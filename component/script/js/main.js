@@ -1,4 +1,3 @@
-<script>
     (function() {
       const root = document.documentElement;
       const toggleBtn = document.getElementById("theme-toggle");
