@@ -1,0 +1,259 @@
+Perfect! Here’s the fully optimized generate-lesson-flex.js script that handles everything in one run:
+
+Generates lesson components.
+
+Creates skeleton HTML with dynamic section loading.
+
+Updates lessons/index.html alphabetically.
+
+Adds Previous/Next navigation links.
+
+Injects lesson navigation CSS automatically if missing.
+
+const fs = require('fs');
+const path = require('path');
+
+const lessonName = process.argv[2];
+let sectionsInput = process.argv[3];
+
+if (!lessonName) {
+  console.error("Usage: node generate-lesson-flex.js <lesson-name> [sections]");
+  process.exit(1);
+}
+
+// Default sections
+const defaultSections = ['intro', 'key-concepts', 'diagrams', 'exercises', 'summary'];
+const sections = sectionsInput ? sectionsInput.split(',') : defaultSections;
+
+// Paths
+const lessonDir = path.join(__dirname, 'components', lessonName);
+const lessonHtmlPath = path.join(__dirname, `${lessonName}.html`);
+const lessonsIndexPath = path.join(__dirname, 'lessons', 'index.html');
+const themeCssPath = path.join(__dirname, 'components', 'css', 'theme.css');
+
+// -------------------------
+// Step 1: Create lesson components folder
+// -------------------------
+if (!fs.existsSync(lessonDir)) fs.mkdirSync(lessonDir, { recursive: true });
+
+// -------------------------
+// Step 2: Create section files
+// -------------------------
+const templates = {
+  'intro': `<section id="introduction">
+  <h2>Introduction</h2>
+  <p>Introduction content for ${lessonName} goes here.</p>
+</section>`,
+  'key-concepts': `<section id="key-concepts">
+  <h2>Key Concepts</h2>
+  <article>
+    <h3>Concept 1</h3>
+    <p>Description of concept 1.</p>
+  </article>
+</section>`,
+  'diagrams': `<section id="diagrams">
+  <h2>Visual Diagrams</h2>
+  <p>Placeholder for diagrams.</p>
+</section>`,
+  'exercises': `<section id="exercises">
+  <h2>Exercises</h2>
+  <article>
+    <h3>Exercise 1</h3>
+    <p>Exercise description here.</p>
+  </article>
+</section>`,
+  'summary': `<section id="summary">
+  <h2>Summary</h2>
+  <p>Summary points for ${lessonName}.</p>
+</section>`
+};
+
+sections.forEach(section => {
+  if (templates[section]) {
+    const filePath = path.join(lessonDir, `${section}.html`);
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, templates[section], 'utf8');
+      console.log(`Created: ${filePath}`);
+    }
+  }
+});
+
+// -------------------------
+// Step 3: Update lessons index
+// -------------------------
+const lessonsDir = path.join(__dirname, 'lessons');
+if (!fs.existsSync(lessonsDir)) fs.mkdirSync(lessonsDir, { recursive: true });
+
+let existingLessons = [];
+if (fs.existsSync(lessonsIndexPath)) {
+  const indexContent = fs.readFileSync(lessonsIndexPath, 'utf8');
+  const linkRegex = /<li><a href=".*?">(.*?)<\/a><\/li>/g;
+  let match;
+  while ((match = linkRegex.exec(indexContent)) !== null) {
+    existingLessons.push({ name: match[1], file: match[1].toLowerCase().replace(/\s+/g, '-') + '.html' });
+  }
+}
+
+// Add current lesson if not present
+if (!existingLessons.find(l => l.name === lessonName.replace(/-/g, ' '))) {
+  existingLessons.push({ name: lessonName.replace(/-/g, ' '), file: `${lessonName}.html` });
+}
+
+// Sort alphabetically
+existingLessons.sort((a, b) => a.name.localeCompare(b.name));
+
+// Build index HTML
+const indexHtmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lessons | Malone University</title>
+<link rel="stylesheet" href="../components/css/theme.css">
+</head>
+<body>
+<h1>All Lessons</h1>
+<ul id="lessons-list">
+  ${existingLessons.map(l => `<li><a href="../${l.file}">${l.name}</a></li>`).join('\n  ')}
+</ul>
+</body>
+</html>`;
+
+fs.writeFileSync(lessonsIndexPath, indexHtmlContent, 'utf8');
+console.log(`Updated lessons index at: ${lessonsIndexPath} (alphabetically)`);
+
+// -------------------------
+// Step 4: Determine Previous / Next lessons
+// -------------------------
+const lessonFiles = existingLessons.map(l => l.file);
+const currentIndex = lessonFiles.indexOf(`${lessonName}.html`);
+const prevLesson = currentIndex > 0 ? lessonFiles[currentIndex - 1] : null;
+const nextLesson = currentIndex < lessonFiles.length - 1 ? lessonFiles[currentIndex + 1] : null;
+
+// Navigation HTML
+let navLinksHtml = `<div class="lesson-nav">`;
+if (prevLesson) navLinksHtml += `<a href="../${prevLesson}">⬅ Previous</a>`;
+if (nextLesson) navLinksHtml += `<a href="../${nextLesson}">Next ➡</a>`;
+navLinksHtml += `</div>`;
+
+// -------------------------
+// Step 5: Create lesson HTML skeleton
+// -------------------------
+const sectionDivs = sections.map(s => `<div id="lesson-${s}"></div>`).join('\n    ');
+
+if (!fs.existsSync(lessonHtmlPath)) {
+  const lessonHtmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${lessonName.replace(/-/g,' ')} | Malone University</title>
+  <link rel="stylesheet" href="components/css/theme.css">
+</head>
+<body>
+
+  <div id="navbar-placeholder"></div>
+  <div id="hero-placeholder"></div>
+
+  <main>
+    ${sectionDivs}
+    ${navLinksHtml}
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="components/js/theme-toggle.js"></script>
+
+  <script>
+    async function loadComponent(id, path) {
+      const res = await fetch(path);
+      const html = await res.text();
+      document.getElementById(id).innerHTML = html;
+    }
+
+    loadComponent('navbar-placeholder', 'components/navbar.html');
+    loadComponent('hero-placeholder', 'components/hero.html');
+    loadComponent('footer-placeholder', 'components/footer.html');
+    ${sections.map(s => `loadComponent('lesson-${s}', 'components/${lessonName}/${s}.html');`).join('\n    ')}
+  </script>
+</body>
+</html>`;
+
+  fs.writeFileSync(lessonHtmlPath, lessonHtmlContent, 'utf8');
+  console.log(`Created lesson page: ${lessonHtmlPath}`);
+} else {
+  console.log(`Lesson page already exists: ${lessonHtmlPath}`);
+}
+
+// -------------------------
+// Step 6: Inject lesson navigation CSS
+// -------------------------
+const lessonNavCss = `
+/* ===== LESSON NAVIGATION ===== */
+.lesson-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2rem;
+  padding: 1rem 0;
+  border-top: 2px solid var(--accent);
+}
+
+.lesson-nav a {
+  padding: 0.5rem 1rem;
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.lesson-nav a:hover {
+  background: var(--accent);
+  color: var(--card);
+}
+
+@media (max-width: 600px) {
+  .lesson-nav {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+  }
+  .lesson-nav a {
+    width: 100%;
+    text-align: center;
+  }
+}
+`;
+
+if (fs.existsSync(themeCssPath)) {
+  const themeContent = fs.readFileSync(themeCssPath, 'utf8');
+  if (!themeContent.includes('.lesson-nav')) {
+    fs.appendFileSync(themeCssPath, lessonNavCss, 'utf8');
+    console.log('Added lesson navigation CSS to theme.css');
+  }
+} else {
+  fs.mkdirSync(path.dirname(themeCssPath), { recursive: true });
+  fs.writeFileSync(themeCssPath, lessonNavCss, 'utf8');
+  console.log('Created theme.css and added lesson navigation CSS');
+}
+
+console.log(`Lesson '${lessonName}' scaffolding, navigation, and index update complete.`);
+
+✅ Features
+
+Generates components (intro.html, key-concepts.html, etc.).
+
+Creates skeleton HTML for the lesson with dynamic section loading.
+
+Updates lessons/index.html alphabetically.
+
+Adds Previous / Next lesson navigation links.
+
+Injects lesson navigation CSS automatically if missing.
+
+Fully modular and ready for future lessons.
+
+You now have a complete automated lesson scaffolding system!
+
+Do you want me to also add automatic hero text and navbar placeholders populated from a config file next? This would make all new lessons immediately fully functional.

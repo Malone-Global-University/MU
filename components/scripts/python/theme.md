@@ -1,0 +1,115 @@
+This script creates a index file in all folders of "departments" with theme "system-default".
+
+
+
+
+System default is:
+
+
+
+
+
+:root {
+--bg: #121212;
+--card: #1e1e1e;
+--text: #f0f0f0;
+--accent: #58a6ff;
+--accent-hover: #377bb5;
+}
+
+@media (prefers-color-scheme: light) {
+:root {
+--bg: #f9f9f9;
+--card: #ffffff;
+--text: #121212;
+--accent: #0055cc;
+--accent-hover: #0044aa;
+}
+}
+
+:root.light {
+--bg: #f9f9f9;
+--card: #ffffff;
+--text: #121212;
+--accent: #0055cc;
+--accent-hover: #0044aa;
+}
+
+:root.dark {
+--bg: #121212;
+--card: #1e1e1e;
+--text: #f0f0f0;
+--accent: #58a6ff;
+--accent-hover: #377bb5;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+background: var(--bg);
+color: var(--text);
+line-height: 1.6;
+padding-top: 120px;
+transition: background 0.3s ease, color 0.3s ease;
+}
+
+a { color: var(--accent); text-decoration: none; transition: color 0.3s ease; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+.navbar {
+position: fixed;
+top: 0;
+width: 100%;
+background: var(--card);
+display: flex;
+align-items: center;
+padding: 1rem 2rem;
+z-index: 1000;
+box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.logo-container { display: flex; align-items: center; gap: 0.5rem; }
+.logo-img { max-width: 120px; height: auto; }
+.school-name { font-weight: 700; color: var(--accent); text-transform: uppercase; font-size: 1.5rem; }
+
+.nav-links {
+list-style: none;
+display: flex;
+gap: 1.5rem;
+margin-left: auto;
+}
+.nav-links li a { font-weight: 600; color: var(--text); }
+.nav-links li a:hover { color: var(--accent); }
+
+.hamburger {
+background: var(--accent);
+color: #fff;
+border: none;
+border-radius: 999px;
+padding: 0.4rem 0.9rem;
+font-size: 1.2rem;
+cursor: pointer;
+margin-left: 1rem;
+}
+
+.hero {
+background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+padding: 5rem 2rem;
+text-align: center;
+color: #dbefff;
+}
+.hero h1 { font-size: clamp(1.8rem, 5vw, 3rem); margin-bottom: 0.5rem; }
+.hero p { font-size: clamp(1rem, 2.5vw, 1.25rem); max-width: 700px; margin: 0 auto; }
+
+section { padding: 4rem 2rem; max-width: 900px; margin: 0 auto; }
+section h2 { font-size: 2rem; color: var(--accent); border-bottom: 2px solid var(--accent); margin-bottom: 1rem; padding-bottom: 0.5rem; }
+section p { font-size: 1.125rem; margin-bottom: 1.5rem; color: var(--text); }
+
+footer { background: var(--card); text-align: center; padding: 2rem 1rem; font-size: 0.9rem; color: var(--text); opacity: 0.6; }
+
+@media (max-width: 768px) {
+.nav-links { flex-direction: column; gap: 0; margin-top: 0.5rem; }
+.nav-links li a { padding: 1rem 0; border-top: 1px solid rgba(255,255,255,0.1); }
+}
+
