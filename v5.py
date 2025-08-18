@@ -2,7 +2,7 @@ import os
 
 BASE_DIR = "departments"
 CSS_PATH = "/components/css/pyc.css"
-FAVICON_PATH = "/images/android-chrome-512x512.png"
+FAVICON_PATH = "/images/logo.png"
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">

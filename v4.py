@@ -187,13 +187,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
     <ul class="nav-links" id="nav-links">
-      <li><a href="/">Home</a></li>
-    <li><a href="/contact">Contact</a></li>
-    <li><a href="/jm">Founder</a></li>
-    <li><a href="/mission">Mission</a></li>
-    <li><a href="/hardened">FINAL OFFER</a></li>
-    <li><a href="/departments">Departments</a></li>
-    <li><a href="/departments/library">Library</a></li>
+   <li><a href="/contact">Contact</a></li>
+      <li><a href="/about">About</a></li>
+      <li><a href="/community/resources">Community</a></li>
+      <li><a href="/homepage">Home</a></li>
+      <li><a href="/mission">Mission</a></li>
+      <li><a href="/library/directory">Library</a></li>
+      <li><a href="/department/directory">Department</a></li>
+      <li><a href="/devblog/live-journal">DevBlog</a></li>
   </ul>
     </ul>
     <div style="display:flex;align-items:center;">
