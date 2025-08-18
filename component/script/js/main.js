@@ -11,11 +11,10 @@
   if (saved) setTheme(saved, true);
   else setTheme("system", true);
 
-  // Theme toggle button
+  // Theme toggle button (now inside the menu as last item)
   toggleBtn.addEventListener("click", () => {
     const current = localStorage.getItem("theme-preference") || "system";
-    const next =
-      current === "system" ? "dark" : current === "dark" ? "light" : "system";
+    const next = current === "system" ? "dark" : current === "dark" ? "light" : "system";
     setTheme(next);
   });
 
@@ -28,27 +27,39 @@
     updateIcon(mode);
     toggleBtn.setAttribute("aria-pressed", mode === "dark");
 
-    // Remove no-flash once the initial theme is applied
     if (isInit) requestAnimationFrame(() => {
       document.documentElement.classList.remove("no-flash");
     });
   }
 
   function updateIcon(mode) {
-    toggleBtn.textContent =
-      mode === "light" ? "☀️" : mode === "dark" ? "🌙" : "💻";
+    toggleBtn.textContent = mode === "light" ? "☀️" : mode === "dark" ? "🌙" : "💻";
   }
 
-  // Listen for system changes if "system" is active
+  // Respond to system changes while in "system" mode
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (localStorage.getItem("theme-preference") === "system") setTheme("system");
   });
 
   // Mobile nav toggle
   navToggle.addEventListener("click", () => {
-    navLinks.classList.toggle("show");
+    const open = navLinks.classList.toggle("show");
+    navToggle.setAttribute("aria-expanded", String(open));
   });
   navToggle.addEventListener("keypress", (e) => {
-    if (e.key === "Enter" || e.key === " ") navLinks.classList.toggle("show");
+    if (e.key === "Enter" || e.key === " ") {
+      const open = navLinks.classList.toggle("show");
+      navToggle.setAttribute("aria-expanded", String(open));
+    }
+  });
+
+  // Close menu after clicking a link or the theme item (on mobile)
+  navLinks.addEventListener("click", (e) => {
+    if (window.matchMedia("(max-width: 768px)").matches) {
+      if (e.target.closest("a") || e.target.closest(".theme-item")) {
+        navLinks.classList.remove("show");
+        navToggle.setAttribute("aria-expanded", "false");
+      }
+    }
   });
 })();
