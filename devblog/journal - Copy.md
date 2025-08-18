@@ -72,7 +72,7 @@ Artifacts Created
  
 Next Steps
 - Create department folders.
-- Write a Python script to automatically generate index files in each folder
+- Write a Python script to generate index files in each folder automatically
 - create journal.md for GreyMatter to convert to dev-blog.html
 
 
@@ -85,7 +85,7 @@ Rationale
 - To build a vastly superior pipeline for zero-fail full transparency and auditability
 
 Artifacts created
-- Time stamped .odts of code and conversations with ChatGpt 5.0
+- Time-stamped .odts of code and conversations with ChatGPT 5.0
 
 Next Steps
 - Consult ChatGPT about improved folder structure and build discipline
@@ -93,3 +93,31 @@ Next Steps
  
 
 
+##12:20 AM 8/18/2025 
+
+Actions Taken
+- On Sunday, I worked on three different Python programs:
+- 1. md to HTML converter
+- 2. auto index file generator
+- 3. live system map monitor
+- Ran map monitor first time shortly after midnight between 12:06-12:20 AM 8/18/2025
+- Finished overhauling the new repository
+- Up-coded the library and made it better integrated into the site
+- Wrote objectives and clear goals for the library, encyclopedia, dictionary, and wiki
+- Performed regularly scheduled admin duties
+
+Rationale
+- These programs aid productivity and provide learning lessons for staff and students
+- The library serves a core role in the institution
+
+
+Artifacts created
+
+- 0035-first-run-python-map-monitor.png
+- 0036-first-run-python-map-monitor.png
+
+
+Next Steps
+- Solicit institutional donors for endowment seed money
+- Build coursework and lessons for all departments
+- Better integrate the DevBlog journal and track major developments
