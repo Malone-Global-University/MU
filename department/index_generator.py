@@ -6,7 +6,6 @@ from pathlib import Path
 
 # ------------- Configuration -------------
 BASE_DIR = "department"                         # root to walk
-BASE_DIR = "community"                          # root to walk
 CSS_PATH = "/component/css/pyc.css"             # main css for generated pages
 FAVICON_PATH = "/image/logo.png"                # favicon / logo path used in templates
 EXTRA_CSS = "/component/css/py.css"             # optional extra css
