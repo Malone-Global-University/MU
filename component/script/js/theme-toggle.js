@@ -1,5 +1,5 @@
 /* theme-toggle.js
-   Provides MGUToggleTheme() and persists choice to localStorage
+   Provides MGUToggleTheme() and persists the choice to localStorage
 */
 (function(){
   const storageKey = 'mgu_theme';
