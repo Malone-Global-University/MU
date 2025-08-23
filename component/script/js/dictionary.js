@@ -1,4 +1,4 @@
-    (function() {
+     (function() {
       const root = document.documentElement;
       const toggleBtn = document.getElementById("theme-toggle");
       const navLinks = document.getElementById("nav-links");
