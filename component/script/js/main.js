@@ -1,4 +1,4 @@
-  (function() {
+     (function() {
       const root = document.documentElement;
       const toggleBtn = document.getElementById("theme-toggle");
       const navLinks = document.getElementById("nav-links");
@@ -32,8 +32,6 @@
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
         if(localStorage.getItem('theme-preference') === 'system') setTheme('system');
       });
-
-
 
       navToggle.addEventListener("click", () => {
         navLinks.classList.toggle("show");
