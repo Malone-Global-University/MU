@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("navbar-placeholder").innerHTML = data;
 
       const navToggle = document.getElementById("nav-toggle");
-      const navMain = document.getElementById("nav-main");
+      const navMain = document.getElementById("nav-menu");
       const themeToggle = document.getElementById("theme-toggle");
 
       navToggle.addEventListener("click", () => {
