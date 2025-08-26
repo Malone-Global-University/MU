@@ -1,8 +1,8 @@
      (function() {
       const root = document.documentElement;
-      const toggleBtn = document.getElementById("theme-toggle");
-      const navLinks = document.getElementById("nav-links");
-      const navToggle = document.getElementById("nav-toggle");
+      const toggleBtn = document.getElementById("loadtheme");
+      const navLinks = document.getElementById("loadNavbar");
+      const navToggle = document.getElementById("loadtoggle");
 
       const saved = localStorage.getItem("theme-preference");
       if (saved) setTheme(saved);
