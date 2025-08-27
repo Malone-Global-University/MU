@@ -1,7 +1,7 @@
      (function() {
       const root = document.documentElement;
       const toggleBtn = document.getElementById("theme-toggle");
-      const navLinks = document.getElementById("nav-links");
+      const navLinks = document.getElementById("nav-menu");
       const navToggle = document.getElementById("nav-toggle");
 
       const saved = localStorage.getItem("theme-preference");
