@@ -1,10 +1,10 @@
      (function() {
-      const root = document.documentElement;
-      const toggleBtn = document.getElementById("theme-toggle");
-      const navLinks = document.getElementById("nav-menu");
-      const navToggle = document.getElementById("nav-toggle");
-
-      const saved = localStorage.getItem("theme-preference");
+      document.addEventListener("DOMContentLoaded", () => {
+  const root = document.documentElement;
+  const toggleBtn = document.getElementById("theme-toggle");
+  const navLinks = document.getElementById("nav-menu");
+  const navToggle = document.getElementById("nav-toggle");
+  const saved = localStorage.getItem("theme-preference");
       if (saved) setTheme(saved);
       else setTheme("system");
 
@@ -40,3 +40,4 @@
         if(e.key === "Enter" || e.key === " ") navLinks.classList.toggle("show");
       });
     })();
+    });
