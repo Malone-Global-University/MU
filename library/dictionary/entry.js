@@ -1,12 +1,17 @@
-async function fetchDictionary() {
-  const res = await fetch("/library/dictionary/dictionary.json");
+async function loadShardIndex() {
+  const res = await fetch("/library/dictionary/dictionary_index.json");
+  return await res.json();
+}
+
+async function fetchShard(url) {
+  const res = await fetch(url);
   return await res.json();
 }
 
 function renderBreadcrumbs(entry) {
   return `
     <a href="/library/dictionary">Dictionary</a> › 
-    <a href="/library/dictionary/${entry.word[0].toLowerCase()}">${entry.word[0].toUpperCase()}</a> › 
+    <a href="/library/dictionary#${entry.word[0].toLowerCase()}">${entry.word[0].toUpperCase()}</a> › 
     ${entry.word}
   `;
 }
@@ -35,14 +40,30 @@ document.addEventListener("DOMContentLoaded", async () => {
   const entryContainer = document.getElementById("entry");
   const breadcrumbsContainer = document.getElementById("breadcrumbs");
 
-  if (!word) return entryContainer.innerHTML = "<p>No word specified.</p>";
+  if (!word) {
+    entryContainer.innerHTML = "<p>No word specified.</p>";
+    return;
+  }
 
   try {
-    const dictionary = await fetchDictionary();
-    const entry = dictionary[word];
+    const shardIndex = await loadShardIndex();
+    const firstLetter = word[0].toLowerCase();
+    const shardUrl = shardIndex[firstLetter];
 
-    if (!entry) return entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
+    if (!shardUrl) {
+      entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
+      return;
+    }
 
+    const shard = await fetchShard(shardUrl);
+    const entry = shard[word];
+
+    if (!entry) {
+      entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
+      return;
+    }
+
+    // Update page metadata
     document.title = `${entry.word} | MGU Dictionary`;
     document.querySelector('meta[name="description"]').setAttribute(
       "content",
