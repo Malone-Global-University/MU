@@ -9,8 +9,8 @@
   <link rel="stylesheet" href="/component/css/main.css" />
   <style>
     /* ----- Pills Styling ----- */
-    #index { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-    #index a {
+    #letter-pills, #index { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    a.letter-pill, #index a {
       display: inline-block;
       padding: 8px 16px;
       border-radius: 999px;
@@ -20,7 +20,7 @@
       background: #e0e0e0;
       color: #000;
     }
-    #index a:hover {
+    a.letter-pill:hover, #index a:hover {
       background: #d0d0d0;
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0,0,0,0.2);
@@ -78,58 +78,121 @@
     <button type="submit">Search</button>
   </form>
 
+  <!-- Clickable Letter Pills -->
+  <div id="letter-pills"></div>
+
+  <!-- Dictionary Index -->
   <div id="index"></div>
-  <div id="loading">Loading dictionary...</div>
+  <div id="loading">Select a letter or search to load dictionary.</div>
 
   <footer>
-    <p>© 2025 Malone University. Building the future, on our own terms.</p>
+    <p>© 2025 Malone Global University. Building the future, on our own terms.</p>
+    <p>
+      <a href="https://twitter.com/MaloneGlobal" target="_blank" rel="noopener noreferrer">Twitter</a> |
+      <a href="https://facebook.com/YOUR_HANDLE" target="_blank" rel="noopener noreferrer">Facebook</a> |
+      <a href="https://instagram.com/maloneglobaluniversity" target="_blank" rel="noopener noreferrer">Instagram</a> |
+      <a href="/terms.html">Terms</a> |
+      <a href="/contact.html">Contact</a>
+    </p>
+    <p>Content last updated: 8/29/2025<br>
+       Layout last updated: 8/28/2025</p>
   </footer>
 
-  <script>
-    const indexContainer = document.getElementById('index');
-    const loadingText = document.getElementById('loading');
-    const tierFilter = document.getElementById('tier-filter');
+<script src="/component/script/js/main.js"></script>
+<script>
+const indexContainer = document.getElementById('index');
+const loadingText = document.getElementById('loading');
+const tierFilter = document.getElementById('tier-filter');
+const letterPillsContainer = document.getElementById('letter-pills');
 
-    async function fetchDictionary() {
-      const res = await fetch('/library/dictionary/dictionary.json');
-      return await res.json();
-    }
+let shardIndex = {};
+let loadedShards = {};
 
-    function renderIndex(data, filterTier = "") {
-      indexContainer.innerHTML = "";
-      Object.keys(data)
-        .filter(word => !filterTier || data[word].tier === filterTier)
-        .sort()
-        .forEach(word => {
-          const link = document.createElement('a');
-          link.href = `entry.html?word=${encodeURIComponent(word)}`;
-          link.textContent = word;
-          indexContainer.appendChild(link);
-        });
-    }
+// Load top-level shard index
+async function loadIndex() {
+  const res = await fetch('/library/dictionary/dictionary_index.json');
+  shardIndex = await res.json();
+}
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      try {
-        const dictionary = await fetchDictionary();
-        loadingText.style.display = 'none';
-        renderIndex(dictionary);
+// Fetch shard by letter, with caching
+async function fetchShard(letter) {
+  letter = letter.toLowerCase();
+  if (loadedShards[letter]) return loadedShards[letter];
+  const url = shardIndex[letter];
+  if (!url) return {};
+  const res = await fetch(url);
+  const data = await res.json();
+  loadedShards[letter] = data;
+  return data;
+}
 
-        // Tier filter
-        tierFilter.addEventListener('change', () => {
-          renderIndex(dictionary, tierFilter.value);
-        });
-
-        // Search bar
-        document.getElementById('search-bar').addEventListener('submit', e => {
-          e.preventDefault();
-          const word = document.getElementById('search-input').value.trim();
-          if (word) window.location.href = `entry.html?word=${encodeURIComponent(word)}`;
-        });
-      } catch (err) {
-        loadingText.textContent = 'Failed to load dictionary.';
-        console.error(err);
-      }
+// Render words
+function renderWords(words, filterTier = "") {
+  indexContainer.innerHTML = "";
+  Object.keys(words)
+    .filter(word => !filterTier || words[word].tier === filterTier)
+    .sort()
+    .forEach(word => {
+      const link = document.createElement('a');
+      link.href = `entry.html?word=${encodeURIComponent(word)}`;
+      link.textContent = word;
+      indexContainer.appendChild(link);
     });
-  </script>
+}
+
+// Render clickable letter pills
+function renderLetterPills() {
+  const letters = Object.keys(shardIndex).sort();
+  letterPillsContainer.innerHTML = "";
+  letters.forEach(letter => {
+    const pill = document.createElement('a');
+    pill.href = "#";
+    pill.textContent = letter.toUpperCase();
+    pill.className = "letter-pill";
+    pill.addEventListener('click', async e => {
+      e.preventDefault();
+      const shard = await fetchShard(letter);
+      renderWords(shard, tierFilter.value);
+    });
+    letterPillsContainer.appendChild(pill);
+  });
+}
+
+// Handle search
+async function handleSearch(word) {
+  if (!word) return;
+  const firstLetter = word[0].toLowerCase();
+  const shard = await fetchShard(firstLetter);
+  const filtered = {};
+  Object.keys(shard).forEach(k => {
+    if (k.toLowerCase().startsWith(word.toLowerCase())) filtered[k] = shard[k];
+  });
+  renderWords(filtered, tierFilter.value);
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await loadIndex();
+    loadingText.style.display = 'none';
+    renderLetterPills();
+
+    tierFilter.addEventListener('change', async () => {
+      const word = document.getElementById('search-input').value.trim();
+      if (word) await handleSearch(word);
+    });
+
+    document.getElementById('search-bar').addEventListener('submit', async e => {
+      e.preventDefault();
+      const word = document.getElementById('search-input').value.trim();
+      await handleSearch(word);
+    });
+  } catch (err) {
+    loadingText.textContent = 'Failed to load dictionary.';
+    console.error(err);
+  }
+});
+</script>
+
 </body>
 </html>
