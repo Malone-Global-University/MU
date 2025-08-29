@@ -36,26 +36,34 @@ function renderEntryContent(entry) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
-  const word = params.get("word");
+  const rawWord = params.get("word");
+
   const entryContainer = document.getElementById("entry");
   const breadcrumbsContainer = document.getElementById("breadcrumbs");
 
-  if (!word) {
+  if (!rawWord) {
     entryContainer.innerHTML = "<p>No word specified.</p>";
     return;
   }
 
+  // Normalize: trim whitespace and lowercase
+  const word = rawWord.trim().toLowerCase();
+
   try {
     const shardIndex = await loadShardIndex();
-    const firstLetter = word[0].toLowerCase();
-    const shardUrl = shardIndex[firstLetter];
+    const firstLetter = word[0];
 
+    const shardUrl = shardIndex[firstLetter];
     if (!shardUrl) {
       entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
       return;
     }
 
     const shard = await fetchShard(shardUrl);
+
+    // DEBUG: log shard keys
+    console.log("Looking up word:", word, "in shard keys:", Object.keys(shard));
+
     const entry = shard[word];
 
     if (!entry) {
