@@ -1,51 +1,59 @@
+async function fetchDictionary() {
+  const res = await fetch("/library/dictionary/dictionary.json");
+  return await res.json();
+}
+
+function renderBreadcrumbs(entry) {
+  return `
+    <a href="/library/dictionary">Dictionary</a> › 
+    <a href="/library/dictionary/${entry.word[0].toLowerCase()}">${entry.word[0].toUpperCase()}</a> › 
+    ${entry.word}
+  `;
+}
+
+function renderEntryContent(entry) {
+  return `
+    <h2>${entry.word}</h2>
+    <p><strong>Tier:</strong> ${entry.tier}</p>
+    <p><strong>Part of Speech:</strong> ${entry.partOfSpeech}</p>
+    <p><strong>Pronunciation:</strong> ${entry.pronunciation}</p>
+    <p><strong>Definition:</strong> ${entry.definition}</p>
+    ${entry.synonyms?.length ? `<p><strong>Synonyms:</strong> ${entry.synonyms.join(", ")}</p>` : ""}
+    ${entry.antonyms?.length ? `<p><strong>Antonyms:</strong> ${entry.antonyms.join(", ")}</p>` : ""}
+    ${entry.etymology ? `<p><strong>Etymology:</strong> ${entry.etymology}</p>` : ""}
+    ${entry.examples?.length ? `<ul>${entry.examples.map(e => `<li>${e}</li>`).join("")}</ul>` : ""}
+    ${entry.explanation ? `<p><strong>Explanation:</strong> ${entry.explanation}</p>` : ""}
+    ${entry.audio ? `<p><button onclick="document.getElementById('${entry.word}-audio').play()">🔊 Hear pronunciation</button>
+      <audio id="${entry.word}-audio" src="${entry.audio}"></audio></p>` : ""}
+    <p><em>Updated: ${entry.updated}</em></p>
+  `;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
-  const word = params.get("word"); // Example: entry.html?word=convivial
+  const word = params.get("word");
+  const entryContainer = document.getElementById("entry");
+  const breadcrumbsContainer = document.getElementById("breadcrumbs");
 
-  if (!word) {
-    document.getElementById("entry").innerHTML = "<p>No word specified.</p>";
-    return;
-  }
+  if (!word) return entryContainer.innerHTML = "<p>No word specified.</p>";
 
   try {
-    const response = await fetch("/library/dictionary/dictionary.json");
-    const data = await response.json();
+    const dictionary = await fetchDictionary();
+    const entry = dictionary[word];
 
-    if (!data[word]) {
-      document.getElementById("entry").innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
-      return;
-    }
+    if (!entry) return entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
 
-    const entry = data[word];
     document.title = `${entry.word} | MGU Dictionary`;
-    document.querySelector('meta[name="description"]').setAttribute("content", `dictionary entry: ${entry.word} - ${entry.definition}`);
+    document.querySelector('meta[name="description"]').setAttribute(
+      "content",
+      `Dictionary entry: ${entry.word} - ${entry.definition}`
+    );
 
-    // Breadcrumbs
-    document.getElementById("breadcrumbs").innerHTML = `
-      <a href="/library/dictionary">Dictionary</a> › 
-      <a href="/library/dictionary/${entry.word[0].toLowerCase()}">${entry.word[0].toUpperCase()}</a> › 
-      ${entry.word}
-    `;
+    breadcrumbsContainer.innerHTML = renderBreadcrumbs(entry);
+    entryContainer.innerHTML = renderEntryContent(entry);
 
-    // Entry Content
-    document.getElementById("entry").innerHTML = `
-      <h2>${entry.word}</h2>
-      <p><strong>Part of Speech:</strong> ${entry.partOfSpeech}</p>
-      <p><strong>Pronunciation:</strong> ${entry.pronunciation}</p>
-      <p><strong>Definition:</strong> ${entry.definition}</p>
-      <p><strong>Synonyms:</strong> ${entry.synonyms.join(", ")}</p>
-      <p><strong>Antonyms:</strong> ${entry.antonyms.join(", ")}</p>
-      <p><strong>Etymology:</strong> ${entry.etymology}</p>
-      <p><strong>Examples:</strong></p>
-      <ul>${entry.examples.map(e => `<li>${e}</li>`).join("")}</ul>
-      <p><strong>Explanation:</strong> ${entry.explanation}</p>
-      ${entry.audio ? `
-        <p><button onclick="document.getElementById('${entry.word}-audio').play()">🔊 Hear pronunciation</button>
-        <audio id="${entry.word}-audio" src="${entry.audio}"></audio></p>` : ""}
-      <p><em>Updated: ${entry.updated}</em></p>
-    `;
   } catch (err) {
-    document.getElementById("entry").innerHTML = "<p>Error loading dictionary.</p>";
+    entryContainer.innerHTML = "<p>Error loading dictionary.</p>";
     console.error(err);
   }
 });
