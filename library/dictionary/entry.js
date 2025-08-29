@@ -1,5 +1,5 @@
 async function loadShardIndex() {
-  const res = await fetch("/library/dictionary/dictionary_index.json");
+  const res = await fetch("/library/dictionary/dictionary-index.json");
   return await res.json();
 }
 
