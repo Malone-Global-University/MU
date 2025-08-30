@@ -1,21 +1,26 @@
+// Load the shard index
 async function loadShardIndex() {
-  const res = await fetch("/library/dictionary/dictionary-index.json");
-  return await res.json();
+  try {
+    const res = await fetch("/library/dictionary/dictionary-index.json");
+    return await res.json();
+  } catch (err) {
+    console.error("Failed to load shard index:", err);
+    return {};
+  }
 }
 
+// Fetch a specific shard
 async function fetchShard(url) {
-  const res = await fetch(url);
-  return await res.json();
+  try {
+    const res = await fetch(url);
+    return await res.json();
+  } catch (err) {
+    console.error("Failed to fetch shard:", err);
+    return {};
+  }
 }
 
-function renderBreadcrumbs(entry) {
-  return `
-    <a href="/library/dictionary">Dictionary</a> › 
-    <a href="/library/dictionary#${entry.word[0].toLowerCase()}">${entry.word[0].toUpperCase()}</a> › 
-    ${entry.word}
-  `;
-}
-
+// Render dictionary entry HTML
 function renderEntryContent(entry) {
   return `
     <h2>${entry.word}</h2>
@@ -28,7 +33,7 @@ function renderEntryContent(entry) {
     ${entry.etymology ? `<p><strong>Etymology:</strong> ${entry.etymology}</p>` : ""}
     ${entry.examples?.length ? `<ul>${entry.examples.map(e => `<li>${e}</li>`).join("")}</ul>` : ""}
     ${entry.explanation ? `<p><strong>Explanation:</strong> ${entry.explanation}</p>` : ""}
-    ${entry.audio ? `<p><button onclick="document.getElementById('${entry.word}-audio').play()">🔊 Hear pronunciation</button>
+    ${entry.audio ? `<p><button onclick="document.getElementById('${entry.word}-audio')?.play()">🔊 Hear pronunciation</button>
       <audio id="${entry.word}-audio" src="${entry.audio}"></audio></p>` : ""}
     <p><em>Updated: ${entry.updated}</em></p>
   `;
@@ -39,14 +44,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const rawWord = params.get("word");
 
   const entryContainer = document.getElementById("entry");
-  const breadcrumbsContainer = document.getElementById("breadcrumbs");
+
+  if (!entryContainer) {
+    console.error("No element with id 'entry' found on page.");
+    return;
+  }
 
   if (!rawWord) {
     entryContainer.innerHTML = "<p>No word specified.</p>";
     return;
   }
 
-  // Normalize: trim whitespace and lowercase
   const word = rawWord.trim().toLowerCase();
 
   try {
@@ -60,25 +68,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const shard = await fetchShard(shardUrl);
-
-    // DEBUG: log shard keys
     console.log("Looking up word:", word, "in shard keys:", Object.keys(shard));
 
     const entry = shard[word];
-
     if (!entry) {
       entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
       return;
     }
 
-    // Update page metadata
+    // Update page metadata safely
     document.title = `${entry.word} | MGU Dictionary`;
-    document.querySelector('meta[name="description"]').setAttribute(
-      "content",
-      `Dictionary entry: ${entry.word} - ${entry.definition}`
-    );
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute("content", `Dictionary entry: ${entry.word} - ${entry.definition}`);
+    }
 
-    breadcrumbsContainer.innerHTML = renderBreadcrumbs(entry);
     entryContainer.innerHTML = renderEntryContent(entry);
 
   } catch (err) {
