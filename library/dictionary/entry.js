@@ -25,6 +25,7 @@ function renderEntryContent(entry) {
   return `
     <h2>${entry.word}</h2>
     <p><strong>Tier:</strong> ${entry.tier}</p>
+    <p><strong>Difficulty:</strong> ${entry.difficulty || "N/A"}</p>
     <p><strong>Part of Speech:</strong> ${entry.partOfSpeech}</p>
     <p><strong>Pronunciation:</strong> ${entry.pronunciation}</p>
     <p><strong>Definition:</strong> ${entry.definition}</p>
