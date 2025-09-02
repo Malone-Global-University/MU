@@ -20,24 +20,62 @@ async function fetchShard(url) {
   }
 }
 
-// Render dictionary entry HTML
+// Render dictionary entry HTML (supports multiple senses per lemma)
 function renderEntryContent(entry) {
+  const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
+
+  // Render senses
+  let sensesHtml = "";
+  if (entry.senses?.length) {
+    sensesHtml = entry.senses
+      .map((sense, idx) => `
+        <li>
+          <strong>Sense ${idx + 1}:</strong> ${sense.definition}
+          ${sense.examples?.length ? `<ul>${sense.examples.map(e => `<li>${e}</li>`).join("")}</ul>` : ""}
+        </li>
+      `).join("");
+    sensesHtml = `<ul>${sensesHtml}</ul>`;
+  } else {
+    sensesHtml = `<p>${entry.definition}</p>`;
+  }
+
   return `
-    <h2>${entry.word}</h2>
+    <h2>${entry.lemma}</h2>
+    ${entry.variants?.length ? `<p><strong>Variants:</strong> ${entry.variants.join(", ")}</p>` : ""}
     <p><strong>Tier:</strong> ${entry.tier}</p>
     <p><strong>Difficulty:</strong> ${entry.difficulty || "N/A"}</p>
-    <p><strong>Part of Speech:</strong> ${entry.partOfSpeech}</p>
-    <p><strong>Pronunciation:</strong> ${entry.pronunciation}</p>
-    <p><strong>Definition:</strong> ${entry.definition}</p>
+    <p><strong>Part of Speech:</strong> ${entry.partOfSpeech || "N/A"}</p>
+    ${pronunciationText ? `<p><strong>Pronunciation:</strong> ${pronunciationText}</p>` : ""}
+    ${sensesHtml}
     ${entry.synonyms?.length ? `<p><strong>Synonyms:</strong> ${entry.synonyms.join(", ")}</p>` : ""}
     ${entry.antonyms?.length ? `<p><strong>Antonyms:</strong> ${entry.antonyms.join(", ")}</p>` : ""}
     ${entry.etymology ? `<p><strong>Etymology:</strong> ${entry.etymology}</p>` : ""}
-    ${entry.examples?.length ? `<ul>${entry.examples.map(e => `<li>${e}</li>`).join("")}</ul>` : ""}
     ${entry.explanation ? `<p><strong>Explanation:</strong> ${entry.explanation}</p>` : ""}
-    ${entry.audio ? `<p><button onclick="document.getElementById('${entry.word}-audio')?.play()">🔊 Hear pronunciation</button>
-      <audio id="${entry.word}-audio" src="${entry.audio}"></audio></p>` : ""}
+    ${
+      entry.audio
+        ? `<p><button onclick="document.getElementById('${entry.lemma}-audio')?.play()">
+             🔊 Hear Pronunciation
+           </button>
+           <audio id="${entry.lemma}-audio" src="${entry.audio}"></audio></p>`
+        : `<p><button onclick="speakWord('${entry.lemma}', '${pronunciationText}')">
+             🔈 Read Aloud
+           </button></p>`
+    }
     <p><em>Updated: ${entry.updated}</em></p>
   `;
+}
+
+// TTS Fallback Function
+function speakWord(word, pronunciation) {
+  if (!('speechSynthesis' in window)) {
+    return alert('Speech not supported on this device.');
+  }
+  const text = pronunciation ? `${word}. Pronounced ${pronunciation}.` : word;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.9;
+  u.pitch = 1.1;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -45,43 +83,34 @@ document.addEventListener("DOMContentLoaded", async () => {
   const rawWord = params.get("word");
 
   const entryContainer = document.getElementById("entry");
+  if (!entryContainer) return console.error("No element with id 'entry' found on page.");
+  if (!rawWord) return entryContainer.innerHTML = "<p>No word specified.</p>";
 
-  if (!entryContainer) {
-    console.error("No element with id 'entry' found on page.");
-    return;
-  }
-
-  if (!rawWord) {
-    entryContainer.innerHTML = "<p>No word specified.</p>";
-    return;
-  }
-
-  const word = rawWord.trim().toLowerCase();
+  const query = rawWord.trim().toLowerCase();
 
   try {
     const shardIndex = await loadShardIndex();
-    const firstLetter = word[0];
-
+    const firstLetter = query[0];
     const shardUrl = shardIndex[firstLetter];
-    if (!shardUrl) {
-      entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
-      return;
-    }
+    if (!shardUrl) return entryContainer.innerHTML = `<p>No entry found for <strong>${query}</strong>.</p>`;
 
     const shard = await fetchShard(shardUrl);
-    console.log("Looking up word:", word, "in shard keys:", Object.keys(shard));
 
-    const entry = shard[word];
+    // Lookup by lemma (direct or fallback)
+    let entry = shard[query] || Object.values(shard).find(e => e.lemma.toLowerCase() === query);
+
+    // If not found, check variants
     if (!entry) {
-      entryContainer.innerHTML = `<p>No entry found for <strong>${word}</strong>.</p>`;
-      return;
+      entry = Object.values(shard).find(e => e.variants?.some(v => v.toLowerCase() === query));
     }
 
-    // Update page metadata safely
-    document.title = `${entry.word} | MGU Dictionary`;
+    if (!entry) return entryContainer.innerHTML = `<p>No entry found for <strong>${query}</strong>.</p>`;
+
+    // Update metadata
+    document.title = `${entry.lemma} | MGU Dictionary`;
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.setAttribute("content", `Dictionary entry: ${entry.word} - ${entry.definition}`);
+      metaDescription.setAttribute("content", `Dictionary entry: ${entry.lemma} - ${entry.definition || entry.senses?.[0]?.definition}`);
     }
 
     entryContainer.innerHTML = renderEntryContent(entry);
