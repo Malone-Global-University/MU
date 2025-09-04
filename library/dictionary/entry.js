@@ -22,6 +22,33 @@ async function fetchShard(url) {
   }
 }
 
+// TTS Fallback
+function speakWord(word, pronunciation) {
+  if (!('speechSynthesis' in window)) {
+    return alert('Speech not supported on this device.');
+  }
+  const text = pronunciation ? `${word}. Pronounced ${pronunciation}.` : word;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.9;
+  u.pitch = 1.1;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
+// Fail-safe audio/TTS button
+function playAudioOrTTS(entry) {
+  const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
+  if (entry.audio && entry.audio.trim() !== "") {
+    const audio = new Audio(entry.audio);
+    audio.play().catch(() => {
+      // fallback to TTS if audio fails
+      speakWord(entry.lemma, pronunciationText);
+    });
+  } else {
+    speakWord(entry.lemma, pronunciationText);
+  }
+}
+
 // Render dictionary entry HTML (supports multiple senses per lemma)
 function renderEntryContent(entry) {
   const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
@@ -41,17 +68,6 @@ function renderEntryContent(entry) {
     sensesHtml = `<p>${entry.definition}</p>`;
   }
 
-  // Decide audio or TTS fallback
-  const hasAudio = entry.audio && entry.audio.trim().endsWith(".mp3");
-  const audioButton = hasAudio
-    ? `<p>
-         <button onclick="document.getElementById('${entry.lemma}-audio')?.play()">🔊 Hear Pronunciation</button>
-         <audio id="${entry.lemma}-audio" src="${entry.audio}"></audio>
-       </p>`
-    : `<p>
-         <button onclick="speakWord('${entry.lemma}', '${pronunciationText}')">🔈 Read Aloud</button>
-       </p>`;
-
   return `
     <h2>${entry.lemma}</h2>
     ${entry.variants?.length ? `<p><strong>Variants:</strong> ${entry.variants.join(", ")}</p>` : ""}
@@ -64,22 +80,11 @@ function renderEntryContent(entry) {
     ${entry.antonyms?.length ? `<p><strong>Antonyms:</strong> ${entry.antonyms.join(", ")}</p>` : ""}
     ${entry.etymology ? `<p><strong>Etymology:</strong> ${entry.etymology}</p>` : ""}
     ${entry.explanation ? `<p><strong>Explanation:</strong> ${entry.explanation}</p>` : ""}
-    ${audioButton}
+    <p>
+      <button onclick="playAudioOrTTS(${JSON.stringify(entry)})">🔊 Hear Pronunciation</button>
+    </p>
     <p><em>Updated: ${entry.updated}</em></p>
   `;
-}
-
-// TTS Fallback
-function speakWord(word, pronunciation) {
-  if (!('speechSynthesis' in window)) {
-    return alert('Speech not supported on this device.');
-  }
-  const text = pronunciation ? `${word}. Pronounced ${pronunciation}.` : word;
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.9;
-  u.pitch = 1.1;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
 }
 
 // Main
