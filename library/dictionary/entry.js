@@ -39,39 +39,41 @@ function speakWord(word, pronunciation) {
 // Play audio if exists, else fallback to TTS
 function playAudioOrTTS(entry) {
   const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
-
   if (entry.audio && entry.audio.trim() !== "") {
     const audio = new Audio(entry.audio);
-    audio.play()
-      .catch(() => {
-        // Audio failed to play (404 or unsupported) → fallback TTS
-        speakWord(entry.lemma, pronunciationText);
-      });
+    audio.play().catch(() => {
+      speakWord(entry.lemma, pronunciationText, entry.definition || entry.senses?.[0]?.definition || "");
+    });
   } else {
-    // No audio file → TTS immediately
-    speakWord(entry.lemma, pronunciationText);
+    speakWord(entry.lemma, pronunciationText, entry.definition || entry.senses?.[0]?.definition || "");
   }
 }
 
-// Render dictionary entry
+
+// safe id helper
+function makeId(lemma) {
+  return 'play-' + String(lemma).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+
 function renderEntryContent(entry) {
   const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
-
-  // Render senses
   let sensesHtml = "";
+
   if (entry.senses?.length) {
-    sensesHtml = entry.senses.map((sense, idx) => `
-      <li>
-        <strong>Sense ${idx + 1}:</strong> ${sense.definition}
-        ${sense.examples?.length ? `<ul>${sense.examples.map(e => `<li>${e}</li>`).join("")}</ul>` : ""}
-      </li>
-    `).join("");
+    sensesHtml = entry.senses
+      .map((sense, idx) => `
+        <li>
+          <strong>Sense ${idx + 1}:</strong> ${sense.definition}
+          ${sense.examples?.length ? `<ul>${sense.examples.map(e => `<li>${e}</li>`).join("")}</ul>` : ""}
+        </li>
+      `).join("");
     sensesHtml = `<ul>${sensesHtml}</ul>`;
   } else {
-    sensesHtml = `<p>${entry.definition}</p>`;
+    sensesHtml = `<p>${entry.definition || ''}</p>`;
   }
 
-  // Always use a single button calling the JS function
+  const btnId = makeId(entry.lemma);
+
   return `
     <h2>${entry.lemma}</h2>
     ${entry.variants?.length ? `<p><strong>Variants:</strong> ${entry.variants.join(", ")}</p>` : ""}
@@ -84,14 +86,21 @@ function renderEntryContent(entry) {
     ${entry.antonyms?.length ? `<p><strong>Antonyms:</strong> ${entry.antonyms.join(", ")}</p>` : ""}
     ${entry.etymology ? `<p><strong>Etymology:</strong> ${entry.etymology}</p>` : ""}
     ${entry.explanation ? `<p><strong>Explanation:</strong> ${entry.explanation}</p>` : ""}
-    <p>
-      <button onclick='playAudioOrTTS(${JSON.stringify(entry)})'>
-        🔊 Hear Pronunciation
-      </button>
-    </p>
+
+    <!-- Button placeholder only -->
+    <p><button id="${btnId}">🔊 Hear Pronunciation</button></p>
+
     <p><em>Updated: ${entry.updated}</em></p>
   `;
 }
+entryContainer.innerHTML = renderEntryContent(entry);
+
+// now attach the click handler with the real object — no stringification
+const btn = document.getElementById(makeId(entry.lemma));
+if (btn) {
+  btn.addEventListener('click', () => playAudioOrTTS(entry));
+}
+
 
 // Main
 document.addEventListener("DOMContentLoaded", async () => {
