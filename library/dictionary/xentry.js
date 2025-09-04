@@ -1,5 +1,3 @@
-//new entry.js
-
 // Load the shard index
 async function loadShardIndex() {
   try {
@@ -22,7 +20,7 @@ async function fetchShard(url) {
   }
 }
 
-// Render dictionary entry HTML (supports multiple senses per lemma)
+// Render dictionary entry HTML (supports multiple senses per lemma) deprecaited 9/03/2025
 function renderEntryContent(entry) {
   const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
 
@@ -41,16 +39,6 @@ function renderEntryContent(entry) {
     sensesHtml = `<p>${entry.definition}</p>`;
   }
 
-  // Decide audio or TTS fallback
-  const audioButton = (entry.audio && entry.audio.trim() !== "")
-    ? `<p><button onclick="document.getElementById('${entry.lemma}-audio')?.play()">
-         🔊 Hear Pronunciation
-       </button>
-       <audio id="${entry.lemma}-audio" src="${entry.audio}"></audio></p>`
-    : `<p><button onclick="speakWord('${entry.lemma}', '${pronunciationText}')">
-         🔈 Read Aloud
-       </button></p>`;
-
   return `
     <h2>${entry.lemma}</h2>
     ${entry.variants?.length ? `<p><strong>Variants:</strong> ${entry.variants.join(", ")}</p>` : ""}
@@ -63,10 +51,21 @@ function renderEntryContent(entry) {
     ${entry.antonyms?.length ? `<p><strong>Antonyms:</strong> ${entry.antonyms.join(", ")}</p>` : ""}
     ${entry.etymology ? `<p><strong>Etymology:</strong> ${entry.etymology}</p>` : ""}
     ${entry.explanation ? `<p><strong>Explanation:</strong> ${entry.explanation}</p>` : ""}
-    ${audioButton}
+    ${
+      entry.audio
+        ? `<p><button onclick="document.getElementById('${entry.lemma}-audio')?.play()">
+             🔊 Hear Pronunciation
+           </button>
+           <audio id="${entry.lemma}-audio" src="${entry.audio}"></audio></p>`
+        : `<p><button onclick="speakWord('${entry.lemma}', '${pronunciationText}')">
+             🔈 Read Aloud
+           </button></p>`
+    }
     <p><em>Updated: ${entry.updated}</em></p>
   `;
 }
+
+// TTS Fallback Function
 function speakWord(word, pronunciation) {
   if (!('speechSynthesis' in window)) {
     return alert('Speech not supported on this device.');
