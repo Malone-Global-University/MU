@@ -1,5 +1,3 @@
-//new entry.js
-
 // Load the shard index
 async function loadShardIndex() {
   try {
@@ -22,9 +20,31 @@ async function fetchShard(url) {
   }
 }
 
+// TTS Fallback Function (word + pronunciation + definition)
+function speakWord(word, pronunciation, definition = "") {
+  if (!('speechSynthesis' in window)) {
+    return alert('Speech not supported on this device.');
+  }
+
+  // Build text to speak
+  let parts = [word];
+  if (pronunciation) parts.push(`Pronounced ${pronunciation}`);
+  if (definition) parts.push(`Definition: ${definition}`);
+
+  const text = parts.join(". ");
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.9;
+  u.pitch = 1.1;
+
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
 // Render dictionary entry HTML (supports multiple senses per lemma)
 function renderEntryContent(entry) {
   const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
+  const definitionText = entry.definition || entry.senses?.[0]?.definition || "";
 
   // Render senses
   let sensesHtml = "";
@@ -38,7 +58,7 @@ function renderEntryContent(entry) {
       `).join("");
     sensesHtml = `<ul>${sensesHtml}</ul>`;
   } else {
-    sensesHtml = `<p>${entry.definition}</p>`;
+    sensesHtml = `<p>${definitionText}</p>`;
   }
 
   // Decide audio or TTS fallback
@@ -47,7 +67,7 @@ function renderEntryContent(entry) {
          🔊 Hear Pronunciation
        </button>
        <audio id="${entry.lemma}-audio" src="${entry.audio}"></audio></p>`
-    : `<p><button onclick="speakWord('${entry.lemma}', '${pronunciationText}')">
+    : `<p><button onclick="speakWord('${entry.lemma}', '${pronunciationText}', '${definitionText}')">
          🔈 Read Aloud
        </button></p>`;
 
@@ -66,17 +86,6 @@ function renderEntryContent(entry) {
     ${audioButton}
     <p><em>Updated: ${entry.updated}</em></p>
   `;
-}
-function speakWord(word, pronunciation) {
-  if (!('speechSynthesis' in window)) {
-    return alert('Speech not supported on this device.');
-  }
-  const text = pronunciation ? `${word}. Pronounced ${pronunciation}.` : word;
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.9;
-  u.pitch = 1.1;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -121,3 +130,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error(err);
   }
 });
+
+//updated 9/03/2025 to include speech support if mp3 files are missing
