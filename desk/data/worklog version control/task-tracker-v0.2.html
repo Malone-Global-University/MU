@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Worklog | Malone Global University</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f8f9fa; }
+    header { background: #1f497d; color: #fff; padding: 12px 20px; font-size: 20px; }
+    .container { display: flex; margin: 20px; }
+
+    /* Sidebar */
+    .sidebar { width: 220px; padding: 15px; background: #fff; border: 1px solid #ccc; margin-right: 20px; }
+    .sidebar input, .sidebar select, .sidebar button { width: 100%; margin: 8px 0; padding: 6px; }
+
+    /* Main */
+    .main { flex: 1; background: #fff; border: 1px solid #ccc; padding: 15px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f1f1f1; cursor: pointer; }
+    .status { font-weight: bold; color: #1f497d; }
+    .pagination { margin-top: 10px; text-align: center; }
+    .pagination button { margin: 2px; padding: 5px 10px; border: 1px solid #1f497d; background: #fff; color: #1f497d; cursor: pointer; }
+    .pagination button:hover { background: #1f497d; color: #fff; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; 
+             width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+    .modal-content { background: #fff; margin: 10% auto; padding: 20px; border: 1px solid #ccc; width: 400px; }
+    .modal-content label { display: block; margin: 10px 0; }
+    .close { float: right; font-size: 20px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>Malone Global University – Worklog</header>
+  <main>
+    <section id="worklog">
+      <h2>Worklog Tasks</h2>
+      <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <h3>Search Tasks</h3>
+          <input type="text" id="searchText" placeholder="Enter keyword" oninput="applyFilters()">
+          <select id="statusFilter" onchange="applyFilters()">
+            <option value="all">All</option>
+            <option value="in-progress">In-Progress</option>
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+          </select>
+          <button onclick="openModal('add')">Add Task</button>
+        </aside>
+
+        <!-- Main Table -->
+        <div class="main">
+          <p id="results-count"></p>
+          <table id="taskTable">
+            <thead>
+              <tr>
+                <th>ID</th><th>Title</th><th>Modified</th><th>Version</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="pagination">
+            <button onclick="changePage(-1)">&laquo; Previous</button>
+            <span id="page-info"></span>
+            <button onclick="changePage(1)">Next &raquo;</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div id="taskModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h3 id="modal-title">Add/Edit Task</h3>
+      <form id="taskForm">
+        <label>ID: <input type="text" id="taskID" required></label>
+        <label>Title: <input type="text" id="taskTitle" required></label>
+        <label>Modified: <input type="datetime-local" id="taskModified" required></label>
+        <label>Version: <input type="text" id="taskVersion" required></label>
+        <label>Status:
+          <select id="taskStatus">
+            <option value="In-Progress">In-Progress</option>
+            <option value="Completed">Completed</option>
+            <option value="Pending">Pending</option>
+          </select>
+        </label>
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  </div>
+
+<script>
+let tasks = [
+  {id:"WL#1001", title:"Setup database schema", modified:"2025-08-20T10:30", version:"v1.0", status:"In-Progress"},
+  {id:"WL#1002", title:"Design homepage UI", modified:"2025-08-21T09:12", version:"v1.1", status:"Completed"},
+  {id:"WL#1003", title:"Implement login system", modified:"2025-08-22T15:45", version:"v1.2", status:"Pending"}
+];
+
+let currentPage = 1, rowsPerPage = 5, editingIndex = null;
+
+function renderTable() {
+  const tbody = document.querySelector("#taskTable tbody");
+  tbody.innerHTML = "";
+  const filtered = getFilteredTasks();
+  const start = (currentPage-1)*rowsPerPage;
+  const pageTasks = filtered.slice(start, start+rowsPerPage);
+
+  pageTasks.forEach((task,i) => {
+    let row = `<tr>
+      <td>${task.id}</td>
+      <td>${task.title}</td>
+      <td>${task.modified.replace("T"," ")}</td>
+      <td>${task.version}</td>
+      <td class="status">${task.status}</td>
+      <td><button onclick="openModal('edit',${start+i})">Edit</button></td>
+    </tr>`;
+    tbody.insertAdjacentHTML("beforeend", row);
+  });
+
+  document.getElementById("results-count").textContent = 
+    `Displaying ${start+1} to ${start+pageTasks.length} of ${filtered.length} results`;
+  document.getElementById("page-info").textContent = `Page ${currentPage}`;
+}
+
+function getFilteredTasks() {
+  const text = document.getElementById("searchText").value.toLowerCase();
+  const status = document.getElementById("statusFilter").value;
+  return tasks.filter(t=>{
+    const matchesText = !text || t.title.toLowerCase().includes(text);
+    const matchesStatus = status==="all" || t.status.toLowerCase()===status;
+    return matchesText && matchesStatus;
+  });
+}
+
+function applyFilters() { currentPage=1; renderTable(); }
+
+function changePage(dir) {
+  const maxPage = Math.ceil(getFilteredTasks().length/rowsPerPage);
+  currentPage = Math.min(Math.max(1,currentPage+dir), maxPage);
+  renderTable();
+}
+
+// Modal logic
+function openModal(mode,index) {
+  document.getElementById("taskModal").style.display="block";
+  document.getElementById("modal-title").textContent = mode==="add"?"Add Task":"Edit Task";
+  editingIndex = (mode==="edit") ? index : null;
+
+  if(editingIndex!==null){
+    const t = tasks[editingIndex];
+    document.getElementById("taskID").value = t.id;
+    document.getElementById("taskTitle").value = t.title;
+    document.getElementById("taskModified").value = t.modified;
+    document.getElementById("taskVersion").value = t.version;
+    document.getElementById("taskStatus").value = t.status;
+  } else {
+    document.getElementById("taskForm").reset();
+  }
+}
+
+function closeModal(){ document.getElementById("taskModal").style.display="none"; }
+
+document.getElementById("taskForm").onsubmit = function(e){
+  e.preventDefault();
+  const newTask = {
+    id:document.getElementById("taskID").value,
+    title:document.getElementById("taskTitle").value,
+    modified:document.getElementById("taskModified").value,
+    version:document.getElementById("taskVersion").value,
+    status:document.getElementById("taskStatus").value
+  };
+  if(editingIndex!==null){ tasks[editingIndex]=newTask; }
+  else { tasks.push(newTask); }
+  closeModal(); renderTable();
+};
+
+window.onclick = e => { if(e.target==document.getElementById("taskModal")) closeModal(); }
+
+renderTable();
+</script>
+</body>
+</html>

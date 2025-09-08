@@ -1,0 +1,274 @@
+11:14 AM 8/16/2025
+Perfect! Here's a fully merged, metadata-driven lesson generator that includes everything:
+
+Navbar, hero, footer components
+
+Sections auto-generated from JSON
+
+Lesson skeleton HTML
+
+Lessons index updated alphabetically
+
+Automatic Previous/Next navigation links
+
+Lesson navigation CSS
+
+Save this as generate-lesson.js:
+
+const fs = require('fs');
+const path = require('path');
+
+// -------------------------
+// Step 0: Load site config
+// -------------------------
+const siteConfigPath = path.join(__dirname, 'site-config.json');
+let siteConfig = {
+  universityName: "Malone University",
+  logoPath: "logo.png",
+  navbarLinks: []
+};
+
+if (fs.existsSync(siteConfigPath)) {
+  siteConfig = JSON.parse(fs.readFileSync(siteConfigPath, 'utf8'));
+  console.log("Loaded site-config.json");
+}
+
+// -------------------------
+// Step 1: Parse input
+// -------------------------
+const lessonName = process.argv[2];
+if (!lessonName) {
+  console.error("Usage: node generate-lesson.js <lesson-name>");
+  process.exit(1);
+}
+
+// -------------------------
+// Step 2: Load lesson metadata
+// -------------------------
+const lessonMetaPath = path.join(__dirname, 'lesson-configs', `${lessonName}.json`);
+if (!fs.existsSync(lessonMetaPath)) {
+  console.error("Lesson metadata JSON not found:", lessonMetaPath);
+  process.exit(1);
+}
+
+const lessonMeta = JSON.parse(fs.readFileSync(lessonMetaPath, 'utf8'));
+const sections = lessonMeta.sections;
+
+// -------------------------
+// Step 3: Ensure components folder
+// -------------------------
+const lessonDir = path.join(__dirname, 'components', lessonName);
+if (!fs.existsSync(lessonDir)) fs.mkdirSync(lessonDir, { recursive: true });
+
+// -------------------------
+// Step 4: Generate section components
+// -------------------------
+sections.forEach(section => {
+  const sectionHtml = `<section id="${section.id}">
+  <h2>${section.title}</h2>
+  <p>${section.content}</p>
+</section>`;
+  const sectionPath = path.join(lessonDir, `${section.id}.html`);
+  fs.writeFileSync(sectionPath, sectionHtml, 'utf8');
+  console.log(`Created section component: ${sectionPath}`);
+});
+
+// -------------------------
+// Step 5: Generate hero component
+// -------------------------
+const heroHtmlPath = path.join(__dirname, 'components', 'hero.html');
+const heroHtml = `<div class="hero">
+  <h1>${lessonMeta.hero.title}</h1>
+  <p>${lessonMeta.hero.subtitle}</p>
+</div>`;
+fs.writeFileSync(heroHtmlPath, heroHtml, 'utf8');
+console.log(`Updated hero component: ${heroHtmlPath}`);
+
+// -------------------------
+// Step 6: Generate navbar component
+// -------------------------
+const navbarHtmlPath = path.join(__dirname, 'components', 'navbar.html');
+if (!fs.existsSync(navbarHtmlPath)) {
+  const navbarLinksHtml = siteConfig.navbarLinks.map(link =>
+    `<li><a href="${link.href}">${link.label}</a></li>`
+  ).join('\n    ');
+
+  const navbarHtml = `<nav class="navbar">
+  <div class="logo-container">
+    <img src="${siteConfig.logoPath}" alt="${siteConfig.universityName} Logo" class="logo-img">
+    <span class="school-name">${siteConfig.universityName}</span>
+  </div>
+  <ul class="nav-links">
+    ${navbarLinksHtml}
+  </ul>
+  <button id="theme-toggle" class="hamburger" title="Toggle theme">💻</button>
+</nav>`;
+  fs.writeFileSync(navbarHtmlPath, navbarHtml, 'utf8');
+  console.log(`Created navbar component: ${navbarHtmlPath}`);
+}
+
+// -------------------------
+// Step 7: Generate footer component
+// -------------------------
+const footerHtmlPath = path.join(__dirname, 'components', 'footer.html');
+if (!fs.existsSync(footerHtmlPath)) {
+  const footerHtml = `<footer>
+  <p>© 2025 ${siteConfig.universityName}. Building the future, on our own terms.</p>
+</footer>`;
+  fs.writeFileSync(footerHtmlPath, footerHtml, 'utf8');
+  console.log(`Created footer component: ${footerHtmlPath}`);
+}
+
+// -------------------------
+// Step 8: Generate lesson skeleton HTML
+// -------------------------
+const lessonHtmlPath = path.join(__dirname, `${lessonName}.html`);
+const sectionDivs = sections.map(s => `<div id="lesson-${s.id}"></div>`).join('\n    ');
+
+let lessonHtmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${lessonMeta.title} | ${siteConfig.universityName}</title>
+  <link rel="stylesheet" href="components/css/theme.css">
+</head>
+<body>
+
+  <div id="navbar-placeholder"></div>
+  <div id="hero-placeholder"></div>
+
+  <main>
+    ${sectionDivs}
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="components/js/theme-toggle.js"></script>
+
+  <script>
+    async function loadComponent(id, path) {
+      const res = await fetch(path);
+      const html = await res.text();
+      document.getElementById(id).innerHTML = html;
+    }
+
+    loadComponent('navbar-placeholder', 'components/navbar.html');
+    loadComponent('hero-placeholder', 'components/hero.html');
+    loadComponent('footer-placeholder', 'components/footer.html');
+    ${sections.map(s => `loadComponent('lesson-${s.id}', 'components/${lessonName}/${s.id}.html');`).join('\n    ')}
+  </script>
+</body>
+</html>`;
+
+// -------------------------
+// Step 9: Update lessons index
+// -------------------------
+const lessonsIndexPath = path.join(__dirname, 'lessons', 'index.html');
+if (!fs.existsSync(path.dirname(lessonsIndexPath))) fs.mkdirSync(path.dirname(lessonsIndexPath), { recursive: true });
+
+let existingLessons = [];
+if (fs.existsSync(lessonsIndexPath)) {
+  const indexContent = fs.readFileSync(lessonsIndexPath, 'utf8');
+  const linkRegex = /<li><a href=".*?">(.*?)<\/a><\/li>/g;
+  let match;
+  while ((match = linkRegex.exec(indexContent)) !== null) {
+    existingLessons.push({ name: match[1], file: match[1].toLowerCase().replace(/\s+/g, '-') + '.html' });
+  }
+}
+
+if (!existingLessons.find(l => l.name === lessonMeta.title)) {
+  existingLessons.push({ name: lessonMeta.title, file: `${lessonName}.html` });
+}
+existingLessons.sort((a, b) => a.name.localeCompare(b.name));
+
+const indexHtmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lessons | ${siteConfig.universityName}</title>
+<link rel="stylesheet" href="../components/css/theme.css">
+</head>
+<body>
+<h1>All Lessons</h1>
+<ul id="lessons-list">
+  ${existingLessons.map(l => `<li><a href="../${l.file}">${l.name}</a></li>`).join('\n  ')}
+</ul>
+</body>
+</html>`;
+
+fs.writeFileSync(lessonsIndexPath, indexHtmlContent, 'utf8');
+console.log(`Updated lessons index at: ${lessonsIndexPath}`);
+
+// -------------------------
+// Step 9b: Previous / Next lesson navigation
+// -------------------------
+const lessonFiles = existingLessons.map(l => l.file);
+const currentIndex = lessonFiles.indexOf(`${lessonName}.html`);
+const prevLesson = currentIndex > 0 ? lessonFiles[currentIndex - 1] : null;
+const nextLesson = currentIndex < lessonFiles.length - 1 ? lessonFiles[currentIndex + 1] : null;
+
+let navLinksHtml = '';
+if (prevLesson || nextLesson) {
+  navLinksHtml = `<div class="lesson-nav">`;
+  if (prevLesson) navLinksHtml += `<a href="../${prevLesson}">⬅ Previous</a>`;
+  if (nextLesson) navLinksHtml += `<a href="../${nextLesson}">Next ➡</a>`;
+  navLinksHtml += `</div>`;
+}
+
+lessonHtmlContent = lessonHtmlContent.replace('</main>', `${navLinksHtml}\n  </main>`);
+fs.writeFileSync(lessonHtmlPath, lessonHtmlContent, 'utf8');
+console.log("Injected Previous/Next navigation links");
+
+// -------------------------
+// Step 10: Lesson navigation CSS
+// -------------------------
+const themeCssPath = path.join(__dirname, 'components', 'css', 'theme.css');
+const lessonNavCss = `
+.lesson-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2rem;
+  padding: 1rem 0;
+  border-top: 2px solid var(--accent);
+}
+.lesson-nav a {
+  padding: 0.5rem 1rem;
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.lesson-nav a:hover { background: var(--accent); color: var(--card); }
+@media (max-width: 600px) {
+  .lesson-nav { flex-direction: column; gap: 1rem; align-items: center; }
+  .lesson-nav a { width: 100%; text-align: center; }
+}
+`;
+
+if (!fs.existsSync(themeCssPath)) fs.mkdirSync(path.dirname(themeCssPath), { recursive: true });
+if (!fs.readFileSync(themeCssPath, 'utf8').includes('.lesson-nav')) {
+  fs.appendFileSync(themeCssPath, lessonNavCss, 'utf8');
+  console.log('Added lesson navigation CSS to theme.css');
+}
+
+console.log(`Lesson '${lessonName}' scaffolding complete!`);
+
+✅ Usage
+node generate-lesson.js lesson9
+
+
+Creates all components and skeleton HTML.
+
+Updates lesson index alphabetically.
+
+Injects Previous/Next navigation automatically.
+
+Appends lesson-nav CSS if missing.
+
+This is now a fully automated, metadata-driven, componentized lesson generator ready for your Pan-African free online school.
+
+Do you want me to also automatically generate the theme-toggle JS component as a separate file for this workflow?

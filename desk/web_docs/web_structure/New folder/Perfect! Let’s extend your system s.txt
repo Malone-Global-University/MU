@@ -1,0 +1,187 @@
+Perfect! Let’s extend your system so that every new lesson is automatically added to a central lessons index page for easy navigation. This index will list all lessons with links to their HTML pages.
+
+1. Enhanced Lesson Generator with Index Update
+
+We’ll modify the previous generate-lesson-flex.js to also update lessons/index.html (or create it if missing) whenever a new lesson is generated.
+
+const fs = require('fs');
+const path = require('path');
+
+const lessonName = process.argv[2];
+let sectionsInput = process.argv[3];
+
+if (!lessonName) {
+  console.error("Usage: node generate-lesson-flex.js <lesson-name> [sections]");
+  process.exit(1);
+}
+
+const defaultSections = ['intro', 'key-concepts', 'diagrams', 'exercises', 'summary'];
+const sections = sectionsInput ? sectionsInput.split(',') : defaultSections;
+
+// Paths
+const lessonDir = path.join(__dirname, 'components', lessonName);
+const lessonHtmlPath = path.join(__dirname, `${lessonName}.html`);
+const lessonsIndexPath = path.join(__dirname, 'lessons', 'index.html');
+
+// --- Step 1: Create lesson components folder ---
+if (!fs.existsSync(lessonDir)) fs.mkdirSync(lessonDir, { recursive: true });
+
+// --- Step 2: Create section files ---
+const templates = {
+  'intro': `<section id="introduction">
+  <h2>Introduction</h2>
+  <p>Introduction content for ${lessonName} goes here.</p>
+</section>`,
+  'key-concepts': `<section id="key-concepts">
+  <h2>Key Concepts</h2>
+  <article>
+    <h3>Concept 1</h3>
+    <p>Description of concept 1.</p>
+  </article>
+</section>`,
+  'diagrams': `<section id="diagrams">
+  <h2>Visual Diagrams</h2>
+  <p>Placeholder for diagrams.</p>
+</section>`,
+  'exercises': `<section id="exercises">
+  <h2>Exercises</h2>
+  <article>
+    <h3>Exercise 1</h3>
+    <p>Exercise description here.</p>
+  </article>
+</section>`,
+  'summary': `<section id="summary">
+  <h2>Summary</h2>
+  <p>Summary points for ${lessonName}.</p>
+</section>`
+};
+
+sections.forEach(section => {
+  if (templates[section]) {
+    const filePath = path.join(lessonDir, `${section}.html`);
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, templates[section], 'utf8');
+      console.log(`Created: ${filePath}`);
+    }
+  }
+});
+
+// --- Step 3: Create skeleton lesson HTML page ---
+if (!fs.existsSync(lessonHtmlPath)) {
+  const sectionDivs = sections.map(s => `<div id="lesson-${s}"></div>`).join('\n    ');
+  const lessonHtmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${lessonName.replace(/-/g,' ')} | Malone University</title>
+  <link rel="stylesheet" href="components/css/theme.css">
+</head>
+<body>
+
+  <div id="navbar-placeholder"></div>
+  <div id="hero-placeholder"></div>
+
+  <main>
+    ${sectionDivs}
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="components/js/theme-toggle.js"></script>
+
+  <script>
+    async function loadComponent(id, path) {
+      const res = await fetch(path);
+      const html = await res.text();
+      document.getElementById(id).innerHTML = html;
+    }
+
+    loadComponent('navbar-placeholder', 'components/navbar.html');
+    loadComponent('hero-placeholder', 'components/hero.html');
+    loadComponent('footer-placeholder', 'components/footer.html');
+    ${sections.map(s => `loadComponent('lesson-${s}', 'components/${lessonName}/${s}.html');`).join('\n    ')}
+  </script>
+</body>
+</html>`;
+
+  fs.writeFileSync(lessonHtmlPath, lessonHtmlContent, 'utf8');
+  console.log(`Created lesson page: ${lessonHtmlPath}`);
+} else {
+  console.log(`Lesson page already exists: ${lessonHtmlPath}`);
+}
+
+// --- Step 4: Update lessons index page ---
+const lessonsDir = path.join(__dirname, 'lessons');
+if (!fs.existsSync(lessonsDir)) fs.mkdirSync(lessonsDir, { recursive: true });
+
+let indexContent = '';
+if (fs.existsSync(lessonsIndexPath)) {
+  indexContent = fs.readFileSync(lessonsIndexPath, 'utf8');
+  // Remove any previous link for this lesson
+  indexContent = indexContent.replace(
+    new RegExp(`<li><a href="../${lessonName}\\.html">.*?</a></li>`, 'g'),
+    ''
+  );
+} else {
+  // Initial index skeleton
+  indexContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lessons | Malone University</title>
+<link rel="stylesheet" href="../components/css/theme.css">
+</head>
+<body>
+<h1>All Lessons</h1>
+<ul id="lessons-list">
+</ul>
+</body>
+</html>`;
+}
+
+// Insert new lesson link
+const lessonLink = `<li><a href="../${lessonName}.html">${lessonName.replace(/-/g,' ')}</a></li>`;
+
+// Inject into <ul id="lessons-list">
+indexContent = indexContent.replace(
+  /<ul id="lessons-list">([\s\S]*?)<\/ul>/,
+  `<ul id="lessons-list">\n  $1  ${lessonLink}\n</ul>`
+);
+
+fs.writeFileSync(lessonsIndexPath, indexContent, 'utf8');
+console.log(`Updated lessons index at: ${lessonsIndexPath}`);
+
+console.log(`Lesson '${lessonName}' scaffolding and index update complete.`);
+
+2. How to Use
+Default (all sections)
+node generate-lesson-flex.js lesson6
+
+Custom sections
+node generate-lesson-flex.js lesson7 intro,key-concepts,summary
+
+
+The script creates the lesson folder, all requested components, the skeleton HTML page, and adds a link to lessons/index.html automatically.
+
+lessons/index.html now serves as a dynamic navigation page for all lessons.
+
+✅ Resulting Structure Example:
+
+components/
+└── lesson6/
+    ├── intro.html
+    ├── key-concepts.html
+    ├── diagrams.html
+    ├── exercises.html
+    └── summary.html
+
+lesson6.html
+lessons/
+└── index.html  <-- updated with link to lesson6.html
+
+
+If you want, I can also make the lessons index auto-sort alphabetically so new lessons always appear in order.
+
+Do you want me to add that?

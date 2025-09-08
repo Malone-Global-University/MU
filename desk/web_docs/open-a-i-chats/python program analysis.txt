@@ -1,0 +1,397 @@
+what does this python program do: Ultimate MGU System Map with Real-Time Auto-Update
+Date: 2025-08-16
+Author: Malone Global University
+
+Features:
+- Auto-regenerates HTML whenever files change
+- Collapsible folders
+- Department color-coding
+- Recent file highlights
+- Dashboard summary
+- Search/filter box
+- Clickable links & tooltips
+- PDF export
+"""
+
+import os
+import subprocess
+from datetime import datetime, timedelta
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import time
+
+BASE_DIRS = ["scripts", "departments", "components", "images", "MGU-DOCS"]
+LOGS = ["conversion_log.txt", "README.md"]
+HTML_FILE = "mgu_system_map.html"
+RECENT_DELTA = timedelta(days=1)
+now = datetime.now()
+
+department_colors = {
+    "law": "#FF9999",
+    "science": "#99CCFF",
+    "math": "#99FF99",
+    "scripts": "#FFD700",
+    "components": "#FFCC66",
+    "images": "#CC9966",
+    "MGU-DOCS": "#CC99FF"
+}
+
+department_summary = {}
+
+def generate_map():
+    global now
+    now = datetime.now()
+    department_summary.clear()
+
+    def scan_folder(folder_path, dept=None):
+        structure = {}
+        if os.path.exists(folder_path):
+            for item in sorted(os.listdir(folder_path)):
+                full_path = os.path.join(folder_path, item)
+                if os.path.isdir(full_path):
+                    new_dept = dept
+                    if folder_path.startswith("departments") and dept is None:
+                        new_dept = item
+                        department_summary[new_dept] = {"total": 0, "recent": 0, "color": department_colors.get(new_dept, "#FFFFFF")}
+                    elif folder_path in BASE_DIRS:
+                        new_dept = item
+                        if item not in department_summary:
+                            department_summary[item] = {"total": 0, "recent": 0, "color": department_colors.get(item, "#FFFFFF")}
+                    structure[item] = scan_folder(full_path, new_dept)
+                else:
+                    mtime = datetime.fromtimestamp(os.path.getmtime(full_path))
+                    recent = (now - mtime) <= RECENT_DELTA
+                    info = {"path": full_path.replace("\\", "/"), "mtime": mtime.strftime("%Y-%m-%d %H:%M:%S"), "recent": recent}
+                    if dept and dept in department_summary:
+                        department_summary[dept]["total"] += 1
+                        if recent:
+                            department_summary[dept]["recent"] += 1
+                    structure[item] = info
+        return structure
+
+    def build_html_list(structure, dept=None):
+        html = "<ul class='file-tree'>"
+        for key, value in structure.items():
+            color = department_colors.get(dept, "")
+            if isinstance(value, dict) and "path" in value:
+                style = "background-color: yellow;" if value["recent"] else f"background-color: {color};"
+                html += f'<li title="Last Modified: {value["mtime"]}" style="{style}">'
+                html += f'<a href="{value["path"]}" target="_blank">{key}</a></li>'
+            elif isinstance(value, dict):
+                html += f"""
+                <li>
+                    <span class="caret">{key}</span>
+                    {build_html_list(value, dept)}
+                </li>"""
+            else:
+                html += f"<li>{key}</li>"
+        html += "</ul>"
+        return html
+
+    # Scan base folders
+    mgu_structure = {}
+    for base in BASE_DIRS:
+        mgu_structure[base] = scan_folder(base)
+
+    # Add logs
+    log_info = {log: {"path": log, "mtime": now.strftime("%Y-%m-%d %H:%M:%S"), "recent": True} for log in LOGS}
+    mgu_structure["Logs & Summaries"] = log_info
+    department_summary["Logs & Summaries"] = {"total": len(LOGS), "recent": len(LOGS), "color": "#FFCCCC"}
+
+    # Dashboard HTML
+    dashboard_html = "<h2>Department Summary</h2><ul>"
+    for dept, data in department_summary.items():
+        dashboard_html += f'<li style="background-color:{data["color"]}; padding:2px;">{dept}: {data["total"]} files, {data["recent"]} recently updated</li>'
+    dashboard_html += "</ul>"
+
+    # HTML Template
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="UTF-8">
+    <title>MGU Content System Map</title>
+    <style>
+    body {{ font-family: Arial, sans-serif; background-color: #f5f5f5; }}
+    .container {{ max-width: 1000px; margin: auto; padding: 20px; }}
+    h1 {{ text-align: center; color: #002147; }}
+    h2 {{ color: #004080; }}
+    ul {{ list-style-type: none; padding-left: 20px; display: none; }}
+    li {{ margin: 5px 0; }}
+    li > ul {{ padding-left: 20px; }}
+    a {{ text-decoration: none; color: #0066cc; }}
+    a:hover {{ text-decoration: underline; }}
+    .caret {{ cursor: pointer; user-select: none; font-weight: bold; color: #004080; }}
+    .caret::before {{ content: "\\25B6"; display: inline-block; margin-right: 6px; }}
+    .caret-down::before {{ transform: rotate(90deg); }}
+    #searchBox {{ width: 100%; padding: 8px; margin-bottom: 10px; font-size: 16px; }}
+    #downloadPdf {{ padding: 8px 12px; font-size: 16px; margin-bottom:10px; }}
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    </head>
+    <body>
+    <div class="container">
+    <h1>MGU Content System Map</h1>
+    {dashboard_html}
+    <input type="text" id="searchBox" placeholder="Search files or folders..." onkeyup="filterTree()">
+    <button id="downloadPdf">Download PDF</button>
+    {build_html_list(mgu_structure)}
+    </div>
+
+    <script>
+    // Collapsible folders
+    var togglers = document.getElementsByClassName("caret");
+    for (var i = 0; i < togglers.length; i++) {{
+      togglers[i].addEventListener("click", function() {{
+        this.parentElement.querySelector("ul").classList.toggle("active");
+        this.classList.toggle("caret-down");
+        var ul = this.parentElement.querySelector("ul");
+        ul.style.display = (ul.style.display === "block") ? "none" : "block";
+      }});
+    }}
+
+    // Show top-level lists by default
+    var topUl = document.querySelectorAll(".container > ul");
+    topUl.forEach(ul => ul.style.display = "block");
+
+    // Search/filter function
+    function filterTree() {{
+      var input = document.getElementById('searchBox');
+      var filter = input.value.toLowerCase();
+      var items = document.querySelectorAll('.file-tree li');
+      items.forEach(function(li) {{
+        var text = li.textContent || li.innerText;
+        li.style.display = text.toLowerCase().indexOf(filter) > -1 ? "" : "none";
+      }});
+    }}
+
+    // PDF export
+    document.getElementById("downloadPdf").addEventListener("click", function() {{
+        var element = document.querySelector(".container");
+        var opt = {{
+            margin: 0.5,
+            filename: 'MGU_Content_Map.pdf',
+            image: {{ type: 'jpeg', quality: 0.98 }},
+            html2canvas: {{ scale: 2 }},
+            jsPDF: {{ unit: 'in', format: 'letter', orientation: 'portrait' }}
+        }};
+        html2pdf().set(opt).from(element).save();
+    }});
+    </script>
+    </body>
+    </html>
+    """
+
+    # Write HTML file
+    with open(HTML_FILE, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"MGU map regenerated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+# Watchdog event handler
+class ChangeHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if event.src_path.endswith((".md", ".html")):
+            generate_map()
+
+# Start observer
+if __name__ == "__main__":
+    generate_map()  # initial generation
+    observer = Observer()
+    for folder in BASE_DIRS:
+        observer.schedule(ChangeHandler(), path=folder, recursive=True)
+    observer.start()
+    print("Watching for file changes...")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+ChatGPT said:
+
+This Python program is a real-time file system mapper and HTML dashboard generator for the Malone Global University (MGU) content system. Here's a detailed breakdown of what it does:
+
+1. Purpose
+
+It automatically generates an interactive HTML system map of your project directories and files, including features like:
+
+Collapsible folder trees
+
+Department-specific color-coding
+
+Recently updated file highlights
+
+Dashboard summary of files per department
+
+Search/filter capability
+
+Clickable links to files
+
+PDF export of the map
+
+Real-time auto-update whenever files change
+
+2. Key Components
+Directories and Logs
+BASE_DIRS = ["scripts", "departments", "components", "images", "MGU-DOCS"]
+LOGS = ["conversion_log.txt", "README.md"]
+
+
+It monitors these directories and files for changes.
+
+Assigns colors to each department/folder for easy visual distinction.
+
+Department Colors
+department_colors = { ... }
+
+
+Used for background highlighting in the HTML map.
+
+recent files are highlighted in yellow.
+
+Recent Files
+RECENT_DELTA = timedelta(days=1)
+
+
+Files modified in the last 24 hours are marked as “recent.”
+
+3. Functions
+scan_folder(folder_path, dept=None)
+
+Recursively scans directories.
+
+Tracks:
+
+Full path
+
+Last modified time
+
+Whether a file is “recent”
+
+Updates department summary with totals and recent counts.
+
+build_html_list(structure, dept=None)
+
+Builds an HTML <ul> tree of files and folders.
+
+Collapsible folders with clickable links.
+
+Applies department colors and highlights recent files.
+
+4. HTML Generation
+
+Generates an interactive HTML file (mgu_system_map.html) with:
+
+Dashboard Summary
+
+Department: total files, recently updated files
+
+
+Collapsible file/folder tree
+
+Search box to filter files in real-time
+
+PDF export button (via html2pdf.js)
+
+Uses inline JavaScript for:
+
+Collapsible folders
+
+Search/filter
+
+PDF export
+
+5. Real-Time Auto-Update
+
+Uses watchdog:
+
+observer = Observer()
+observer.schedule(ChangeHandler(), path=folder, recursive=True)
+
+
+Monitors file changes in BASE_DIRS.
+
+Regenerates the HTML whenever .md or .html files are modified.
+
+6. Execution Flow
+
+Generate initial HTML map (generate_map()).
+
+Start a file watcher to detect changes.
+
+Regenerate HTML automatically whenever files change.
+
+Keep running until manually stopped (Ctrl+C).
+
+7. Output
+
+mgu_system_map.html: interactive, searchable, and color-coded system map of MGU files.
+
+PDF export of the same map.
+
+Console logs showing when the map was regenerated.
+
+✅ In short: This program gives MGU a live, interactive dashboard of all their content, automatically updated when files change, color-coded by department, searchable, and exportable to PDF.
+
+If you want, I can make a diagram showing exactly how the file scanning → HTML generation → dashboard → auto-update workflow flows. It would make this easier to visualize. Do you want me to do that?
+
+You said:
+To use it I put the file in the root folder and then run the command on powershell?
+ChatGPT said:
+
+Yes — exactly. Here’s the step-by-step:
+
+1. Place the Script
+
+Put your Python script (the one you shared) in the root folder of your project.
+
+The root folder should contain your BASE_DIRS folders (scripts, departments, etc.) at the same level as the script.
+
+2. Open PowerShell
+
+Navigate to the root folder where the script is located:
+
+cd "C:\path\to\your\project\root"
+
+3. Run the Script
+
+Run the script with Python:
+
+python script_name.py
+
+
+Replace script_name.py with the actual filename.
+
+If you have multiple Python versions installed, you may need:
+
+python3 script_name.py
+
+4. What Happens Next
+
+The script will scan all your base directories, generate mgu_system_map.html, and print a message like:
+
+MGU map regenerated at 2025-08-17 23:45:12
+Watching for file changes...
+
+
+As long as the script runs, it keeps monitoring the directories for changes.
+
+Whenever a .md or .html file changes, the HTML map is auto-updated.
+
+5. Open the Map
+
+Open mgu_system_map.html in a browser to view the live, interactive system map.
+
+Tips
+
+Keep PowerShell open while the script runs; closing it stops the file monitoring.
+
+Make sure you have watchdog installed:
+
+pip install watchdog
+
+
+You can stop the script anytime with Ctrl + C.
+
+If you want, I can write a ready-to-use PowerShell one-liner that installs dependencies and runs the script in one command. This would make it plug-and-play. Do you want me to do that?

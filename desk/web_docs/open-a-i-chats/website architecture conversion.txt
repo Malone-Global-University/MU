@@ -1,0 +1,526 @@
+Malone Global University — Website Structure Whitepaper
+
+Purpose: Document the website architecture, content workflow, and operational standards for the Malone Global University (MGU) website so it can be stored in the library’s reference repository and used by developers, content authors, and maintainers.
+Prepared by: Malone Global University — Web & Dev Team
+Date: 2025-08-22
+Revision: 1.0
+
+Executive summary
+
+This whitepaper describes a deterministic, maintainable website structure for MGU that prevents orphan pages, simplifies publishing, and supports a modular component system. It separates private source content from public, centralizes UI components and metadata, provides a searchable registry, enforces naming conventions, and includes a simple automated registry generator to keep search and sitemaps accurate. The goal is predictable builds, easier onboarding, fewer deployment surprises, and a single source of truth for site content.
+
+1. Objectives
+
+Prevent orphan (unreferenced) public pages and partials.
+
+Keep authoring (private drafts) and published pages separated.
+
+Provide a uniform page template and component system (navbar, hero, footer).
+
+Include site-wide search, department sub-navigation, breadcrumbs, and accessible mobile-friendly nav (collapsible).
+
+Provide a persistent theme (dark/light) toggle stored in user preference.
+
+Make maintenance simple: automated page registry generation, clear naming conventions, and a documented build/publish workflow.
+
+Ensure content is discoverable in the library reference repository with metadata for search and citation.
+
+2. High-level architecture
+C:\mgu (root)
+├─ public/                     # Public-facing, deployed site (Netlify)
+├─ content/                    # Private drafts and editable source (authors)
+├─ component/                  # UI components, css, js, registry (single source)
+│  ├─ css/
+│  ├─ partials/
+│  ├─ script/js/
+│  └─ registry/pages.json
+├─ image/                      # Organized by department / shared
+├─ library/                    # Encyclopedia, wiki, dictionary, blackpapers
+├─ mgu_desk/                   # Staging / dev notes / screenshots
+├─ software/                   # Build and utility scripts
+└─ node_modules/
+
+
+Key separation: content/ holds drafts; public/ holds generated HTML served to users. component/ contains UI building blocks reused across pages and the search registry pages.json.
+
+3. Naming & file conventions (required)
+
+File slugs: Use lower-case, kebab-case (e.g., lesson-13-html5-new-elements.html).
+
+Directories: department/<department-slug>/... (e.g., department/it/)
+
+Page metadata required: Every public HTML page must include:
+
+<title>Descriptive Title | Malone Global University</title>
+
+<meta name="description" content="Concise page summary (120–160 chars)">
+
+Optional: <meta name="keywords" content="tag1, tag2">
+
+Optional: body attribute data-breadcrumbs="Home|Department|Course Title" to control breadcrumbs.
+
+Component path standard: Use component/partials/* for HTML partials, component/css/* for styles, and component/script/js/* for behavior.
+
+4. Component system
+
+Maintain a small set of shared components to reduce duplication and ensure consistent UI.
+
+Primary components
+
+component/partials/navbar.html — main navigation, department sub-navbar placeholder, search input, theme toggle (bottom of nav list), breadcrumbs container. Must be accessible and collapsible on narrow viewports.
+
+component/partials/hero.html — optional page hero used on landing pages or department hubs.
+
+component/partials/footer.html — site-wide footer with copyright.
+
+component/css/main.css — global variables, layout, header, navbar styles, dark-mode variable overrides.
+
+component/script/js/main.js — nav collapse, sub-menu toggles, breadcrumbs generator, client-side search UI.
+
+component/script/js/theme-toggle.js — persistent theme management.
+
+component/registry/pages.json — canonical site pages registry and search index.
+
+Loading pattern
+Pages use a minimal wrapper HTML template that loads these partials asynchronously with a small JS loader (ensures any updates to partials propagate site-wide without editing every page).
+
+5. Page template (reference)
+
+All public pages follow a canonical template to guarantee consistent metadata and component loading. The template includes:
+
+Centered header with school logo and school name “Malone Global University”.
+
+Main navbar directly under the header.
+
+main element for the page content.
+
+Footer and scripts included at the bottom.
+
+This practice enforces consistent accessibility landmarks, search, and breadcrumb behaviors.
+
+6. Registry & search
+
+Purpose: A single, generated JSON file (component/registry/pages.json) is the canonical index for client-side search, sitemaps, and discovery.
+
+Registry fields (per page):
+
+{
+  "title": "Intro to HTML",
+  "url": "/department/it/intro-to-html.html",
+  "description": "Learn the basic structure of HTML documents, tags, and elements.",
+  "department": "IT",
+  "tags": ["html","web","it"]
+}
+
+
+Generation: A simple script (software/generate_registry.py) scans public/ for HTML pages, extracts <title> and <meta name="description"> and writes pages.json. This is run as part of the publish/build step to keep search and sitemap accurate and to detect unpublished/draft pages or orphaned files.
+
+7. Publishing workflow (recommended)
+
+Authoring — Writers create/modify source in content/ or department/ (private).
+
+Build — Run markdown → HTML conversion for lessons and pages, output to public/.
+
+Registry update — Run software/generate_registry.py to regenerate component/registry/pages.json and optionally sitemap.xml.
+
+Review — QA review of the public/ site locally or on a staging preview.
+
+Commit & deploy — Commit public/ and component/registry/pages.json (or push a built artifact) to the repository/Netlify to trigger production deployment.
+
+Post-deploy checks — Verify Netlify build succeeded, spot-check search and breadcrumbs.
+
+Notes: Keep content/ out of the build artifact if you want to avoid exposing drafts — only public/ is required for hosting.
+
+8. Orphan prevention strategies
+
+Central registry: The registry is the single source of truth for what exists publicly (search, sitemap).
+
+Build-time checks: The build script should validate that every public page is present in the registry. Conversely, pages in the registry but missing from public/ are flagged.
+
+Link auditing: Optional enhanced script can scan anchor tags for broken links and list pages with zero incoming links in public/ (likely orphaned).
+
+Naming & placement rules: Department pages placed under public/department/<dept>/ make hierarchy explicit and easier to audit.
+
+9. Navigation & UX rules
+
+Top header: Large centered site title “Malone Global University”, with logo left (or above on narrow screens).
+
+Main navbar: Positioned below header, includes primary links plus “Departments” sub-navigation.
+
+Sub-navbar: Expandable list of departments; can appear as a flyout on desktop and as a nested list inside the mobile panel.
+
+Breadcrumbs: Per-page breadcrumbs generated from data-breadcrumbs attribute or derived from URL path segments as fallback. Inserted into #breadcrumbs.
+
+Search: Site-wide search field in navbar queries component/registry/pages.json. For small to medium sites this client-side search is performant and immediate; for larger catalogs we recommend a server-side index (Algolia/Elastic).
+
+Mobile: Navbar must be collapsible (hamburger). The mobile nav slides in or expands over the content and supports keyboard navigation and ARIA attributes (aria-expanded, aria-controls).
+
+10. Theming and accessibility
+
+Dark mode: Implemented with CSS custom properties (variables) and toggled via component/script/js/theme-toggle.js. The toggle is in the navbar list at the bottom for easy discoverability. User preference stored in localStorage.
+
+Accessibility: All interactive elements must include appropriate ARIA attributes, focus styles, and semantic HTML (nav, main, footer). Navigation must be operable by keyboard. Contrast ratios should meet WCAG AA.
+
+Responsive: CSS uses breakpoints to ensure header, nav, and main content reflow on phones/tablets/desktops.
+
+11. Content & metadata guidelines (for library documentation)
+
+Each published page should include:
+
+Author (if relevant) — author line and last updated date.
+
+Title and description as required by registry generation.
+
+Department tag and additional taxonomy tags — used for filtering in search and in the library repository.
+
+Suggest storing a short JSON/YAML front-matter in the source content to capture metadata which the build script uses to populate registry fields.
+
+12. Security, privacy & access control
+
+Private content: Keep private drafts and developer-only tools out of public/. Use .gitignore to exclude local-only assets.
+
+Credentials: Never store API keys, credentials, or private tokens in the repository plaintext. Use environment variables for build-time secrets.
+
+User data: If future search or theme preferences are synced server-side, ensure compliance with data policies and provide a privacy page documenting stored data.
+
+13. Deployment recommendations
+
+Use Netlify (already in your stack) or similar static-hosting provider for public/.
+
+The CI pipeline:
+
+On main branch push: Build step runs the markdown → HTML converter, runs generate_registry.py, runs tests (link-checker), and deploys public/.
+
+Optionally use branch deploys for staging preview.
+
+Add automated link checker and accessibility audit in CI (axe-core based) to block regressions.
+
+14. Contributor & maintenance guidelines (to include in repo)
+
+README: Single-page contributor guide explaining:
+
+Authoring workflow (where to edit, how to build, how to publish).
+
+Naming conventions and slug rules.
+
+How to run generate_registry.py.
+
+How to add a department and add its pages to the registry.
+
+CHANGELOG: Keep a changelog for structural changes (e.g., new component paths, registry format changes).
+
+Onboarding: Provide a “first-steps” shell script to create local dev server and preview public/.
+
+15. File examples (reference block to be stored in the library)
+
+Include sample snippets in the reference repository:
+
+a) Minimal page meta
+
+<title>Lesson 13 — HTML5 New Elements | Malone Global University</title>
+<meta name="description" content="Lesson 13: The HTML5 new semantic elements and attributes explained.">
+<body data-breadcrumbs="Home|IT Department|HTML Course|Lesson 13">
+
+
+b) Registry entry
+
+{
+  "title": "Lesson 13 — HTML5 New Elements",
+  "url": "/department/it/lesson-13-html5-new-elements.html",
+  "description": "An in-depth look at HTML5 semantic elements and attributes.",
+  "department": "IT",
+  "tags": ["html5","web","lesson"]
+}
+
+
+c) Template loader snippet
+
+<div id="navbar-placeholder"></div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  fetch('/component/partials/navbar.html').then(r=>r.text()).then(html=>document.getElementById('navbar-placeholder').innerHTML = html);
+});
+</script>
+
+16. Suggested next actions (practical checklist)
+
+Adopt the content/ (drafts) / public/ (built) separation across the project.
+
+Standardize on the component/ path naming convention and move partials to component/partials/.
+
+Add software/generate_registry.py to CI and run it as part of the build.
+
+Install a link-checker and accessibility tests in CI.
+
+Document these standards in a SITE_ARCHITECTURE.md and place it in the library reference repository.
+
+17. Appendix — Rationale and trade-offs
+
+Client-side registry vs. server search: Client-side JSON is simple, zero-cost hosting and fast for small/medium catalogs. If the registry grows large or you need advanced ranking, migrate to a server-side search index (Algolia/Elastic).
+
+Separate content/public folders: This reduces accidental publishing of drafts and gives explicit steps for authors to publish. It adds a small build step, but that is standard for static sites.
+
+Component partials: Pros — single source of truth, consistent UI, faster site updates. Cons — requires a loader (trivial) and careful path management.
+
+Contact & repository location
+
+Repository: https://github.com/Malone-Global-University/MU (canonical) — include this link in the library record.
+
+For architectural questions or document updates, contact: web-team@maloneglobal.edu (or record the maintainers in the library metadata).
+
+A final note
+
+This whitepaper is intended as a living document. As the site evolves (new departments, a larger content catalog, or a shift to dynamic features), update the registry format, CI pipeline, and migration notes here so the library’s reference copy remains authoritative.
+
+If you want, I can:
+
+Produce a SITE_ARCHITECTURE.md version of this whitepaper formatted for the repository (README-ready).
+
+Generate the sample registry JSON and a draft generate_registry.py script for inclusion in software/.
+
+Produce a one-page quickstart for contributors.
+ChatGPT said:
+Thought for 22s
+Site Architecture
+Malone Global University — Website Structure Whitepaper
+
+Purpose
+Document the website architecture, content workflow, and operational standards for the Malone Global University (MGU) website so it can be stored in the library’s reference repository and used by developers, content authors, and maintainers.
+
+Prepared by: Malone Global University — Web & Dev Team
+Date: 2025-08-22
+Revision: 1.0
+
+Executive Summary
+
+This whitepaper describes a deterministic, maintainable website structure for MGU that prevents orphan pages, simplifies publishing, and supports a modular component system. It separates private source content from public, centralizes UI components and metadata, provides a searchable registry, enforces naming conventions, and includes a simple automated registry generator to keep search and sitemaps accurate. The goal is predictable builds, easier onboarding, fewer deployment surprises, and a single source of truth for site content.
+
+1. Objectives
+
+Prevent orphan (unreferenced) public pages and partials.
+
+Keep authoring (private drafts) and published pages separated.
+
+Provide a uniform page template and component system (navbar, hero, footer).
+
+Include site-wide search, department sub-navigation, breadcrumbs, and accessible mobile-friendly nav (collapsible).
+
+Provide a persistent theme (dark/light) toggle stored in user preference.
+
+Make maintenance simple: automated page registry generation, clear naming conventions, and a documented build/publish workflow.
+
+Ensure content is discoverable in the library reference repository with metadata for search and citation.
+
+2. High-level Architecture
+C:\mgu (root)
+├─ public/                     # Public-facing, deployed site (Netlify)
+├─ content/                    # Private drafts and editable source (authors)
+├─ component/                  # UI components, css, js, registry (single source)
+│  ├─ css/
+│  ├─ partials/
+│  ├─ script/js/
+│  └─ registry/pages.json
+├─ image/                      # Organized by department / shared
+├─ library/                    # Encyclopedia, wiki, dictionary, blackpapers
+├─ mgu_desk/                   # Staging / dev notes / screenshots
+├─ software/                   # Build and utility scripts
+└─ node_modules/
+
+Key separation: content/ holds drafts; public/ holds generated HTML served to users. component/ contains UI building blocks reused across pages and the search registry pages.json.
+
+3. Naming & File Conventions (Required)
+
+File slugs: lower-case, kebab-case (e.g., lesson-13-html5-new-elements.html).
+
+Directories: public/department/<department-slug>/... (e.g., public/department/it/).
+
+Page metadata (required on every public HTML page):
+
+<title>Descriptive Title | Malone Global University</title>
+<meta name="description" content="Concise page summary (120–160 chars)">
+
+Optional tags:
+
+<meta name="keywords" content="tag1, tag2">
+<body data-breadcrumbs="Home|Department|Course Title">
+
+Component path standard: Use component/partials/* for HTML partials, component/css/* for styles, and component/script/js/* for behavior.
+
+4. Component System
+
+Maintain a small set of shared components to reduce duplication and ensure consistent UI.
+
+Primary components
+
+component/partials/navbar.html — main navigation, department sub-navbar placeholder, search input, theme toggle (bottom of nav list), breadcrumbs container. Must be accessible and collapsible on narrow viewports.
+
+component/partials/hero.html — optional page hero used on landing pages or department hubs.
+
+component/partials/footer.html — site-wide footer with copyright.
+
+component/css/main.css — global variables, layout, header, navbar styles, dark-mode variable overrides.
+
+component/script/js/main.js — nav collapse, sub-menu toggles, breadcrumbs generator, client-side search UI.
+
+component/script/js/theme-toggle.js — persistent theme management.
+
+component/registry/pages.json — canonical site pages registry and search index.
+
+Loading pattern
+Pages use a minimal wrapper HTML template that loads these partials asynchronously with a small JS loader (ensures any updates to partials propagate site-wide without editing every page).
+
+5. Page Template (Reference)
+
+All public pages follow a canonical template to guarantee consistent metadata and component loading. The template includes:
+
+Centered header with school logo and school name “Malone Global University”.
+
+Main navbar directly under the header.
+
+<main> element for the page content.
+
+Footer and scripts included at the bottom.
+
+This practice enforces consistent accessibility landmarks, search, and breadcrumb behaviors.
+
+Minimal template skeleton:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page Title | Malone Global University</title>
+  <meta name="description" content="Concise page summary (120–160 chars)">
+  <link rel="stylesheet" href="/component/css/main.css">
+</head>
+<body data-breadcrumbs="Home|Department|Page">
+  <header id="site-header"></header>
+  <nav id="navbar"></nav>
+  <main id="content" role="main">
+    <!-- page content here -->
+  </main>
+  <footer id="site-footer"></footer>
+  <script src="/component/script/js/main.js" defer></script>
+  <script src="/component/script/js/theme-toggle.js" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const inject = (sel, path) => fetch(path).then(r=>r.text()).then(html => {
+        const el = document.querySelector(sel); if (el) el.innerHTML = html;
+      });
+      inject('#navbar', '/component/partials/navbar.html');
+      inject('#site-header', '/component/partials/hero.html');
+      inject('#site-footer', '/component/partials/footer.html');
+    });
+  </script>
+</body>
+</html>
+6. Registry & Search
+
+Purpose: A single, generated JSON file (component/registry/pages.json) is the canonical index for client-side search, sitemaps, and discovery.
+
+Registry fields (per page):
+
+{
+  "title": "Intro to HTML",
+  "url": "/department/it/intro-to-html.html",
+  "description": "Learn the basic structure of HTML documents, tags, and elements.",
+  "department": "IT",
+  "tags": ["html", "web", "it"]
+}
+
+Generation: A script (software/generate_registry.py) scans public/ for HTML pages, extracts <title> and <meta name="description">, and writes pages.json. It runs during publish/build to keep search and sitemap accurate and to detect unpublished/draft pages or orphaned files.
+
+7. Publishing Workflow (Recommended)
+
+Authoring — Writers create/modify source in content/ or department/ (private).
+
+Build — Run markdown → HTML conversion for lessons and pages, output to public/.
+
+Registry update — Run software/generate_registry.py to regenerate component/registry/pages.json and optionally sitemap.xml.
+
+Review — QA review of the public/ site locally or on a staging preview.
+
+Commit & deploy — Commit public/ and component/registry/pages.json (or push a built artifact) to the repository/Netlify to trigger production deployment.
+
+Post-deploy checks — Verify Netlify build succeeded, spot-check search and breadcrumbs.
+
+Note: Keep content/ out of the build artifact if you want to avoid exposing drafts — only public/ is required for hosting.
+
+Suggested commands (example):
+
+# build content to public/
+python software/build_markdown.py
+
+
+# generate registry and sitemap
+python software/generate_registry.py --root public --out component/registry/pages.json --sitemap public/sitemap.xml --base-url https://maloneuniversity.org
+
+
+# preview locally
+npx serve public -p 4321
+8. Orphan Prevention Strategies
+
+Central registry: The registry is the single source of truth for what exists publicly (search, sitemap).
+
+Build-time checks: Validate that every public page is present in the registry; flag registry entries missing from public/.
+
+Link auditing: Optional enhanced script can scan anchor tags for broken links and list pages with zero incoming links in public/ (likely orphaned).
+
+Naming & placement rules: Department pages placed under public/department/<dept>/ make hierarchy explicit and easier to audit.
+
+9. Navigation & UX Rules
+
+Top header: Large centered site title “Malone Global University”, with logo left (or above on narrow screens).
+
+Main navbar: Positioned below header, includes primary links plus “Departments” sub-navigation.
+
+Sub-navbar: Expandable list of departments; flyout on desktop and nested list inside the mobile panel.
+
+Breadcrumbs: Generated from data-breadcrumbs or derived from URL path segments. Insert into #breadcrumbs.
+
+Search: Site-wide search field in navbar queries component/registry/pages.json.
+
+Mobile: Navbar must be collapsible (hamburger) with keyboard navigation and ARIA (aria-expanded, aria-controls).
+
+10. Theming and Accessibility
+
+Dark mode: Implemented with CSS custom properties and toggled via component/script/js/theme-toggle.js. Preference stored in localStorage.
+
+Accessibility: Interactive elements include ARIA attributes, focus styles, and semantic HTML (nav, main, footer). Keyboard-operable nav. Contrast ≥ WCAG AA.
+
+Responsive: CSS breakpoints ensure header, nav, and main content reflow on phones/tablets/desktops.
+
+11. Content & Metadata Guidelines (Library)
+
+Each published page should include:
+
+Author (if relevant) — author line and last updated date.
+
+Title and description — required by registry generation.
+
+Department tag and taxonomy tags — used for filtering in search and in the library repository.
+
+Suggest storing short JSON/YAML front matter in the source content; the build script uses it to populate registry fields.
+
+12. Security, Privacy & Access Control
+
+Private content: Keep drafts and developer-only tools out of public/. Use .gitignore to exclude local-only assets.
+
+Credentials: Never store API keys or tokens plaintext in the repo. Use environment variables for build-time secrets.
+
+User data: If future search or theme preferences sync server-side, document data handling on a privacy page.
+
+13. Deployment Recommendations
+
+Use Netlify (already in your stack) or similar static hosting for public/.
+
+CI pipeline (main branch):
+
+Build markdown → HTML.
+
+Run `generate_reg
+
+I’ve turned your whitepaper into a repository-ready SITE_ARCHITECTURE.md and bundled the extras you asked for (a draft generate_registry.py, a sample pages.json, and a one-page contributor quickstart) — all in the canvas to your right so you can copy straight into your repo.
+
+Want me to split those into separate files (and/or convert the quickstart into CONTRIBUTING.md), or add a Netlify CI snippet next?
