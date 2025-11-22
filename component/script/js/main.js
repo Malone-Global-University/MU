@@ -1,4 +1,3 @@
-<script>
 (function() {
   const root = document.documentElement;
   const toggleBtn = document.getElementById("theme-toggle");
@@ -34,4 +33,3 @@
     if(e.key === "Enter" || e.key === " ") navLinks.classList.toggle("show");
   });
 })();
-</script>
