@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Index Generator — Beta 3.3
-Adds clickable tag badges that filter the file list.
+Index Generator — Alpha penultimate
+
 """
 
 import os
@@ -12,21 +12,20 @@ from pathlib import Path
 
 # ------------- Configuration -------------
 BASE_DIR = "department"
-CSS_PATH = "/component/css/pyc.css"
+CSS_PATH = "/component/css/main.css"
 FAVICON_PATH = "/image/logo.png"
-EXTRA_CSS = "/component/css/py.css"
 EXTRA_JS = "/component/js/theme.js"
 OUTPUT_FILENAME = "index.html"
 README_NAMES = ("meta.json", "README.md", "README.txt")
 # -----------------------------------------
 
 ICON_MAP = {
-    ".md": "📄", ".odt": "📝",".txt": "📝", ".pdf": "📚",
+    ".txt": "📄", ".md": "📝", ".odt": "📙", ".doc": "📘", ".docx": "📗", ".pdf": "📕",
     ".csv": "📊", ".xls": "📊", ".xlsx": "📊",
     ".png": "🖼️", ".jpg": "🖼️", ".jpeg": "🖼️", ".gif": "🖼️", ".svg": "🖼️",
     ".zip": "🗜️", ".tar": "🗜️", ".gz": "🗜️",
     ".mp4": "🎞️", ".mp3": "🎧",
-    ".py": "🐍", ".js": "🧩", ".css": "🎨", ".html": "🌐",
+    ".py": "🐍", ".js": "⚡", ".json": "📇", ".css": "🎨", ".html": "🌐",
 }
 
 def file_icon(filename: str) -> str:
@@ -95,7 +94,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <title>{title}</title>
   <link rel="icon" href="{favicon}" type="image/x-icon">
   <link rel="stylesheet" href="{css_path}">
-  {extra_css_link}
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
@@ -128,7 +126,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </main>
 
   <footer>
-    <p>© {year} Malone University. Generated {updated}.</p>
+    <p>&copy; {year} Malone University. Generated {updated}.</p>
     {footer_meta}
   </footer>
 
@@ -214,7 +212,6 @@ def generate_index_for_folder(root, dirs, files):
         title=f"{title} - Malone University",
         favicon=FAVICON_PATH,
         css_path=CSS_PATH,
-        extra_css_link=f'<link rel="stylesheet" href="{EXTRA_CSS}">' if EXTRA_CSS else "",
         extra_js=EXTRA_JS or "",
         breadcrumb=breadcrumb,
         thumbnail_html=thumbnail_html,
