@@ -26,18 +26,10 @@
     toggleBtn.textContent = mode === "light" ? "☀️" : "🌙";
   }
 
-  // ------------------------------
-  // MOBILE NAV + HAMBURGER ANIMATION
-  // ------------------------------
   navToggle.addEventListener("click", () => {
     navLinks.classList.toggle("show");
-    navToggle.classList.toggle("active");   // <-- ADDED
   });
-
   navToggle.addEventListener("keypress", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      navLinks.classList.toggle("show");
-      navToggle.classList.toggle("active"); // <-- ADDED
-    }
+    if(e.key === "Enter" || e.key === " ") navLinks.classList.toggle("show");
   });
 })();
