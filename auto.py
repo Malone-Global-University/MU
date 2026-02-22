@@ -1,4 +1,3 @@
-import csv
 import json
 import os
 import re
@@ -8,8 +7,16 @@ import html
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
-INPUT_FILE = "data/glossary-source/glossary-terms.json"
-OUTPUT_DIR = "glossary-pages"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+INPUT_FILE = os.path.join(
+    BASE_DIR,
+    "data",
+    "glossary-source",
+    "glossary-terms.json"
+)
+
+OUTPUT_DIR = os.path.join(BASE_DIR, "glossary-pages")
 BASE_URL = "https://maloneuniversity.org"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -26,14 +33,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- ========== SEO META DESCRIPTION ========== -->
-  <meta name="description" content="Definition of {{TERM_NAME}} in {{DEPARTMENT_NAME}}. {{SHORT_DESCRIPTION}}">
+  <meta name="description" content="Malone Global University Department of Economics Glossary definition entry of {{TERM_NAME}}.">
 
   <!-- ========== CANONICAL URL ========== -->
   <link rel="canonical" href="{{CANONICAL_URL}}">
 
   <!-- ========== OPEN GRAPH ========== -->
   <meta property="og:title" content="{{TERM_NAME}} | {{DEPARTMENT_NAME}} Glossary">
-  <meta property="og:description" content="{{SHORT_DESCRIPTION}}">
+  <meta property="og:description" content="Malone Global University Department of Economics Glossary definition entry of {{TERM_NAME}}.">
   <meta property="og:type" content="article">
   <meta property="og:url" content="{{CANONICAL_URL}}">
   <meta property="og:image" content="/image/global/logo.png">
@@ -48,10 +55,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     "itemListElement": [
       {"@type":"ListItem","position":1,"name":"Home","item":"/"},
       {"@type":"ListItem","position":2,"name":"Department","item":"/department/directory"},
-      {"@type":"ListItem","position":3,"name":"{{DEPARTMENT_CATEGORY}}","item":"{{DEPARTMENT_CATEGORY_URL}}"},
-      {"@type":"ListItem","position":4,"name":"{{COURSE_NAME}}","item":"{{COURSE_URL}}"},
-      {"@type":"ListItem","position":5,"name":"Glossary","item":"{{GLOSSARY_HOME_URL}}"},
-      {"@type":"ListItem","position":6,"name":"{{TERM_NAME}}","item":"{{TERM_PAGE_URL}}"}
+      {"@type":"ListItem","position":3,"name":"Corporate Science","item":"/department/corporate-science/home"},
+      {"@type":"ListItem","position":4,"name":"Economics 101","item":"/department/corporate-science/economics-101/home"},
+      {"@type":"ListItem","position":5,"name":"Glossary","item":"/department/corporate-science/economics-101/glossary/home"},
+      {"@type":"ListItem","position":6,"name":"{{TERM_NAME}}","item":"{{CANONICAL_URL}}"}
     ]
   }
   </script>
@@ -62,8 +69,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     "@context": "https://schema.org",
     "@type": "DefinedTerm",
     "name": "{{TERM_NAME}}",
-    "description": "{{TERM_DESCRIPTION}}",
-    "inDefinedTermSet": "{{GLOSSARY_HOME_URL}}"
+    "description": "Malone Global University Department of Economics Glossary definition entry of {{TERM_NAME}}.",
+    "inDefinedTermSet": "https://maloneuniversity.org/department/corporate-science/economics-101/glossary/"
   }
   </script>
 </head>
@@ -103,10 +110,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   <!-- ========== BREADCRUMB NAVIGATION ========== -->
   <nav class="breadcrumb">
-    <a href="/">Home</a>
-    <a href="{{DEPARTMENT_HOME_URL}}">{{DEPARTMENT_NAME}}</a>
-    <a href="{{COURSE_URL}}">{{COURSE_NAME}}</a>
-    <a href="{{GLOSSARY_HOME_URL}}">Glossary</a>
+       <a href="/">Home</a>
+    <a href="/department/directory">Department</a>
+    <a href="/department/corporate-science/home">Corporate Science</a>
+    <a href="/department/corporate-science/economics-101/home">Economics</a>
+    <a href="/department/corporate-science/economics-101/glossary/">Glossary</a>
     <span>{{TERM_NAME}}</span>
   </nav>
 
@@ -129,7 +137,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </ul>
 
       <section>
-        <a class="btn" href="{{GLOSSARY_HOME_URL}}">Back to Glossary</a>
+        <a class="btn" href="./home">Back to Glossary</a>
       </section>
     </section>
   </main>
@@ -144,7 +152,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <a href="/terms.html">Terms</a> |
       <a href="/contact.html">Contact</a>
     </p>
-    <p>Uploaded: {{UPLOAD_DATE}} - Updated: {{UPDATE_DATE}}</p>
+    <p>Uploaded: 2/21/2026 - Updated: {{UPDATE_DATE}}</p>
   </footer>
 
 <script src="/component/script/js/main.js"></script>
@@ -152,15 +160,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+
 # -----------------------------
 # HELPERS
 # -----------------------------
+
 def slugify(text):
     text = text.lower().strip()
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_]+", "-", text)
     text = re.sub(r"-{2,}", "-", text)
     return text.strip("-")
+
+
+def format_term_name(slug):
+    words = slug.split("-")
+    formatted = []
+
+    for w in words:
+        if w.isupper():
+            formatted.append(w)
+        else:
+            formatted.append(w.capitalize())
+
+    return " ".join(formatted)
+
+
+def build_related_links(raw_related, glossary_home):
+    related_links = []
+
+    for slug in raw_related:
+        clean_slug = slug.strip()
+
+        related_links.append({
+            "name": format_term_name(clean_slug),
+            "url": f"{glossary_home}{clean_slug}.html"
+        })
+
+    return related_links
 
 
 def render_related_terms(template, related_terms):
@@ -172,9 +209,8 @@ def render_related_terms(template, related_terms):
     rendered = ""
 
     for item in related_terms:
-        name = html.escape(item.get("name", ""))
-        url = item.get("url", "#")
-        temp = block.replace("{{NAME}}", name).replace("{{URL}}", url)
+        temp = block.replace("{{NAME}}", html.escape(item["name"]))
+        temp = temp.replace("{{URL}}", item["url"])
         rendered += temp
 
     return template.replace(pattern.group(0), rendered)
@@ -183,36 +219,33 @@ def render_related_terms(template, related_terms):
 def render_template(context, related_terms):
     output = HTML_TEMPLATE
 
-    # Replace simple placeholders
     for key, value in context.items():
         output = output.replace(f"{{{{{key}}}}}", value)
 
-    # Render related terms block
     output = render_related_terms(output, related_terms)
 
     return output
 
 
 # -----------------------------
-# INPUT PROCESSING
+# GENERATOR
 # -----------------------------
-def generate_pages(input_file):
+def generate_pages():
 
-    ext = os.path.splitext(input_file)[1].lower()
+    if not os.path.exists(INPUT_FILE):
+        print("ERROR: JSON file not found at:", INPUT_FILE)
+        return
 
-    if ext == ".csv":
-        with open(input_file, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            terms = list(reader)
-    elif ext == ".json":
-        with open(input_file, encoding="utf-8") as f:
-            data = json.load(f)
-            terms = data["terms"] if isinstance(data, dict) and "terms" in data else data
-    else:
-        raise ValueError("Unsupported file format.")
+    with open(INPUT_FILE, encoding="utf-8") as f:
+        data = json.load(f)
+
+    terms = data["terms"] if isinstance(data, dict) and "terms" in data else data
 
     today = date.today()
     today_str = f"{today.month}/{today.day}/{today.year}"
+
+    glossary_home = "/department/corporate-science/economics-101/glossary/"
+    department_name_default = "Economics"
 
     for term in terms:
 
@@ -222,32 +255,21 @@ def generate_pages(input_file):
 
         slug = term.get("slug") or slugify(term_name)
 
-        department_name = term.get("department_name", "Economics")
-        department_category = term.get("department_category", "Corporate Science")
-        course_name = term.get("course_name", "Economics 101")
-
-        glossary_home = "/department/corporate-science/economics-101/glossary/"
-        department_home = "/department/corporate-science/home"
-        course_url = department_home
+        department_name = term.get("department_name", department_name_default)
 
         canonical_url = f"{BASE_URL}{glossary_home}{slug}.html"
 
-        related_terms = term.get("related_terms", [])
+        # Transform related_terms → link objects
+        raw_related = term.get("related_terms", [])
+        related_terms = build_related_links(raw_related, glossary_home)
 
         context = {
             "TERM_NAME": html.escape(term_name),
             "DEPARTMENT_NAME": html.escape(department_name),
-            "DEPARTMENT_CATEGORY": html.escape(department_category),
-            "DEPARTMENT_CATEGORY_URL": department_home,
-            "COURSE_NAME": html.escape(course_name),
-            "COURSE_URL": course_url,
-            "GLOSSARY_HOME_URL": glossary_home,
-            "TERM_PAGE_URL": canonical_url,
             "TERM_DEFINITION": html.escape(term.get("term_definition", "")),
-            "TERM_DESCRIPTION": html.escape(term.get("term_definition", "")),
-            "SHORT_DESCRIPTION": html.escape(term.get("term_definition", "")[:150]),
             "WHY_IT_MATTERS": html.escape(term.get("why_it_matters", "")),
             "TERM_EXAMPLE": html.escape(term.get("term_example", "")),
+            "SHORT_DESCRIPTION": html.escape(term.get("term_definition", "")),
             "CANONICAL_URL": canonical_url,
             "CURRENT_YEAR": str(today.year),
             "UPLOAD_DATE": term.get("upload_date", today_str),
@@ -257,11 +279,15 @@ def generate_pages(input_file):
         html_content = render_template(context, related_terms)
 
         output_file = os.path.join(OUTPUT_DIR, f"{slug}.html")
+
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(html_content)
 
         print(f"Generated {output_file}")
 
 
+# -----------------------------
+# ENTRY POINT
+# -----------------------------
 if __name__ == "__main__":
-    generate_pages(INPUT_FILE)
+    generate_pages()
