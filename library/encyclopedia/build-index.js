@@ -1,95 +1,126 @@
-// build-indexes.js
-// Generates encyclopedia homepage (index.html) + category pages
+// build-index.js
+// JSON → index.html + domain pages
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const VOLUMES_DIR = path.join(__dirname, 'volumes');
-const CATEGORIES_DIR = path.join(__dirname, 'categories');
-const INDEX_FILE = path.join(__dirname, 'index.html');
+const ROOT = __dirname;
+const CONTENT_DIR = path.join(ROOT, "content");
+const INDEX_FILE = path.join(ROOT, "index.html");
 
-// Ensure categories dir exists
-if (!fs.existsSync(CATEGORIES_DIR)) {
-  fs.mkdirSync(CATEGORIES_DIR);
+if (!fs.existsSync(CONTENT_DIR)) {
+  console.log("No content directory found.");
+  process.exit(0);
 }
 
-// Load all HTML files in volumes
-const files = fs.readdirSync(VOLUMES_DIR).filter(f => f.endsWith('.html'));
+const files = fs
+  .readdirSync(CONTENT_DIR)
+  .filter(f => f.endsWith(".json"));
 
-// Parse metadata from HTML <meta> tags
-function parseMeta(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
-
-  const titleMatch = content.match(/<title>(.*?)<\/title>/);
-  const title = titleMatch ? titleMatch[1] : path.basename(filePath, '.html');
-
-  const categoryMatch = content.match(/<meta name="category" content="(.*?)">/);
-  const category = categoryMatch ? categoryMatch[1] : 'Uncategorized';
-
-  return { title, category };
-}
-
-// Collect entries
 const entries = files.map(file => {
-  const filePath = path.join(VOLUMES_DIR, file);
-  const { title, category } = parseMeta(filePath);
-  return { title, category, file };
+  const data = JSON.parse(
+    fs.readFileSync(path.join(CONTENT_DIR, file), "utf8")
+  );
+
+  return {
+    title: data.title,
+    domain: data.domain,
+    url: data.output.url,
+    summary: data.summary
+  };
 });
 
-// --- Build index.html ---
-let indexHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>MGU Encyclopedia Index</title>
-  <link rel="stylesheet" href="../css/style.css">
-</head>
-<body>
-  <h1>MGU Encyclopedia</h1>
-  <ul>
-`;
 
-entries.sort((a, b) => a.title.localeCompare(b.title)).forEach(entry => {
-  indexHtml += `    <li><a href="volumes/${entry.file}">${entry.title}</a> (${entry.category})</li>\n`;
-});
+// ======================
+// GROUP BY DOMAIN
+// ======================
 
-indexHtml += `  </ul>
-</body>
-</html>`;
+const domains = {};
 
-fs.writeFileSync(INDEX_FILE, indexHtml, 'utf-8');
-console.log(`✅ Encyclopedia index built at ${INDEX_FILE}`);
-
-// --- Build category pages ---
-const categories = {};
 entries.forEach(entry => {
-  if (!categories[entry.category]) categories[entry.category] = [];
-  categories[entry.category].push(entry);
+  if (!domains[entry.domain]) {
+    domains[entry.domain] = [];
+  }
+  domains[entry.domain].push(entry);
 });
 
-for (const [category, items] of Object.entries(categories)) {
-  let catHtml = `<!DOCTYPE html>
-<html lang="en">
+
+// ======================
+// BUILD MAIN INDEX
+// ======================
+
+let indexHtml = `<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>${category} | MGU Encyclopedia</title>
-  <link rel="stylesheet" href="../css/style.css">
+  <title>Encyclopedia</title>
+  <link rel="stylesheet" href="/component/css/main.css">
 </head>
 <body>
-  <h1>${category}</h1>
-  <ul>
+
+<h1>Encyclopedia</h1>
+
+<ul>
 `;
 
-  items.sort((a, b) => a.title.localeCompare(b.title)).forEach(entry => {
-    catHtml += `    <li><a href="../volumes/${entry.file}">${entry.title}</a></li>\n`;
-  });
+Object.keys(domains).sort().forEach(domain => {
+  indexHtml += `<li><a href="./${domain}/index.html">${domain}</a></li>\n`;
+});
 
-  catHtml += `  </ul>
-  <p><a href="../index.html">← Back to Encyclopedia Index</a></p>
+indexHtml += `
+</ul>
+
 </body>
 </html>`;
 
-  const catFile = path.join(CATEGORIES_DIR, `${category}.html`);
-  fs.writeFileSync(catFile, catHtml, 'utf-8');
-  console.log(`✅ Category page built: ${catFile}`);
-}
+fs.writeFileSync(INDEX_FILE, indexHtml, "utf8");
+
+console.log("✅ Main index built");
+
+
+// ======================
+// BUILD DOMAIN PAGES
+// ======================
+
+Object.entries(domains).forEach(([domain, items]) => {
+  const dir = path.join(ROOT, domain);
+
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  let html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>${domain} | Encyclopedia</title>
+  <link rel="stylesheet" href="/component/css/main.css">
+</head>
+<body>
+
+<h1>${domain}</h1>
+
+<ul>
+`;
+
+  items
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .forEach(entry => {
+      html += `<li>
+        <a href="/${entry.domain}/${entry.url.split("/").pop()}">
+          ${entry.title}
+        </a>
+        <p>${entry.summary}</p>
+      </li>\n`;
+    });
+
+  html += `
+</ul>
+
+<a href="/library/encyclopedia/index.html">Back</a>
+
+</body>
+</html>`;
+
+  fs.writeFileSync(path.join(dir, "index.html"), html, "utf8");
+
+  console.log(`✅ Built domain page: ${domain}`);
+});

@@ -1,46 +1,37 @@
+// build-search-index.js
+// JSON → search.json
+
 const fs = require("fs");
 const path = require("path");
 
-// Paths
-const volumesDir = path.join(__dirname, "volumes");
-const outputFile = path.join(__dirname, "search.json");
+const CONTENT_DIR = path.join(__dirname, "content");
+const OUTPUT_FILE = path.join(__dirname, "search.json");
 
-// Helper to strip HTML tags
-function stripHTML(html) {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+if (!fs.existsSync(CONTENT_DIR)) {
+  console.log("No content directory found.");
+  process.exit(0);
 }
 
-// Read all HTML files in volumes folder
-const files = fs.readdirSync(volumesDir).filter(file => file.endsWith(".html"));
+const files = fs
+  .readdirSync(CONTENT_DIR)
+  .filter(f => f.endsWith(".json"));
 
-let indexData = [];
+const indexData = files.map(file => {
+  const fullPath = path.join(CONTENT_DIR, file);
+  const data = JSON.parse(fs.readFileSync(fullPath, "utf8"));
 
-files.forEach(file => {
-  const filePath = path.join(volumesDir, file);
-  const html = fs.readFileSync(filePath, "utf8");
-
-  // Extract <title>
-  const titleMatch = html.match(/<title>(.*?)<\/title>/i);
-  const title = titleMatch ? titleMatch[1].replace("– MGU Encyclopedia", "").trim() : file.replace(".html", "");
-
-  // Extract category from meta tag
-  const categoryMatch = html.match(/<meta\s+name=["']category["']\s+content=["'](.*?)["']\s*\/?>/i);
-  const category = categoryMatch ? categoryMatch[1] : "Uncategorized";
-
-  // Extract body text
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  const content = bodyMatch ? stripHTML(bodyMatch[1]) : "";
-
-  // Add entry
-  indexData.push({
-    title,
-    category,
-    url: `volumes/${file}`,
-    content
-  });
+  return {
+    id: data.id,
+    title: data.title,
+    domain: data.domain,
+    tags: data.tags,
+    summary: data.summary,
+    url: data.output.url,
+    content: (data.body || "").slice(0, 2000) // limit size
+  };
 });
 
-// Save JSON file
-fs.writeFileSync(outputFile, JSON.stringify(indexData, null, 2), "utf8");
+fs.writeFileSync(OUTPUT_FILE, JSON.stringify(indexData, null, 2), "utf8");
 
-console.log(`✅ Search index built with ${indexData.length} entries at ${outputFile}`);
+console.log(`✅ Search index built with ${indexData.length} entries`);
+console.log(`📦 Output: ${OUTPUT_FILE}`);
