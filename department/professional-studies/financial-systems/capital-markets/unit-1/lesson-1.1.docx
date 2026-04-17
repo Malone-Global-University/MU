@@ -1,0 +1,606 @@
+const {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  AlignmentType, LevelFormat, HeadingLevel, BorderStyle, WidthType,
+  ShadingType, VerticalAlign, PageNumber, TabStopType, TabStopPosition
+} = require('docx');
+const fs = require('fs');
+
+// ─── COLOR PALETTE ────────────────────────────────────────────────────────────
+const NAVY    = "1B3A5C";
+const TEAL    = "1A6B72";
+const GOLD    = "B07D2A";
+const LGRAY   = "F4F6F8";
+const MGRAY   = "D8DDE3";
+const WHITE   = "FFFFFF";
+const BLACK   = "1A1A1A";
+const DKGRAY  = "4A4A4A";
+const MIDGRAY = "7A8794";
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const border = (color = MGRAY) => ({ style: BorderStyle.SINGLE, size: 1, color });
+const allBorders = (color = MGRAY) => ({ top: border(color), bottom: border(color), left: border(color), right: border(color) });
+const noBorder = () => ({ style: BorderStyle.NONE, size: 0, color: WHITE });
+const noBorders = () => ({ top: noBorder(), bottom: noBorder(), left: noBorder(), right: noBorder() });
+
+function h1(text) {
+  return new Paragraph({
+    heading: HeadingLevel.HEADING_1,
+    spacing: { before: 400, after: 160 },
+    children: [new TextRun({ text, font: "Arial", size: 36, bold: true, color: NAVY })]
+  });
+}
+function h2(text) {
+  return new Paragraph({
+    heading: HeadingLevel.HEADING_2,
+    spacing: { before: 320, after: 120 },
+    children: [new TextRun({ text, font: "Arial", size: 28, bold: true, color: TEAL })]
+  });
+}
+function h3(text) {
+  return new Paragraph({
+    heading: HeadingLevel.HEADING_3,
+    spacing: { before: 240, after: 80 },
+    children: [new TextRun({ text, font: "Arial", size: 24, bold: true, color: NAVY })]
+  });
+}
+function body(text, opts = {}) {
+  return new Paragraph({
+    spacing: { before: 80, after: 140 },
+    children: [new TextRun({ text, font: "Arial", size: 22, color: opts.color || BLACK, bold: opts.bold || false, italics: opts.italic || false })]
+  });
+}
+function bodyRuns(runs) {
+  return new Paragraph({
+    spacing: { before: 80, after: 140 },
+    children: runs.map(r => new TextRun({ font: "Arial", size: 22, color: BLACK, ...r }))
+  });
+}
+function bullet(text, bold_prefix = null) {
+  const children = bold_prefix
+    ? [new TextRun({ text: bold_prefix, font: "Arial", size: 22, bold: true, color: BLACK }),
+       new TextRun({ text, font: "Arial", size: 22, color: BLACK })]
+    : [new TextRun({ text, font: "Arial", size: 22, color: BLACK })];
+  return new Paragraph({
+    numbering: { reference: "bullets", level: 0 },
+    spacing: { before: 60, after: 60 },
+    children
+  });
+}
+function numbered(text, bold_prefix = null) {
+  const children = bold_prefix
+    ? [new TextRun({ text: bold_prefix, font: "Arial", size: 22, bold: true, color: BLACK }),
+       new TextRun({ text, font: "Arial", size: 22, color: BLACK })]
+    : [new TextRun({ text, font: "Arial", size: 22, color: BLACK })];
+  return new Paragraph({
+    numbering: { reference: "numbers", level: 0 },
+    spacing: { before: 80, after: 80 },
+    children
+  });
+}
+function spacer(pts = 200) {
+  return new Paragraph({ spacing: { before: 0, after: pts }, children: [new TextRun("")] });
+}
+function rule(color = MGRAY) {
+  return new Paragraph({
+    spacing: { before: 160, after: 160 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color, space: 1 } },
+    children: [new TextRun("")]
+  });
+}
+function labelTag(text, bgColor = TEAL) {
+  return new Paragraph({
+    spacing: { before: 60, after: 60 },
+    children: [
+      new TextRun({ text: `  ${text}  `, font: "Arial", size: 18, bold: true, color: WHITE,
+        shading: { fill: bgColor, type: ShadingType.CLEAR } })
+    ]
+  });
+}
+function sectionBanner(text) {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [new TableRow({ children: [
+      new TableCell({
+        borders: noBorders(),
+        shading: { fill: NAVY, type: ShadingType.CLEAR },
+        margins: { top: 160, bottom: 160, left: 240, right: 240 },
+        children: [new Paragraph({ children: [
+          new TextRun({ text, font: "Arial", size: 26, bold: true, color: WHITE })
+        ]})]
+      })
+    ]})]
+  });
+}
+function tealBox(children_arr) {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [new TableRow({ children: [
+      new TableCell({
+        borders: { top: border(TEAL), bottom: border(TEAL), left: { style: BorderStyle.SINGLE, size: 12, color: TEAL }, right: noBorder() },
+        shading: { fill: "EEF5F5", type: ShadingType.CLEAR },
+        margins: { top: 140, bottom: 140, left: 220, right: 220 },
+        children: children_arr
+      })
+    ]})]
+  });
+}
+function goldBox(children_arr) {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [new TableRow({ children: [
+      new TableCell({
+        borders: { top: border(GOLD), bottom: border(GOLD), left: { style: BorderStyle.SINGLE, size: 12, color: GOLD }, right: noBorder() },
+        shading: { fill: "FBF7EE", type: ShadingType.CLEAR },
+        margins: { top: 140, bottom: 140, left: 220, right: 220 },
+        children: children_arr
+      })
+    ]})]
+  });
+}
+function grayBox(children_arr) {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [new TableRow({ children: [
+      new TableCell({
+        borders: allBorders(MGRAY),
+        shading: { fill: LGRAY, type: ShadingType.CLEAR },
+        margins: { top: 140, bottom: 140, left: 220, right: 220 },
+        children: children_arr
+      })
+    ]})]
+  });
+}
+
+// ─── TERM DEFINITION (S7 Core Concepts style) ────────────────────────────────
+function coreConcept(term, paragraphText) {
+  return [
+    new Paragraph({
+      spacing: { before: 200, after: 60 },
+      children: [new TextRun({ text: term, font: "Arial", size: 24, bold: true, color: TEAL })]
+    }),
+    new Paragraph({
+      spacing: { before: 0, after: 160 },
+      children: [new TextRun({ text: paragraphText, font: "Arial", size: 22, color: BLACK })]
+    }),
+    new Paragraph({
+      border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: MGRAY, space: 1 } },
+      spacing: { before: 0, after: 120 },
+      children: [new TextRun("")]
+    })
+  ];
+}
+
+// ─── KEY TERM (S15 glossary anchor style) ────────────────────────────────────
+function keyTerm(term, sentence) {
+  return new Paragraph({
+    spacing: { before: 80, after: 80 },
+    children: [
+      new TextRun({ text: term + ": ", font: "Arial", size: 22, bold: true, color: NAVY }),
+      new TextRun({ text: sentence, font: "Arial", size: 22, color: BLACK })
+    ]
+  });
+}
+
+// ─── KNOWLEDGE CHECK Q&A ─────────────────────────────────────────────────────
+function mcq(num, question, options, correct, explanation) {
+  return [
+    new Paragraph({
+      spacing: { before: 200, after: 80 },
+      children: [new TextRun({ text: `Question ${num}: ${question}`, font: "Arial", size: 22, bold: true, color: NAVY })]
+    }),
+    ...options.map(o => new Paragraph({
+      spacing: { before: 40, after: 40 },
+      children: [new TextRun({ text: o, font: "Arial", size: 22, color: BLACK })]
+    })),
+    new Paragraph({
+      spacing: { before: 100, after: 40 },
+      children: [new TextRun({ text: `Correct Answer: ${correct}`, font: "Arial", size: 22, bold: true, color: TEAL })]
+    }),
+    new Paragraph({
+      spacing: { before: 0, after: 160 },
+      children: [new TextRun({ text: explanation, font: "Arial", size: 22, color: DKGRAY, italics: true })]
+    }),
+    new Paragraph({
+      border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: MGRAY, space: 1 } },
+      spacing: { before: 0, after: 120 },
+      children: [new TextRun("")]
+    })
+  ];
+}
+
+// ─── TWO-COLUMN NAV ROW ───────────────────────────────────────────────────────
+function navRow(leftLabel, leftSub, rightLabel, rightSub) {
+  function navCell(label, sub, align) {
+    return new TableCell({
+      borders: allBorders(MGRAY),
+      shading: { fill: LGRAY, type: ShadingType.CLEAR },
+      margins: { top: 140, bottom: 140, left: 200, right: 200 },
+      children: [
+        new Paragraph({ alignment: align, children: [new TextRun({ text: label, font: "Arial", size: 20, bold: true, color: NAVY })] }),
+        new Paragraph({ alignment: align, children: [new TextRun({ text: sub, font: "Arial", size: 19, color: DKGRAY })] })
+      ]
+    });
+  }
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [4680, 4680],
+    rows: [new TableRow({ children: [
+      navCell(leftLabel, leftSub, AlignmentType.LEFT),
+      navCell(rightLabel, rightSub, AlignmentType.RIGHT)
+    ]})]
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCUMENT CONTENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const doc = new Document({
+  numbering: {
+    config: [
+      { reference: "bullets", levels: [{ level: 0, format: LevelFormat.BULLET, text: "•",
+        alignment: AlignmentType.LEFT,
+        style: { paragraph: { indent: { left: 600, hanging: 300 } } } }] },
+      { reference: "numbers", levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.",
+        alignment: AlignmentType.LEFT,
+        style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] },
+    ]
+  },
+  styles: {
+    default: { document: { run: { font: "Arial", size: 22, color: BLACK } } },
+    paragraphStyles: [
+      { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { size: 36, bold: true, font: "Arial", color: NAVY },
+        paragraph: { spacing: { before: 400, after: 160 }, outlineLevel: 0 } },
+      { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { size: 28, bold: true, font: "Arial", color: TEAL },
+        paragraph: { spacing: { before: 320, after: 120 }, outlineLevel: 1 } },
+      { id: "Heading3", name: "Heading 3", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { size: 24, bold: true, font: "Arial", color: NAVY },
+        paragraph: { spacing: { before: 240, after: 80 }, outlineLevel: 2 } },
+    ]
+  },
+  sections: [{
+    properties: {
+      page: {
+        size: { width: 12240, height: 15840 },
+        margin: { top: 1080, right: 1260, bottom: 1080, left: 1260 }
+      }
+    },
+    children: [
+
+      // ── SECTION 1: HERO BLOCK ───────────────────────────────────────────────
+      new Paragraph({
+        spacing: { before: 0, after: 60 },
+        children: [new TextRun({ text: "Capital Markets & Securities Operations Track  ·  Unit 1: Financial Foundations for Capital Markets", font: "Arial", size: 18, color: MIDGRAY })]
+      }),
+      new Paragraph({
+        spacing: { before: 0, after: 60 },
+        children: [new TextRun({ text: "Lesson 1.1", font: "Arial", size: 20, bold: true, color: GOLD })]
+      }),
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        spacing: { before: 0, after: 200 },
+        children: [new TextRun({ text: "Securities Pricing and Market Value", font: "Arial", size: 44, bold: true, color: NAVY })]
+      }),
+      tealBox([
+        new Paragraph({ spacing: { before: 0, after: 0 }, children: [
+          new TextRun({ text: "Securities pricing is not a passive readout of intrinsic value — it is the continuous, contested output of competing participant intentions operating through market structure. This lesson examines how prices form, why they move, and what information they encode; why the mechanisms of price formation — supply and demand dynamics, information asymmetry, and institutional order interaction — are inseparable from the infrastructure that transmits them; and how pricing behavior connects to adjacent systems including liquidity, order flow, and settlement. The distinction between a practitioner who understands pricing and one who merely quotes it lies in grasping how price functions as both a signal and a constraint across every downstream operation in the securities lifecycle.", font: "Arial", size: 22, color: BLACK })
+        })]
+      ]),
+      spacer(240),
+
+      // ── SECTION 2: BREADCRUMB ───────────────────────────────────────────────
+      new Paragraph({
+        spacing: { before: 0, after: 60 },
+        children: [
+          new TextRun({ text: "Home", font: "Arial", size: 19, color: TEAL }),
+          new TextRun({ text: "  ›  Professional & Occupational Studies  ›  Financial Systems  ›  Capital Markets & Securities Operations Track  ›  Unit 1: Financial Foundations  ›  ", font: "Arial", size: 19, color: MIDGRAY }),
+          new TextRun({ text: "Lesson 1.1: Securities Pricing and Market Value", font: "Arial", size: 19, bold: true, color: NAVY }),
+        ]
+      }),
+      rule(MGRAY),
+
+      // ── SECTION 3: WHERE THIS LESSON FITS ──────────────────────────────────
+      sectionBanner("Section 3 · Where This Lesson Fits"),
+      spacer(100),
+      body("The Capital Markets & Securities Operations Track opens with Unit 1 because every later unit — exchange structure, brokerage operations, clearing, settlement, custody, and market controls — depends on a shared vocabulary of market mechanics. Prior coursework in the Financial Systems department introduces students to institutional structure and the broad categories of financial intermediation, but it does not address how prices actually form in live markets, or how price information flows through the operational infrastructure that surrounds trading activity. That gap is what Unit 1 is designed to close."),
+      body("Unit 1 addresses the foundational financial logic of securities markets as a whole: how prices emerge, why liquidity is structurally necessary, how order flow connects participants to venues, how settlement timing creates obligations that outlast execution, and how costs and incentives shape participant behavior. Together these concepts constitute the analytical common ground that all subsequent units in the track assume. Without them, students can describe what operational systems do in the abstract, but cannot reason about why they behave as they do under pressure."),
+      body("Lesson 1.1 opens the unit by establishing what a securities price actually is and how it comes to exist. It is the first lesson because pricing is the most foundational concept in the unit: liquidity is a condition that affects price formation; order flow is the mechanism through which price-setting intentions enter the market; settlement is the process through which prices are converted into ownership obligations; and transaction costs are the friction that pricing must absorb. Every subsequent lesson in Unit 1, and most lessons in Units 2 through 4, will reference pricing logic in some form. Students who finish this lesson with a working operational understanding of how prices form will be better equipped to reason about every market function that follows."),
+      spacer(160),
+
+      // ── SECTION 4: LESSON OBJECTIVE ────────────────────────────────────────
+      sectionBanner("Section 4 · Lesson Objectives"),
+      spacer(100),
+      body("By the end of this lesson, students should be able to: describe how securities prices emerge from the interaction of supply, demand, and participant information rather than from any single authoritative source; explain how fundamental value, market sentiment, and technical price dynamics each contribute to price formation and distinguish their roles; identify the key institutional participants who contribute to price discovery and describe the function each performs in the pricing process; distinguish between price formation in liquid and illiquid markets and explain how structural conditions affect execution outcomes; apply the concept of market efficiency to interpret how prices respond to new information, including the conditions under which prices may systematically diverge from fair value; explain why price is not simply an output of trading but a continuous input to operational decisions across clearing, settlement, and custody; and evaluate a described pricing scenario to identify which pricing forces are most active and what operational consequences follow from the price behavior observed."),
+      spacer(160),
+
+      // ── SECTION 5: LESSON OVERVIEW ─────────────────────────────────────────
+      sectionBanner("Section 5 · Lesson Overview"),
+      spacer(100),
+      body("A securities price is the rate at which a financial instrument changes hands between a willing buyer and a willing seller at a specific moment in time. It is not a measurement of permanent value, nor is it a consensus estimate of future performance. It is a transaction record — the intersection of one party's willingness to sell and another's willingness to buy, expressed numerically and timestamped. Understanding this precisely matters because operational systems across the entire securities lifecycle — from execution to clearing to settlement to custody — treat price as an input, a trigger, and a constraint simultaneously."),
+      body("The core difficulty of securities pricing as an operational concept is that the price of a security at any moment is both a product of market structure and a driver of it. Prices do not form in isolation: they emerge from the accumulated intentions of participants operating under incomplete information, in markets designed to aggregate and transmit those intentions through specific mechanisms. The same price can reflect efficient information aggregation in one market environment and noise, manipulation, or thin liquidity in another. Practitioners who understand pricing only at the surface level — a number that goes up or down — cannot diagnose pricing anomalies, interpret execution quality, or support risk monitoring functions that depend on price-based triggers."),
+      body("For operations professionals, pricing is not primarily a trading or investment concept — it is an infrastructure concept. The price at which a trade executes determines the settlement obligation, the margin calculation, the collateral requirement, and the net asset value attribution. Errors in pricing propagate into every downstream function. Mispricing of a security at the time of execution creates reconciliation failures at settlement, incorrect position valuations in custody records, and potential regulatory exposure if reported prices deviate from acceptable benchmarks. This lesson establishes a working model of how prices form, why they sometimes fail to form correctly, and what the operational consequences of price behavior are."),
+      spacer(160),
+
+      // ── SECTION 6: WHY THIS MATTERS ────────────────────────────────────────
+      sectionBanner("Section 6 · Why This Matters in Wealth & Asset Operations"),
+      spacer(100),
+      body("When securities pricing functions correctly, it creates conditions where every downstream operational system can operate from shared, reliable data. Settlement teams can calculate obligations with confidence. Custody and recordkeeping platforms can maintain accurate position values. Risk systems can set margin and collateral thresholds on a defensible basis. Compliance functions can verify that execution prices fall within acceptable deviation from benchmarks. Price discovery that is working well — that is actively aggregating participant information and resolving it into a fair, stable transaction rate — reduces operational error, minimizes dispute volume, and supports the kind of orderly market activity that institutional clients and regulators expect."),
+      body("When pricing breaks down — during market stress, in illiquid instruments, or through data quality failures — the consequences radiate outward through every function that depends on price as an input. A stale price reference causes incorrect margin calls. A pricing error in a fixed income instrument misstates the value of an entire portfolio. A failure to account for bid-ask spread in execution analysis masks true transaction costs and distorts performance reporting. Operational professionals who do not understand how prices form cannot identify these failure modes early. They respond reactively to symptoms — reconciliation breaks, client disputes, regulatory inquiries — rather than diagnosing the pricing dysfunction that caused them."),
+      body("At the career level, understanding pricing distinguishes operations professionals who can engage substantively with trading desks, risk teams, and portfolio managers from those who can only report data others have generated. Senior operations roles — middle office supervision, product control, regulatory reporting, and client service management — all require the ability to interpret price behavior, explain why a price moved, identify when a price is suspect, and communicate those judgments clearly to non-specialists. This lesson provides the conceptual foundation for that capacity. It is not a trading course, but it is the baseline that separates operational fluency from operational dependency."),
+      spacer(160),
+
+      // ── SECTION 7: CORE CONCEPTS ───────────────────────────────────────────
+      sectionBanner("Section 7 · Core Concepts"),
+      spacer(100),
+      body("The following concepts describe mechanisms in motion — how the pricing system behaves when the market is running. They are operational explanations, not dictionary definitions. Each term below names a dynamic process that produces observable consequences in securities operations.", { color: DKGRAY, italic: true }),
+      spacer(80),
+
+      ...coreConcept("Price Formation",
+        "Price formation is the ongoing process by which the market resolves competing buy and sell intentions into a single transaction rate. It is not a calculation performed by any central authority — it is the emergent output of participants simultaneously submitting orders that express their valuations. At any given moment, the price of a security is being formed by the interaction between the best available bid (what buyers will pay) and the best available offer (what sellers will accept); when those two numbers converge, a trade occurs, and a price is recorded. The mechanism continues without interruption throughout the trading session, meaning that the price of a liquid security is not a fixed point but a continuous series of resolved conflicts between opposing intentions, each shaped by the information each side holds."),
+      ...coreConcept("Bid-Ask Spread",
+        "The bid-ask spread is the distance between what buyers are willing to pay and what sellers are willing to accept at any given moment. It is not merely a fee or a friction — it is the visible expression of uncertainty in the pricing process. When participants are confident about a security's value and many are willing to transact, spreads narrow because buyers and sellers are not far apart. When uncertainty rises — due to news events, illiquidity, or thin participation — spreads widen because sellers demand more compensation for the risk of transacting at a potentially incorrect price. For operations professionals, the spread is a direct measure of execution cost embedded in the price, and understanding its behavior is necessary to interpret why actual execution prices deviate from pre-trade benchmarks."),
+      ...coreConcept("Supply and Demand Dynamics",
+        "In securities markets, supply is the volume of a security that owners are willing to sell at current or near-current prices, and demand is the volume that potential buyers are willing to absorb at those same prices. When demand exceeds available supply at a given price, buyers must bid higher to attract sellers — prices rise. When supply exceeds demand, sellers must accept lower prices to find buyers — prices fall. These dynamics operate continuously in real-time across all liquid markets, and their intensity determines not just the direction of price movement but its speed. A large imbalance between buy orders and sell orders at a particular price level will move prices sharply and quickly; a near-equilibrium between supply and demand will produce a stable, slow-moving price. Operations teams that monitor portfolio positions, calculate margin requirements, or support stress-testing functions all depend on understanding how supply-demand imbalances generate the price movements that drive their calculations."),
+      ...coreConcept("Information and Price Discovery",
+        "Price discovery is the mechanism by which new information — earnings announcements, macroeconomic data, regulatory decisions, or changes in participant sentiment — becomes embedded in the price of a security. When new information enters the market, it changes participants' assessments of a security's fair value, and they respond by adjusting their orders. Sellers who learn that a company's earnings have missed expectations will offer at lower prices; buyers anticipating the same will reduce their bids. The cascade of order revisions that follows new information is price discovery in action: the market is solving for the price that reflects the updated state of knowledge. The speed and accuracy of this process varies by market, by instrument, and by the transparency of the information environment. Securities with wide analyst coverage and active trading discover prices quickly; thinly traded instruments may take longer to incorporate public information, creating windows of mispricing that operational systems must account for."),
+      ...coreConcept("Market Efficiency and Pricing Behavior",
+        "Market efficiency describes the degree to which a security's current price reflects all available relevant information. In a highly efficient market, prices adjust rapidly and accurately to new information, leaving little room for systematic deviation from fair value. In practice, efficiency is a spectrum rather than a binary state: large-cap equities in deep markets are priced efficiently most of the time; small-cap equities, illiquid bonds, and complex derivatives may exhibit persistent inefficiencies. For operations professionals, the relevant consequence of efficiency is predictability: an efficient market produces prices that are reliable inputs for settlement, margin, and valuation calculations. An inefficient or disrupted market produces prices that may be temporarily unreliable — stale, manipulated, or distorted by thin liquidity — and operations teams must have protocols to identify and escalate these conditions rather than processing them as if they were normal."),
+      ...coreConcept("Fundamental Value and Market Price",
+        "Fundamental value is a model-based estimate of what a security is worth based on the economic characteristics of the underlying asset — cash flows, growth expectations, default probability, duration, and comparable instruments. Market price is what the security is actually trading for at a given moment. These two numbers are related but not identical, and the relationship between them shifts with market conditions. In calm, liquid markets with high participation, market prices tend to track fundamental value estimates closely because informed participants will exploit any significant divergence by buying undervalued securities and selling overvalued ones until the gap closes. In stressed or illiquid conditions, prices can diverge substantially and persistently from fundamental estimates — not because the estimates are wrong, but because the conditions required for efficient price discovery have broken down. Operations teams managing portfolio valuations, NAV calculations, or client reporting must understand this distinction: they are sometimes reporting market prices, sometimes using model-based fundamental estimates, and sometimes navigating the tension between the two."),
+      ...coreConcept("Price Volatility and Operational Risk",
+        "Volatility is the rate and magnitude of price change over time. High volatility means prices are moving rapidly and by large amounts; low volatility means prices are relatively stable. Volatility is not inherently bad — it is the mechanism by which markets absorb shocks and reflect changing information — but it creates direct operational risk. When prices move sharply, margin requirements change, collateral obligations shift, settlement exposures widen, and the risk of counterparty default rises. Operations teams working in environments of elevated volatility must process more exceptions, escalate more anomalies, and manage more intraday adjustments than in stable conditions. Understanding volatility as a pricing phenomenon — rather than simply as a market observation — allows operations professionals to anticipate the operational consequences of price movements before they create failures in settlement, collateral, or custody systems."),
+      spacer(160),
+
+      // ── SECTION 8: SYSTEM STRUCTURE ────────────────────────────────────────
+      sectionBanner("Section 8 · System Structure"),
+      spacer(100),
+      body("The securities pricing system is not a single mechanism — it is a layered architecture of participants, venues, and data channels, each of which occupies a distinct structural role in determining how prices form and how they are transmitted. The following components describe what exists in this architecture — the permanent, identifiable parts of the system as it would appear if frozen in place."),
+      spacer(80),
+      bullet("Primary Issuers and the Initial Pricing Moment. Corporations, governments, and other entities issue securities into the market through primary offerings — IPOs, bond auctions, rights issues — where an initial price is established through a negotiated or auction process involving underwriters and large institutional investors. This initial pricing event does not persist into secondary market trading, but it establishes the reference point against which subsequent prices will be interpreted. The primary issuance function is the structural origin point of a security's price history. Issuers themselves are not active pricing agents in the secondary market — once their securities begin trading, price formation passes to the secondary market structure entirely."),
+      bullet("Market Makers and Continuous Pricing Obligations. Market makers are institutions — typically broker-dealers or specialized trading firms — that commit to quoting both a bid and an offer in a security simultaneously, thereby creating the two-sided market that allows other participants to transact on demand. They are the structural backbone of continuous price availability: without market makers willing to quote, buyers and sellers would have no counterparty until a natural match appeared, and price formation would be intermittent and unstable. Market makers earn the bid-ask spread as compensation for the risk they absorb by holding inventory in a security whose price may move against them between buy and sell. Their presence or absence in a given security has a direct structural effect on that security's pricing behavior."),
+      bullet("Institutional Investors and Order-Based Price Pressure. Asset managers, hedge funds, pension funds, insurance companies, and other institutional investors are the primary source of order flow that moves prices. When an institution accumulates or liquidates a large position, it must do so through the market — and the act of doing so exerts directional pressure on price. A large buy order absorbs available supply at the current price and forces the next execution to occur at a higher level; a large sell order does the reverse. Institutional investors do not typically intend to move prices — they are trying to transact at the best available price — but their scale means they inevitably do. The structural implication is that institutional activity is simultaneously a driver of price discovery and a source of price disruption."),
+      bullet("Exchanges and Multilateral Trading Facilities. Exchanges are the regulated, centralized venues where securities are listed and where the primary price discovery process for those securities occurs. They operate under formal rules that govern order submission, matching, and reporting, and they publish real-time price data that serves as the reference price for all downstream operations including clearing, settlement, and client reporting. Multilateral trading facilities (MTFs) and alternative trading systems (ATSs) compete with exchanges for order flow, creating a fragmented price discovery environment in which the same security may be trading simultaneously at slightly different prices on different venues — a structural feature known as market fragmentation."),
+      bullet("Data Infrastructure and Price Dissemination. Prices formed on trading venues are commercially and operationally useless unless they can be transmitted, stored, and accessed in real time by the downstream systems that depend on them. The data infrastructure of the pricing system — consolidated tape facilities, market data vendors, pricing services, and proprietary data feeds — is the channel through which execution prices become settlement prices, valuation prices, and benchmark prices. Failures in this infrastructure do not affect price formation directly, but they make it impossible for operations teams to act on pricing information accurately, creating the same operational consequences as a pricing error even when the underlying price is correct."),
+      spacer(160),
+
+      // ── SECTION 9: SYSTEM LAYERS ───────────────────────────────────────────
+      sectionBanner("Section 9 · System Layers"),
+      spacer(100),
+      body("The pricing system operates across several functional layers that activate when the market runs. Where Section 8 describes what the system contains, this section describes what those components do — the distinct types of activity that occur across the system simultaneously and sequentially."),
+      spacer(80),
+      bullet("The Order Interaction Layer. The most immediate functional layer of the pricing system is the continuous interaction of buy and sell orders at the venue level. When a market order to buy 1,000 shares meets the available offers in the order book, it consumes supply at successive price levels until it is filled — each successive fill occurring at a slightly higher price as cheaper supply is exhausted. This layer is where price actually moves: the mechanics of order matching in response to incoming order flow. Operations teams in execution management and transaction cost analysis work primarily within the consequences of this layer."),
+      bullet("The Information Absorption Layer. Running parallel to order interaction is the continuous process by which participant assessments of value are updated in response to new information. When a company announces earnings, participants immediately revise their valuations; those revised valuations appear as revised orders, which change the supply-demand balance at existing price levels and drive price to a new equilibrium. This layer is what most people mean when they refer to 'price discovery' in its classic sense. It operates on a different timescale from order interaction — information absorption can happen within milliseconds for high-profile events in liquid securities, or over hours and days in thinly traded instruments."),
+      bullet("The Sentiment and Technical Layer. Beyond fundamental information absorption, prices are also influenced by participant psychology, momentum signals, and technical price patterns — the weight of prior price history on current trading decisions. A security that has been rising for several sessions may attract additional buyers simply because it has been rising; a price that has repeatedly failed to break through a particular level may attract sellers each time it approaches that level. These dynamics are real inputs to price formation even though they are not grounded in changes to the security's fundamental value. For operations professionals, the practical significance is that prices can move in ways that are not explained by news or fundamentals alone, and that these movements can be persistent enough to affect settlement exposures and collateral calculations for extended periods."),
+      bullet("The Cross-Venue Arbitrage Layer. Because securities trade simultaneously on multiple venues, prices are kept approximately consistent across venues by arbitrageurs — participants who detect price discrepancies between venues and exploit them until the discrepancy is eliminated. This layer prevents material fragmentation of the reference price: if the same equity is offered at $50.10 on one exchange and $50.15 on another, buyers will route to the cheaper venue and sellers to the more expensive one until prices align. Arbitrage activity is therefore a structural stabilizer of the pricing system, but it operates through the same order flow that moves prices everywhere else, and in periods of stress it can amplify rather than dampen volatility."),
+      bullet("The Operational Translation Layer. The final functional layer of the pricing system is not a trading function at all — it is the process by which executed prices are translated into inputs for all downstream operations. The trade price becomes the settlement consideration. It becomes the basis for margin calculation. It feeds the end-of-day valuation of positions. It enters NAV calculations. It is the reference for compliance monitoring of best execution. This translation process is where most operations professionals interact with pricing: not as market participants observing price formation, but as the systems and teams that receive prices as facts and use them to drive operational outcomes. Errors, delays, and ambiguities in this layer produce the majority of reconciliation failures and operational exceptions that securities operations teams manage."),
+      spacer(160),
+
+      // ── SECTION 10: COMPARISON ─────────────────────────────────────────────
+      sectionBanner("Section 10 · Comparison: Price as Signal vs. Price as Input"),
+      spacer(100),
+      body("The most consequential distinction in this lesson is not between two types of securities or two market structures — it is between two orientations toward price that define the difference between junior and senior operational thinking. Most practitioners understand price as a signal: a number that reflects market opinion and moves in response to events. Fewer understand price as an input: a value that must be captured, validated, controlled, and actioned with precision in order for downstream systems to function correctly. The distinction matters because misunderstanding which orientation applies in a given context is the source of most pricing-related operational failures."),
+      body("The price-as-signal orientation treats price as information about what the market thinks. It is the orientation of analysts, portfolio managers, and traders who are primarily asking: what does this price tell me? Is it too high? Too low? What is it likely to do next? This orientation is evaluative and forward-looking, and it is entirely appropriate when the task is investment decision-making or trading execution. A practitioner working in this mode is assessing the price, interpreting it, and deciding how to respond to it. This is a legitimate and important orientation — but it is not the primary orientation of operations."),
+      body("The price-as-input orientation treats price as a fact that must be acted upon, regardless of whether the practitioner believes it is the correct price. When a settlement team receives the executed price of a trade, they do not evaluate whether the price was fair — they use it to calculate the settlement obligation. When a collateral management function receives an end-of-day mark, they use it to calculate margin exposure. When a custody platform records a position value, it uses the price it received, not a judgment about what the price should have been. The operations professional's task is to ensure that prices are received accurately, validated against expected parameters, applied consistently to the correct systems, and escalated when they fall outside acceptable ranges — not to second-guess the price itself. Practitioners who conflate these two orientations will either over-function (challenging prices that are within normal parameters) or under-function (accepting prices that are clearly anomalous because they assume trading has already validated them)."),
+      spacer(160),
+
+      // ── SECTION 11: OPERATIONAL WORKFLOW ───────────────────────────────────
+      sectionBanner("Section 11 · Operational Workflow: How a Securities Price Is Formed and Used"),
+      spacer(100),
+      body("The following steps describe the end-to-end lifecycle of a securities price — from the moment it begins forming in the market to the moment it becomes an operational output in downstream systems. Each step specifies who acts, what input triggers the action, what output is produced, and where the risk of failure lies."),
+      spacer(80),
+      numbered("Pre-Trade Price Reference. Before any order is submitted, the participant — whether an institutional investor, a broker, or an automated trading system — consults the current market price to establish a reference point. The input is the real-time bid-ask quote available from the relevant venue or consolidated data feed. The output is a decision about what price to submit an order at, or whether to submit an order at all. The risk at this step is stale or incorrect reference data: if the price displayed to the participant does not reflect the current state of the order book — due to data latency, feed failure, or quote manipulation — the participant's order may execute at a materially different price than intended, creating an execution error that propagates into settlement.", "Step 1: "),
+      numbered("Order Submission and Queue Position. The participant submits an order to a venue — an exchange, an MTF, or a dark pool — specifying quantity and, for limit orders, a price threshold. The input is the participant's pricing intention expressed as an order. The output is a position in the venue's order book, visible or hidden depending on order type. The risk here is that market conditions change between order submission and execution — prices move, spreads widen, or counterparty supply evaporates — leaving the order at a price that no longer reflects current market conditions. For operations teams, the relevant consequence is that the price at which an order was submitted and the price at which it executes may differ, and that difference must be tracked, reported, and reconciled.", "Step 2: "),
+      numbered("Order Matching and Price Determination. When the venue's matching engine pairs the submitted order with a resting counterpart order, a trade is executed at the intersection of the two orders' prices. The input is the order book state — the set of all available bids and offers at that moment. The output is an executed trade with a timestamp, a quantity, and a price. The risk at this step is fragmented execution: a large order may be filled across multiple price levels as it consumes successive layers of supply or demand, resulting in an average execution price that differs from the quoted price at the moment of order submission. Operations teams must receive and reconcile all fill reports accurately to construct the correct weighted average price for settlement and reporting.", "Step 3: "),
+      numbered("Trade Confirmation and Reporting. Following execution, the venue and the executing broker generate trade confirmations — official records of the executed trade specifying all material terms including price, quantity, instrument identifier, counterparties, and timestamp. The input is the execution data from the matching engine. The output is a bilateral confirmation that both parties acknowledge and record. The risk is discrepancy: if the buyer's and seller's records of the trade price differ — due to system errors, communication failures, or manual processing — the resulting mismatch must be resolved before settlement can proceed. Unresolved price discrepancies are a primary driver of settlement failure.", "Step 4: "),
+      numbered("Pre-Settlement Price Validation. Before the settlement date, operations teams validate the confirmed trade price against several reference points: the pre-trade benchmark, the venue's official closing price, and any applicable pricing tolerances specified in the relevant investment management agreement or compliance policy. The input is the confirmed trade price and the set of applicable benchmarks. The output is either clearance for settlement or an exception that requires investigation. The risk is that anomalous prices — whether the result of erroneous data, manipulation, or genuine market dislocation — pass through validation without triggering an exception if tolerance thresholds are set too wide or monitored too loosely.", "Step 5: "),
+      numbered("Settlement Obligation Calculation. On or before the settlement date, the confirmed and validated trade price is used to calculate the cash obligation: the amount of money that must change hands between buyer and seller to complete the transaction. The input is the trade price multiplied by the trade quantity, adjusted for any applicable fees, taxes, or accrued interest. The output is a net settlement instruction submitted to the relevant clearinghouse or bilateral counterparty. The risk is that price errors at this step produce incorrect cash movements — either shortfalls that result in settlement failure or overpayments that create credit exposure to the counterparty until recovered.", "Step 6: "),
+      numbered("Post-Settlement Price Recording and Valuation. Once settlement is complete, the executed price becomes a permanent record in the custody and accounting systems: the cost basis of the acquired position, the realized gain or loss on the disposed position, and the benchmark for all future valuation of the same holding. The input is the settled trade data. The output is an updated position record with an embedded price reference. The risk is inconsistency between trading systems, settlement systems, and accounting records — a known failure mode in institutions that run multiple platforms without a reliable reconciliation workflow.", "Step 7: "),
+      spacer(160),
+
+      // ── SECTION 12: REAL-WORLD EXAMPLE ─────────────────────────────────────
+      sectionBanner("Section 12 · Real-World Example"),
+      spacer(100),
+      h3("Equity Pricing Exception at a Mid-Size Asset Manager"),
+      body("The scenario involves a mid-size active equity manager with approximately $4 billion in assets under management, operating three domestic equity strategies. The firm's middle office team of seven professionals supports portfolio management, executes trade confirmation workflows, and feeds valuation and reporting systems. The firm does not have a proprietary execution management system; it relies on broker-provided allocations and a third-party order management system (OMS) for trade capture and confirmation matching."),
+      body("During a period of elevated market volatility following an unexpected central bank announcement, the firm's OMS received a batch of trade confirmations for a single large-cap equity position that had been traded across three different execution venues throughout the day. The confirmations reported execution prices ranging from $142.30 to $143.85 — a spread of $1.55 that was larger than the expected intraday range and inconsistent with the volume-weighted average price (VWAP) benchmark the portfolio manager had specified. A junior operations analyst, treating the confirmations as normal input to the settlement workflow, processed them without escalation. The resulting settlement instruction overstated the cost basis of the position by approximately $38,000 relative to the correct VWAP calculation."),
+      body("The error was caught during the end-of-day portfolio reconciliation, when the middle office supervisor compared the settled cost basis to the portfolio management system's pre-trade VWAP target and identified a material discrepancy. The supervisor requested full execution detail from all three brokers, matched each fill against the venue's time-stamped trade reports, and identified that two fills had been confirmed at prices outside the acceptable tolerance window. Those fills were rebooked at the correct prices, the settlement instruction was revised and resubmitted to the clearinghouse before the cut-off for same-day settlement, and the compliance team was notified of the anomaly per the firm's best execution monitoring policy."),
+      body("The outcome was resolution without settlement failure, but with two operational consequences. First, the near-miss triggered a review of the firm's OMS tolerance settings, which had not been updated to account for the wider intraday price ranges typical of volatile sessions. Second, the incident produced a documented process change requiring that any trade confirmation with a fill price deviation exceeding a defined basis point threshold from the pre-trade VWAP benchmark be reviewed by a senior operations professional before settlement processing proceeds. The operations team's ability to identify, trace, and resolve the pricing discrepancy before settlement cut-off prevented what would have been a material error in the portfolio's cost basis and a potential compliance reporting failure."),
+      spacer(160),
+
+      // ── SECTION 13: COMMON MISTAKES ────────────────────────────────────────
+      sectionBanner("Section 13 · Common Mistakes"),
+      spacer(100),
+
+      h3("Mistake 1: Treating Last Trade Price as Current Price"),
+      body("The most pervasive pricing error in operations is using the most recently recorded execution price as a proxy for the current market price of a security. In a liquid market with continuous trading, this approximation is usually close enough to be operationally harmless. In thinly traded securities, at market open or close, or during periods of sharp price movement, the last trade price may be minutes or hours old and may be materially different from where the security would actually transact if an order were submitted now. Operations teams that apply stale last-trade prices to margin calculations, collateral valuations, or intraday NAV estimates are creating exposures they cannot see — and the error only becomes visible when a counterparty disputes the valuation or a settlement fails on incorrect assumptions about the security's current value."),
+
+      h3("Mistake 2: Ignoring Bid-Ask Spread in Execution Cost Analysis"),
+      body("A common structural error in execution quality assessment is measuring execution performance solely against the mid-price — the midpoint between the bid and the ask — rather than accounting for the spread that any actual transaction must cross. Every buy order executes at or above the mid-price; every sell order executes at or below it. Ignoring this means that an execution that appears to match the mid-price exactly has actually cost the investor half the spread, and that 'good' execution in a wide-spread environment may actually represent significant transaction cost. Operations teams responsible for transaction cost analysis (TCA) reports that do not account for spread dynamics will consistently misrepresent true execution quality to portfolio managers and clients."),
+
+      h3("Mistake 3: Assuming All Venues Report the Same Price"),
+      body("In fragmented markets, the same security may trade at slightly different prices on different venues simultaneously. Operations teams that pull reference prices from a single venue and apply them as universal benchmarks are implicitly assuming that venue's prices are representative of the whole market — an assumption that breaks down during periods of stress or low liquidity, when prices can diverge meaningfully across venues before arbitrage restores alignment. This error is especially consequential in fixed income and OTC derivatives markets, where there is no single exchange and prices are formed through bilateral dealer networks. A firm that prices a bond position using one dealer's quote when the market has moved elsewhere is carrying a position at a materially incorrect value."),
+
+      h3("Mistake 4: Conflating Price Volatility with Price Inaccuracy"),
+      body("When prices are moving sharply, it is common for operations professionals — especially those newer to the role — to flag price movements as potential data errors rather than valid market behavior. A security that drops 8% in thirty minutes is alarming, but if that movement is driven by a material news event and is reflected uniformly across all venues and data sources, it is an accurate price, not a feed error. Treating accurate volatile prices as suspected inaccuracies creates unnecessary exceptions, delays settlement processing, and consumes investigation resources that should be directed at actual data quality failures. The skill being developed here is the ability to distinguish a price that is accurate but uncomfortable from a price that is genuinely suspect — a distinction that requires both market knowledge and rigorous data validation procedures."),
+
+      h3("Mistake 5: Failing to Document Price Override Rationale"),
+      body("In certain circumstances — model-based valuations for illiquid securities, fair value overrides during market closures, or pricing adjustments for corporate actions — operations teams make deliberate decisions to use a price other than the one reported by the primary data source. These overrides are legitimate and often necessary. The mistake is not in making them but in failing to document why the override was made, who authorized it, and what evidence supported the alternative price. Undocumented overrides are invisible to auditors, difficult to defend during regulatory review, and impossible to reconstruct when the same situation recurs. A pricing override without a documented rationale is an operational liability regardless of whether the overridden price was correct."),
+      spacer(160),
+
+      // ── SECTION 14: PRACTICAL EXERCISES ────────────────────────────────────
+      sectionBanner("Section 14 · Practical Exercises"),
+      spacer(100),
+
+      h3("Exercise 1: Bid-Ask Spread Analysis (Analysis)"),
+      body("You are provided with a data table showing end-of-day bid and ask quotes for ten equity securities across two weeks: five large-cap, widely traded equities and five small-cap equities with limited analyst coverage. Calculate the bid-ask spread in both dollar terms and basis points for each security on each day. Identify the three days on which spreads widened most sharply, and for each of those days, write a one-paragraph explanation of what market conditions might have produced the widening. Then evaluate: for which securities would executing a $5 million order have the greatest execution cost impact, and why? Your analysis should demonstrate that you understand spread as a pricing mechanism rather than a simple transaction fee, and your explanations should connect observed spread behavior to the pricing dynamics described in Sections 7 and 9."),
+
+      h3("Exercise 2: Price Tolerance Policy Design (Design)"),
+      body("Design a price tolerance policy for a mid-size equity manager that processes 50–200 trades per day across domestic equities, international equities, and fixed income. Your policy must specify: the price deviation thresholds (in basis points) at which a confirmed trade price triggers review rather than automatic settlement processing; whether those thresholds should differ by asset class, instrument liquidity, and trade size; who has authority to approve settlement of a flagged trade; and what documentation is required when a trade is settled at a price outside normal parameters. Your policy should be written as a one-to-two page operational procedure document, not a conceptual outline. It will be evaluated on specificity, operational feasibility, and alignment with the pricing risk concepts from Section 7."),
+
+      h3("Exercise 3: Trade Confirmation Discrepancy (Scenario)"),
+      body("Your firm executed a bond purchase through three different broker-dealers on the same day as part of a portfolio rebalancing. The three brokers have submitted confirmations with slightly different prices: Broker A at 98.45, Broker B at 98.52, and Broker C at 98.38. The portfolio manager's pre-trade benchmark was a VWAP target of 98.48. Assess the situation: which confirmations fall within an acceptable tolerance range, which require investigation, and what steps would you take to resolve the discrepancy before the settlement date? Draft the internal escalation memo you would send to your supervisor, including a factual summary of the discrepancy, your recommended course of action, and the information you need from the brokers to resolve it. Your memo will be evaluated on analytical clarity and procedural accuracy."),
+
+      h3("Exercise 4: Pricing Layer Mapping (Written)"),
+      body("Select any publicly traded equity security you are familiar with and write a two-to-three page analysis describing how each of the five pricing system layers from Section 9 operates for that specific security. Your analysis must be specific to the security's actual market characteristics — its trading volume, analyst coverage, exchange listing, and institutional ownership — rather than generic. Identify which layers are most active for this security and why, and describe what would happen to each layer's function if the security's trading volume dropped by 80% over a three-month period. Your analysis should demonstrate that you can apply the lesson's conceptual framework to a real instrument, not just describe the framework in the abstract."),
+      spacer(160),
+
+      // ── SECTION 15: KEY TERMS ───────────────────────────────────────────────
+      sectionBanner("Section 15 · Key Terms"),
+      spacer(100),
+      body("Canonical labels for indexing, linking, and retrieval. For operational definitions and mechanism explanations, see Section 7.", { color: DKGRAY, italic: true }),
+      spacer(60),
+      keyTerm("Price Formation", "The ongoing market process that resolves competing buy and sell intentions into a transaction rate."),
+      keyTerm("Bid-Ask Spread", "The gap between the highest price a buyer will pay and the lowest price a seller will accept, representing embedded transaction cost and pricing uncertainty."),
+      keyTerm("Supply and Demand Dynamics", "The real-time interaction between the volume of securities available for sale and the volume sought by buyers, which drives directional price movement."),
+      keyTerm("Price Discovery", "The mechanism by which new information is absorbed into a security's market price through participant order revisions."),
+      keyTerm("Market Efficiency", "The degree to which a security's price reflects all available relevant information at a given moment."),
+      keyTerm("Fundamental Value", "A model-based estimate of a security's intrinsic worth derived from its underlying economic characteristics."),
+      keyTerm("Market Price", "The rate at which a security most recently transacted between a willing buyer and a willing seller in an open market."),
+      keyTerm("Volatility", "The rate and magnitude of price change in a security over a defined period, with direct consequences for operational risk and margin requirements."),
+      keyTerm("Market Maker", "An institution that quotes simultaneous bids and offers in a security, providing continuous price availability in exchange for earning the spread."),
+      keyTerm("Market Fragmentation", "The condition in which a security trades simultaneously on multiple venues at slightly different prices, requiring arbitrage to maintain price consistency."),
+      keyTerm("Price Override", "A deliberate operational decision to use a price other than the one reported by the primary data source, requiring documented authorization and rationale."),
+      keyTerm("Execution Price", "The specific price at which a submitted order is filled, which becomes the basis for settlement obligations and position cost recording."),
+      spacer(160),
+
+      // ── SECTION 16: KNOWLEDGE CHECK ────────────────────────────────────────
+      sectionBanner("Section 16 · Knowledge Check"),
+      spacer(100),
+
+      ...mcq(1,
+        "An operations analyst receives a confirmed trade price for a large-cap equity that is 30 basis points below the pre-trade VWAP benchmark. The analyst's first action should be to:",
+        ["A. Immediately escalate the trade to the compliance team as a potential best execution violation.",
+         "B. Compare the confirmed price against the tolerance thresholds in the firm's price validation policy before determining whether escalation is required.",
+         "C. Contact the executing broker to request a reprice before proceeding.",
+         "D. Process the trade for settlement and note the deviation in the end-of-day exception log."],
+        "B",
+        "The correct answer is B because a 30 basis point deviation is a data point, not automatically a policy breach. The appropriate first action is to evaluate it against established tolerance thresholds — thresholds that exist precisely to distinguish normal market variation from genuine pricing anomalies. Answer A is premature: compliance escalation may be required, but only if the deviation breaches a defined threshold, not merely because it exists. Answer C is operationally incorrect: requesting a reprice from a broker is not a standard procedure for a deviation of uncertain significance. Answer D is also incorrect because processing without investigation when a deviation exists is exactly the failure mode that price validation protocols are designed to prevent. Institutional competence in this situation means applying policy before exercising judgment."
+      ),
+      ...mcq(2,
+        "The bid-ask spread in a security widens sharply during an afternoon session with no apparent news catalysts. The most operationally relevant interpretation of this observation is that:",
+        ["A. The security's fundamental value has declined and should be revalued in the portfolio.",
+         "B. Market makers are demanding greater compensation for inventory risk due to elevated uncertainty, which increases effective transaction costs for any orders executed during this period.",
+         "C. The executing broker has failed to provide best execution and should be notified.",
+         "D. The security has become illiquid and should be flagged for immediate position reduction."],
+        "B",
+        "Answer B is correct because spread widening without news catalysts typically reflects market makers increasing their compensation for the risk of holding inventory when their own uncertainty about fair value has risen — possibly due to reduced order flow, approaching end of session, or thin market conditions. This has a direct operational implication: any trades executed during wide-spread periods have higher embedded transaction costs that must be captured in execution quality reporting. Answer A is incorrect because spread widening does not change fundamental value; it changes transaction cost. Answer C conflates normal market conditions with broker failure, which is analytically imprecise. Answer D is premature: spread widening indicates elevated cost but not necessarily position-reducing illiquidity; a position reduction decision would require additional evidence of structural impairment."
+      ),
+      ...mcq(3,
+        "Which of the following describes the primary difference between the 'information absorption layer' and the 'order interaction layer' in the securities pricing system?",
+        ["A. The information absorption layer operates at the exchange level; the order interaction layer operates at the broker-dealer level.",
+         "B. The information absorption layer determines which participants can submit orders; the order interaction layer determines how those orders are priced.",
+         "C. The information absorption layer reflects how participant valuations are revised in response to new information; the order interaction layer reflects how those revised valuations are expressed through orders that move prices.",
+         "D. They are functionally identical — both describe how supply and demand determine price."],
+        "C",
+        "Answer C correctly captures the distinction established in Section 9. The information absorption layer is the cognitive and valuation-revision process — participants learning something new and updating what they believe a security is worth. The order interaction layer is the mechanical consequence of those revised beliefs being expressed as orders that execute against each other and move prices. The two layers are related but sequential: information absorption changes what participants want to do; order interaction is how they do it and what price results. Answer A is incorrect because both layers operate across the system, not at distinct institutional levels. Answer B is incorrect because neither layer controls participant access. Answer D is incorrect because conflating the two layers obscures the analytical insight that prices can stop moving (order interaction slows) even while information continues to arrive (information absorption continues) — a common feature of end-of-session trading."
+      ),
+      ...mcq(4,
+        "A portfolio manager argues that a security's confirmed execution price is 'wrong' because it is 45 basis points above what a fundamental analysis model indicates is fair value. The operations team's appropriate response is:",
+        ["A. Agree with the portfolio manager and rebook the trade at the model's fair value estimate.",
+         "B. Escalate to the pricing committee to determine whether the execution price or the model price should take precedence.",
+         "C. Proceed with settlement at the confirmed execution price, which reflects what the market actually transacted; the divergence between market price and model estimate is an investment judgment, not an operational error.",
+         "D. Flag the trade for best execution review since the execution price exceeded the fair value estimate."],
+        "C",
+        "Answer C is correct and directly reflects the price-as-input versus price-as-signal distinction from Section 10. Operations does not adjudicate investment disagreements about whether a security should have traded where it did. The confirmed execution price is the legal record of what transacted, and settlement must proceed on that basis. The portfolio manager's fundamental valuation model produces a signal about investment attractiveness; it does not override the documented transaction. Answer A would introduce a fabricated price into the settlement and accounting records — a serious operational and regulatory error. Answer B mischaracterizes the role of a pricing committee, which addresses valuation inputs for illiquid or untraded positions, not disputes about market execution prices. Answer D is incorrect: best execution review compares execution price to market benchmarks, not to fundamental valuation models."
+      ),
+      ...mcq(5,
+        "An operations team at a fixed income desk receives end-of-day prices for a portfolio of corporate bonds from a single pricing vendor. The desk head points out that the vendor's prices for three illiquid bonds appear to be unchanged from the previous day's close, despite significant credit market movements. The most appropriate operational response is:",
+        ["A. Accept the vendor's prices as the official valuation since they are provided by a contracted, regulated service.",
+         "B. Challenge all prices in the portfolio from that vendor pending a full data quality review.",
+         "C. Contact the vendor to understand whether the unchanged prices reflect genuine market stability or a failure to update stale inputs, and obtain secondary price sources for the three bonds before completing the end-of-day valuation run.",
+         "D. Apply a uniform spread adjustment to the three bonds based on the day's credit market movements and proceed with valuation."],
+        "C",
+        "Answer C reflects the operational competence required when price data exhibits a suspicious pattern — unchanged prices in an instrument that should have been affected by material market movement. The correct response is targeted investigation: request clarification from the vendor for the specific bonds in question and seek corroborating prices from secondary sources before accepting the potentially stale values. This is the price validation function operating as designed. Answer A reflects excessive deference to a contracted service when available evidence suggests a data quality issue. Answer B is overcorrective: the issue is specific to three bonds, not the whole portfolio, and a full suspension would disrupt the valuation workflow unnecessarily. Answer D is analytically creative but operationally impermissible: applying ad hoc spread adjustments without documented methodology and authorization introduces subjective pricing that would not withstand audit review."
+      ),
+      spacer(160),
+
+      // ── SECTION 17: LESSON SUMMARY ─────────────────────────────────────────
+      sectionBanner("Section 17 · Lesson Summary"),
+      spacer(100),
+      body("Securities pricing is the continuous process by which markets resolve competing participant intentions into transaction rates that encode current information, risk assessments, and supply-demand balances simultaneously. The essential characteristic of this process — the fact that no single authority determines prices, that prices emerge from decentralized interaction, and that they are continuously revised in response to information and order flow — means that prices are always provisional outputs of a system in motion, not stable facts about a security's inherent value. This is the foundational insight the lesson has established: price is not a measurement, it is a resolution."),
+      body("The system that produces prices has a layered architecture. Its structural components — issuers, market makers, institutional investors, trading venues, and data infrastructure — define what exists. Its functional layers — order interaction, information absorption, sentiment and technical dynamics, cross-venue arbitrage, and operational translation — define what those components do when the market runs. Together these two dimensions explain not just how prices form but why they behave differently in different market conditions, and why operations teams sometimes receive prices that are correct but volatile, or stable but stale, or disputed but legally binding. Understanding both dimensions allows operations professionals to diagnose price-related operational problems rather than merely report them."),
+      body("The lesson's primary failure mode insights follow from the distinction between price-as-signal and price-as-input. Operations teams that treat price as a signal to be evaluated will over-function — challenging market prices on investment grounds, delaying settlement, creating friction with trading desks. Operations teams with no analytical framework for price behavior will under-function — processing anomalous prices without exception, missing genuine data errors, and producing downstream failures in settlement, collateral, and reporting. The practitioner who understands pricing as a mechanism can do both: act decisively on confirmed prices while identifying the narrow set of circumstances where a price is genuinely suspect and requires investigation before it propagates into operational systems."),
+      spacer(160),
+
+      // ── SECTION 18: LOOKING AHEAD ──────────────────────────────────────────
+      sectionBanner("Section 18 · Looking Ahead"),
+      spacer(100),
+      body("Lesson 1.2 — Liquidity and Tradable Markets — takes the pricing framework established here and examines the structural conditions that make reliable price formation possible. Because price discovery requires willing participants on both sides of a trade, the depth, consistency, and stability of participation in a market determines whether the prices it produces can be trusted as operational inputs. Having established in this lesson what prices are and how they form, we are now positioned to examine what conditions allow that process to function reliably — and what operational consequences follow when liquidity conditions deteriorate and the pricing mechanism itself begins to break down."),
+      spacer(160),
+
+      // ── SECTION 19: STUDY SUPPORT ──────────────────────────────────────────
+      sectionBanner("Section 19 · Study Support"),
+      spacer(100),
+
+      h3("How to Approach This Lesson"),
+      body("The most effective cognitive strategy for this lesson is to read every pricing concept as a process description, not a definition. Ask for each term: what is actually happening when this exists? What inputs does it consume, what outputs does it produce, and at what point does it create risk? Pricing becomes intuitive when you stop thinking of it as a number and start thinking of it as a system output."),
+
+      h3("Key Patterns to Recognize"),
+      bullet("Wide bid-ask spreads indicate elevated uncertainty or thin participation — any trade executed in this environment carries higher embedded cost than the execution price alone suggests."),
+      bullet("Prices that are unchanged across multiple sessions in an instrument that should be sensitive to market conditions are more likely stale than stable — treat them as a data quality signal."),
+      bullet("When a price is disputed between trading and operations, the relevant question is not which price is correct in an investment sense but which price is legally documented and operationally binding."),
+      bullet("Price movements that are sharp and consistent across all venues and data sources are likely accurate; sharp movements visible on only one source or feed are likely data errors."),
+      bullet("The operational translation layer is where most pricing-related operational failures actually occur — not in price formation itself, but in how formed prices are captured, validated, and applied downstream."),
+
+      h3("Questions to Test Your Understanding"),
+      bullet("Can you explain why the bid-ask spread is an operational cost concept and not just a trading concept?"),
+      bullet("What is the difference between price formation and price discovery, and why does that distinction matter for how you interpret market price movements?"),
+      bullet("In what circumstances would you use a model-based fundamental value estimate rather than the most recent market price, and what documentation would you require to support that decision?"),
+      bullet("How would you distinguish a price that is accurate-but-volatile from a price that is genuinely erroneous, using only the data available to an operations team?"),
+      bullet("What are the downstream operational consequences of allowing a settlement to proceed at an incorrect price, and at which systems do those consequences first become visible?"),
+
+      h3("Common Areas of Confusion"),
+      body("The most common confusion in this lesson is between market price and fundamental value. Students sometimes assume that if a market price diverges significantly from what a model or analyst estimates as fair value, the price is 'wrong.' It is not — it is the price that the market produced at that moment under those conditions, and operations must use it. The model estimate is an investment judgment; the market price is an operational fact. These are different things that serve different purposes, and conflating them leads to the specific mistake described in Knowledge Check Question 4."),
+      body("A secondary confusion is between the bid-ask spread and commission or fee structures. Commissions are explicit charges added to a trade's cost; spreads are implicit costs embedded in the price itself. A 'commission-free' trade is not cost-free if the spread is wide — the cost has been shifted into the execution price rather than added on top of it. Operations teams that analyze transaction costs without accounting for spread dynamics will systematically understate true trading costs."),
+
+      h3("How This Connects to the Larger System"),
+      body("This lesson provides the pricing foundation that every subsequent lesson in Unit 1 depends on. Lesson 1.2 (Liquidity) examines the conditions under which price formation functions reliably. Lesson 1.3 (Order Flow) examines how participant intentions enter the pricing mechanism. Lesson 1.4 (Settlement) examines what happens to the execution price after it is formed. Lesson 1.5 (Transaction Costs) builds directly on spread concepts introduced here. The pricing concepts in this lesson also appear in Units 2, 3, and 4 whenever exchange structure, instrument characteristics, or market participant behavior affects the quality and reliability of price formation — which is to say, throughout the track."),
+      spacer(160),
+
+      // ── SECTION 20: PRACTICAL APPLICATIONS ────────────────────────────────
+      sectionBanner("Section 20 · Practical Application"),
+      spacer(100),
+
+      h3("Application 1: End-of-Day Price Validation Run"),
+      body("An operations analyst at an asset management firm runs the end-of-day price validation process across the firm's full portfolio. This involves pulling confirmed closing prices from the primary pricing vendor, comparing them against secondary source prices and exchange official closing marks, and identifying any securities where the deviation between sources exceeds the firm's tolerance thresholds. The output is a daily exception report listing flagged positions, the magnitude of the discrepancy, the data sources used, and a recommended disposition for each exception. This lesson's pricing framework informs the analyst's ability to interpret why discrepancies arise, distinguish data errors from legitimate price differences between venues, and prioritize escalation based on the operational risk each exception poses."),
+
+      h3("Application 2: Transaction Cost Analysis Contribution"),
+      body("A middle office professional contributes to a quarterly transaction cost analysis (TCA) report for the firm's equity strategies. This requires pulling executed trade prices for all equity transactions in the quarter, comparing each execution to the appropriate benchmark — VWAP, arrival price, or closing price depending on the order type — and calculating implementation shortfall for each trade. The output is a summary of execution quality by strategy, broker, and asset class, with observations about how market conditions during the quarter — including spread behavior and intraday volatility — affected execution outcomes. This lesson's analysis of bid-ask spread, volatility, and price formation dynamics provides the conceptual foundation for interpreting TCA results beyond the surface metrics."),
+
+      h3("Application 3: Pricing Override Authorization"),
+      body("A senior operations professional reviews a request from the portfolio accounting team to apply a model-based fair value price to an illiquid corporate bond that has not traded in eleven days. The professional must evaluate whether the vendor's stale last-trade price or the portfolio manager's model estimate better represents the security's current value for NAV calculation purposes; document the rationale for the override decision, including the evidence reviewed and the methodology applied; obtain appropriate authorization from the pricing committee; and ensure the override is recorded in the pricing exception log with full audit trail. This application draws directly on the lesson's framework for distinguishing market price from fundamental value and the operational discipline required when those two diverge."),
+
+      h3("Application 4: Settlement Price Dispute Resolution"),
+      body("An operations manager at a broker-dealer receives a dispute from an institutional client claiming that the price at which a bond trade was settled does not match the price confirmed in the pre-trade indication of interest. The manager must retrieve the full trade record — order submission, execution confirmations, post-trade allocation, and settlement instruction — and trace any price changes across the lifecycle to identify where the discrepancy originated. The output is a written response to the client documenting the chronological record, identifying the source of the price discrepancy, and proposing a resolution within the applicable regulatory timeframe. This application requires the full pricing lifecycle framework from Section 11 and the documentation disciplines discussed in Section 13."),
+      spacer(200),
+
+      // ── SECTION 21: LESSON NAVIGATION ─────────────────────────────────────
+      sectionBanner("Section 21 · Lesson Navigation"),
+      spacer(100),
+      navRow("← Previous", "Unit 1 Introduction: Financial Foundations for Capital Markets", "Next →", "Lesson 1.2: Liquidity and Tradable Markets"),
+      spacer(80),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 80, after: 80 },
+        children: [new TextRun({ text: "Unit 1 Home  ·  Back to Top  ·  Capital Markets & Securities Operations Track", font: "Arial", size: 19, color: MIDGRAY })]
+      }),
+      spacer(120),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: "MGU Professional Operations Track  ·  Lesson 1.1: Securities Pricing and Market Value", font: "Arial", size: 17, color: MIDGRAY })]
+      }),
+
+    ]
+  }]
+});
+
+Packer.toBuffer(doc).then(buffer => {
+  fs.writeFileSync("/mnt/user-data/outputs/MGU_Lesson_1_1_Securities_Pricing.docx", buffer);
+  console.log("Done.");
+});
