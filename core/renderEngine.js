@@ -1,0 +1,74 @@
+import "/core/registry.js"
+
+const ComponentRegistry = new Map()
+
+function registerComponent(name, fn) {
+  ComponentRegistry.set(name, fn)
+}
+
+function getRoutePath() {
+  const path = window.location.pathname
+  return path.endsWith("/") ? path + "home" : path
+}
+
+async function loadPageData(route) {
+  const response = await fetch(`/data/pages${route}.json`)
+  if (!response.ok) throw new Error("Page data not found")
+  return await response.json()
+}
+
+function setMeta(meta) {
+  if (!meta) return
+
+  document.title = meta.title || ""
+
+  const desc = document.querySelector("meta[name='description']")
+  if (desc) desc.setAttribute("content", meta.description || "")
+
+  const canon = document.querySelector("link[rel='canonical']")
+  if (canon) canon.setAttribute("href", meta.canonical || "")
+}
+
+function render(componentName, data) {
+  const fn = ComponentRegistry.get(componentName)
+  if (!fn) return
+  fn(data)
+}
+
+async function boot() {
+  try {
+    const route = getRoutePath()
+    const page = await loadPageData(route)
+
+    setMeta(page.meta)
+
+    render("header", page.header)
+    render("hero", page.hero)
+    render("breadcrumb", page.breadcrumb)
+    render("index", page.index)
+    render("sections", page.sections)
+    render("bottomNav", page.navigation)
+    render("footer", page.footer)
+
+  } catch (err) {
+    console.error("Render engine error:", err)
+  }
+}
+
+const isPreview = window.location.search.includes("preview=true")
+
+if (!isPreview) {
+  boot()
+}
+
+export { registerComponent }
+export function renderPage(page) {
+  setMeta(page.meta)
+
+  render("header", page.header)
+  render("hero", page.hero)
+  render("breadcrumb", page.breadcrumb)
+  render("index", page.index)
+  render("bottomNav", page.navigation)
+  render("footer", page.footer)
+}
