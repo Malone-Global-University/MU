@@ -6,14 +6,22 @@ function getRoutePath() {
   return path.endsWith("/") ? path + "home" : path
 }
 
-async function loadPageData(route) {
-  const pages = await fetch("/api/pages/index.json").then(r => r.json())
+// renderEngine.js
 
-  const page = pages.find(p => p.path === route)
-
-  if (!page) throw new Error("Page not found")
-
-  return await fetch(page.file).then(r => r.json())
+async function loadPageData(pageId) {
+  try {
+    const response = await fetch(`/api/pages/${pageId}`);
+    if (!response.ok) {
+      // Throw a specific error if the page is missing (404)
+      if (response.status === 404) throw new Error("Page not found");
+      throw new Error("Server error");
+    }
+    return await response.json();
+  } catch (err) {
+    console.error("Render engine error:", err);
+    // Optionally redirect to a 404 UI instead of crashing the boot process
+    return null; 
+  }
 }
 
 function setMeta(meta) {
