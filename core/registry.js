@@ -1,4 +1,4 @@
-import { registerComponent } from "/core/renderEngine.js"
+import { registerComponent } from "/core/componentRegistry.js"
 
 /* =========================
    HEADER

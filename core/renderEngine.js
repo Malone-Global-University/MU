@@ -1,10 +1,5 @@
+import { getComponent } from "/core/componentRegistry.js"
 import "/core/registry.js"
-
-const ComponentRegistry = new Map()
-
-function registerComponent(name, fn) {
-  ComponentRegistry.set(name, fn)
-}
 
 function getRoutePath() {
   const path = window.location.pathname
@@ -12,9 +7,13 @@ function getRoutePath() {
 }
 
 async function loadPageData(route) {
-  const response = await fetch(`/data/pages${route}.json`)
-  if (!response.ok) throw new Error("Page data not found")
-  return await response.json()
+  const pages = await fetch("/api/pages/index.json").then(r => r.json())
+
+  const page = pages.find(p => p.path === route)
+
+  if (!page) throw new Error("Page not found")
+
+  return await fetch(page.file).then(r => r.json())
 }
 
 function setMeta(meta) {
@@ -29,8 +28,8 @@ function setMeta(meta) {
   if (canon) canon.setAttribute("href", meta.canonical || "")
 }
 
-function render(componentName, data) {
-  const fn = ComponentRegistry.get(componentName)
+function render(name, data) {
+  const fn = getComponent(name)
   if (!fn) return
   fn(data)
 }
@@ -61,7 +60,6 @@ if (!isPreview) {
   boot()
 }
 
-export { registerComponent }
 export function renderPage(page) {
   setMeta(page.meta)
 
