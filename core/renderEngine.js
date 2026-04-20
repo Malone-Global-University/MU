@@ -56,7 +56,6 @@ async function boot() {
     render("sections", page.sections)
     render("bottomNav", page.navigation)
     render("footer", page.footer)
-
   } catch (err) {
     console.error("Render engine error:", err)
   }
