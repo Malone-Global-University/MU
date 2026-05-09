@@ -92,4 +92,8 @@ function buildBreadcrumbs() {
   breadcrumb.innerHTML = `<ol>${items.join("")}</ol>`;
 }
 
-document.addEventListener("DOMContentLoaded", buildBreadcrumbs);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", buildBreadcrumbs);
+} else {
+  buildBreadcrumbs();
+}
