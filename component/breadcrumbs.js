@@ -15,7 +15,7 @@ function titleCaseSlug(slug) {
   if (specialNames[slug]) return specialNames[slug];
 
   return slug
-    .replace(/[-_]/g, " ")
+    .replace(/[-_]/g,)
     .replace(/\b\w/g, char => char.toUpperCase());
 }
 
