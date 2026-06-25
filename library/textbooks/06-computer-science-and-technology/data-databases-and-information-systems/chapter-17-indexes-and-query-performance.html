@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 17: Indexes and Query Performance at an Introductory Level — MGU CS Series</title>
+<style>
+
+/* ─── Design Tokens ──────────────────────────────────────────────────── */
+:root {
+  --ink:         #1a1a2e;
+  --ink-mid:     #3d3d5c;
+  --ink-light:   #6b6b8a;
+  --rule:        #d4d4e8;
+  --page:        #fafafa;
+  --surface:     #ffffff;
+  --accent:      #2d5be3;
+  --accent-dim:  #e8eefb;
+  --accent-dark: #1a3ba0;
+  --highlight:   #f0f4ff;
+  --code-bg:     #f4f6fb;
+  --warn:        #4a3800;
+  --warn-bg:     #fffbeb;
+  --warn-rule:   #d4a500;
+  --positive:    #1a4a2e;
+  --positive-bg: #edfaf3;
+  --positive-rule:#2a8a52;
+
+  --serif:   'Georgia', 'Times New Roman', serif;
+  --sans:    'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:    'Courier New', 'Consolas', monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-md:   1.125rem;
+  --text-lg:   1.25rem;
+  --text-xl:   1.5rem;
+  --text-2xl:  1.875rem;
+  --text-3xl:  2.375rem;
+  --text-4xl:  3rem;
+
+  --radius:  4px;
+  --col:     680px;
+  --wide:    860px;
+}
+
+/* ─── Reset & Base ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 17px; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--serif);
+  font-size: var(--text-base);
+  line-height: 1.78;
+  color: var(--ink);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Layout Shell ───────────────────────────────────────────────────── */
+.page-wrap {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+/* ─── Sidebar Nav ────────────────────────────────────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--ink);
+  color: #c8c8e0;
+  padding: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #3d3d5c transparent;
+}
+
+.sidebar-brand {
+  padding: 0 1.5rem 1.5rem;
+  border-bottom: 1px solid #2a2a45;
+}
+
+.sidebar-series {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7878aa;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #e8e8f4;
+  line-height: 1.4;
+}
+
+.sidebar-nav {
+  padding: 1.25rem 0 1rem;
+  flex: 1;
+}
+
+.nav-part-label {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5a80;
+  padding: 0.85rem 1.5rem 0.25rem;
+}
+
+.nav-link {
+  display: block;
+  padding: 0.3rem 1.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #9898be;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: color 0.15s, background 0.15s;
+  border-left: 2px solid transparent;
+}
+
+.nav-link:hover {
+  color: #e8e8f4;
+  background: rgba(255,255,255,0.04);
+  border-left-color: #5a6ee8;
+}
+
+.nav-link.current {
+  color: #b8c4ff;
+  border-left-color: var(--accent);
+  background: rgba(45, 91, 227, 0.12);
+}
+
+.nav-link.section-link {
+  padding-left: 2.1rem;
+  font-size: 0.72rem;
+  color: #6a6a90;
+}
+
+.nav-link.section-link:hover { color: #c0c0e0; }
+
+/* ─── Main Content Area ──────────────────────────────────────────────── */
+.main {
+  min-width: 0;
+  background: var(--surface);
+}
+
+/* ─── Chapter Header ─────────────────────────────────────────────────── */
+.chapter-header {
+  background: var(--ink);
+  color: white;
+  padding: 4rem 3.5rem 3.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.chapter-header::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 420px;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 40%, rgba(45,91,227,0.18) 100%);
+  pointer-events: none;
+}
+
+.chapter-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, #7a9cff 50%, transparent 100%);
+}
+
+.chapter-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.part-badge {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(45,91,227,0.35);
+  color: #b0c4ff;
+  padding: 0.2rem 0.65rem;
+  border-radius: 2px;
+  border: 1px solid rgba(45,91,227,0.5);
+}
+
+.chapter-number-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #7878aa;
+  letter-spacing: 0.05em;
+}
+
+.chapter-number {
+  font-family: var(--sans);
+  font-size: 5rem;
+  font-weight: 800;
+  color: rgba(255,255,255,0.06);
+  position: absolute;
+  top: 2rem;
+  right: 3rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  user-select: none;
+}
+
+.chapter-title {
+  font-family: var(--serif);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #f0f0fc;
+  max-width: 620px;
+  margin-bottom: 1.5rem;
+}
+
+.chapter-intro-summary {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: #9898c0;
+  line-height: 1.6;
+  max-width: 580px;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ─── Section Contents Strip ─────────────────────────────────────────── */
+.toc-strip {
+  background: var(--highlight);
+  border-bottom: 1px solid var(--rule);
+  padding: 1.5rem 3.5rem;
+}
+
+.toc-strip-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 0.75rem;
+}
+
+.toc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.25rem 2rem;
+}
+
+.toc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-mid);
+}
+
+.toc-num {
+  color: var(--accent);
+  font-weight: 700;
+  min-width: 2.5rem;
+  font-size: 0.7rem;
+}
+
+.toc-item a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.toc-item a:hover { color: var(--accent); }
+
+/* ─── Content Body ───────────────────────────────────────────────────── */
+.content-body {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 3rem 3.5rem 4rem;
+}
+
+/* ─── Section ────────────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 3.5rem;
+}
+
+.section-anchor {
+  display: block;
+  position: relative;
+  top: -80px;
+  visibility: hidden;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.section-num {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 2.5rem;
+  letter-spacing: 0.02em;
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+/* ─── Subsection ─────────────────────────────────────────────────────── */
+.subsection {
+  margin: 1.75rem 0;
+}
+
+.subsection-title {
+  font-family: var(--sans);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+  line-height: 1.3;
+}
+
+/* ─── Prose ──────────────────────────────────────────────────────────── */
+p {
+  margin-bottom: 1.1rem;
+  color: var(--ink-mid);
+  max-width: var(--col);
+}
+
+p strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ─── Tables ─────────────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.75rem 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.table-caption {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-light);
+  padding: 0.5rem 1rem 0;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--rule);
+  font-style: italic;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+thead th {
+  background: var(--ink);
+  color: #c8c8e0;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+tbody tr { border-bottom: 1px solid var(--rule); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--highlight); }
+
+tbody td {
+  padding: 0.55rem 1rem;
+  color: var(--ink-mid);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+tbody td:first-child {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+/* ─── Code & SQL Blocks ──────────────────────────────────────────────── */
+.code-block {
+  margin: 1.5rem 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--rule);
+}
+
+.code-label {
+  background: var(--ink);
+  color: #7878aa;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.code-label-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* SQL keyword coloring via classes */
+.kw { color: #1a3ba0; font-weight: 700; }
+.str { color: #2a6a00; }
+.cm { color: #888; font-style: italic; }
+.fn { color: #8a3b00; font-weight: 700; }
+
+/* Inline code */
+p code, li code {
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  font-size: 0.82em;
+  color: var(--accent-dark);
+}
+
+/* ─── Callout Boxes ──────────────────────────────────────────────────── */
+.callout {
+  margin: 1.75rem 0;
+  padding: 1.1rem 1.4rem;
+  border-radius: var(--radius);
+  border-left: 3px solid;
+  max-width: var(--col);
+}
+
+.callout-note {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.callout-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-rule);
+}
+
+.callout-positive {
+  background: var(--positive-bg);
+  border-color: var(--positive-rule);
+}
+
+.callout-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.callout-note .callout-title    { color: var(--accent-dark); }
+.callout-warn .callout-title    { color: var(--warn); }
+.callout-positive .callout-title{ color: var(--positive); }
+
+.callout p { margin-bottom: 0; max-width: none; }
+.callout p + p { margin-top: 0.5rem; }
+
+/* ─── Components Grid (reused for tradeoffs / responsibilities) ───────── */
+.components-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.component-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  border-top: 3px solid var(--accent);
+}
+
+.component-card-name {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.component-card p {
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ─── Scope Grid (reused for four areas style cards) ───────────────────── */
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.scope-card {
+  padding: 1rem 1.1rem;
+  background: var(--highlight);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.scope-card-num {
+  font-family: var(--sans);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: rgba(45,91,227,0.15);
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.scope-card-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.35rem;
+}
+
+.scope-card p {
+  font-size: 0.8rem;
+  margin: 0;
+  color: var(--ink-light);
+  line-height: 1.5;
+}
+
+/* ─── Habits / Numbered Step List ───────────────────────────────────── */
+.habits-list {
+  counter-reset: habit;
+  list-style: none;
+  max-width: var(--col);
+  margin: 1rem 0;
+}
+
+.habits-list li {
+  counter-increment: habit;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  align-items: flex-start;
+}
+
+.habits-list li::before {
+  content: counter(habit);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  border-radius: 50%;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.habits-list li div {
+  flex: 1;
+}
+
+.habits-list li strong {
+  display: block;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  margin-bottom: 0.2rem;
+}
+
+.habits-list li p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* ─── Plain Question List (design questions inside chapter body) ──────── */
+.inline-question-list {
+  list-style: none;
+  max-width: var(--col);
+  margin: 1rem 0 1.25rem;
+}
+
+.inline-question-list li {
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  margin-bottom: 0.6rem;
+  padding-left: 1.1rem;
+  position: relative;
+  line-height: 1.6;
+}
+
+.inline-question-list li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+/* ─── Back Matter ────────────────────────────────────────────────────── */
+.back-matter {
+  background: var(--page);
+  border-top: 2px solid var(--rule);
+}
+
+.back-section {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 2.5rem 3.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.back-section:last-child { border-bottom: none; }
+
+.back-section-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--accent-dim);
+}
+
+/* Summary points */
+.summary-points {
+  list-style: none;
+  max-width: var(--col);
+}
+
+.summary-points li {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.6;
+}
+
+.summary-points li::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* Key terms */
+.key-terms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  max-width: var(--wide);
+}
+
+.term-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+}
+
+.term-word {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+
+.term-def {
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Practice questions */
+.practice-section {
+  margin-bottom: 1.75rem;
+}
+
+.practice-section-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+}
+
+.practice-intro {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  max-width: var(--col);
+  margin-bottom: 1.25rem;
+}
+
+.questions-list {
+  list-style: none;
+  counter-reset: question;
+  max-width: var(--col);
+}
+
+.questions-list li {
+  counter-increment: question;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.65;
+}
+
+.questions-list li::before {
+  content: counter(question) '.';
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 1.5rem;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* Scenario cards (Index Choice Practice, Tradeoff Analysis) */
+.scenario-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  max-width: var(--col);
+}
+
+.scenario-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  margin-bottom: 0.4rem;
+}
+
+.scenario-card p {
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* Query scenario blocks */
+.query-scenario {
+  margin-bottom: 2rem;
+  max-width: var(--wide);
+}
+
+.query-scenario-label {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.6rem;
+}
+
+.query-scenario-context {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  margin-bottom: 0.75rem;
+  max-width: var(--col);
+}
+
+/* Misconceptions */
+.misconception {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid #d4006e;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  max-width: var(--col);
+}
+
+.misconception-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d4006e;
+  margin-bottom: 0.35rem;
+}
+
+.misconception-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.4rem;
+}
+
+.misconception p {
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* Preview */
+.preview-box {
+  background: var(--ink);
+  color: #c8c8e0;
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+  max-width: var(--col);
+}
+
+.preview-box-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a6ee8;
+  margin-bottom: 0.6rem;
+}
+
+.preview-box p {
+  color: #b0b0d4;
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.7;
+  max-width: none;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+.chapter-footer {
+  background: var(--ink);
+  color: #5a5a80;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  padding: 1.25rem 3.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chapter-footer a { color: #7878aa; text-decoration: none; }
+.chapter-footer a:hover { color: #b0b0d0; }
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .page-wrap { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .chapter-header,
+  .toc-strip,
+  .content-body,
+  .back-section { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .chapter-number { font-size: 3rem; }
+  .components-grid,
+  .scope-grid { grid-template-columns: 1fr; }
+  .key-terms-grid { grid-template-columns: 1fr; }
+  .chapter-footer { flex-direction: column; gap: 0.5rem; text-align: center; }
+}
+
+@media (max-width: 540px) {
+  .toc-grid { grid-template-columns: 1fr; }
+  .chapter-title { font-size: var(--text-2xl); }
+}
+
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- ─── Sidebar ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-series">MGU CS Series</span>
+      <span class="sidebar-title">Data, Databases, and Information Systems</span>
+    </div>
+    <nav class="sidebar-nav" aria-label="Chapter navigation">
+      <span class="nav-part-label">Part IV — Managing and Changing Data</span>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 15 — Inserting, Updating, and Deleting Data</a>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 16 — Transactions and Data Integrity</a>
+      <a class="nav-link current" href="#chapter-start">Ch. 17 — Indexes and Query Performance</a>
+      <a class="nav-link section-link" href="#s17-1">17.1 Why Query Performance Matters</a>
+      <a class="nav-link section-link" href="#s17-2">17.2 Searching Through Tables</a>
+      <a class="nav-link section-link" href="#s17-3">17.3 Full Table Scans</a>
+      <a class="nav-link section-link" href="#s17-4">17.4 What an Index Is</a>
+      <a class="nav-link section-link" href="#s17-5">17.5 Primary Key Indexes</a>
+      <a class="nav-link section-link" href="#s17-6">17.6 Indexing Foreign Keys</a>
+      <a class="nav-link section-link" href="#s17-7">17.7 Indexes on Search Columns</a>
+      <a class="nav-link section-link" href="#s17-8">17.8 Index Tradeoffs</a>
+      <a class="nav-link section-link" href="#s17-9">17.9 Query Plans at a Basic Level</a>
+      <a class="nav-link section-link" href="#s17-10">17.10 Performance as a Design Concern</a>
+
+      <span class="nav-part-label" style="margin-top:0.5rem;">Back Matter</span>
+      <a class="nav-link section-link" href="#summary">Chapter Summary</a>
+      <a class="nav-link section-link" href="#key-terms">Key Terms</a>
+      <a class="nav-link section-link" href="#concept-check">Performance Concept Check</a>
+      <a class="nav-link section-link" href="#index-practice">Index Choice Practice</a>
+      <a class="nav-link section-link" href="#query-scenarios">Query Scenario Questions</a>
+      <a class="nav-link section-link" href="#tradeoff">Tradeoff Analysis</a>
+      <a class="nav-link section-link" href="#misconceptions">Common Misconceptions</a>
+      <a class="nav-link section-link" href="#real-world">Real-World Applications</a>
+      <a class="nav-link section-link" href="#review">Review Questions</a>
+      <a class="nav-link section-link" href="#preview">Preview of Chapter 18</a>
+
+      <span class="nav-part-label" style="margin-top:0.75rem;">Coming Next</span>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 18 — Security, Permissions, and Access Control</a>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 19 — What Information Systems Do</a>
+    </nav>
+  </aside>
+
+  <!-- ─── Main ────────────────────────────────────────── -->
+  <main class="main" id="chapter-start">
+
+    <!-- Chapter Header -->
+    <header class="chapter-header">
+      <div class="chapter-number" aria-hidden="true">17</div>
+      <div class="chapter-eyebrow">
+        <span class="part-badge">Part IV — Managing and Changing Data</span>
+        <span class="chapter-number-label">Chapter 17 of 28</span>
+      </div>
+      <h1 class="chapter-title">Indexes and Query Performance at an Introductory Level</h1>
+      <p class="chapter-intro-summary">
+        A database holding twenty records answers almost any question instantly. A database holding two million records, with real users waiting, is a different kind of system altogether. This chapter introduces performance as a design concern: what happens when a database searches for data, why that search can become slow, and how indexes change the picture entirely.
+      </p>
+    </header>
+
+    <!-- TOC Strip -->
+    <div class="toc-strip" aria-label="Sections in this chapter">
+      <div class="toc-strip-title">Sections in This Chapter</div>
+      <div class="toc-grid">
+        <div class="toc-item"><span class="toc-num">17.1</span><a href="#s17-1">Why Query Performance Matters</a></div>
+        <div class="toc-item"><span class="toc-num">17.2</span><a href="#s17-2">Searching Through Records</a></div>
+        <div class="toc-item"><span class="toc-num">17.3</span><a href="#s17-3">Full Table Scans at an Introductory Level</a></div>
+        <div class="toc-item"><span class="toc-num">17.4</span><a href="#s17-4">What an Index Is</a></div>
+        <div class="toc-item"><span class="toc-num">17.5</span><a href="#s17-5">Primary Key Indexes</a></div>
+        <div class="toc-item"><span class="toc-num">17.6</span><a href="#s17-6">Indexing Foreign Keys</a></div>
+        <div class="toc-item"><span class="toc-num">17.7</span><a href="#s17-7">Indexes on Search Columns</a></div>
+        <div class="toc-item"><span class="toc-num">17.8</span><a href="#s17-8">Index Tradeoffs</a></div>
+        <div class="toc-item"><span class="toc-num">17.9</span><a href="#s17-9">Query Plans at a Basic Level</a></div>
+        <div class="toc-item"><span class="toc-num">17.10</span><a href="#s17-10">Performance as a Design Concern</a></div>
+      </div>
+    </div>
+
+    <!-- Content Body -->
+    <article class="content-body">
+
+      <!-- Chapter Introduction -->
+      <section class="section">
+        <p>Every database eventually grows large enough that the time it takes to answer a query starts to matter. A database holding twenty student records will answer almost any question in an instant. A database holding two million records, with users waiting for results, becomes a system where design choices have real consequences.</p>
+        <p>Chapter 17 introduces performance thinking as a design concern, not as an advanced administration topic. Students learn what happens when a database searches through records, why that process can become slow, how indexes make certain searches dramatically faster, and what tradeoffs come with choosing to index a column.</p>
+        <p>The chapter stays conceptual and practical. It does not teach query optimization tools, advanced execution plans, or database server tuning. It teaches the ideas every database designer needs to understand before a system grows large, and it reinforces that performance is built into good design from the beginning, not patched in afterward.</p>
+        <div class="callout callout-note">
+          <div class="callout-title">Note for New Students</div>
+          <p>This chapter does not require you to memorize internal database engine mechanics. What matters is the conceptual model: searching without help is slow at scale, indexes provide that help, and every help comes with a cost. Keep that exchange in mind as you read.</p>
+        </div>
+      </section>
+
+      <!-- 17.1 -->
+      <section class="section" id="s17-1">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.1</span>
+          <h2 class="section-title">Why Query Performance Matters</h2>
+        </div>
+
+        <p>When a user submits a query, they are not simply asking a question. They are asking a machine to locate specific data in a potentially enormous collection of records, assemble the relevant pieces, apply filters, sort the results, and return an answer. When the database is small, this happens so quickly that the time is invisible. When the database is large and the design is careless, the same operation can take seconds, minutes, or, in poorly designed systems, much longer.</p>
+        <p>Performance matters for reasons that are easy to understand from everyday experience. A website that takes ten seconds to load a product search loses users. A hospital system that takes thirty seconds to retrieve a patient record during an emergency creates real danger. A school system that takes several minutes to generate a report wastes the time of every administrator who waits for it. A library catalog that responds slowly to every patron search erodes the usefulness of the entire collection.</p>
+        <p>Database performance is not only about speed as a pleasant convenience. It is about whether a system remains usable as it grows. Almost every database grows over time. Records are added, more users join, more queries run simultaneously. The design choices that work acceptably with ten thousand records may become genuinely painful with ten million.</p>
+
+        <div class="callout callout-positive">
+          <div class="callout-title">Central Idea</div>
+          <p>Understanding performance at an introductory level means understanding one central question: when a query asks the database to find something, how does the database go about looking?</p>
+        </div>
+      </section>
+
+      <!-- 17.2 -->
+      <section class="section" id="s17-2">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.2</span>
+          <h2 class="section-title">Searching Through Records</h2>
+        </div>
+
+        <p>Before thinking about how databases improve their searches, it helps to think carefully about the basic problem. Imagine a stack of five hundred index cards, each containing a student's name, student ID number, department, and enrollment date. You need to find every student in the Engineering department.</p>
+        <p>There is no shortcut. You pick up the first card, read the department field, check whether it says Engineering, set it aside if it does not, and move to the next card. You repeat this process for every card in the stack. By the time you have checked all five hundred cards, you have found your Engineering students, but you have also touched every card in the collection, even the cards for students in Biology, History, and Languages who could not possibly match your query.</p>
+        <p>This is exactly what a database does when it has no index on the column you are searching. It examines every row in the table, one by one, checks the value in the column you specified, and either includes or excludes that row from the result. When the table contains five hundred records, this is fast. When the table contains five million records, this is slow in a way that becomes noticeable to anyone waiting for results.</p>
+        <p>The important thing to understand is that this row-by-row inspection is not a design flaw. It is the natural behavior of a database when it has no faster way to locate data. The question becomes whether the database designer has given the database the tools it needs to search more efficiently.</p>
+      </section>
+
+      <!-- 17.3 -->
+      <section class="section" id="s17-3">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.3</span>
+          <h2 class="section-title">Full Table Scans at an Introductory Level</h2>
+        </div>
+
+        <p>Database professionals use the term <strong>full table scan</strong> to describe what happens when a database reads every row in a table to answer a query. The name is descriptive: the database scans the full table.</p>
+        <p>A full table scan is not always a problem. For small tables, it is entirely reasonable. If a table contains a hundred rows, scanning all hundred rows to find a matching record is practically instantaneous. The overhead of setting up a more sophisticated search mechanism would cost more than the scan itself.</p>
+        <p>Full table scans become a concern when tables are large and when certain queries run frequently. Consider the following scenario.</p>
+        <p>A university stores its student records in a table called <code>Students</code>. After fifteen years of operation, the table contains three hundred thousand records. An administrative system runs a query every time a student logs in to verify their account and retrieve their record. That query looks something like this:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Login Lookup Query</div>
+          <pre><code><span class="kw">SELECT</span> *
+<span class="kw">FROM</span> Students
+<span class="kw">WHERE</span> email = <span class="str">'nguyen.linh@mgu.edu'</span>;</code></pre>
+        </div>
+
+        <p>If the database has no index on the <code>email</code> column, it must scan all three hundred thousand rows to find the one matching record. Every single login triggers a full table scan. With a hundred students logging in simultaneously during registration period, the database is performing three hundred thousand row reads one hundred times over, all at the same moment.</p>
+        <p>An index on the <code>email</code> column would allow the database to locate the matching record almost immediately, touching only a tiny fraction of the table instead of all of it.</p>
+
+        <div class="callout callout-warn">
+          <div class="callout-title">Worth Remembering</div>
+          <p>Full table scans are not errors. They are the default behavior. But understanding when they occur, and when they can be replaced by indexed lookups, is the core of introductory performance thinking.</p>
+        </div>
+      </section>
+
+      <!-- 17.4 -->
+      <section class="section" id="s17-4">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.4</span>
+          <h2 class="section-title">What an Index Is</h2>
+        </div>
+
+        <p>An <strong>index</strong> is a separate data structure that the database maintains alongside a table. It is built on one or more columns, and it stores the values from those columns along with pointers that tell the database exactly where each matching row lives in the table.</p>
+        <p>The closest everyday analogy is the index at the back of a textbook. A textbook index does not contain the full content of every page. It contains a sorted list of important terms, and next to each term it lists the page numbers where that term appears. When you want to find information about normalization, you do not read the textbook from page one. You go to the index, find the entry for normalization, and jump directly to the relevant pages.</p>
+        <p>A database index works the same way. When the database needs to answer a query that searches by an indexed column, it does not scan the entire table. Instead, it consults the index, which is organized for fast lookup. The index directs the database to the specific rows that match the query, and the database retrieves only those rows.</p>
+        <p>The speed difference can be enormous. Searching through an index to find a specific value in a table with one million rows might require examining only twenty or thirty index entries rather than one million table rows. This is possible because database indexes are organized as sorted, hierarchical structures that allow the database to narrow down the search space very quickly with each step, rather than checking one record at a time.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">What an Index Looks Like Conceptually</div>
+          <p>Consider a simplified <code>Students</code> table:</p>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Students table example">
+          <div class="table-caption">Table 17.1 — A simplified <code>Students</code> table.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>student_id</th>
+                <th>name</th>
+                <th>email</th>
+                <th>department</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>Amara Diallo</td><td>diallo.amara@mgu.edu</td><td>Biology</td></tr>
+              <tr><td>2</td><td>Linh Nguyen</td><td>nguyen.linh@mgu.edu</td><td>Engineering</td></tr>
+              <tr><td>3</td><td>Felix Brandt</td><td>brandt.felix@mgu.edu</td><td>History</td></tr>
+              <tr><td>4</td><td>Yuki Tanaka</td><td>tanaka.yuki@mgu.edu</td><td>Engineering</td></tr>
+              <tr><td>5</td><td>Priya Sharma</td><td>sharma.priya@mgu.edu</td><td>Languages</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>A conceptual index on the <code>email</code> column might look like this:</p>
+
+        <div class="table-wrap" role="region" aria-label="Conceptual index example">
+          <div class="table-caption">Table 17.2 — A conceptual index on <code>email</code>, sorted alphabetically with pointers back to the matching row.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>email (sorted)</th>
+                <th>points to row</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>brandt.felix@mgu.edu</td><td>row 3</td></tr>
+              <tr><td>diallo.amara@mgu.edu</td><td>row 1</td></tr>
+              <tr><td>nguyen.linh@mgu.edu</td><td>row 2</td></tr>
+              <tr><td>sharma.priya@mgu.edu</td><td>row 5</td></tr>
+              <tr><td>tanaka.yuki@mgu.edu</td><td>row 4</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The index is sorted alphabetically. When a query asks for the row where <code>email = 'nguyen.linh@mgu.edu'</code>, the database uses the index to go directly to row 2, without reading rows 1, 3, 4, or 5 at all.</p>
+        <p>The actual internal structure of a database index is more sophisticated than this simple list, using a hierarchical structure called a B-tree that allows very fast binary searching. But the conceptual purpose remains the same: the index stores sorted values and pointers, so the database can locate matching rows without reading the whole table.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Creating an Index in SQL</div>
+          <p>In SQL, you create an index with the <code>CREATE INDEX</code> statement:</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Creating an Index</div>
+          <pre><code><span class="kw">CREATE</span> <span class="kw">INDEX</span> idx_students_email
+<span class="kw">ON</span> Students (email);</code></pre>
+        </div>
+
+        <p>This tells the database to build and maintain an index on the <code>email</code> column of the <code>Students</code> table. After this statement runs, any query that filters by <code>email</code> can use the index instead of scanning the full table.</p>
+        <p>The database maintains the index automatically. When new rows are inserted, when email addresses are updated, or when records are deleted, the database updates the index to keep it accurate. This maintenance happens in the background and is transparent to the user.</p>
+      </section>
+
+      <!-- 17.5 -->
+      <section class="section" id="s17-5">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.5</span>
+          <h2 class="section-title">Primary Key Indexes</h2>
+        </div>
+
+        <p>Every table with a primary key benefits from an index on that primary key. In fact, most database systems, including SQLite and PostgreSQL, automatically create an index on the primary key when the table is defined. This happens without any extra instruction from the designer.</p>
+        <p>The reason is straightforward. Primary keys are the most common way to look up a specific record. Queries join tables using primary and foreign keys constantly. If looking up a primary key value required a full table scan, the overhead would be intolerable.</p>
+        <p>Consider a simple join:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Joining on a Primary Key</div>
+          <pre><code><span class="kw">SELECT</span> Students.name, Enrollments.course_id
+<span class="kw">FROM</span> Students
+<span class="kw">JOIN</span> Enrollments <span class="kw">ON</span> Students.student_id = Enrollments.student_id
+<span class="kw">WHERE</span> Students.student_id = 1042;</code></pre>
+        </div>
+
+        <p>This query joins two tables on <code>student_id</code>. For the join to work efficiently, the database needs to find the row in <code>Students</code> where <code>student_id = 1042</code>, and all the rows in <code>Enrollments</code> where <code>student_id = 1042</code>. If both tables have indexes on <code>student_id</code>, these lookups are nearly instantaneous. If neither table has indexes, both require full table scans, and the join itself must work through combinations of rows in an inefficient way.</p>
+        <p>Because primary key indexes are created automatically, students generally do not need to create them manually. But understanding that they exist, and why they matter, is essential for understanding how join queries perform in practice.</p>
+      </section>
+
+      <!-- 17.6 -->
+      <section class="section" id="s17-6">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.6</span>
+          <h2 class="section-title">Indexing Foreign Keys</h2>
+        </div>
+
+        <p>If primary keys are automatically indexed, foreign keys require more attention. In many database systems, including SQLite, foreign keys are not automatically indexed. The designer must decide whether to create indexes on foreign key columns.</p>
+        <p>This matters because foreign key columns are used constantly in join conditions. Every time you join two tables, the query connects a foreign key in one table to a primary key in another. If the foreign key column has no index, the join may require a full table scan on the child table for every row in the parent table.</p>
+        <p>Consider a university database with students and their enrollments:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Table Notes</div>
+          <pre><code><span class="cm">-- Students table (50,000 rows)</span>
+<span class="cm">-- Primary key: student_id (automatically indexed)</span>
+
+<span class="cm">-- Enrollments table (400,000 rows)</span>
+<span class="cm">-- Foreign key: student_id references Students(student_id)</span>
+<span class="cm">-- (no automatic index on this foreign key column)</span></code></pre>
+        </div>
+
+        <p>A query that retrieves all enrollments for a given student:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Enrollment Lookup by Student</div>
+          <pre><code><span class="kw">SELECT</span> *
+<span class="kw">FROM</span> Enrollments
+<span class="kw">WHERE</span> student_id = 1042;</code></pre>
+        </div>
+
+        <p>Without an index on <code>Enrollments.student_id</code>, the database reads all four hundred thousand rows in the Enrollments table to find the records where <code>student_id = 1042</code>. With an index, it goes directly to those rows.</p>
+        <p>Creating the index is simple:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Indexing a Foreign Key</div>
+          <pre><code><span class="kw">CREATE</span> <span class="kw">INDEX</span> idx_enrollments_student_id
+<span class="kw">ON</span> Enrollments (student_id);</code></pre>
+        </div>
+
+        <p>As a design habit, database designers commonly create indexes on foreign key columns whenever the table is large and joins on that column will run frequently. This is not a universal rule, but it is a useful starting point.</p>
+      </section>
+
+      <!-- 17.7 -->
+      <section class="section" id="s17-7">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.7</span>
+          <h2 class="section-title">Indexes on Search Columns</h2>
+        </div>
+
+        <p>Primary keys and foreign keys are the most common targets for indexes, but they are not the only ones. Any column that appears frequently in <code>WHERE</code> conditions, particularly on large tables, is a candidate for indexing.</p>
+        <p>Consider the search scenarios that arise in a library catalog system. A librarian searches for all books by a specific author:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Search by Author</div>
+          <pre><code><span class="kw">SELECT</span> * <span class="kw">FROM</span> Resources <span class="kw">WHERE</span> author_id = 88;</code></pre>
+        </div>
+
+        <p>A patron searches for resources tagged with a specific subject:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Search by Subject</div>
+          <pre><code><span class="kw">SELECT</span> * <span class="kw">FROM</span> Resources <span class="kw">WHERE</span> subject = <span class="str">'Database Systems'</span>;</code></pre>
+        </div>
+
+        <p>An administrator retrieves all resources added after a certain date:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Search by Date Added</div>
+          <pre><code><span class="kw">SELECT</span> * <span class="kw">FROM</span> Resources <span class="kw">WHERE</span> date_added &gt; <span class="str">'2024-01-01'</span>;</code></pre>
+        </div>
+
+        <p>If the <code>Resources</code> table contains half a million records, each of these queries could trigger a full table scan without indexes. With indexes on <code>author_id</code>, <code>subject</code>, and <code>date_added</code>, the database can locate matching records quickly.</p>
+        <p>Creating these indexes follows the same pattern:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Creating Multiple Search Indexes</div>
+          <pre><code><span class="kw">CREATE</span> <span class="kw">INDEX</span> idx_resources_author_id
+<span class="kw">ON</span> Resources (author_id);
+
+<span class="kw">CREATE</span> <span class="kw">INDEX</span> idx_resources_subject
+<span class="kw">ON</span> Resources (subject);
+
+<span class="kw">CREATE</span> <span class="kw">INDEX</span> idx_resources_date_added
+<span class="kw">ON</span> Resources (date_added);</code></pre>
+        </div>
+
+        <p>The decision about which columns to index depends on actual usage. Columns that appear in frequent, large-table searches are good candidates. Columns on small tables, or columns that are rarely used in filters, may not benefit enough to justify the cost of maintaining the index.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Composite Indexes</div>
+          <p>It is also possible to create an index on two or more columns together. This is called a <strong>composite index</strong> or a <strong>multi-column index</strong>. Composite indexes are useful when queries regularly filter by two columns together.</p>
+          <p>For example, if an enrollment system frequently looks up records by both student and term:</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Filtering by Two Columns</div>
+          <pre><code><span class="kw">SELECT</span> *
+<span class="kw">FROM</span> Enrollments
+<span class="kw">WHERE</span> student_id = 1042 <span class="kw">AND</span> term_id = 5;</code></pre>
+        </div>
+
+        <p>A composite index can help:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Creating a Composite Index</div>
+          <pre><code><span class="kw">CREATE</span> <span class="kw">INDEX</span> idx_enrollments_student_term
+<span class="kw">ON</span> Enrollments (student_id, term_id);</code></pre>
+        </div>
+
+        <p>The order of columns in a composite index matters. The index is most useful for queries that filter by the leading column first. A composite index on <code>(student_id, term_id)</code> helps queries filtering by <code>student_id</code> alone, or by both <code>student_id</code> and <code>term_id</code>. It is less helpful for queries that filter only by <code>term_id</code>.</p>
+
+        <div class="callout callout-note">
+          <div class="callout-title">A Note on Depth</div>
+          <p>Composite indexes are an intermediate topic, but understanding that they exist helps students see that index design can become nuanced as systems grow.</p>
+        </div>
+      </section>
+
+      <!-- 17.8 -->
+      <section class="section" id="s17-8">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.8</span>
+          <h2 class="section-title">Index Tradeoffs</h2>
+        </div>
+
+        <p>Indexes are not free. Each index the database maintains comes with costs, and understanding these tradeoffs is part of making good design decisions.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Indexes Speed Up Reads but Slow Down Writes</div>
+          <p>When a new row is inserted into a table, the database does not only add the row to the table. It also updates every index defined on that table to include the new row's values. If a table has five indexes and a thousand new rows are inserted at once, the database performs a thousand insertions into the table and five thousand index updates.</p>
+          <p>Similarly, when a row is updated, the indexes on affected columns must be updated. When a row is deleted, the indexes must remove the entry for that row.</p>
+          <p>For tables that are read far more often than they are written to, this is a reasonable tradeoff. A library catalog might add a few new resources each week but answer thousands of search queries each day. Indexes clearly help there. A system that receives millions of high-speed insertions per hour, such as a sensor logging system or a financial transaction feed, might find that indexes on lightly queried columns create significant write overhead.</p>
+        </div>
+
+        <p>This tradeoff can be summarized simply:</p>
+
+        <div class="table-wrap" role="region" aria-label="Index tradeoff summary table">
+          <div class="table-caption">Table 17.3 — How indexes affect different database operations.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Operation</th>
+                <th>Effect of indexes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>SELECT queries with indexed columns</td><td>Faster</td></tr>
+              <tr><td>INSERT, UPDATE, DELETE</td><td>Slower, since indexes must be updated</td></tr>
+              <tr><td>Storage space</td><td>More space used, since index structures occupy disk</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Indexes Use Additional Storage</div>
+          <p>Every index occupies storage space. On large tables with many indexed columns, the indexes themselves can grow to be a significant fraction of the total database size. For introductory purposes, it is enough to know that indexes are not free from a storage perspective, even if storage costs are relatively low in modern systems.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Too Many Indexes Can Hurt Performance</div>
+          <p>A common mistake by designers who have just learned about indexes is to index every column. This is usually a mistake. An over-indexed table becomes slow to write to and uses far more storage than necessary. Each additional index must be maintained on every data modification.</p>
+          <p>Good index design means choosing indexes thoughtfully, based on actual queries that the system runs, the size of the tables involved, and the relative frequency of reads versus writes.</p>
+        </div>
+      </section>
+
+      <!-- 17.9 -->
+      <section class="section" id="s17-9">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.9</span>
+          <h2 class="section-title">Query Plans at a Basic Level</h2>
+        </div>
+
+        <p>Modern database systems provide tools that allow designers and administrators to inspect how the database plans to execute a query before it actually runs. This is called a <strong>query plan</strong> or <strong>execution plan</strong>.</p>
+        <p>A query plan describes the steps the database engine intends to take to answer a query. It tells the designer whether the database intends to use an index or perform a full table scan, how it plans to join tables, and what order of operations it will follow.</p>
+        <p>In SQLite, you can see a simplified version of the query plan using the <code>EXPLAIN QUERY PLAN</code> command:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Inspecting a Query Plan</div>
+          <pre><code><span class="kw">EXPLAIN</span> <span class="kw">QUERY</span> <span class="kw">PLAN</span>
+<span class="kw">SELECT</span> Students.name, Enrollments.course_id
+<span class="kw">FROM</span> Students
+<span class="kw">JOIN</span> Enrollments <span class="kw">ON</span> Students.student_id = Enrollments.student_id
+<span class="kw">WHERE</span> Students.student_id = 1042;</code></pre>
+        </div>
+
+        <p>The output might look something like this:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>Output — Using Indexes</div>
+          <pre><code>QUERY PLAN
+|--SEARCH Students USING INTEGER PRIMARY KEY (rowid=?)
+`--SEARCH Enrollments USING INDEX idx_enrollments_student_id (student_id=?)</code></pre>
+        </div>
+
+        <p>This output tells you that the database intends to use the primary key index on <code>Students</code> and the index on <code>Enrollments.student_id</code>. Both lookups are efficient.</p>
+        <p>If instead the output showed:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>Output — Falling Back to Scans</div>
+          <pre><code>QUERY PLAN
+|--SCAN Students
+`--SCAN Enrollments</code></pre>
+        </div>
+
+        <p>This would mean the database plans to perform a full table scan on both tables, which would be slow for large tables.</p>
+        <p>Query plan inspection is an advanced skill used by database administrators in professional work. At this introductory level, the important idea is simply that these tools exist. A designer who suspects a query is slow can ask the database how it plans to execute that query, and look for opportunities to add indexes that would allow more efficient lookups.</p>
+
+        <div class="callout callout-positive">
+          <div class="callout-title">You Do Not Need Fluency Yet</div>
+          <p>You do not need to read query plans fluently to benefit from this awareness. Knowing that full table scans are the default, and that indexes change how the database searches, is enough to make much better design decisions.</p>
+        </div>
+      </section>
+
+      <!-- 17.10 -->
+      <section class="section" id="s17-10">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">17.10</span>
+          <h2 class="section-title">Performance as a Design Concern</h2>
+        </div>
+
+        <p>A common misunderstanding about database performance is that it is an operational problem, something to fix after the system is built and deployed, when users start complaining that queries are slow. This misunderstanding leads to systems that were not designed with performance in mind and require increasingly difficult patches as they grow.</p>
+        <p>Performance is a design concern. The best time to think about it is when the database is first being designed, when tables are being defined, when the expected data volumes are being estimated, and when the common queries are being planned.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Thinking About Scale from the Beginning</div>
+          <p>When designing a table, it helps to estimate how many rows it might contain at maturity. A table for a small school club might hold a few hundred rows and need no special indexing at all. A table for student enrollment at a large university system might hold millions of rows and require careful attention to which columns will be searched frequently.</p>
+          <p>The questions worth asking during design include:</p>
+          <ul class="inline-question-list">
+            <li>How large will this table become over time?</li>
+            <li>Which columns will appear most often in <code>WHERE</code> conditions?</li>
+            <li>Which join conditions will run most frequently?</li>
+            <li>Are there searches that users will perform repeatedly on large data sets?</li>
+          </ul>
+          <p>The answers to these questions guide index decisions before the system goes into production, when changes are easy and inexpensive.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Query-First Design Habit</div>
+          <p>One useful habit for database designers is to think about the queries the system must answer before finalizing the table design. Chapter 9 introduced the idea of listing the questions a database must answer as part of requirements gathering. That same practice has a performance dimension.</p>
+          <p>If you know that the system must frequently answer the question "show me all orders placed by this customer," then you know the <code>Orders</code> table will be filtered by <code>customer_id</code> regularly. You can plan a foreign key and an index on <code>customer_id</code> from the beginning, rather than discovering the need after the system is in production.</p>
+          <p>If you know that the system must produce a monthly report of all enrollments grouped by department, you can think about how that query will be structured and whether the columns it touches are indexed appropriately.</p>
+          <p>This is not about premature over-engineering. It is about letting likely usage patterns inform design decisions in a natural way.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Indexes Are Not Magic</div>
+          <p>Students sometimes assume that adding an index to a column will always improve a query's performance. This is not always true. A database optimizer makes decisions about whether to use an index based on its estimate of how selective the index is, meaning how much it actually narrows down the search.</p>
+          <p>If a <code>Students</code> table has a column called <code>is_active</code> that stores only two possible values, <code>true</code> or <code>false</code>, and ninety-five percent of records have <code>is_active = true</code>, then an index on <code>is_active</code> may not help much. When a query asks for all active students, the index points to ninety-five percent of the table. The database may decide it is faster to scan the whole table than to use the index and then retrieve ninety-five percent of rows anyway.</p>
+          <p>Indexes provide the most benefit on columns with high selectivity, meaning columns where each value or small range of values narrows the result set to a small fraction of the table. Email addresses, student ID numbers, and specific category filters on tables with many categories are often highly selective. Boolean flags and columns with only a few possible values are often less selective and less likely to benefit from indexing.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Normalize First, Index Thoughtfully</div>
+          <p>Good normalization, introduced in Chapter 8, already contributes to performance by reducing data duplication and keeping table sizes smaller. A well-normalized database with thoughtfully placed indexes performs better than an over-denormalized database with indexes added as an afterthought.</p>
+          <p>The progression for database design should be: model the data correctly, design clean, normalized tables with clear keys and relationships, then think about which columns will be searched frequently on large tables and add indexes where they will genuinely help.</p>
+        </div>
+
+        <div class="callout callout-warn">
+          <div class="callout-title">Get the Structure Right First</div>
+          <p>This order matters. Trying to fix a poorly designed database with indexes is like trying to make a building stable by adding exterior decoration. The structure has to be right first.</p>
+        </div>
+      </section>
+
+    </article><!-- end content-body -->
+
+    <!-- ─── Back Matter ───────────────────────────────── -->
+    <div class="back-matter">
+
+      <!-- Summary -->
+      <div class="back-section" id="summary">
+        <div class="back-section-title">Chapter Summary</div>
+        <ul class="summary-points">
+          <li>Chapter 17 introduced indexes and query performance as concepts that every database designer needs to understand, even before working with large systems.</li>
+          <li>When a database has no index on a searched column, it performs a <strong>full table scan</strong>, reading every row in the table to find matching records. For small tables, this is imperceptible. For large tables with frequent queries, it becomes a real performance problem.</li>
+          <li>An <strong>index</strong> is a separate data structure the database maintains alongside a table. It stores sorted column values and pointers to the rows that contain those values. When a query filters by an indexed column, the database uses the index to locate matching rows directly, rather than scanning the full table.</li>
+          <li><strong>Primary key indexes</strong> are created automatically by most database systems. <strong>Foreign key indexes</strong> often must be created manually and are important for join performance. Indexes on frequently searched columns can dramatically improve <code>WHERE</code> clause performance on large tables.</li>
+          <li>Indexes come with tradeoffs. They speed up reads but slow down inserts, updates, and deletes, because the database must maintain the index structure with every data modification. They also use additional storage. Good index design means choosing indexes based on actual query patterns, table size, and the balance of reads versus writes.</li>
+          <li><strong>Query plans</strong> allow designers to inspect how the database intends to execute a query. In SQLite, <code>EXPLAIN QUERY PLAN</code> reveals whether the database will use an index or perform a full table scan.</li>
+          <li>Performance is a design concern. The best time to think about indexes is during the initial design of a database, when expected data volumes and common queries are being planned. Asking which columns will appear in frequent searches on large tables, and creating indexes on those columns from the beginning, produces systems that remain usable as they grow.</li>
+        </ul>
+      </div>
+
+      <!-- Key Terms -->
+      <div class="back-section" id="key-terms">
+        <div class="back-section-title">Key Terms</div>
+        <div class="key-terms-grid">
+          <div class="term-card">
+            <div class="term-word">Full table scan</div>
+            <p class="term-def">The process of reading every row in a table to find records that match a query condition. The default behavior when no index is available on the searched column.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Index</div>
+            <p class="term-def">A separate data structure maintained by the database alongside a table. An index stores sorted values from one or more columns along with pointers to the table rows that contain those values, allowing the database to locate matching rows without scanning the full table.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Composite index</div>
+            <p class="term-def">An index built on two or more columns together, useful for queries that regularly filter by multiple columns simultaneously.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Selectivity</div>
+            <p class="term-def">A property of an index that describes how much it narrows down the result set. An index on a column with many unique values, such as email addresses, has high selectivity and tends to be most useful. An index on a column with only a few possible values, such as a true or false flag, has low selectivity and may offer less benefit.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Query plan</div>
+            <p class="term-def">A description of the steps a database engine intends to take to execute a query. Also called an execution plan. Database systems provide tools to inspect query plans, helping designers identify whether queries are using indexes effectively.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word"><code>EXPLAIN QUERY PLAN</code></div>
+            <p class="term-def">A SQLite command that shows the query plan for a given SQL statement without executing the query itself.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word"><code>CREATE INDEX</code></div>
+            <p class="term-def">The SQL statement used to define an index on a table column or columns.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Write overhead</div>
+            <p class="term-def">The additional work a database must perform to maintain index structures when rows are inserted, updated, or deleted.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">B-tree</div>
+            <p class="term-def">The hierarchical, sorted data structure most commonly used inside database indexes. Students do not need to understand the internal mechanics of B-trees at this level, but knowing the term is useful for later study.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance Concept Check -->
+      <div class="back-section" id="concept-check">
+        <div class="back-section-title">Performance Concept Check</div>
+        <p class="practice-intro">Answer these questions in your own words to check your understanding of the chapter.</p>
+        <ul class="questions-list">
+          <li>What is a full table scan? When does it occur?</li>
+          <li>Why might a full table scan be acceptable on a small table, but problematic on a large one?</li>
+          <li>What is an index? What information does it store?</li>
+          <li>Why are primary key indexes created automatically by most database systems?</li>
+          <li>Why might foreign key columns need manually created indexes?</li>
+          <li>A table called <code>Products</code> has 800,000 rows. A frequent query filters by <code>category_name</code>. Should this column have an index? Explain your reasoning.</li>
+          <li>Describe two costs that come with adding an index to a table.</li>
+          <li>What does selectivity mean? Give an example of a column with high selectivity and a column with low selectivity.</li>
+          <li>What does <code>EXPLAIN QUERY PLAN</code> do in SQLite? Why might a designer use it?</li>
+          <li>Why is performance better treated as a design concern, rather than something to address after a system is built?</li>
+        </ul>
+      </div>
+
+      <!-- Index Choice Practice -->
+      <div class="back-section" id="index-practice">
+        <div class="back-section-title">Index Choice Practice</div>
+        <p class="practice-intro">For each scenario below, decide whether creating an index is likely to be beneficial. Explain your reasoning in one or two sentences.</p>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Scenario A</div>
+          <p>A <code>Users</code> table has 1.2 million rows. An application frequently queries <code>WHERE email = ?</code> to look up user accounts.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Scenario B</div>
+          <p>A <code>Settings</code> table has 12 rows that store system configuration values. A query retrieves a setting by name once per day.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Scenario C</div>
+          <p>An <code>Orders</code> table has 600,000 rows and grows by about 50,000 rows per week. Analysts frequently run queries filtered by <code>ORDER BY order_date DESC WHERE order_date > ?</code> to retrieve recent orders.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Scenario D</div>
+          <p>A <code>Courses</code> table has 280 rows. Queries regularly filter by <code>department_id</code>. The table is stable and rarely updated.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Scenario E</div>
+          <p>A <code>Sensor_Readings</code> table receives 200,000 new rows per hour from automated devices. A column called <code>device_type</code> holds one of three possible values. Occasional reports filter by <code>device_type</code>.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Scenario F</div>
+          <p>A <code>Loans</code> table in a library system has 400,000 rows. Librarians frequently search for all loans associated with a specific <code>patron_id</code>, which is a foreign key.</p>
+        </div>
+      </div>
+
+      <!-- Query Scenario Questions -->
+      <div class="back-section" id="query-scenarios">
+        <div class="back-section-title">Query Scenario Questions</div>
+        <p class="practice-intro">Read each query and the table description. Then answer the questions below.</p>
+
+        <div class="query-scenario">
+          <div class="query-scenario-label">Query 1</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Membership Status Filter</div>
+            <pre><code><span class="kw">SELECT</span> name, email
+<span class="kw">FROM</span> Members
+<span class="kw">WHERE</span> membership_status = <span class="str">'active'</span>;</code></pre>
+          </div>
+          <p class="query-scenario-context">The <code>Members</code> table has 950,000 rows. Approximately 920,000 members have <code>membership_status = 'active'</code>. A small number are inactive.</p>
+          <ul class="inline-question-list">
+            <li>Is this likely to benefit from an index on <code>membership_status</code>? Why or why not?</li>
+            <li>What concept from the chapter explains your answer?</li>
+          </ul>
+        </div>
+
+        <div class="query-scenario">
+          <div class="query-scenario-label">Query 2</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Loans Joined to Resources</div>
+            <pre><code><span class="kw">SELECT</span> r.title, r.author
+<span class="kw">FROM</span> Resources r
+<span class="kw">JOIN</span> Loans l <span class="kw">ON</span> r.resource_id = l.resource_id
+<span class="kw">WHERE</span> l.patron_id = 7741;</code></pre>
+          </div>
+          <p class="query-scenario-context">The <code>Resources</code> table has 80,000 rows and has a primary key index on <code>resource_id</code>. The <code>Loans</code> table has 500,000 rows. There is no index on <code>Loans.patron_id</code> and no index on <code>Loans.resource_id</code>.</p>
+          <ul class="inline-question-list">
+            <li>Which column in this query could benefit most immediately from an index?</li>
+            <li>Write the <code>CREATE INDEX</code> statement to create that index.</li>
+            <li>What would happen to this query's performance if the <code>Loans</code> table had indexes on both <code>patron_id</code> and <code>resource_id</code>?</li>
+          </ul>
+        </div>
+
+        <div class="query-scenario">
+          <div class="query-scenario-label">Query 3</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Counting Enrollments per Student</div>
+            <pre><code><span class="kw">SELECT</span> student_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> course_count
+<span class="kw">FROM</span> Enrollments
+<span class="kw">GROUP</span> <span class="kw">BY</span> student_id
+<span class="kw">HAVING</span> <span class="fn">COUNT</span>(*) &gt; 5;</code></pre>
+          </div>
+          <p class="query-scenario-context">The <code>Enrollments</code> table has 1.2 million rows. The <code>student_id</code> column is a foreign key referencing the <code>Students</code> table.</p>
+          <ul class="inline-question-list">
+            <li>Explain in plain terms what this query is asking.</li>
+            <li>Would an index on <code>student_id</code> in the <code>Enrollments</code> table help this query? Explain.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Tradeoff Analysis -->
+      <div class="back-section" id="tradeoff">
+        <div class="back-section-title">Tradeoff Analysis</div>
+        <p class="practice-intro">For each situation below, describe the performance tradeoff involved and state what you would recommend.</p>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Situation 1</div>
+          <p>A student records system at a large university runs thousands of login queries per day, each filtering by <code>email</code>. The table has 300,000 rows. The <code>email</code> column has no index.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Situation 2</div>
+          <p>A financial system receives 500,000 transaction records per hour from payment processors. A developer proposes creating indexes on every column of the <code>Transactions</code> table to speed up reporting queries.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Situation 3</div>
+          <p>A small school uses a database with 200 student records. An administrator suggests adding indexes to improve performance before the school grows.</p>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-label">Situation 4</div>
+          <p>A large e-commerce database has an <code>Orders</code> table with 10 million rows. The table has indexes on <code>customer_id</code>, <code>order_date</code>, and <code>status</code>. A new report requires filtering by a column called <code>shipping_region</code> that was recently added. Queries on this column are already slow.</p>
+        </div>
+      </div>
+
+      <!-- Misconceptions -->
+      <div class="back-section" id="misconceptions">
+        <div class="back-section-title">Common Misconceptions</div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 1</div>
+          <div class="misconception-title">Adding indexes always makes queries faster.</div>
+          <p>Indexes improve performance when a query filters by an indexed column and the index is selective, meaning it narrows the results significantly. If a column has very few distinct values and a query is expected to return most of the table, the database optimizer may choose not to use the index at all and simply scan the table instead. Indexes also slow down insertions, updates, and deletions. Indexing every column is not good design.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 2</div>
+          <div class="misconception-title">Indexes are only needed for very large databases.</div>
+          <p>The performance benefit of indexes depends on table size, query frequency, and data volume growth. Even a moderately sized table can become slow if a column is searched frequently without an index. Thinking about likely search patterns during initial design is valuable for any database expected to grow.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 3</div>
+          <div class="misconception-title">The database always uses an index if one exists.</div>
+          <p>The database optimizer decides whether to use an index based on its estimate of the cost of using it versus the cost of a full table scan. If using an index would require retrieving almost all rows anyway, the optimizer may decide a full scan is more efficient. The optimizer is usually right, but inspecting query plans can reveal when indexes are not being used as expected.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 4</div>
+          <div class="misconception-title">Primary key indexes must be created manually.</div>
+          <p>Most database systems, including SQLite and PostgreSQL, automatically create an index on a table's primary key. This is why primary key lookups and joins on primary keys are fast by default. Foreign key indexes, however, often require manual creation.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 5</div>
+          <div class="misconception-title">Performance is something to fix after launch.</div>
+          <p>Retrofitting indexes into a poorly designed database after it is in production is harder, more disruptive, and less effective than thinking about likely query patterns and data volumes during the initial design. Performance is a design concern.</p>
+        </div>
+      </div>
+
+      <!-- Real-World Applications -->
+      <div class="back-section" id="real-world">
+        <div class="back-section-title">Real-World Applications</div>
+        <ul class="questions-list">
+          <li><strong>Library Catalog.</strong> A public library's digital catalog has 2 million records for books, periodicals, and digital resources. Patrons search by title, author, subject, and ISBN constantly throughout the day. Which columns in a <code>Resources</code> table would most benefit from indexes? Explain your reasoning.</li>
+          <li><strong>Hospital Records.</strong> A hospital's patient database stores records for 400,000 patients. Staff members look up patients by patient ID, by last name, and by date of birth. The system also runs overnight reports that analyze admissions by diagnosis code. Which search columns might benefit from indexes? Are there any that might not?</li>
+          <li><strong>E-Commerce Orders.</strong> An online store has an <code>Orders</code> table that grows by 30,000 rows per day. Customer service staff look up orders by customer email and by order number. Analysts run weekly reports filtered by order date and status. The database team is concerned about write performance, since the table receives many insertions each day. How would you think about this tradeoff?</li>
+          <li><strong>University Enrollment.</strong> A university enrollment system stores 5 million enrollment records accumulated over decades. The most common queries filter by <code>student_id</code>, by <code>course_id</code>, and by <code>term_id</code>. Some queries filter by all three columns together. What indexes would you recommend, and why?</li>
+        </ul>
+      </div>
+
+      <!-- Review Questions -->
+      <div class="back-section" id="review">
+        <div class="back-section-title">Review Questions</div>
+        <ul class="questions-list">
+          <li>Explain in your own words what happens during a full table scan.</li>
+          <li>What is the purpose of a database index? How does it change the way the database searches for records?</li>
+          <li>Why do most database systems automatically index primary keys?</li>
+          <li>Why do foreign keys often need manually created indexes?</li>
+          <li>Describe one situation where adding an index would help performance, and one situation where it might not.</li>
+          <li>What tradeoff does every index introduce for write operations such as <code>INSERT</code>, <code>UPDATE</code>, and <code>DELETE</code>?</li>
+          <li>What is a composite index? Give an example of when one would be useful.</li>
+          <li>What does it mean for an index to be selective? Why does selectivity affect whether an index is useful?</li>
+          <li>What does <code>EXPLAIN QUERY PLAN</code> show in SQLite? Why might a database designer use it?</li>
+          <li>Describe the relationship between good normalization and good performance. Why should normalization come before index design?</li>
+        </ul>
+      </div>
+
+      <!-- Preview -->
+      <div class="back-section" id="preview">
+        <div class="back-section-title">Preview of Chapter 18</div>
+        <div class="preview-box">
+          <div class="preview-box-label">Coming Next — Chapter 18: Security, Permissions, and Access Control</div>
+          <p>Chapter 17 focused on making queries fast and reliable. Chapter 18 turns to a different kind of reliability: keeping data safe and controlled.</p>
+          <p style="margin-top: 0.75rem;">Chapter 18, "Security, Permissions, and Access Control," explains how database systems protect data from unauthorized access, modification, and misuse. Students will learn how authentication and authorization work, how roles and permissions control what different users can see and do, what the principle of least privilege means, and how SQL injection attacks work at a conceptual level, so that designers understand why safe query practices matter.</p>
+          <p style="margin-top: 0.75rem;">The chapter builds directly on everything studied so far. Good tables, clean data, reliable queries, and careful transactions are only as useful as the security practices that protect them from harm.</p>
+        </div>
+      </div>
+
+    </div><!-- end back-matter -->
+
+    <!-- Footer -->
+    <footer class="chapter-footer">
+      <span>Data, Databases, and Information Systems &mdash; MGU Computer Science Series &mdash; Library Textbook Edition</span>
+      <span>Chapter 17 of 28 &mdash; Part IV: Managing and Changing Data</span>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>

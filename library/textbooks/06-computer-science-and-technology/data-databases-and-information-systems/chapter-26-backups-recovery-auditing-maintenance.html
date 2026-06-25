@@ -1,0 +1,1875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 26: Backups, Recovery, Auditing, and Maintenance — MGU CS Series</title>
+<style>
+
+/* ─── Design Tokens ──────────────────────────────────────────────────── */
+:root {
+  --ink:         #1a1a2e;
+  --ink-mid:     #3d3d5c;
+  --ink-light:   #6b6b8a;
+  --rule:        #d4d4e8;
+  --page:        #fafafa;
+  --surface:     #ffffff;
+  --accent:      #2d5be3;
+  --accent-dim:  #e8eefb;
+  --accent-dark: #1a3ba0;
+  --highlight:   #f0f4ff;
+  --code-bg:     #f4f6fb;
+  --warn:        #4a3800;
+  --warn-bg:     #fffbeb;
+  --warn-rule:   #d4a500;
+  --positive:    #1a4a2e;
+  --positive-bg: #edfaf3;
+  --positive-rule:#2a8a52;
+
+  --serif:   'Georgia', 'Times New Roman', serif;
+  --sans:    'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:    'Courier New', 'Consolas', monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-md:   1.125rem;
+  --text-lg:   1.25rem;
+  --text-xl:   1.5rem;
+  --text-2xl:  1.875rem;
+  --text-3xl:  2.375rem;
+  --text-4xl:  3rem;
+
+  --radius:  4px;
+  --col:     680px;
+  --wide:    860px;
+}
+
+/* ─── Reset & Base ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 17px; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--serif);
+  font-size: var(--text-base);
+  line-height: 1.78;
+  color: var(--ink);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Layout Shell ───────────────────────────────────────────────────── */
+.page-wrap {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+/* ─── Sidebar Nav ────────────────────────────────────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--ink);
+  color: #c8c8e0;
+  padding: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #3d3d5c transparent;
+}
+
+.sidebar-brand {
+  padding: 0 1.5rem 1.5rem;
+  border-bottom: 1px solid #2a2a45;
+}
+
+.sidebar-series {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7878aa;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #e8e8f4;
+  line-height: 1.4;
+}
+
+.sidebar-nav {
+  padding: 1.25rem 0 1rem;
+  flex: 1;
+}
+
+.nav-part-label {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5a80;
+  padding: 0.85rem 1.5rem 0.25rem;
+}
+
+.nav-link {
+  display: block;
+  padding: 0.3rem 1.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #9898be;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: color 0.15s, background 0.15s;
+  border-left: 2px solid transparent;
+}
+
+.nav-link:hover {
+  color: #e8e8f4;
+  background: rgba(255,255,255,0.04);
+  border-left-color: #5a6ee8;
+}
+
+.nav-link.current {
+  color: #b8c4ff;
+  border-left-color: var(--accent);
+  background: rgba(45, 91, 227, 0.12);
+}
+
+.nav-link.section-link {
+  padding-left: 2.1rem;
+  font-size: 0.72rem;
+  color: #6a6a90;
+}
+
+.nav-link.section-link:hover { color: #c0c0e0; }
+
+/* ─── Main Content Area ──────────────────────────────────────────────── */
+.main {
+  min-width: 0;
+  background: var(--surface);
+}
+
+/* ─── Chapter Header ─────────────────────────────────────────────────── */
+.chapter-header {
+  background: var(--ink);
+  color: white;
+  padding: 4rem 3.5rem 3.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.chapter-header::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 420px;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 40%, rgba(45,91,227,0.18) 100%);
+  pointer-events: none;
+}
+
+.chapter-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, #7a9cff 50%, transparent 100%);
+}
+
+.chapter-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.part-badge {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(45,91,227,0.35);
+  color: #b0c4ff;
+  padding: 0.2rem 0.65rem;
+  border-radius: 2px;
+  border: 1px solid rgba(45,91,227,0.5);
+}
+
+.chapter-number-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #7878aa;
+  letter-spacing: 0.05em;
+}
+
+.chapter-number {
+  font-family: var(--sans);
+  font-size: 5rem;
+  font-weight: 800;
+  color: rgba(255,255,255,0.06);
+  position: absolute;
+  top: 2rem;
+  right: 3rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  user-select: none;
+}
+
+.chapter-title {
+  font-family: var(--serif);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #f0f0fc;
+  max-width: 620px;
+  margin-bottom: 1.5rem;
+}
+
+.chapter-intro-summary {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: #9898c0;
+  line-height: 1.6;
+  max-width: 580px;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ─── Section Contents Strip ─────────────────────────────────────────── */
+.toc-strip {
+  background: var(--highlight);
+  border-bottom: 1px solid var(--rule);
+  padding: 1.5rem 3.5rem;
+}
+
+.toc-strip-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 0.75rem;
+}
+
+.toc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.25rem 2rem;
+}
+
+.toc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-mid);
+}
+
+.toc-num {
+  color: var(--accent);
+  font-weight: 700;
+  min-width: 2.5rem;
+  font-size: 0.7rem;
+}
+
+.toc-item a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.toc-item a:hover { color: var(--accent); }
+
+/* ─── Content Body ───────────────────────────────────────────────────── */
+.content-body {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 3rem 3.5rem 4rem;
+}
+
+/* ─── Section ────────────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 3.5rem;
+}
+
+.section-anchor {
+  display: block;
+  position: relative;
+  top: -80px;
+  visibility: hidden;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.section-num {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 2.5rem;
+  letter-spacing: 0.02em;
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+/* ─── Subsection ─────────────────────────────────────────────────────── */
+.subsection {
+  margin: 1.75rem 0;
+}
+
+.subsection-title {
+  font-family: var(--sans);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+  line-height: 1.3;
+}
+
+/* ─── Prose ──────────────────────────────────────────────────────────── */
+p {
+  margin-bottom: 1.1rem;
+  color: var(--ink-mid);
+  max-width: var(--col);
+}
+
+p strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ─── Tables ─────────────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.75rem 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.table-caption {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-light);
+  padding: 0.5rem 1rem 0;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--rule);
+  font-style: italic;
+  padding-bottom: 0.5rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+thead th {
+  background: var(--ink);
+  color: #c8c8e0;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+tbody tr { border-bottom: 1px solid var(--rule); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--highlight); }
+
+tbody td {
+  padding: 0.55rem 1rem;
+  color: var(--ink-mid);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+tbody td:first-child {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+/* ─── Code & SQL Blocks ──────────────────────────────────────────────── */
+.code-block {
+  margin: 1.5rem 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--rule);
+}
+
+.code-label {
+  background: var(--ink);
+  color: #7878aa;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.code-label-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* SQL keyword coloring via classes */
+.kw { color: #1a3ba0; font-weight: 700; }
+.str { color: #2a6a00; }
+.cm { color: #888; font-style: italic; }
+
+/* Inline code */
+p code, li code, td code {
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  font-size: 0.82em;
+  color: var(--accent-dark);
+}
+
+/* ─── Callout Boxes ──────────────────────────────────────────────────── */
+.callout {
+  margin: 1.75rem 0;
+  padding: 1.1rem 1.4rem;
+  border-radius: var(--radius);
+  border-left: 3px solid;
+  max-width: var(--col);
+}
+
+.callout-note {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.callout-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-rule);
+}
+
+.callout-positive {
+  background: var(--positive-bg);
+  border-color: var(--positive-rule);
+}
+
+.callout-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.callout-note .callout-title    { color: var(--accent-dark); }
+.callout-warn .callout-title    { color: var(--warn); }
+.callout-positive .callout-title{ color: var(--positive); }
+
+.callout p { margin-bottom: 0; max-width: none; }
+.callout p + p { margin-top: 0.5rem; }
+
+/* ─── Components Grid ────────────────────────────────────────────────── */
+.components-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.component-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  border-top: 3px solid var(--accent);
+}
+
+.component-card-name {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.component-card p {
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ─── Backup Type Cards (3-column grid) ──────────────────────────────── */
+.backup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.backup-card {
+  padding: 1rem 1.1rem;
+  background: var(--highlight);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--accent);
+}
+
+.backup-card-name {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  margin-bottom: 0.35rem;
+}
+
+.backup-card p {
+  font-size: 0.82rem;
+  margin: 0;
+  color: var(--ink-mid);
+  line-height: 1.5;
+}
+
+/* ─── Checklist Block ─────────────────────────────────────────────────── */
+.checklist-block {
+  margin: 1.5rem 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  max-width: var(--col);
+}
+
+.checklist-label {
+  background: var(--ink);
+  color: #7878aa;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checklist-label-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--positive-rule);
+  display: inline-block;
+}
+
+.checklist-body {
+  background: var(--positive-bg);
+  padding: 1rem 1.25rem;
+}
+
+.checklist-group {
+  margin-bottom: 1rem;
+}
+
+.checklist-group:last-child { margin-bottom: 0; }
+
+.checklist-group-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--positive);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.checklist-items {
+  list-style: none;
+  padding: 0;
+}
+
+.checklist-items li {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-mid);
+  padding: 0.2rem 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  line-height: 1.5;
+}
+
+.checklist-items li::before {
+  content: '☐';
+  color: var(--positive-rule);
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+/* ─── Scenario Box ───────────────────────────────────────────────────── */
+.scenario-box {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.scenario-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.scenario-box p {
+  margin-bottom: 0.75rem;
+  font-size: var(--text-sm);
+}
+
+.scenario-box p:last-child { margin-bottom: 0; }
+
+/* ─── Back Matter ────────────────────────────────────────────────────── */
+.back-matter {
+  background: var(--page);
+  border-top: 2px solid var(--rule);
+}
+
+.back-section {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 2.5rem 3.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.back-section:last-child { border-bottom: none; }
+
+.back-section-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--accent-dim);
+}
+
+/* Summary points */
+.summary-points {
+  list-style: none;
+  max-width: var(--col);
+}
+
+.summary-points li {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.6;
+}
+
+.summary-points li::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* Key terms */
+.key-terms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  max-width: var(--wide);
+}
+
+.term-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+}
+
+.term-word {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+
+.term-def {
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Practice questions */
+.practice-section {
+  margin-bottom: 1.75rem;
+}
+
+.practice-section-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+}
+
+.questions-list {
+  list-style: none;
+  counter-reset: question;
+  max-width: var(--col);
+}
+
+.questions-list li {
+  counter-increment: question;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.65;
+}
+
+.questions-list li::before {
+  content: counter(question) '.';
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 1.5rem;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* Scenario questions with lettered sub-lists */
+.sub-questions {
+  list-style: none;
+  counter-reset: sub-q;
+  margin-top: 0.5rem;
+  padding-left: 0;
+}
+
+.sub-questions li {
+  counter-increment: sub-q;
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.6;
+}
+
+.sub-questions li::before {
+  content: counter(sub-q, lower-alpha) '.';
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--ink-light);
+  min-width: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* Scenario label inside practice */
+.scenario-heading {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin: 1.25rem 0 0.5rem;
+}
+
+/* Misconceptions */
+.misconception {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid #d4006e;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  max-width: var(--col);
+}
+
+.misconception-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d4006e;
+  margin-bottom: 0.35rem;
+}
+
+.misconception-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.4rem;
+}
+
+.misconception p {
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* Preview */
+.preview-box {
+  background: var(--ink);
+  color: #c8c8e0;
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+  max-width: var(--col);
+}
+
+.preview-box-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a6ee8;
+  margin-bottom: 0.6rem;
+}
+
+.preview-box p {
+  color: #b0b0d4;
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.7;
+  max-width: none;
+}
+
+.preview-box p + p { margin-top: 0.75rem; }
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+.chapter-footer {
+  background: var(--ink);
+  color: #5a5a80;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  padding: 1.25rem 3.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chapter-footer a { color: #7878aa; text-decoration: none; }
+.chapter-footer a:hover { color: #b0b0d0; }
+
+/* ─── Audit Record Example ───────────────────────────────────────────── */
+.audit-example {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0;
+  max-width: var(--wide);
+  overflow-x: auto;
+}
+
+.audit-example-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 0.6rem;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .page-wrap { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .chapter-header,
+  .toc-strip,
+  .content-body,
+  .back-section { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .chapter-number { font-size: 3rem; }
+  .components-grid,
+  .backup-grid { grid-template-columns: 1fr; }
+  .key-terms-grid { grid-template-columns: 1fr; }
+  .chapter-footer { flex-direction: column; gap: 0.5rem; text-align: center; }
+}
+
+@media (max-width: 540px) {
+  .toc-grid { grid-template-columns: 1fr; }
+  .chapter-title { font-size: var(--text-2xl); }
+}
+
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- ─── Sidebar ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-series">MGU CS Series</span>
+      <span class="sidebar-title">Data, Databases, and Information Systems</span>
+    </div>
+    <nav class="sidebar-nav" aria-label="Chapter navigation">
+      <span class="nav-part-label">Part VI — Data Applications</span>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 23 — Spreadsheets, CSV Files, and Data Exchange</a>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 24 — APIs, JSON, and Connected Systems</a>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 25 — Databases Behind Websites and Apps</a>
+      <a class="nav-link current" href="#chapter-start">Ch. 26 — Backups, Recovery, Auditing, and Maintenance</a>
+      <a class="nav-link section-link" href="#s26-1">26.1 Data Systems Need Care</a>
+      <a class="nav-link section-link" href="#s26-2">26.2 Backups</a>
+      <a class="nav-link section-link" href="#s26-3">26.3 Recovery and Restore Testing</a>
+      <a class="nav-link section-link" href="#s26-4">26.4 Retention Policies</a>
+      <a class="nav-link section-link" href="#s26-5">26.5 Logs</a>
+      <a class="nav-link section-link" href="#s26-6">26.6 Auditing</a>
+      <a class="nav-link section-link" href="#s26-7">26.7 Monitoring and Alerts</a>
+      <a class="nav-link section-link" href="#s26-8">26.8 Maintenance Tasks</a>
+      <a class="nav-link section-link" href="#s26-9">26.9 Migrations</a>
+      <a class="nav-link section-link" href="#s26-10">26.10 Documentation and Disaster Planning</a>
+      <span class="nav-part-label" style="margin-top:0.5rem;">Back Matter</span>
+      <a class="nav-link section-link" href="#summary">Chapter Summary</a>
+      <a class="nav-link section-link" href="#key-terms">Key Terms</a>
+      <a class="nav-link section-link" href="#backup-review">Backup Strategy Review</a>
+      <a class="nav-link section-link" href="#restore-checklist">Restore Testing Checklist</a>
+      <a class="nav-link section-link" href="#audit-practice">Audit Trail Practice</a>
+      <a class="nav-link section-link" href="#disaster-scenarios">Disaster Planning Scenarios</a>
+      <a class="nav-link section-link" href="#maintenance-questions">Monitoring and Maintenance Questions</a>
+      <a class="nav-link section-link" href="#real-world">Real-World Applications</a>
+      <a class="nav-link section-link" href="#mixed-review">Mixed Review</a>
+      <a class="nav-link section-link" href="#review">Review Questions</a>
+      <a class="nav-link section-link" href="#preview">Preview of Chapter 27</a>
+      <span class="nav-part-label" style="margin-top:0.75rem;">Part VII — Ethics and Capstone</span>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 27 — Data Ethics, Privacy, Governance, and Risk</a>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 28 — Capstone: Designing a Small Information System</a>
+    </nav>
+  </aside>
+
+  <!-- ─── Main ────────────────────────────────────────── -->
+  <main class="main" id="chapter-start">
+
+    <!-- Chapter Header -->
+    <header class="chapter-header">
+      <div class="chapter-number" aria-hidden="true">26</div>
+      <div class="chapter-eyebrow">
+        <span class="part-badge">Part VI — Data Applications and System Integration</span>
+        <span class="chapter-number-label">Chapter 26 of 28</span>
+      </div>
+      <h1 class="chapter-title">Backups, Recovery, Auditing, and Maintenance</h1>
+      <p class="chapter-intro-summary">
+        A database that works correctly today is not guaranteed to work correctly tomorrow. This chapter covers the practices that keep data systems reliable, recoverable, and trustworthy over time: backups, restore testing, retention policies, logs, auditing, monitoring, maintenance, migrations, and disaster planning.
+      </p>
+    </header>
+
+    <!-- TOC Strip -->
+    <div class="toc-strip" aria-label="Sections in this chapter">
+      <div class="toc-strip-title">Sections in This Chapter</div>
+      <div class="toc-grid">
+        <div class="toc-item"><span class="toc-num">26.1</span><a href="#s26-1">Data Systems Need Care</a></div>
+        <div class="toc-item"><span class="toc-num">26.2</span><a href="#s26-2">Backups</a></div>
+        <div class="toc-item"><span class="toc-num">26.3</span><a href="#s26-3">Recovery and Restore Testing</a></div>
+        <div class="toc-item"><span class="toc-num">26.4</span><a href="#s26-4">Retention Policies</a></div>
+        <div class="toc-item"><span class="toc-num">26.5</span><a href="#s26-5">Logs</a></div>
+        <div class="toc-item"><span class="toc-num">26.6</span><a href="#s26-6">Auditing</a></div>
+        <div class="toc-item"><span class="toc-num">26.7</span><a href="#s26-7">Monitoring and Alerts</a></div>
+        <div class="toc-item"><span class="toc-num">26.8</span><a href="#s26-8">Maintenance Tasks</a></div>
+        <div class="toc-item"><span class="toc-num">26.9</span><a href="#s26-9">Migrations</a></div>
+        <div class="toc-item"><span class="toc-num">26.10</span><a href="#s26-10">Documentation and Disaster Planning</a></div>
+      </div>
+    </div>
+
+    <!-- Content Body -->
+    <article class="content-body">
+
+      <!-- 26.1 -->
+      <section class="section" id="s26-1">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.1</span>
+          <h2 class="section-title">Data Systems Need Care</h2>
+        </div>
+
+        <p>When students first encounter databases, it is natural to focus on design and querying. Designing tables, writing joins, building forms, and reading reports are visible, satisfying, and directly connected to what databases do. Backups, logs, and maintenance are less visible. Students rarely encounter them in early learning because they do not affect the query you are writing right now.</p>
+        <p>But real databases live in time. They are used by people who make mistakes. They run on hardware that eventually fails. They are accessed by accounts whose credentials may be stolen. They grow over months and years, accumulating millions of records. They are sometimes updated incorrectly, sometimes attacked, and sometimes corrupted by software faults nobody anticipated.</p>
+        <p>Every real organization that depends on a database has had at least one frightening moment when something went wrong. The difference between a recoverable incident and a catastrophic loss almost always comes down to whether the organization had working backups, maintained good logs, monitored the system, and had a clear recovery plan.</p>
+        <p>Consider what is lost when a database fails without a backup. A school loses years of student enrollment records and grade history. A hospital loses patient histories and medication records. A library loses its entire catalog and loan history. A small business loses its customer records, order history, and inventory. A research project loses data that took two years to collect.</p>
+
+        <div class="callout callout-warn">
+          <div class="callout-title">None of These Situations Are Hypothetical</div>
+          <p>These failures happen regularly, to real organizations in countries around the world. The common thread in every preventable disaster is that nobody had put the protection systems in place. This chapter covers those protection systems. It is less exciting than writing complex SQL, but it may be the most important chapter in the book for anyone who will work with real data professionally.</p>
+        </div>
+      </section>
+
+      <!-- 26.2 -->
+      <section class="section" id="s26-2">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.2</span>
+          <h2 class="section-title">Backups</h2>
+        </div>
+
+        <p>A <strong>backup</strong> is a copy of data stored separately from the original, so that if the original is damaged or lost, the copy can be used to restore it. That definition sounds simple, but backups involve many decisions. What exactly should be backed up? How often? Where should the backup copy be stored? How long should backup copies be kept? How will a backup be used if something goes wrong? Who is responsible for making sure backups happen?</p>
+
+        <div class="subsection">
+          <div class="subsection-title">What Should Be Backed Up</div>
+          <p>A complete database backup should include the data itself, meaning all the records in all the tables. It should also include the schema: table definitions, column names and data types, constraints, indexes, views, and any other objects that define how the database is organized. In many systems, the backup should also include configuration settings and stored procedures or triggers if they are part of the database.</p>
+          <p>A backup that captures only the data but not the schema may be difficult or impossible to restore, because the software needs to know the structure before it can put the data back into it.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Types of Backups</div>
+          <div class="backup-grid">
+            <div class="backup-card">
+              <div class="backup-card-name">Full Backup</div>
+              <p>Copies everything: all tables, all records, all schema definitions. The most complete kind, and the simplest to use during recovery. The trade-off is size and time.</p>
+            </div>
+            <div class="backup-card">
+              <div class="backup-card-name">Incremental Backup</div>
+              <p>Copies only data changed since the last backup of any kind. Smaller and faster, but recovery requires the last full backup plus every subsequent incremental in order.</p>
+            </div>
+            <div class="backup-card">
+              <div class="backup-card-name">Differential Backup</div>
+              <p>Copies everything changed since the last full backup. Larger than incremental backups but simpler to recover from: you need only the last full backup and the most recent differential.</p>
+            </div>
+            <div class="backup-card">
+              <div class="backup-card-name">Transaction Log Backup</div>
+              <p>Captures the sequential record of every data change. Enables very fine-grained point-in-time recovery, often to within minutes of a failure. Used in combination with full backups.</p>
+            </div>
+          </div>
+          <p>A common production strategy combines these types: a full backup weekly, a differential or incremental backup daily, and a transaction log backup every fifteen or thirty minutes. The appropriate combination depends on how often data changes and how much data loss the organization can tolerate.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Where to Store Backups</div>
+          <p>A backup stored on the same physical machine as the original database is almost useless in the most important failure scenario, which is when the machine itself is damaged. If a hard drive fails, a fire destroys a server room, or a power surge damages hardware, backups stored on the same machine are lost along with the original data.</p>
+          <p>Backups must be stored in a different physical location from the original database. This might mean an external hard drive kept off-site, a backup server in a different building, or cloud-based backup storage in a different data center. Cloud storage services are commonly used as <strong>offsite backup</strong> destinations because they are geographically separate from local hardware.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The 3-2-1 Backup Strategy</div>
+          <p>A widely recommended approach is the <strong>3-2-1 strategy</strong>: keep three copies of data, store them on two different types of media, and keep at least one copy offsite.</p>
+          <p>For a small database, this might mean keeping the original on the primary server, a backup on a local external drive, and another backup in cloud storage. For a large organization, it might mean multiple redundant servers, tape backups, and cloud replication. The specific implementation depends on system size, budget, and risk tolerance, but the principle is the same: multiple copies, multiple locations, multiple media types.</p>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-title">Backup Schedules and the Key Question</div>
+          <p>The appropriate backup schedule depends on how often data changes and how much data loss the organization can tolerate. The key question is: if we lost all changes made since the last backup, how serious would that be? The answer drives the schedule. A banking system processing thousands of transactions per minute needs near-continuous protection. A school enrollment database that changes mainly at term boundaries may need much less.</p>
+        </div>
+      </section>
+
+      <!-- 26.3 -->
+      <section class="section" id="s26-3">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.3</span>
+          <h2 class="section-title">Recovery and Restore Testing</h2>
+        </div>
+
+        <p>A backup has no value until it has been successfully used to restore data. Many organizations discover during an actual crisis that their backups are incomplete, corrupted, outdated, or stored in a format that can no longer be read. By then, it is too late.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">What Recovery Means</div>
+          <p><strong>Recovery</strong> is the process of restoring a database from a backup after a failure. Recovery might be needed for many different reasons.</p>
+          <div class="components-grid">
+            <div class="component-card">
+              <div class="component-card-name">Hardware Failure</div>
+              <p>A hard drive fails, a server becomes unresponsive, or a storage array is corrupted. If the database cannot be restarted from the failed hardware, it must be rebuilt from backup.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Human Error</div>
+              <p>A database administrator accidentally drops a table. A developer runs an UPDATE without a WHERE clause. A user submits incorrect data that gets committed before anyone notices.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Software Bugs</div>
+              <p>A new application version introduces a bug that writes incorrect values. Recovery may require restoring to a version before the bug was deployed, then carefully replaying legitimate changes.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Security Incidents</div>
+              <p>If an attacker gains access and deletes or corrupts data, recovery from a clean backup is necessary. The backup must predate the intrusion by a safe margin.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Point-in-Time Recovery</div>
+          <p><strong>Point-in-time recovery</strong> is the ability to restore a database to its exact state at a specific moment in the past. This requires both a full backup and transaction log backups covering the period up to the target time.</p>
+          <p>For example, if a mistake was discovered at 3:00 PM and occurred around 2:30 PM, a point-in-time recovery could restore the database to its state at 2:29 PM, before the mistake happened. Changes made from 2:29 PM to 3:00 PM would be lost, but those might be recoverable through other means, such as re-entering data or applying known transactions.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Restore Testing</div>
+          <p><strong>Restore testing</strong> is the practice of actually performing a recovery from backup, on a regular schedule, to verify that the backup works. Organizations without restore testing routines often discover problems only when they need to restore in a real emergency.</p>
+          <p>Common problems that restore testing reveals include backups that are not complete because the backup process silently failed, backup files that are corrupted and cannot be read, backup software that has been updated and can no longer read older formats, recovery procedures that are documented incorrectly, and recovery times that are far longer than expected.</p>
+          <p>A restore test should be performed periodically, perhaps monthly for critical systems, and any time a major change is made to the backup process. It should always be performed on a separate test environment, never on the production database. A complete restore test should verify that all tables and records are present, the schema is correct, constraints and indexes are intact, and the database can accept connections and run queries normally.</p>
+        </div>
+
+        <div class="callout callout-positive">
+          <div class="callout-title">Recovery Objectives</div>
+          <p>Two terms define recovery requirements precisely. The <strong>recovery time objective</strong> (RTO) is the maximum acceptable time a system can be offline after a failure. The <strong>recovery point objective</strong> (RPO) is the maximum acceptable amount of data loss measured in time. A system with an RPO of fifteen minutes needs log backups running at least every fifteen minutes. A system with an RTO of one hour needs a recovery procedure that can complete in one hour, verified by restore testing.</p>
+        </div>
+      </section>
+
+      <!-- 26.4 -->
+      <section class="section" id="s26-4">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.4</span>
+          <h2 class="section-title">Retention Policies</h2>
+        </div>
+
+        <p>A <strong>retention policy</strong> defines how long backup copies and other data records should be kept before they are deleted. Retention policies serve several purposes: they ensure backups are kept long enough to be useful, prevent unlimited accumulation of old files, establish consistent practices, and in some contexts reflect legal or regulatory requirements.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Backup Retention</div>
+          <p>For backups specifically, retention policies typically address how many daily, weekly, and monthly backups to keep. A simple example: keep daily backups for thirty days, weekly backups for twelve weeks, and monthly backups for one year. Under this policy, a database administrator can always restore to any point in the past thirty days, any week in the past three months, or any month in the past year.</p>
+          <p>The appropriate retention period depends on the type of system. Regulated environments such as healthcare or finance may require longer retention. Small internal tools may need only short retention.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Data Retention Versus Backup Retention</div>
+          <p>It is important to distinguish between <strong>backup retention</strong>, which governs how long backup copies are kept, and <strong>data retention</strong>, which governs how long the data itself should remain in the live database.</p>
+          <p>Organizations sometimes have legal obligations to keep certain records for minimum periods: employment records, financial records, medical records, and educational records are commonly subject to retention requirements. At the same time, organizations may have privacy obligations to delete personal data after it is no longer needed. These two requirements can create tension.</p>
+          <p>A school may be required to keep academic records for ten years, but a privacy policy may require deleting personal contact information after a student graduates. Retention policies must reflect both obligations. Chapter 27, on data ethics, privacy, and governance, covers data retention from the policy perspective in detail.</p>
+        </div>
+      </section>
+
+      <!-- 26.5 -->
+      <section class="section" id="s26-5">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.5</span>
+          <h2 class="section-title">Logs</h2>
+        </div>
+
+        <p>A <strong>log</strong> is a record of events that have occurred in a database or information system. Logs are one of the most useful tools available for understanding what a system has done, diagnosing problems, auditing activity, and supporting recovery.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Transaction Logs</div>
+          <p>The <strong>transaction log</strong> is a core component of most relational database systems. As discussed in Chapter 16 on transactions and data integrity, it records every change made to the database before the change is applied. This makes it possible to roll back incomplete transactions and to recover committed transactions after a failure. The transaction log is primarily a reliability tool, essential infrastructure for the database system itself, not merely an optional audit feature.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Error Logs</div>
+          <p>An <strong>error log</strong> records problems that occurred in the database system: failed connections, query errors, storage warnings, permission violations, crashed processes, and other abnormal events. Error logs are invaluable for diagnosing problems. When a database behaves unexpectedly, the first place a database administrator looks is usually the error log. Error logs can also reveal patterns of problems that might not be obvious from individual incidents.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Access Logs</div>
+          <p>An <strong>access log</strong> records who connected to the database, when, and from where. Access logs may also record which databases, schemas, or tables were accessed, and whether authentication succeeded or failed. If a security incident is suspected, access logs can show whether unauthorized access occurred, what accounts were used, and at what times. A pattern of failed login attempts may indicate a brute-force attack.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Query Logs</div>
+          <p>Some database systems can be configured to log the actual SQL queries that were run, along with timing information. Query logs are useful for performance analysis, revealing which queries are running most often or taking the most time. They are also useful for security, since they can show whether a user ran a query that accessed data they should not have accessed.</p>
+          <p>Query logs tend to grow very large quickly, because databases can execute many thousands of queries per minute. They are often used selectively, for example to log only slow queries, only queries from specific accounts, or only queries against specific tables.</p>
+        </div>
+      </section>
+
+      <!-- 26.6 -->
+      <section class="section" id="s26-6">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.6</span>
+          <h2 class="section-title">Auditing</h2>
+        </div>
+
+        <p><strong>Auditing</strong> is the process of systematically recording and reviewing significant events in a database system to support accountability, compliance, security review, and problem investigation. Auditing is different from simply having logs. Logs may capture everything that happens automatically. Auditing involves deliberately deciding what to record, how to record it, how long to keep the records, and who can review them.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">What Auditing Records</div>
+          <p>A database audit trail typically records data changes, including inserts, updates, and deletes. For each change, the audit record should capture what was changed, what the value was before the change, what the value is after the change, who made the change, and when it happened.</p>
+          <p>Some audit systems also record read access, meaning they record when data was viewed even if it was not changed. This is particularly important for sensitive data such as medical records, financial data, or personal information. In regulated environments, knowing that someone accessed a patient's record may be just as important as knowing whether they changed it.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Why Auditing Matters</div>
+          <div class="components-grid">
+            <div class="component-card">
+              <div class="component-card-name">Accountability</div>
+              <p>When something goes wrong, the audit trail shows what happened and who was responsible. This helps teams learn from incidents and improve processes.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Security</div>
+              <p>If unauthorized access or manipulation occurs, the audit trail provides evidence. It also deters malicious activity, since potential bad actors know their actions are recorded.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Compliance</div>
+              <p>In many regulated industries, organizations are legally required to maintain audit records of certain activities: patient access, financial transactions, grade changes.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Debugging</div>
+              <p>When a data quality problem is discovered, the audit trail shows when incorrect data was introduced, what it replaced, and who made the change.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Designing an Audit System</div>
+          <p>An audit system should capture events at the database level, not only at the application level. Application-level logging can be bypassed if someone accesses the database directly. Database-level triggers or built-in audit features capture changes regardless of how they are made.</p>
+          <p>Audit records should themselves be protected. If the person responsible for a data manipulation can also delete the audit records, the audit trail is useless. Audit tables should be readable by authorized reviewers but not writable or deletable by ordinary users, including the users whose actions are being audited.</p>
+          <p>A common design pattern is to create a separate audit table for each table that needs to be audited. A database trigger executes automatically whenever a row is inserted, updated, or deleted, and writes a record to the audit table including the action type, the old and new values, the user account, and the timestamp.</p>
+          <p>Here is a simple example of what an audit record might look like for a grade change:</p>
+        </div>
+
+        <div class="audit-example" role="region" aria-label="Grades audit table example">
+          <div class="audit-example-label">Table: Grades_Audit — Sample Record</div>
+          <div class="table-wrap" style="margin:0; border:none; box-shadow:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>audit_id</th>
+                  <th>action_type</th>
+                  <th>grade_id</th>
+                  <th>student_id</th>
+                  <th>old_score</th>
+                  <th>new_score</th>
+                  <th>changed_by</th>
+                  <th>changed_at</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1001</td>
+                  <td style="font-family:var(--mono); font-size:var(--text-xs);">UPDATE</td>
+                  <td>5044</td>
+                  <td>2819</td>
+                  <td>73</td>
+                  <td>88</td>
+                  <td>jsmith</td>
+                  <td style="font-family:var(--mono); font-size:var(--text-xs); white-space:nowrap;">2024-10-15 14:23:07</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <p>This record shows that user <code>jsmith</code> updated a grade record on October 15, 2024 at 2:23 PM, changing the score from 73 to 88. If the change was authorized, the record simply confirms it happened. If it was unauthorized or disputed, the record provides the information needed to investigate.</p>
+
+        <div class="callout callout-note">
+          <div class="callout-title">Reviewing Audit Records</div>
+          <p>Maintaining audit records is only useful if someone reviews them. Audit review might be triggered by a specific incident or complaint, performed on a regular schedule as part of governance practice, or generated automatically by monitoring tools that look for unusual patterns. Regular review of audit records for sensitive tables, privileged accounts, and unusual access patterns is a healthy practice for any system that handles important or protected data.</p>
+        </div>
+      </section>
+
+      <!-- 26.7 -->
+      <section class="section" id="s26-7">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.7</span>
+          <h2 class="section-title">Monitoring and Alerts</h2>
+        </div>
+
+        <p><strong>Monitoring</strong> is the ongoing practice of observing system health, performance, and behavior so that problems are detected quickly and addressed before they become serious failures. A database that is not monitored may be silently accumulating problems that will eventually cause disruption or data loss.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">What to Monitor</div>
+          <p><strong>Disk space</strong> is one of the most critical metrics to monitor. A database that runs out of disk space will stop accepting writes, which can bring an entire application to a halt. Many systems can grow unexpectedly, and disk space that seemed ample can fill up faster than anticipated.</p>
+          <p><strong>Query performance</strong> should be monitored to detect degradation. Queries that ran quickly when a table had a thousand records may become slow when it has a million. Performance monitoring reveals when indexes are no longer sufficient or when a schema change has introduced a problem.</p>
+          <p><strong>Connection counts</strong> indicate how many clients are connected. Unusually high counts can indicate a bug in an application that is opening connections without closing them, eventually exhausting the database's capacity to accept new ones.</p>
+          <p><strong>Replication lag</strong> is relevant for systems that maintain read replicas or secondary servers. If a secondary is falling behind the primary, queries against it may return stale data.</p>
+          <p><strong>Backup job status</strong> must be monitored. An organization may have automated backups configured, but if the job fails silently, the organization may believe it is protected when it is not.</p>
+          <p><strong>Error rates</strong> should be monitored. A sudden rise in authentication failures, query errors, or connection timeouts may indicate a security incident, a software bug, or a hardware problem.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Alerts</div>
+          <p>Monitoring is most effective when it includes automated <strong>alerts</strong>: notifications sent to a responsible person or team when a monitored metric crosses a threshold. An alert might fire when disk space falls below twenty percent, when a backup job fails, when error rates exceed a defined level, or when query response times increase significantly.</p>
+          <p>Alerts should be directed to people who can act on them. An alert that goes to an unmonitored email address is not better than no alert. Organizations with critical databases should designate responsible parties who will respond at any time, including outside business hours.</p>
+        </div>
+      </section>
+
+      <!-- 26.8 -->
+      <section class="section" id="s26-8">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.8</span>
+          <h2 class="section-title">Maintenance Tasks</h2>
+        </div>
+
+        <p>A database requires periodic maintenance to remain healthy. Maintenance tasks are routine activities that prevent gradual degradation, keep the system performing well, and reduce the risk of failures.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Index Maintenance</div>
+          <p>As data is inserted, updated, and deleted over time, indexes can become <strong>fragmented</strong>. A fragmented index is less efficient than a well-organized one, because the database may have to read more pages of data to find the same result. Index rebuilding or reorganization compacts and reorganizes index structures to restore their efficiency. This is typically done during low-traffic periods, since index rebuilding can be resource-intensive.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Statistics Updates</div>
+          <p>Most database query planners use statistics about table sizes and value distributions to choose efficient query plans. If statistics become stale because data has changed significantly, the query planner may choose inefficient execution paths. Updating statistics refreshes the query planner's information, helping it generate better plans. Most database systems can be configured to update statistics automatically, but verifying that this is working correctly is a part of routine maintenance.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Archiving Old Data</div>
+          <p>Active tables tend to grow over time. As tables grow very large, queries may slow down, backups take longer, and disk usage increases. <strong>Archiving</strong> is the practice of moving older records from the active table to an archive table or archive database. Archived records are preserved but removed from the working data set that active queries and reports use.</p>
+          <p>A school might archive enrollment records more than five years old to an archive database that is backed up but not queried in normal operation. A web application might archive event logs older than ninety days to a separate storage system. Archiving keeps active tables manageable without permanently deleting historical records.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Vacuuming and Garbage Collection</div>
+          <p>Some database systems, including PostgreSQL, use a multi-version concurrency control model in which old versions of rows are kept after updates or deletes, until a cleanup process removes them. This cleanup process, called <strong>vacuuming</strong> in PostgreSQL, reclaims the storage used by old row versions. Without regular vacuuming, tables can grow very large and performance can degrade. Most modern PostgreSQL deployments use <code>autovacuum</code>, a background process that handles this automatically. Monitoring and tuning autovacuum is a routine maintenance concern for PostgreSQL administrators.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Checking Constraints and Data Quality</div>
+          <p>Over time, data quality can drift in ways that are not immediately obvious. Records may accumulate with missing values that were supposed to be required. Orphaned records, meaning records in a child table that no longer have a matching record in the parent table, may appear if referential integrity was ever disabled or bypassed. Periodic data quality checks, similar to those discussed in Chapter 4, help catch problems before they cause reporting errors, application bugs, or user confusion.</p>
+        </div>
+      </section>
+
+      <!-- 26.9 -->
+      <section class="section" id="s26-9">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.9</span>
+          <h2 class="section-title">Migrations at an Introductory Level</h2>
+        </div>
+
+        <p>A <strong>database migration</strong> is a change to the structure of a database, such as adding a table, adding a column, changing a data type, removing a field, or renaming a table or column. Migrations are how a database evolves as the application and organization it supports change over time. They are also one of the riskiest activities in database management: a poorly executed migration can corrupt data, break applications, or cause extended downtime.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Why Migrations Happen</div>
+          <p>No database design survives contact with real use unchanged. Requirements change. Organizations discover that the original model was missing something important. Reporting needs require new fields. Performance analysis reveals that the schema needs indexes that were not anticipated. Application changes require new tables or different column types. Migrations are how these changes are made safely and systematically.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Challenge of Migrations</div>
+          <p>Changing a database schema while data already exists in it is more complex than designing from scratch. Adding a new table or a new optional column is usually safe. Removing a column, changing a data type, or renaming a table can have cascading consequences that are not immediately obvious.</p>
+          <p>If an application is running while a migration runs, queries may fail if they reference a column that has been renamed or a table that has been removed. In production systems, migrations require careful planning, testing in a staging environment before applying to production, communication with teams responsible for applications that use the database, and often a maintenance window during which the system is briefly offline while the migration runs.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Schema Version Control</div>
+          <p>Professional database teams typically track migrations using version control tools. Each migration is a numbered or timestamped file describing the change to make. The team maintains a record of which migrations have been applied to each environment, allowing any team member to understand the history of schema changes, apply migrations in the correct order, and roll back a migration if something goes wrong.</p>
+          <p>Tools such as Liquibase, Flyway, and the migration systems built into frameworks like Rails, Django, and Laravel are commonly used to manage migrations in development teams. Students interested in full-stack web development will encounter these tools frequently.</p>
+        </div>
+
+        <div class="callout callout-warn">
+          <div class="callout-title">The Key Principle</div>
+          <p>Schema changes must be planned, tested, documented, and applied carefully, with consideration for the data that already exists and the applications that already depend on the database. A migration that works perfectly on an empty test database may fail, or silently corrupt data, in a production database with millions of existing records.</p>
+        </div>
+      </section>
+
+      <!-- 26.10 -->
+      <section class="section" id="s26-10">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">26.10</span>
+          <h2 class="section-title">Documentation and Disaster Planning</h2>
+        </div>
+
+        <p>Documentation and disaster planning are the final topics in this chapter. They are also the ones most often neglected, especially in small teams where the same person who built the database is responsible for maintaining it.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Database Documentation</div>
+          <p>Documentation is a description of the database and system sufficient for someone else to understand, maintain, and recover it. In practice, documentation for a database system should include several components.</p>
+          <div class="components-grid">
+            <div class="component-card">
+              <div class="component-card-name">Schema Description</div>
+              <p>Explains each table, what it represents, and what each column stores, including data types, required fields, constraints, and any unusual design decisions.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Data Dictionary</div>
+              <p>Defines each field in detail: valid values, what the field represents, how it is used, and any business rules or conventions that apply.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Relationship Map</div>
+              <p>An entity-relationship diagram showing how tables are connected through foreign keys, identifying the cardinality of each relationship.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Backup and Recovery Docs</div>
+              <p>Explains what backups are taken, how often, where they are stored, and how recovery should be performed, in enough detail for an unfamiliar person to carry it out.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Change Log</div>
+              <p>Records significant changes to the schema or data over time: when a column was added, when a table was renamed, when a constraint was changed.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Contact List</div>
+              <p>Identifies who is responsible for the database and who should be contacted when something goes wrong, with current contact information.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Problem with Undocumented Systems</div>
+          <p>Many real databases are poorly documented or completely undocumented. The person who built the system understood it completely and saw no need to write things down. Then that person moved on, and their replacement spent months trying to understand a system with no documentation.</p>
+          <p>Undocumented systems are also harder to recover. If a disaster occurs and the person responsible for recovery does not know the backup location, the recovery procedure, or the server configuration, recovery will take much longer. In some cases, organizations have been unable to recover at all because critical knowledge existed only in one person's memory. Good documentation is an act of consideration for future colleagues, including future versions of yourself.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Disaster Planning</div>
+          <p>A <strong>disaster plan</strong>, sometimes called a business continuity plan or a disaster recovery plan, is a documented process for what to do when something goes seriously wrong. It should cover the most likely scenarios: hardware failure, data corruption, human error, security incident, and total facility loss.</p>
+          <p>For each scenario, the disaster plan should address how the failure would be detected, who should be notified, what steps should be taken to assess the damage, how recovery should proceed, how long recovery is expected to take, and how normal operations will be restored.</p>
+          <p>The <strong>recovery time objective</strong> and <strong>recovery point objective</strong> introduced in Section 26.3 drive backup frequency and infrastructure choices. These objectives must be established before a disaster, not during one. They should be verified by actual restore testing, not assumed.</p>
+        </div>
+
+        <div class="callout callout-positive">
+          <div class="callout-title">Even Minimal Documentation Helps</div>
+          <p>For smaller systems, a disaster plan might be as simple as a written document describing what to do if the database server fails. Even that minimal documentation is far better than none. A team that has never discussed what would happen in a serious failure is a team that will be improvising at the worst possible moment, when data may already be lost and pressure is highest.</p>
+        </div>
+      </section>
+
+    </article><!-- end content-body -->
+
+    <!-- ─── Back Matter ───────────────────────────────── -->
+    <div class="back-matter">
+
+      <!-- Summary -->
+      <div class="back-section" id="summary">
+        <div class="back-section-title">Chapter Summary</div>
+        <ul class="summary-points">
+          <li><strong>Backups</strong> are copies of data stored separately from the original. Full backups copy everything. Incremental and differential backups copy only changes. Transaction log backups support fine-grained point-in-time recovery. The 3-2-1 strategy, three copies on two types of media with one offsite, provides a practical framework for protection.</li>
+          <li><strong>Recovery</strong> is the process of restoring data from backup after a failure. Point-in-time recovery allows restoration to a specific moment in the past. <strong>Restore testing</strong>, meaning actually performing a recovery to verify it works, is essential. Backups that have never been tested may not work when needed.</li>
+          <li>The <strong>recovery time objective</strong> (RTO) defines the maximum acceptable offline time after a failure. The <strong>recovery point objective</strong> (RPO) defines the maximum acceptable data loss in time. Both must be defined before a disaster, not during one.</li>
+          <li><strong>Retention policies</strong> define how long backup copies and data records are kept. They balance usefulness, storage costs, legal obligations, and privacy requirements. Backup retention and data retention are distinct concerns that may pull in different directions.</li>
+          <li><strong>Logs</strong> record what has happened in a database system. Transaction logs support reliability and recovery. Error logs record problems. Access logs record connections. Query logs record what was executed. Each type serves a different purpose in diagnosis, security, and accountability.</li>
+          <li><strong>Auditing</strong> is the deliberate practice of recording and reviewing events to support accountability, compliance, security, and investigation. Well-designed audit systems record what changed, what the values were before and after, who made the change, and when, and they protect those records from modification.</li>
+          <li><strong>Monitoring</strong> involves observing system health metrics including disk space, query performance, connection counts, replication lag, backup job status, and error rates. <strong>Alerts</strong> notify responsible parties when thresholds are crossed.</li>
+          <li><strong>Maintenance tasks</strong> keep a database healthy over time: index maintenance addresses fragmentation, statistics updates keep the query planner accurate, archiving reduces the size of active tables, and data quality checks catch drift before it causes problems.</li>
+          <li><strong>Migrations</strong> are schema changes applied while data already exists in the database. They require careful planning, testing in a staging environment, and systematic version control to apply safely.</li>
+          <li><strong>Documentation</strong> describes the database structure, data definitions, relationships, backup procedures, change history, and responsible contacts. <strong>Disaster planning</strong> defines how to respond to failures. A database that works well today requires active care to keep working well tomorrow.</li>
+        </ul>
+      </div>
+
+      <!-- Key Terms -->
+      <div class="back-section" id="key-terms">
+        <div class="back-section-title">Key Terms</div>
+        <div class="key-terms-grid">
+          <div class="term-card">
+            <div class="term-word">Backup</div>
+            <p class="term-def">A copy of data stored separately from the original, used for recovery in case of failure or loss.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Full Backup</div>
+            <p class="term-def">A backup that copies all data and schema definitions in the database. The simplest to restore from, but the largest and most time-consuming to create.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Incremental Backup</div>
+            <p class="term-def">A backup that copies only data changed since the last backup of any kind. Smaller and faster than a full backup, but requires all previous incrementals to restore.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Differential Backup</div>
+            <p class="term-def">A backup that copies all data changed since the last full backup. Recovery requires only the last full backup and the most recent differential.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Transaction Log Backup</div>
+            <p class="term-def">A backup of the transaction log, enabling fine-grained point-in-time recovery. Used in combination with full and differential backups.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Offsite Backup</div>
+            <p class="term-def">A backup stored in a physically separate location from the original database, protecting against hardware failures, fires, and other local disasters.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">3-2-1 Backup Strategy</div>
+            <p class="term-def">The practice of maintaining three copies of data on two types of media, with at least one copy stored offsite.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Recovery</div>
+            <p class="term-def">The process of restoring a database from a backup after a failure, corruption, or accidental data loss.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Point-in-Time Recovery</div>
+            <p class="term-def">The ability to restore a database to its exact state at a specific moment in the past, using a combination of full backups and transaction log backups.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Restore Testing</div>
+            <p class="term-def">The practice of actually performing a recovery from backup on a scheduled basis to verify that backups are complete, readable, and recoverable within the expected time.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Retention Policy</div>
+            <p class="term-def">A defined rule governing how long backup copies and data records are kept before deletion, balancing usefulness, storage costs, legal obligations, and privacy requirements.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Recovery Time Objective (RTO)</div>
+            <p class="term-def">The maximum acceptable length of time a system can be offline after a failure before normal operations must be restored.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Recovery Point Objective (RPO)</div>
+            <p class="term-def">The maximum acceptable amount of data loss measured in time: the oldest point to which a system must be restorable after a failure.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Log</div>
+            <p class="term-def">A record of events that have occurred in a database or information system. Different log types serve different purposes: reliability, diagnosis, security, and audit.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Transaction Log</div>
+            <p class="term-def">A sequential record of every data change, recorded before the change is applied. Used by the database system for reliability, rollback, and recovery.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Error Log</div>
+            <p class="term-def">A record of abnormal events, failures, warnings, and permission violations in a database system.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Access Log</div>
+            <p class="term-def">A record of who connected to the database system, when, and from where, including whether authentication succeeded or failed.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Query Log</div>
+            <p class="term-def">A record of SQL queries executed against a database, often including timing information, used for performance analysis and security review.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Audit Log</div>
+            <p class="term-def">A deliberately maintained record of significant events, designed to support accountability, compliance, security review, and investigation.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Auditing</div>
+            <p class="term-def">The systematic recording and review of significant database events for accountability, compliance, security, and investigation.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Monitoring</div>
+            <p class="term-def">The ongoing observation of system health and performance metrics to detect problems early, before they become serious failures.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Alert</div>
+            <p class="term-def">An automated notification sent to a responsible party when a monitored metric crosses a defined threshold.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Index Maintenance</div>
+            <p class="term-def">The process of rebuilding or reorganizing database indexes to address fragmentation that accumulates as data changes over time.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Statistics Update</div>
+            <p class="term-def">Refreshing the database system's statistical information about table sizes and value distributions so the query planner can make accurate decisions.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Archiving</div>
+            <p class="term-def">Moving older records from active tables to archive storage to keep active tables manageable, while preserving historical data.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Vacuuming</div>
+            <p class="term-def">In PostgreSQL and similar systems, the background process that reclaims storage used by old row versions after updates and deletes.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Migration</div>
+            <p class="term-def">A change to the structure of a database schema, applied while data already exists in the database. Requires careful planning, testing, and documentation.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Schema Version Control</div>
+            <p class="term-def">The practice of tracking migrations as versioned files so that schema changes can be applied in order, understood historically, and rolled back if needed.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Data Dictionary</div>
+            <p class="term-def">A document that defines each field in a database in detail: valid values, meaning, business rules, and conventions.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Disaster Plan</div>
+            <p class="term-def">A documented process for responding to serious system failures, defining how each type of failure is detected, who is responsible, and how recovery proceeds. Also called a disaster recovery plan or business continuity plan.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Backup Strategy Review Table -->
+      <div class="back-section" id="backup-review">
+        <div class="back-section-title">Backup Strategy Review</div>
+        <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 1.25rem;">The table below summarizes the four main backup types discussed in this chapter. For each database system you work with, consider which combination best fits the system's size, change frequency, and recovery requirements.</p>
+        <div class="table-wrap" role="region" aria-label="Backup type comparison table">
+          <div class="table-caption">Table 26.1 — Backup type comparison: what each copies, how complex recovery is, how large the backup is, and what it is best suited for.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Backup Type</th>
+                <th>What It Copies</th>
+                <th>Recovery Complexity</th>
+                <th>Storage Size</th>
+                <th>Best For</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Full</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Everything</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Simple (one file)</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Large</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Weekly baseline; small databases</td>
+              </tr>
+              <tr>
+                <td>Incremental</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Changes since last backup of any kind</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Complex (full + all incrementals in order)</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Small</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Active databases with frequent changes</td>
+              </tr>
+              <tr>
+                <td>Differential</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Changes since last full backup</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Moderate (full + latest differential)</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Medium</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Balance between storage and recovery speed</td>
+              </tr>
+              <tr>
+                <td>Transaction Log</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Log records only</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Complex but precise (full + differentials + logs)</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Very small per run</td>
+                <td style="font-family:var(--sans); font-size:var(--text-xs);">Systems needing point-in-time recovery</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Restore Testing Checklist -->
+      <div class="back-section" id="restore-checklist">
+        <div class="back-section-title">Restore Testing Checklist</div>
+        <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 1.25rem;">Use this checklist when performing a scheduled restore test. Always run on a separate test environment, never on the production database. Document the results of every test and file them for future reference.</p>
+        <div class="checklist-block">
+          <div class="checklist-label"><span class="checklist-label-dot"></span>Restore Testing Checklist</div>
+          <div class="checklist-body">
+            <div class="checklist-group">
+              <div class="checklist-group-title">Before the Test</div>
+              <ul class="checklist-items">
+                <li>Identify the backup to restore (date, type, storage location).</li>
+                <li>Confirm the test environment is separate from production.</li>
+                <li>Document the expected state: which tables, approximate record counts.</li>
+                <li>Record the start time of the restore procedure.</li>
+              </ul>
+            </div>
+            <div class="checklist-group">
+              <div class="checklist-group-title">During Restore</div>
+              <ul class="checklist-items">
+                <li>Follow the documented recovery procedure exactly as written.</li>
+                <li>Note any errors or unexpected prompts that appear.</li>
+                <li>Record the time when the restore process completes.</li>
+              </ul>
+            </div>
+            <div class="checklist-group">
+              <div class="checklist-group-title">After Restore</div>
+              <ul class="checklist-items">
+                <li>Verify all expected tables are present in the restored database.</li>
+                <li>Verify record counts are consistent with expectations.</li>
+                <li>Verify schema definitions are intact: column names, data types, constraints.</li>
+                <li>Run representative queries and verify results are sensible.</li>
+                <li>Verify indexes are present and functioning.</li>
+                <li>Verify that the database accepts connections and queries normally.</li>
+              </ul>
+            </div>
+            <div class="checklist-group">
+              <div class="checklist-group-title">Document the Results</div>
+              <ul class="checklist-items">
+                <li>Record whether the test succeeded or failed.</li>
+                <li>Record total recovery time from start to completion.</li>
+                <li>Note any discrepancies from expected state.</li>
+                <li>Note any steps in the procedure that need to be updated.</li>
+                <li>File the test record for future reference and comparison.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Trail Practice -->
+      <div class="back-section" id="audit-practice">
+        <div class="back-section-title">Audit Trail Practice</div>
+        <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 1.25rem;">Read the following scenario carefully, then answer the questions below.</p>
+
+        <div class="scenario-box">
+          <div class="scenario-label">Scenario</div>
+          <p>A university uses a relational database to store student grades. The database has a <code>Grades</code> table with columns for <code>student_id</code>, <code>course_id</code>, <code>grade_score</code>, and <code>graded_by</code>. There is also an <code>Instructors</code> table and a <code>Students</code> table. The university has a policy that grade changes after submission require approval from the department chair.</p>
+          <p>A student notices that their final grade in a course appears lower than the grade the instructor posted at the end of the term. The student submits a formal complaint. The registrar's office wants to investigate.</p>
+        </div>
+
+        <div class="practice-section">
+          <ul class="questions-list">
+            <li>What information would a well-designed audit record for the <code>Grades</code> table need to capture to support this investigation?</li>
+            <li>If the audit table shows that <code>grade_score</code> was changed from 87 to 72 for this student on a specific date, and the <code>graded_by</code> column was changed from the course instructor's user account to a different account, what questions does that raise?</li>
+            <li>If no audit table exists and the grade change cannot be traced, what are the consequences for the student, the institution, and trust in the grading system?</li>
+            <li>Who should be able to read records from the <code>Grades_Audit</code> table? Who should be prevented from deleting or modifying them? Explain your reasoning.</li>
+            <li>Design the columns you would include in a <code>Grades_Audit</code> table. Write the column names and describe what each would store.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Disaster Planning Scenarios -->
+      <div class="back-section" id="disaster-scenarios">
+        <div class="back-section-title">Disaster Planning Scenario Questions</div>
+        <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 1.25rem;">Each scenario below describes a database failure. Read each one, then answer the questions that follow.</p>
+
+        <div class="practice-section">
+          <div class="scenario-heading">Scenario A — Community Library</div>
+          <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 0.75rem;">A small community library uses a database to manage its collection and loan records. The server hosting the database experiences a hard drive failure at 9:00 AM on a Tuesday. The library has a full backup that runs every Sunday evening. The library had no transaction log backups and no incremental backups.</p>
+          <ul class="sub-questions">
+            <li>What is the most recent state of the data that can be recovered?</li>
+            <li>What records may have been permanently lost?</li>
+            <li>What backup improvement would most reduce data loss in this scenario?</li>
+          </ul>
+        </div>
+
+        <div class="practice-section">
+          <div class="scenario-heading">Scenario B — University Registration System</div>
+          <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 0.75rem;">A university's course registration system is backed up nightly with full backups and every thirty minutes with transaction log backups. At 11:15 AM during the last day of course registration, a staff member accidentally runs an UPDATE command without a WHERE clause, setting every student's enrollment status to <code>Withdrawn</code>.</p>
+          <ul class="sub-questions">
+            <li>Is point-in-time recovery possible? What would be needed to perform it?</li>
+            <li>To what moment in time would you want to recover, and why?</li>
+            <li>What changes to access control or procedures might prevent this error in the future?</li>
+          </ul>
+        </div>
+
+        <div class="practice-section">
+          <div class="scenario-heading">Scenario C — Local Backup Failure</div>
+          <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 0.75rem;">An organization has excellent backups stored on an external drive connected to the same server as the database. A fire destroys the server room, damaging both the server and the external drive.</p>
+          <ul class="sub-questions">
+            <li>Why do the backups fail to protect the organization in this scenario?</li>
+            <li>What backup practice would have prevented this outcome?</li>
+            <li>What additional steps should the organization take when rebuilding its systems?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Monitoring and Maintenance Questions -->
+      <div class="back-section" id="maintenance-questions">
+        <div class="back-section-title">Monitoring and Maintenance Questions</div>
+        <div class="practice-section">
+          <ul class="questions-list">
+            <li>A database has been running for three years without any index maintenance. The tables have grown significantly and queries that used to run in under a second now take several seconds. What maintenance task might help, and why?</li>
+            <li>An automated backup job is configured to run every night at 2:00 AM. The backup software sends a confirmation email when a backup succeeds. Nobody reviews these confirmation emails. What risk does this create?</li>
+            <li>A development team regularly adds new columns to the database without updating the data dictionary or the entity-relationship diagram. What problems might this cause six months from now?</li>
+            <li>A school information system has been archiving student records older than five years to a separate archive database. A researcher needs to study enrollment trends over the past eight years. What consideration does the archiving policy create for this request?</li>
+            <li>A database server's disk space monitor shows that free space has been declining steadily for the past six months and is now at twelve percent. What should happen next, and why is this an urgent concern?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Real-World Applications -->
+      <div class="back-section" id="real-world">
+        <div class="back-section-title">Real-World Applications</div>
+        <div class="practice-section">
+          <ul class="questions-list">
+            <li>A public library in a small town has a database that tracks its book catalog, patron records, and loan history. The library has one part-time librarian. Design a backup and recovery plan that is practical for an organization of this size. What would be backed up, how often, where would backups be stored, and how would recovery work?</li>
+            <li>A regional hospital keeps patient records in an electronic health records system. What types of events should the hospital's audit system record? Who should be able to review audit records? What legal and ethical reasons make auditing especially important in healthcare?</li>
+            <li>A growing e-commerce company has a product catalog, customer records, order history, and inventory. The company has been doubling in size every year. What maintenance challenges might arise from this growth, and what practices should the database team put in place to stay ahead of them?</li>
+            <li>A nonprofit organization runs its donor database on an aging server in its office. The organization has no offsite backups and no disaster plan. Write a brief summary explaining the risks this organization faces and recommending three concrete steps it should take immediately to improve its data protection.</li>
+            <li>A university's IT department is planning a migration that will rename several columns in the student information system to align with a new naming convention. What steps should the team take before, during, and after the migration to minimize risk to the database and the applications that depend on it?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Mixed Review -->
+      <div class="back-section" id="mixed-review">
+        <div class="back-section-title">Mixed Review</div>
+        <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col); margin-bottom: 1.25rem;">These questions draw on earlier chapters as well as Chapter 26. They are designed to help you retain and connect earlier material.</p>
+        <div class="practice-section">
+          <ul class="questions-list">
+            <li><em>(Chapter 6)</em> What is referential integrity? Explain how a well-enforced referential integrity constraint might prevent certain data corruption problems that would otherwise need to be discovered through auditing.</li>
+            <li><em>(Chapter 15)</em> A developer accidentally runs the following SQL command against a production database without a WHERE clause, deleting every record in the <code>Students</code> table. The database does not use transactions with explicit rollback. What options does the database administrator have for recovery?
+              <div class="code-block" style="margin-top:0.75rem; max-width:var(--col);">
+                <div class="code-label"><span class="code-label-dot"></span>SQL — Accidental Command</div>
+                <pre><code><span class="kw">DELETE FROM</span> Students;</code></pre>
+              </div>
+            </li>
+            <li><em>(Chapter 16)</em> How do transactions support data integrity in ways that make recovery easier? What would recovery look like if the database did not use transactions at all?</li>
+            <li><em>(Chapter 18)</em> How does the principle of least privilege reduce the risk of scenarios like the accidental DELETE described in question 2 above?</li>
+            <li><em>(Chapter 4)</em> You are performing a restore test and discover that the restored database has several records with missing required values in a field that has a <code>NOT NULL</code> constraint. What might have caused this, and what does it suggest about the original data quality?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Review Questions -->
+      <div class="back-section" id="review">
+        <div class="back-section-title">Review Questions</div>
+        <div class="practice-section">
+          <div class="practice-section-title">Comprehension</div>
+          <ul class="questions-list">
+            <li>What is a backup, and why must it be stored separately from the original data?</li>
+            <li>Describe the difference between a full backup, an incremental backup, and a differential backup.</li>
+            <li>What is a transaction log backup, and what does it enable that other backup types alone do not?</li>
+            <li>What is the 3-2-1 backup strategy, and what specific problems does each part of it protect against?</li>
+            <li>What is restore testing, and why is it essential even when backups appear to be running correctly?</li>
+            <li>What is a recovery time objective? What is a recovery point objective? How do these two concepts influence backup strategy?</li>
+            <li>What is a retention policy? What two kinds of obligations might a retention policy need to balance?</li>
+            <li>Describe three types of logs that a database system might maintain. What is each used for?</li>
+            <li>What is auditing? How is it different from simply having logs?</li>
+            <li>What information should a well-designed audit record capture for an UPDATE operation?</li>
+            <li>What is monitoring? Name three metrics that should be monitored in a production database.</li>
+            <li>What is index fragmentation, and why does it affect query performance over time?</li>
+            <li>What is archiving, and how does it differ from deleting old records?</li>
+            <li>What is a database migration? What risks does it carry compared to other database operations?</li>
+            <li>What should database documentation include? Why is documentation particularly important for disaster recovery?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div class="back-section" id="preview">
+        <div class="back-section-title">Preview of Chapter 27</div>
+        <div class="preview-box">
+          <div class="preview-box-label">Coming Next — Chapter 27: Data Ethics, Privacy, Governance, and Risk</div>
+          <p>Chapter 26 covered the technical practices that protect data systems from failure, corruption, and loss. Chapter 27 moves from technical protection to the human and organizational responsibilities that surround data systems. Students will study privacy and consent, sensitive data categories, data minimization, retention and deletion from a policy perspective, bias and fairness in data-driven systems, transparency, data governance structures, and compliance with legal and regulatory frameworks at an introductory level.</p>
+          <p>Many of the themes introduced in Chapter 26, including audit trails, retention policies, access control, and documentation, will reappear in Chapter 27 as ethical and governance obligations rather than purely technical ones. The transition from this chapter to the next reflects a central truth of the field: technical decisions and human decisions are not separate. Every choice about what to back up, how long to keep records, who can read audit logs, and how to respond to a failure is also a choice with ethical and organizational consequences. Chapter 27 will prepare students for Chapter 28, the capstone chapter, in which all of these responsibilities are integrated into a complete information system design.</p>
+        </div>
+      </div>
+
+    </div><!-- end back-matter -->
+
+    <!-- Footer -->
+    <footer class="chapter-footer">
+      <span>Data, Databases, and Information Systems &mdash; MGU Computer Science Series &mdash; Library Textbook Edition</span>
+      <span>Chapter 26 of 28 &mdash; Part VI: Data Applications and System Integration</span>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>

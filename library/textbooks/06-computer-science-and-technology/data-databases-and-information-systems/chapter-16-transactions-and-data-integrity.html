@@ -1,0 +1,1958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 16: Transactions and Data Integrity — MGU CS Series</title>
+<style>
+
+/* ─── Design Tokens ──────────────────────────────────────────────────── */
+:root {
+  --ink:         #1a1a2e;
+  --ink-mid:     #3d3d5c;
+  --ink-light:   #6b6b8a;
+  --rule:        #d4d4e8;
+  --page:        #fafafa;
+  --surface:     #ffffff;
+  --accent:      #2d5be3;
+  --accent-dim:  #e8eefb;
+  --accent-dark: #1a3ba0;
+  --highlight:   #f0f4ff;
+  --code-bg:     #f4f6fb;
+  --warn:        #4a3800;
+  --warn-bg:     #fffbeb;
+  --warn-rule:   #d4a500;
+  --positive:    #1a4a2e;
+  --positive-bg: #edfaf3;
+  --positive-rule:#2a8a52;
+
+  --serif:   'Georgia', 'Times New Roman', serif;
+  --sans:    'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:    'Courier New', 'Consolas', monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-md:   1.125rem;
+  --text-lg:   1.25rem;
+  --text-xl:   1.5rem;
+  --text-2xl:  1.875rem;
+  --text-3xl:  2.375rem;
+  --text-4xl:  3rem;
+
+  --radius:  4px;
+  --col:     680px;
+  --wide:    860px;
+}
+
+/* ─── Reset & Base ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 17px; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--serif);
+  font-size: var(--text-base);
+  line-height: 1.78;
+  color: var(--ink);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Layout Shell ───────────────────────────────────────────────────── */
+.page-wrap {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+/* ─── Sidebar Nav ────────────────────────────────────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--ink);
+  color: #c8c8e0;
+  padding: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #3d3d5c transparent;
+}
+
+.sidebar-brand {
+  padding: 0 1.5rem 1.5rem;
+  border-bottom: 1px solid #2a2a45;
+}
+
+.sidebar-series {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7878aa;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #e8e8f4;
+  line-height: 1.4;
+}
+
+.sidebar-nav {
+  padding: 1.25rem 0 1rem;
+  flex: 1;
+}
+
+.nav-part-label {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5a80;
+  padding: 0.85rem 1.5rem 0.25rem;
+}
+
+.nav-link {
+  display: block;
+  padding: 0.3rem 1.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #9898be;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: color 0.15s, background 0.15s;
+  border-left: 2px solid transparent;
+}
+
+.nav-link:hover {
+  color: #e8e8f4;
+  background: rgba(255,255,255,0.04);
+  border-left-color: #5a6ee8;
+}
+
+.nav-link.current {
+  color: #b8c4ff;
+  border-left-color: var(--accent);
+  background: rgba(45, 91, 227, 0.12);
+}
+
+.nav-link.section-link {
+  padding-left: 2.1rem;
+  font-size: 0.72rem;
+  color: #6a6a90;
+}
+
+.nav-link.section-link:hover { color: #c0c0e0; }
+
+/* ─── Main Content Area ──────────────────────────────────────────────── */
+.main {
+  min-width: 0;
+  background: var(--surface);
+}
+
+/* ─── Chapter Header ─────────────────────────────────────────────────── */
+.chapter-header {
+  background: var(--ink);
+  color: white;
+  padding: 4rem 3.5rem 3.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.chapter-header::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 420px;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 40%, rgba(45,91,227,0.18) 100%);
+  pointer-events: none;
+}
+
+.chapter-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, #7a9cff 50%, transparent 100%);
+}
+
+.chapter-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.part-badge {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(45,91,227,0.35);
+  color: #b0c4ff;
+  padding: 0.2rem 0.65rem;
+  border-radius: 2px;
+  border: 1px solid rgba(45,91,227,0.5);
+}
+
+.chapter-number-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #7878aa;
+  letter-spacing: 0.05em;
+}
+
+.chapter-number {
+  font-family: var(--sans);
+  font-size: 5rem;
+  font-weight: 800;
+  color: rgba(255,255,255,0.06);
+  position: absolute;
+  top: 2rem;
+  right: 3rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  user-select: none;
+}
+
+.chapter-title {
+  font-family: var(--serif);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #f0f0fc;
+  max-width: 620px;
+  margin-bottom: 1.5rem;
+}
+
+.chapter-intro-summary {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: #9898c0;
+  line-height: 1.6;
+  max-width: 580px;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ─── Section Contents Strip ─────────────────────────────────────────── */
+.toc-strip {
+  background: var(--highlight);
+  border-bottom: 1px solid var(--rule);
+  padding: 1.5rem 3.5rem;
+}
+
+.toc-strip-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 0.75rem;
+}
+
+.toc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.25rem 2rem;
+}
+
+.toc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-mid);
+}
+
+.toc-num {
+  color: var(--accent);
+  font-weight: 700;
+  min-width: 2.5rem;
+  font-size: 0.7rem;
+}
+
+.toc-item a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.toc-item a:hover { color: var(--accent); }
+
+/* ─── Content Body ───────────────────────────────────────────────────── */
+.content-body {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 3rem 3.5rem 4rem;
+}
+
+/* ─── Section ────────────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 3.5rem;
+}
+
+.section-anchor {
+  display: block;
+  position: relative;
+  top: -80px;
+  visibility: hidden;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.section-num {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 2.5rem;
+  letter-spacing: 0.02em;
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+/* ─── Subsection ─────────────────────────────────────────────────────── */
+.subsection {
+  margin: 1.75rem 0;
+}
+
+.subsection-title {
+  font-family: var(--sans);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+  line-height: 1.3;
+}
+
+/* ─── Prose ──────────────────────────────────────────────────────────── */
+p {
+  margin-bottom: 1.1rem;
+  color: var(--ink-mid);
+  max-width: var(--col);
+}
+
+p strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ─── Tables ─────────────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.75rem 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.table-caption {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-light);
+  padding: 0.5rem 1rem 0;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--rule);
+  font-style: italic;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+thead th {
+  background: var(--ink);
+  color: #c8c8e0;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+tbody tr { border-bottom: 1px solid var(--rule); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--highlight); }
+
+tbody td {
+  padding: 0.55rem 1rem;
+  color: var(--ink-mid);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+tbody td:first-child {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+/* ─── Code & SQL Blocks ──────────────────────────────────────────────── */
+.code-block {
+  margin: 1.5rem 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--rule);
+}
+
+.code-label {
+  background: var(--ink);
+  color: #7878aa;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.code-label-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* SQL keyword coloring via classes */
+.kw { color: #1a3ba0; font-weight: 700; }
+.str { color: #2a6a00; }
+.cm { color: #888; font-style: italic; }
+
+/* Inline code */
+p code, li code {
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  font-size: 0.82em;
+  color: var(--accent-dark);
+}
+
+/* ─── Callout Boxes ──────────────────────────────────────────────────── */
+.callout {
+  margin: 1.75rem 0;
+  padding: 1.1rem 1.4rem;
+  border-radius: var(--radius);
+  border-left: 3px solid;
+  max-width: var(--col);
+}
+
+.callout-note {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.callout-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-rule);
+}
+
+.callout-positive {
+  background: var(--positive-bg);
+  border-color: var(--positive-rule);
+}
+
+.callout-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.callout-note .callout-title    { color: var(--accent-dark); }
+.callout-warn .callout-title    { color: var(--warn); }
+.callout-positive .callout-title{ color: var(--positive); }
+
+.callout p { margin-bottom: 0; max-width: none; }
+.callout p + p { margin-top: 0.5rem; }
+
+/* ─── Data Values List ───────────────────────────────────────────────── */
+.data-values {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 1.25rem;
+  padding: 0;
+}
+
+.data-values li {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.75rem;
+  color: var(--accent-dark);
+}
+
+/* ─── Four Components Grid ───────────────────────────────────────────── */
+.components-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.component-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  border-top: 3px solid var(--accent);
+}
+
+.component-card-name {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.component-card p {
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ─── Four Areas Grid ────────────────────────────────────────────────── */
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.scope-card {
+  padding: 1rem 1.1rem;
+  background: var(--highlight);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.scope-card-num {
+  font-family: var(--sans);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: rgba(45,91,227,0.15);
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.scope-card-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.35rem;
+}
+
+.scope-card p {
+  font-size: 0.8rem;
+  margin: 0;
+  color: var(--ink-light);
+  line-height: 1.5;
+}
+
+/* ─── Study Habits / Numbered List ───────────────────────────────────── */
+.habits-list {
+  counter-reset: habit;
+  list-style: none;
+  max-width: var(--col);
+  margin: 1rem 0;
+}
+
+.habits-list li {
+  counter-increment: habit;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  align-items: flex-start;
+}
+
+.habits-list li::before {
+  content: counter(habit);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  border-radius: 50%;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.habits-list li div {
+  flex: 1;
+}
+
+.habits-list li strong {
+  display: block;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  margin-bottom: 0.2rem;
+}
+
+.habits-list li p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* ─── Worked Example Blocks ──────────────────────────────────────────── */
+.example-block {
+  margin: 2rem 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.example-header {
+  background: var(--accent-dim);
+  padding: 0.75rem 1.4rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.example-header-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+}
+
+.example-body {
+  padding: 1.4rem 1.4rem 0.25rem;
+}
+
+.example-body p, .example-body .code-block {
+  max-width: none;
+}
+
+.example-tag {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: 0.4rem;
+}
+
+/* ─── Design Habit Cards (numbered, for 16.10) ───────────────────────── */
+.habit-card {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.4rem;
+  margin-bottom: 1rem;
+  max-width: var(--col);
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+}
+
+.habit-card-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+
+.habit-card p {
+  font-size: var(--text-sm);
+  margin-bottom: 0.6rem;
+}
+
+.habit-card p:last-child { margin-bottom: 0; }
+
+/* ─── Back Matter ────────────────────────────────────────────────────── */
+.back-matter {
+  background: var(--page);
+  border-top: 2px solid var(--rule);
+}
+
+.back-section {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 2.5rem 3.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.back-section:last-child { border-bottom: none; }
+
+.back-section-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--accent-dim);
+}
+
+/* Summary points */
+.summary-points {
+  list-style: none;
+  max-width: var(--col);
+}
+
+.summary-points li {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.6;
+}
+
+.summary-points li::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* Key terms */
+.key-terms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  max-width: var(--wide);
+}
+
+.term-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+}
+
+.term-word {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+
+.term-def {
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Practice questions */
+.practice-section {
+  margin-bottom: 1.75rem;
+}
+
+.practice-section-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+}
+
+.practice-intro {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  max-width: var(--col);
+  margin-bottom: 1.25rem;
+}
+
+.scenario-block {
+  margin-bottom: 1.5rem;
+  max-width: var(--col);
+}
+
+.scenario-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  margin-bottom: 0.4rem;
+}
+
+.scenario-block > p {
+  font-size: var(--text-sm);
+}
+
+.questions-list {
+  list-style: none;
+  counter-reset: question;
+  max-width: var(--col);
+}
+
+.questions-list li {
+  counter-increment: question;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.65;
+}
+
+.questions-list li::before {
+  content: counter(question) '.';
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 1.5rem;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* Misconceptions / Situations */
+.misconception {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid #d4006e;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  max-width: var(--col);
+}
+
+.misconception-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d4006e;
+  margin-bottom: 0.35rem;
+}
+
+.misconception-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.4rem;
+}
+
+.misconception p {
+  font-size: var(--text-sm);
+  margin: 0 0 0.5rem;
+}
+
+.misconception p:last-child { margin-bottom: 0; }
+
+/* Preview */
+.preview-box {
+  background: var(--ink);
+  color: #c8c8e0;
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+  max-width: var(--col);
+}
+
+.preview-box-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a6ee8;
+  margin-bottom: 0.6rem;
+}
+
+.preview-box p {
+  color: #b0b0d4;
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.7;
+  max-width: none;
+}
+
+.preview-box p + p { margin-top: 0.75rem; }
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+.chapter-footer {
+  background: var(--ink);
+  color: #5a5a80;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  padding: 1.25rem 3.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chapter-footer a { color: #7878aa; text-decoration: none; }
+.chapter-footer a:hover { color: #b0b0d0; }
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .page-wrap { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .chapter-header,
+  .toc-strip,
+  .content-body,
+  .back-section { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .chapter-number { font-size: 3rem; }
+  .components-grid,
+  .scope-grid { grid-template-columns: 1fr; }
+  .key-terms-grid { grid-template-columns: 1fr; }
+  .chapter-footer { flex-direction: column; gap: 0.5rem; text-align: center; }
+}
+
+@media (max-width: 540px) {
+  .toc-grid { grid-template-columns: 1fr; }
+  .chapter-title { font-size: var(--text-2xl); }
+}
+
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- ─── Sidebar ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-series">MGU CS Series</span>
+      <span class="sidebar-title">Data, Databases, and Information Systems</span>
+    </div>
+    <nav class="sidebar-nav" aria-label="Chapter navigation">
+      <span class="nav-part-label">Part IV — Managing and Changing Data</span>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 15 — Inserting, Updating, and Deleting Data</a>
+      <a class="nav-link current" href="#chapter-start">Ch. 16 — Transactions and Data Integrity</a>
+      <a class="nav-link section-link" href="#s16-1">16.1 What Data Integrity Means</a>
+      <a class="nav-link section-link" href="#s16-2">16.2 Why Some Changes Belong Together</a>
+      <a class="nav-link section-link" href="#s16-3">16.3 Transactions</a>
+      <a class="nav-link section-link" href="#s16-4">16.4 Commit</a>
+      <a class="nav-link section-link" href="#s16-5">16.5 Rollback</a>
+      <a class="nav-link section-link" href="#s16-6">16.6 Atomicity, Introductory</a>
+      <a class="nav-link section-link" href="#s16-7">16.7 Consistency and Rules</a>
+      <a class="nav-link section-link" href="#s16-8">16.8 Concurrency, Introductory</a>
+      <a class="nav-link section-link" href="#s16-9">16.9 Transaction Examples</a>
+      <a class="nav-link section-link" href="#s16-10">16.10 Designing for Reliable Changes</a>
+      <span class="nav-part-label" style="margin-top:0.5rem;">Back Matter</span>
+      <a class="nav-link section-link" href="#summary">Chapter Summary</a>
+      <a class="nav-link section-link" href="#key-terms">Key Terms</a>
+      <a class="nav-link section-link" href="#scenario-practice">Transaction Scenario Practice</a>
+      <a class="nav-link section-link" href="#commit-rollback">Commit and Rollback Questions</a>
+      <a class="nav-link section-link" href="#integrity-analysis">Integrity Analysis</a>
+      <a class="nav-link section-link" href="#error-analysis">Error Analysis</a>
+      <a class="nav-link section-link" href="#real-world">Real-World Applications</a>
+      <a class="nav-link section-link" href="#mixed-review">Mixed Review</a>
+      <a class="nav-link section-link" href="#review">Review Questions</a>
+      <a class="nav-link section-link" href="#preview">Preview of Chapter 17</a>
+
+      <span class="nav-part-label" style="margin-top:0.75rem;">Coming Next</span>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 17 — Indexes and Query Performance</a>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 18 — Security, Permissions, and Access Control</a>
+    </nav>
+  </aside>
+
+  <!-- ─── Main ────────────────────────────────────────── -->
+  <main class="main" id="chapter-start">
+
+    <!-- Chapter Header -->
+    <header class="chapter-header">
+      <div class="chapter-number" aria-hidden="true">16</div>
+      <div class="chapter-eyebrow">
+        <span class="part-badge">Part IV — Managing and Changing Data</span>
+        <span class="chapter-number-label">Chapter 16 of 28</span>
+      </div>
+      <h1 class="chapter-title">Transactions and Data Integrity</h1>
+      <p class="chapter-intro-summary">
+        A bank transfer is not one change to a database, it is two. A library checkout is not one change, it is two. When several changes describe a single real action, they must succeed together or fail together, and this chapter introduces the tool databases use to guarantee exactly that.
+      </p>
+    </header>
+
+    <!-- TOC Strip -->
+    <div class="toc-strip" aria-label="Sections in this chapter">
+      <div class="toc-strip-title">Sections in This Chapter</div>
+      <div class="toc-grid">
+        <div class="toc-item"><span class="toc-num">16.1</span><a href="#s16-1">What Data Integrity Means</a></div>
+        <div class="toc-item"><span class="toc-num">16.2</span><a href="#s16-2">Why Some Changes Belong Together</a></div>
+        <div class="toc-item"><span class="toc-num">16.3</span><a href="#s16-3">Transactions</a></div>
+        <div class="toc-item"><span class="toc-num">16.4</span><a href="#s16-4">Commit</a></div>
+        <div class="toc-item"><span class="toc-num">16.5</span><a href="#s16-5">Rollback</a></div>
+        <div class="toc-item"><span class="toc-num">16.6</span><a href="#s16-6">Atomicity at an Introductory Level</a></div>
+        <div class="toc-item"><span class="toc-num">16.7</span><a href="#s16-7">Consistency and Rules</a></div>
+        <div class="toc-item"><span class="toc-num">16.8</span><a href="#s16-8">Concurrency at an Introductory Level</a></div>
+        <div class="toc-item"><span class="toc-num">16.9</span><a href="#s16-9">Transaction Examples</a></div>
+        <div class="toc-item"><span class="toc-num">16.10</span><a href="#s16-10">Designing for Reliable Changes</a></div>
+      </div>
+    </div>
+
+    <!-- Content Body -->
+    <article class="content-body">
+
+      <!-- Chapter Introduction -->
+      <section class="section">
+        <p>Chapter 15 taught students how to insert, update, and delete records one command at a time. That chapter emphasized caution, and for good reason: a single <code>UPDATE</code> or <code>DELETE</code> can change many records at once, and the results are permanent unless the system is designed to protect against them.</p>
+        <p>But there is a deeper problem that single commands cannot solve on their own. Some real-world actions require several database changes that must all succeed together, or all fail together. A single transfer of money from one bank account to another is not one database operation. It is two: a withdrawal from one account, and a deposit into another. If the withdrawal succeeds and the deposit fails, the money does not disappear into nothing in real life, but the database will say it did. That is a serious problem.</p>
+        <p>This kind of problem, where a partial completion leaves the database in a state that does not match reality, is the core problem that transactions are designed to solve.</p>
+        <p>Chapter 16 introduces transactions as the tool databases use to keep changes reliable, consistent, and safe. Students will learn what data integrity means, why some changes belong together, how transactions work, what commit and rollback do, and what atomicity means at an introductory level. The chapter will also introduce consistency, concurrency at a basic conceptual level, and worked examples drawn from realistic systems: bank transfers, course enrollments, online orders, library checkouts, and appointment reservations.</p>
+        <div class="callout callout-note">
+          <div class="callout-title">Note for New Students</div>
+          <p>By the end of this chapter, you should understand that reliable database systems are not just technically correct. They are designed to protect the truth of the data even when operations fail, connections drop, or multiple users interact with the same records at the same time.</p>
+        </div>
+      </section>
+
+      <!-- 16.1 -->
+      <section class="section" id="s16-1">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.1</span>
+          <h2 class="section-title">What Data Integrity Means</h2>
+        </div>
+
+        <p><strong>Data integrity</strong> means that the data stored in a database accurately and consistently represents the reality it is supposed to describe.</p>
+        <p>That sentence sounds simple, but think about what it requires.</p>
+        <p>A school's student information system stores enrollment records. If a student is enrolled in a course, the database should say so. If the student drops the course, the enrollment record should be removed or marked inactive. If the student never enrolled, there should be no enrollment record. The data should match the real state of enrollment at all times.</p>
+        <p>A hospital's appointment system stores patient appointments. If a patient has a confirmed appointment with a specific doctor at a specific time, the database should reflect that. If the appointment is cancelled, the record should change. No two patients should be recorded as having the same appointment slot with the same doctor at the same time.</p>
+        <p>A library checkout system stores which resources are currently on loan. If a book is checked out, the loan record should exist, and the resource status should indicate unavailability. When the book is returned, the loan should be closed and the resource should be available again.</p>
+        <p>In all of these cases, data integrity means the database tells the truth. It does not just mean the SQL was written correctly. It means the data reflects reality accurately, completely, and consistently at every moment.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">How Data Integrity Breaks Down</div>
+          <div class="components-grid">
+            <div class="component-card">
+              <div class="component-card-name">Missing Data</div>
+              <p>Happens when a record that should exist does not. If a student enrolled in a course but no enrollment record was created, the database is missing information.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Incorrect Data</div>
+              <p>Happens when a record exists but contains wrong values. If a student's grade is recorded as 95 when the actual grade was 59, the data is inaccurate.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Inconsistent Data</div>
+              <p>Happens when two parts of the database disagree with each other, such as one table saying a student is enrolled while another says the same student has no active enrollments.</p>
+            </div>
+            <div class="component-card">
+              <div class="component-card-name">Orphaned Data</div>
+              <p>Happens when a record refers to something that no longer exists, such as a loan record referencing a resource that has been deleted.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-positive">
+          <div class="callout-title">Central Idea</div>
+          <p><strong>Partially complete data</strong> happens when a multi-step operation is interrupted before all steps finish. This is the problem that transactions are primarily designed to solve. Data integrity is not a single feature of a database, it is the result of careful design choices, enforced constraints, validation rules, well-written queries, controlled access, and reliable transaction handling. Chapter 16 focuses on the transaction side: how databases ensure that multi-step operations are completed correctly, or not at all.</p>
+        </div>
+      </section>
+
+      <!-- 16.2 -->
+      <section class="section" id="s16-2">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.2</span>
+          <h2 class="section-title">Why Some Changes Belong Together</h2>
+        </div>
+
+        <p>Consider a library resource checkout. When a patron checks out a book, two things need to happen:</p>
+        <ol style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+          <li style="margin-bottom: 0.5rem;">A loan record is created, recording who borrowed the book, which book it is, and when the loan started.</li>
+          <li>The book's availability status is updated to indicate it is on loan.</li>
+        </ol>
+        <p>Both changes must succeed. If the loan record is created but the availability status is not updated, the database says the book is available when it is actually on loan. Another patron could try to borrow the same book, or the system could report the book as available in search results when it is not. The data no longer matches reality.</p>
+        <p>If the availability status is updated but the loan record is not created, the database says the book is on loan but does not say to whom. The library cannot track who has the book, or when it is due back.</p>
+        <p>These two changes belong together. Either both happen, or neither should happen.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">A More Dramatic Example: A Bank Transfer</div>
+          <p>A customer transfers 500 from their savings account to their checking account. The database must:</p>
+          <ol style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+            <li style="margin-bottom: 0.5rem;">Subtract 500 from the savings account balance.</li>
+            <li>Add 500 to the checking account balance.</li>
+          </ol>
+          <p>If step one succeeds and step two fails, the savings account loses 500 and the checking account gains nothing. The customer is missing 500. That is not a minor data inconsistency, it is a serious error that causes real harm.</p>
+          <p>If step two succeeds and step one fails, the checking account gains 500 and the savings account is unchanged. The bank now has a record of money appearing from nowhere. That is also a serious problem.</p>
+          <p>The only acceptable outcomes are: both changes succeed together, or neither change is applied at all.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">A Third Example: Course Enrollment</div>
+          <p>Consider a course enrollment system. When a student enrolls in a course:</p>
+          <ol style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+            <li style="margin-bottom: 0.5rem;">An enrollment record is created linking the student and the course.</li>
+            <li style="margin-bottom: 0.5rem;">The course's current enrollment count is updated.</li>
+            <li>If the course has a waitlist, the student's position on the waitlist may be removed.</li>
+          </ol>
+          <p>If only some of these steps succeed, the enrollment count may not match the actual number of enrolled students, or a student may appear on the waitlist of a course they are also enrolled in.</p>
+          <p>These examples all share the same structure. Multiple database changes are logically connected to a single real-world action. The changes must be treated as a unit. That is what a transaction is for.</p>
+        </div>
+      </section>
+
+      <!-- 16.3 -->
+      <section class="section" id="s16-3">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.3</span>
+          <h2 class="section-title">Transactions</h2>
+        </div>
+
+        <p>A <strong>transaction</strong> is a sequence of database operations treated as a single unit of work. Either all of the operations in the transaction succeed and are saved, or none of them are applied to the database at all.</p>
+        <p>Transactions give databases a way to handle multi-step operations safely. Instead of executing each <code>INSERT</code>, <code>UPDATE</code>, or <code>DELETE</code> independently and hoping nothing goes wrong in between, the database groups the operations into a transaction, executes them, and then either commits the entire group or rolls it all back.</p>
+        <p>The basic idea is simple:</p>
+        <ol style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+          <li style="margin-bottom: 0.5rem;">Begin the transaction.</li>
+          <li style="margin-bottom: 0.5rem;">Execute the database operations.</li>
+          <li style="margin-bottom: 0.5rem;">If everything succeeded, commit: make the changes permanent.</li>
+          <li>If anything went wrong, rollback: undo all changes and leave the database as it was before the transaction started.</li>
+        </ol>
+
+        <p>Here is what a transaction looks like in SQL:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — A Successful Transaction</div>
+          <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">UPDATE</span> accounts
+<span class="kw">SET</span> balance = balance - 500
+<span class="kw">WHERE</span> account_id = 101;
+
+<span class="kw">UPDATE</span> accounts
+<span class="kw">SET</span> balance = balance + 500
+<span class="kw">WHERE</span> account_id = 202;
+
+<span class="kw">COMMIT</span>;</code></pre>
+        </div>
+
+        <p>If both <code>UPDATE</code> statements succeed, the <code>COMMIT</code> saves both changes permanently. The database now reflects the completed transfer.</p>
+        <p>If anything goes wrong between <code>BEGIN TRANSACTION</code> and <code>COMMIT</code>, the database can roll back:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — A Rolled-Back Transaction</div>
+          <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">UPDATE</span> accounts
+<span class="kw">SET</span> balance = balance - 500
+<span class="kw">WHERE</span> account_id = 101;
+
+<span class="cm">-- Something goes wrong here</span>
+
+<span class="kw">ROLLBACK</span>;</code></pre>
+        </div>
+
+        <p>After the <code>ROLLBACK</code>, the savings account balance is exactly what it was before the transaction started. No change is visible to other parts of the system. The database is as if the transaction never began.</p>
+
+        <div class="callout callout-note">
+          <div class="callout-title">A Note on Different Database Systems</div>
+          <p>Not every database system requires an explicit <code>BEGIN TRANSACTION</code>. Some systems run each statement as its own automatic transaction by default, meaning each statement is automatically committed unless told otherwise. SQLite, which is used in this textbook for examples, supports explicit <code>BEGIN TRANSACTION</code>, <code>COMMIT</code>, and <code>ROLLBACK</code>. Other common systems, such as PostgreSQL and MySQL, also support explicit transactions. It is worth noting that even a single <code>INSERT</code>, <code>UPDATE</code>, or <code>DELETE</code> statement is technically a transaction in most database systems, it either fully succeeds or fully fails. But when multiple statements need to behave as a unit, explicit transaction control is required.</p>
+        </div>
+      </section>
+
+      <!-- 16.4 -->
+      <section class="section" id="s16-4">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.4</span>
+          <h2 class="section-title">Commit</h2>
+        </div>
+
+        <p><strong>Commit</strong> is the operation that makes a transaction's changes permanent. Once a transaction is committed, its changes are saved to the database and become visible to other users and operations.</p>
+        <p>Before a commit, the changes made inside a transaction may be visible to the session that started the transaction, but other database connections typically cannot see the uncommitted changes. This is an important safety feature. Other parts of the system continue working with the last committed state of the database while the transaction is in progress.</p>
+        <p>Once commit happens:</p>
+        <ul style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+          <li style="margin-bottom: 0.4rem;">The changes are written to permanent storage.</li>
+          <li style="margin-bottom: 0.4rem;">Other users and processes can see the updated data.</li>
+          <li>The changes cannot be undone with a rollback.</li>
+        </ul>
+
+        <p>In SQL, committing is as simple as:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Commit</div>
+          <pre><code><span class="kw">COMMIT</span>;</code></pre>
+        </div>
+
+        <p>Some systems also accept:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Commit, Alternate Form</div>
+          <pre><code><span class="kw">COMMIT TRANSACTION</span>;</code></pre>
+        </div>
+
+        <p>A commit should only happen after all steps in the transaction have been verified to succeed. Committing too early, before all steps have completed, defeats the purpose of the transaction. If you commit after the first of two required updates and then the second update fails, you have already permanently applied a partial change with no way to roll it back.</p>
+        <p>Good application code checks for errors after each step before committing. If any step fails, the code issues a rollback instead of a commit.</p>
+        <p>Here is a simplified example showing how application logic might handle this:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>Pseudocode — Checking Before Committing</div>
+          <pre><code>Begin transaction
+    Try: subtract from account A
+    If error: rollback and stop
+
+    Try: add to account B
+    If error: rollback and stop
+
+    Commit</code></pre>
+        </div>
+
+        <p>The commit only happens if both steps succeed without errors. If either step fails, the rollback is triggered and neither change is saved.</p>
+      </section>
+
+      <!-- 16.5 -->
+      <section class="section" id="s16-5">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.5</span>
+          <h2 class="section-title">Rollback</h2>
+        </div>
+
+        <p><strong>Rollback</strong> is the operation that undoes all changes made during a transaction that has not yet been committed. When a rollback occurs, the database returns to the state it was in before the transaction began.</p>
+        <p>Rollback is a powerful safety mechanism. It means that a transaction can begin, make several changes, discover a problem, and then cancel everything without leaving the database in a partially changed state.</p>
+        <p>In SQL:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Rollback</div>
+          <pre><code><span class="kw">ROLLBACK</span>;</code></pre>
+        </div>
+
+        <p>Rollback can happen in several situations:</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Application Code Triggers a Rollback</div>
+          <p>If the application detects an error, such as a failed constraint check, an unexpected value, or a programming error, it can explicitly issue a <code>ROLLBACK</code> command.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Database Engine Triggers an Automatic Rollback</div>
+          <p>Some systems automatically roll back a transaction if they detect a violation of a constraint or integrity rule that cannot be resolved.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">A Connection Is Lost</div>
+          <p>If the application or network connection drops before a transaction is committed, most database systems automatically roll back the incomplete transaction. The database does not assume the transaction was successful just because it was started.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">A System Failure Occurs</div>
+          <p>If the database server crashes in the middle of a transaction, the recovery process after restart will roll back any transactions that had not yet been committed. The database is restored to its last fully committed state.</p>
+        </div>
+
+        <p>Rollback is not an error message or a punishment. It is a feature. It means the database can safely attempt operations without the risk of leaving data permanently broken if something goes wrong.</p>
+
+        <div class="callout callout-warn">
+          <div class="callout-title">Why This Matters</div>
+          <p>Consider what happens without rollback capability. If a bank transfer begins, subtracts from the savings account, and then fails before adding to the checking account, there is no automatic way to undo the subtraction. A developer would have to manually find the affected record and fix it. If many such failures occur, some might go unnoticed. Customers lose money. The bank's records become unreliable. With transactions and rollback, the system automatically handles partial failures. The savings account is not affected unless the entire transfer succeeds.</p>
+        </div>
+      </section>
+
+      <!-- 16.6 -->
+      <section class="section" id="s16-6">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.6</span>
+          <h2 class="section-title">Atomicity at an Introductory Level</h2>
+        </div>
+
+        <p>The word <strong>atomic</strong> comes from the Greek word for indivisible. An atomic operation is one that cannot be partially completed. Either it happens entirely, or it does not happen at all.</p>
+        <p>In database systems, <strong>atomicity</strong> is the property that guarantees a transaction is treated as a single indivisible unit. All of the operations in the transaction succeed together, or none of them are applied.</p>
+        <p>Atomicity is the first and most fundamental guarantee of reliable transactions.</p>
+
+        <div class="callout callout-positive">
+          <div class="callout-title">A Helpful Comparison</div>
+          <p>Think of atomicity like a light switch. A light switch is either on or off. There is no state where the switch is halfway on, flickering between states, or on for some lights but not others. Atomicity gives database transactions the same binary guarantee: committed, or not committed.</p>
+        </div>
+
+        <p>Without atomicity, a transaction might:</p>
+        <ul style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+          <li style="margin-bottom: 0.4rem;">Complete three of five steps and stop.</li>
+          <li style="margin-bottom: 0.4rem;">Apply changes to some tables but not others.</li>
+          <li style="margin-bottom: 0.4rem;">Write partial data that violates foreign key constraints or business rules.</li>
+          <li>Leave related records in disagreement with each other.</li>
+        </ul>
+        <p>With atomicity, none of those partial states can persist. The transaction either reaches <code>COMMIT</code> with all steps completed, or the entire thing is rolled back.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">A Worked Example With Three Steps</div>
+          <p>A student completes an online course registration. The system must:</p>
+          <ol style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+            <li style="margin-bottom: 0.5rem;">Insert a row into the <code>Enrollments</code> table linking the student and the course.</li>
+            <li style="margin-bottom: 0.5rem;">Update the <code>Courses</code> table to increment the current enrollment count.</li>
+            <li>Insert a confirmation record into the <code>Notifications</code> table so the student receives a confirmation email.</li>
+          </ol>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — A Three-Step Atomic Transaction</div>
+            <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">INSERT INTO</span> Enrollments (student_id, course_id, enrolled_date)
+<span class="kw">VALUES</span> (1042, 301, <span class="str">'2024-09-01'</span>);
+
+<span class="kw">UPDATE</span> Courses
+<span class="kw">SET</span> current_enrollment = current_enrollment + 1
+<span class="kw">WHERE</span> course_id = 301;
+
+<span class="kw">INSERT INTO</span> Notifications (student_id, message, sent_date)
+<span class="kw">VALUES</span> (1042, <span class="str">'You are enrolled in Course 301.'</span>, <span class="str">'2024-09-01'</span>);
+
+<span class="kw">COMMIT</span>;</code></pre>
+          </div>
+
+          <p>If all three statements succeed, the commit saves all three changes. The student is enrolled, the count is accurate, and the notification is queued.</p>
+          <p>If the second <code>INSERT</code> fails because the <code>Notifications</code> table has a problem, the rollback cancels the entire transaction. The enrollment record is removed, the course count is unchanged, and no notification exists. The database is exactly as it was before.</p>
+        </div>
+
+        <p>Atomicity does not mean the operations happen instantaneously. They happen in sequence. Atomicity means that, from the perspective of the final saved state of the database, either all of the changes exist or none of them do. Intermediate states during execution are temporary and private to the transaction.</p>
+      </section>
+
+      <!-- 16.7 -->
+      <section class="section" id="s16-7">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.7</span>
+          <h2 class="section-title">Consistency and Rules</h2>
+        </div>
+
+        <p><strong>Consistency</strong> in database systems means that a transaction takes the database from one valid state to another valid state. A valid state is one in which all defined rules, constraints, and integrity conditions are satisfied.</p>
+        <p>Before a transaction begins, the database should be in a consistent state. After the transaction commits, the database should still be in a consistent state. The transaction itself may temporarily create intermediate states that violate some rules while in progress, but those intermediate states are hidden inside the transaction. They are never committed to the database as a permanent result.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">What Counts as a Consistent State</div>
+          <ul style="margin-left: 1.5rem; max-width: var(--col); color: var(--ink-mid); margin-bottom: 1.1rem;">
+            <li style="margin-bottom: 0.4rem;">All primary key values are unique.</li>
+            <li style="margin-bottom: 0.4rem;">All foreign key references point to records that actually exist.</li>
+            <li style="margin-bottom: 0.4rem;">All required fields contain values.</li>
+            <li style="margin-bottom: 0.4rem;">All check constraints are satisfied.</li>
+            <li style="margin-bottom: 0.4rem;">All unique constraints are satisfied.</li>
+            <li>Business rules defined in the database are respected.</li>
+          </ul>
+        </div>
+
+        <p>For example, a database might have a rule that a course cannot have more enrolled students than its maximum capacity. This might be expressed as a check constraint:</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — A Check Constraint</div>
+          <pre><code><span class="kw">CHECK</span> (current_enrollment <= max_capacity)</code></pre>
+        </div>
+
+        <p>If a transaction tries to enroll a student in a course that has already reached its maximum, the database will reject the transaction. The constraint prevents the database from entering an inconsistent state where enrollment exceeds capacity.</p>
+        <p>Another example: a foreign key constraint ensures that every enrollment record references a valid student and a valid course. If a transaction tries to insert an enrollment for a student ID that does not exist in the <code>Students</code> table, the foreign key constraint rejects it. The database will not allow an enrollment to reference a non-existent student.</p>
+        <p>Consistency depends on constraints being defined and enforced. It also depends on application code following business rules that cannot easily be expressed as database constraints. For example, a database constraint cannot easily enforce a rule like "students may not enroll in more than six courses per semester." That rule might be enforced in application code before the transaction is submitted.</p>
+
+        <div class="callout callout-note">
+          <div class="callout-title">How Atomicity and Consistency Relate</div>
+          <p>Atomicity ensures that transactions do not leave partial changes behind. Consistency ensures that the changes that are saved are valid. Together, they protect the reliability of the database.</p>
+        </div>
+      </section>
+
+      <!-- 16.8 -->
+      <section class="section" id="s16-8">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.8</span>
+          <h2 class="section-title">Concurrency at an Introductory Level</h2>
+        </div>
+
+        <p>Most databases used in real systems are not used by one person at a time. Multiple users connect, query, insert, update, and delete data simultaneously. This creates a situation called <strong>concurrency</strong>: many operations happening at the same time against the same database.</p>
+        <p>Concurrency creates challenges for data integrity. When two transactions are running at the same time and accessing or modifying the same data, problems can occur if the database does not manage concurrent access carefully.</p>
+
+        <div class="callout callout-warn">
+          <div class="callout-title">Scope of This Section</div>
+          <p>This section introduces concurrency at a conceptual level. The details of concurrency management, locking strategies, and isolation levels are advanced topics beyond this textbook. But students should understand the basic problem so they appreciate why transaction management matters even in single-operation systems.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Lost Update Problem</div>
+          <p>This occurs when two transactions read the same value, both make changes based on that value, and then both write their results back. The second write overwrites the first.</p>
+          <p>Imagine two library staff members updating the same resource record at the same moment. Staff member A reads the resource record, sees its status as Available, and begins updating it to On Loan. Staff member B also reads the resource record, also sees Available, and begins a different update. When both finish and write their changes, one of the updates will overwrite the other. One change will be silently lost.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Dirty Read Problem</div>
+          <p>This occurs when one transaction reads data that another transaction has modified but not yet committed. If the second transaction is later rolled back, the first transaction was working with data that was never actually saved, producing incorrect results.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Inconsistent Read Problem</div>
+          <p>This occurs when a transaction reads the same data twice during its execution and gets different values, because another transaction modified and committed the data between the two reads.</p>
+        </div>
+
+        <p>Databases handle concurrency through <strong>locking</strong> and <strong>isolation levels</strong>. Locking prevents multiple transactions from modifying the same data at exactly the same moment. Isolation levels define how visible one transaction's uncommitted changes are to other transactions.</p>
+        <p>For the purposes of this chapter, the key idea is this: databases in real systems must be designed and configured to handle multiple simultaneous users safely. Transactions are the mechanism that makes it possible to reason about groups of changes as units. Locking and isolation mechanisms make it possible for those transactions to coexist without corrupting each other's work.</p>
+        <p>Even in small applications where concurrency seems unlikely, it is worth designing transactions correctly. Web applications can receive many simultaneous requests. Shared library systems may have multiple staff members or students accessing the same records. Correct transaction design is a habit worth building from the beginning.</p>
+      </section>
+
+      <!-- 16.9 -->
+      <section class="section" id="s16-9">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.9</span>
+          <h2 class="section-title">Transaction Examples</h2>
+        </div>
+
+        <p>This section walks through several worked examples of transactions drawn from realistic information systems. For each example, the relevant steps are identified, the SQL is shown, and the behavior under failure is discussed.</p>
+
+        <div class="example-block">
+          <div class="example-header"><span class="example-header-label">Example 1 — Library Book Checkout</span></div>
+          <div class="example-body">
+            <p><span class="example-tag">Scenario.</span>A patron checks out a library book. The system must record the loan and update the book's availability.</p>
+            <p><span class="example-tag">Steps.</span>Insert a row into the <code>Loans</code> table, then update the <code>Resources</code> table to set availability to unavailable.</p>
+
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-dot"></span>SQL — Library Checkout Transaction</div>
+              <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">INSERT INTO</span> Loans (resource_id, user_id, loan_date, due_date)
+<span class="kw">VALUES</span> (5023, 1088, <span class="str">'2024-11-01'</span>, <span class="str">'2024-11-15'</span>);
+
+<span class="kw">UPDATE</span> Resources
+<span class="kw">SET</span> available = 0
+<span class="kw">WHERE</span> resource_id = 5023;
+
+<span class="kw">COMMIT</span>;</code></pre>
+            </div>
+
+            <p><span class="example-tag">If something goes wrong:</span>The rollback removes the loan record and the resource remains marked as available. No partial checkout state exists.</p>
+            <p><span class="example-tag">Note on design.</span>The <code>available</code> field in the <code>Resources</code> table is derived from loan data. In a more sophisticated system, availability might be determined by querying the <code>Loans</code> table rather than storing it separately, a design that avoids update anomalies. But for illustration, the example above shows how the two operations are logically linked.</p>
+          </div>
+        </div>
+
+        <div class="example-block">
+          <div class="example-header"><span class="example-header-label">Example 2 — Bank Account Transfer</span></div>
+          <div class="example-body">
+            <p><span class="example-tag">Scenario.</span>A customer transfers 200 from their savings account to their checking account.</p>
+            <p><span class="example-tag">Steps.</span>Reduce the savings account balance by 200, then increase the checking account balance by 200.</p>
+
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-dot"></span>SQL — Bank Transfer Transaction</div>
+              <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">UPDATE</span> Accounts
+<span class="kw">SET</span> balance = balance - 200
+<span class="kw">WHERE</span> account_id = 3301
+  <span class="kw">AND</span> account_type = <span class="str">'savings'</span>;
+
+<span class="kw">UPDATE</span> Accounts
+<span class="kw">SET</span> balance = balance + 200
+<span class="kw">WHERE</span> account_id = 3302
+  <span class="kw">AND</span> account_type = <span class="str">'checking'</span>;
+
+<span class="kw">COMMIT</span>;</code></pre>
+            </div>
+
+            <p><span class="example-tag">If the savings account has insufficient funds:</span>The first update would complete, but application code or a check constraint could detect the negative balance and issue a rollback before the commit. The savings account balance is restored and no transfer occurs.</p>
+            <p><span class="example-tag">If the second update fails:</span>The rollback cancels the reduction of the savings account. No money is lost.</p>
+            <p><span class="example-tag">Why this matters.</span>Financial systems were among the earliest use cases for reliable transaction support. The correctness of financial data depends directly on atomic, consistent transaction handling.</p>
+          </div>
+        </div>
+
+        <div class="example-block">
+          <div class="example-header"><span class="example-header-label">Example 3 — Student Course Enrollment</span></div>
+          <div class="example-body">
+            <p><span class="example-tag">Scenario.</span>A student enrolls in a course. The system must create the enrollment record and update the course's current enrollment count.</p>
+            <p><span class="example-tag">Steps.</span>Check that the course has available seats, insert an enrollment record, then increment the course enrollment count.</p>
+
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-dot"></span>SQL — Course Enrollment Transaction</div>
+              <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">INSERT INTO</span> Enrollments (student_id, course_id, enrolled_date, status)
+<span class="kw">VALUES</span> (4451, 201, <span class="str">'2024-08-15'</span>, <span class="str">'Active'</span>);
+
+<span class="kw">UPDATE</span> Courses
+<span class="kw">SET</span> current_enrollment = current_enrollment + 1
+<span class="kw">WHERE</span> course_id = 201;
+
+<span class="kw">COMMIT</span>;</code></pre>
+            </div>
+
+            <p><span class="example-tag">If the course is at capacity:</span>A check constraint on the <code>Courses</code> table rejects the <code>UPDATE</code>, or the application detects the capacity limit and issues a rollback. The enrollment record is removed and the count remains unchanged.</p>
+            <p><span class="example-tag">If the student is already enrolled:</span>A uniqueness constraint on the <code>Enrollments</code> table rejects the duplicate <code>INSERT</code>. The rollback cancels the transaction. The enrollment count is not changed.</p>
+          </div>
+        </div>
+
+        <div class="example-block">
+          <div class="example-header"><span class="example-header-label">Example 4 — Online Order Placement</span></div>
+          <div class="example-body">
+            <p><span class="example-tag">Scenario.</span>A customer places an order for a product. The system must create the order record, add order line items, and reduce the product inventory.</p>
+            <p><span class="example-tag">Steps.</span>Insert an order record, insert order line items, then reduce the available quantity in inventory.</p>
+
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-dot"></span>SQL — Online Order Transaction</div>
+              <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">INSERT INTO</span> Orders (customer_id, order_date, status)
+<span class="kw">VALUES</span> (7721, <span class="str">'2024-11-05'</span>, <span class="str">'Pending'</span>);
+
+<span class="kw">INSERT INTO</span> Order_Items (order_id, product_id, quantity, unit_price)
+<span class="kw">VALUES</span> (LAST_INSERT_ID(), 8801, 2, 24.99);
+
+<span class="kw">UPDATE</span> Inventory
+<span class="kw">SET</span> quantity_available = quantity_available - 2
+<span class="kw">WHERE</span> product_id = 8801;
+
+<span class="kw">COMMIT</span>;</code></pre>
+            </div>
+
+            <p><span class="example-tag">Note on <code>LAST_INSERT_ID()</code>.</span>This function retrieves the auto-generated primary key from the most recently inserted row. Its exact syntax varies by database system. In SQLite, the equivalent is <code>last_insert_rowid()</code>.</p>
+            <p><span class="example-tag">If the inventory is insufficient:</span>Application code detects that the requested quantity exceeds available stock and issues a rollback. No order is created.</p>
+            <p><span class="example-tag">If payment is also part of the transaction:</span>A complete e-commerce transaction might include a step to record the payment authorization. If payment fails, the entire transaction rolls back. No order exists and inventory is unchanged.</p>
+          </div>
+        </div>
+
+        <div class="example-block">
+          <div class="example-header"><span class="example-header-label">Example 5 — Appointment Scheduling</span></div>
+          <div class="example-body">
+            <p><span class="example-tag">Scenario.</span>A patient schedules an appointment with a doctor. The system must create the appointment record and update the doctor's schedule to mark the time slot as occupied.</p>
+            <p><span class="example-tag">Steps.</span>Insert an appointment record, then update the schedule to mark the time slot as unavailable.</p>
+
+            <div class="code-block">
+              <div class="code-label"><span class="code-label-dot"></span>SQL — Appointment Scheduling Transaction</div>
+              <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">INSERT INTO</span> Appointments (patient_id, doctor_id, appointment_date, time_slot, status)
+<span class="kw">VALUES</span> (9901, 112, <span class="str">'2024-12-10'</span>, <span class="str">'14:00'</span>, <span class="str">'Scheduled'</span>);
+
+<span class="kw">UPDATE</span> Doctor_Schedule
+<span class="kw">SET</span> slot_available = 0
+<span class="kw">WHERE</span> doctor_id = 112
+  <span class="kw">AND</span> schedule_date = <span class="str">'2024-12-10'</span>
+  <span class="kw">AND</span> time_slot = <span class="str">'14:00'</span>;
+
+<span class="kw">COMMIT</span>;</code></pre>
+            </div>
+
+            <p><span class="example-tag">If the time slot was already taken:</span>A uniqueness constraint on <code>Doctor_Schedule</code> rejects the update, or returns an affected row count of zero. Application code detects this and issues a rollback. The appointment record is removed. The patient is notified that the slot is no longer available.</p>
+            <p><span class="example-tag">Why this scenario is sensitive.</span>In a concurrent system with many patients booking simultaneously, two patients might attempt to book the same slot at the same moment. Proper locking and isolation levels ensure that only one succeeds and the other receives a clear failure response. This is one of the most common real-world transaction scenarios.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 16.10 -->
+      <section class="section" id="s16-10">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">16.10</span>
+          <h2 class="section-title">Designing for Reliable Changes</h2>
+        </div>
+
+        <p>Designing a database system for reliable changes means thinking about transactions from the beginning, not adding them as an afterthought. Students who understand transactions early will write better queries, design better tables, and build more trustworthy systems.</p>
+        <p>Here are the key design habits that support reliable transaction behavior.</p>
+
+        <div class="habit-card">
+          <div class="habit-card-title">Identify Which Operations Belong Together</div>
+          <p>Before writing SQL, think about which real-world actions require multiple database steps. Make a list. For each action, ask: what must all succeed together? Those steps belong in a single transaction.</p>
+          <p>For a library checkout: the loan creation and the availability update belong together. For a money transfer: both balance changes belong together. For a course enrollment: the enrollment record and the seat count update belong together.</p>
+        </div>
+
+        <div class="habit-card">
+          <div class="habit-card-title">Keep Transactions Short</div>
+          <p>Long transactions hold locks on data for extended periods. This can slow down other users who need access to the same records. A transaction should do only what is necessary, and commit or rollback as quickly as possible.</p>
+          <p>Avoid putting user-facing pauses inside a transaction. For example, do not begin a transaction, then wait for a user to fill out a form, then commit after they submit. The database should not hold the transaction open while waiting for human interaction. Start the transaction only when all inputs are ready.</p>
+        </div>
+
+        <div class="habit-card">
+          <div class="habit-card-title">Check for Errors at Each Step</div>
+          <p>Application code should check whether each database operation succeeded before moving to the next step. If any step returns an error, the code should issue a rollback immediately rather than trying to continue. This is especially important for operations that might fail due to constraint violations, missing records, insufficient inventory, or business rule violations.</p>
+        </div>
+
+        <div class="habit-card">
+          <div class="habit-card-title">Do Not Commit Partial Work Intentionally</div>
+          <p>Some developers are tempted to commit after each step of a multi-step operation to avoid losing progress. This defeats the purpose of transactions. If the system commits after step two of five and then fails at step three, the database contains permanent partial work with no way to roll it back automatically.</p>
+          <p>Commit only when all steps are complete. If you are worried about a very long sequence of steps, reconsider whether the sequence can be shortened or broken into smaller logical units with their own complete transactions.</p>
+        </div>
+
+        <div class="habit-card">
+          <div class="habit-card-title">Use Constraints to Support Transaction Integrity</div>
+          <p>Constraints such as primary keys, foreign keys, uniqueness constraints, and check constraints help transactions fail cleanly when they encounter violations. A transaction that fails due to a constraint violation produces a clear error. The rollback removes the partial changes. The constraint did its job.</p>
+          <p>Without constraints, a bad transaction might succeed and commit data that violates business rules, integrity requirements, or relational structure. Constraints are a first line of defense. Transactions are the second.</p>
+        </div>
+
+        <div class="habit-card">
+          <div class="habit-card-title">Plan for Failure</div>
+          <p>Good database design assumes that things will go wrong. Connections drop, servers restart unexpectedly, users provide unexpected input, business rules change. Design transactions to handle failure gracefully. The goal is that after any failure, at any point in the process, the database contains only data that represents a complete and valid state.</p>
+          <p>The question to ask is: if this transaction is interrupted halfway through, what state does the database end up in? The answer should always be: the state it was in before the transaction started.</p>
+        </div>
+
+        <div class="habit-card">
+          <div class="habit-card-title">Document Transaction Boundaries</div>
+          <p>When writing documentation or specifications for a database system, explicitly describe which operations are grouped into transactions. This makes the system easier to maintain, debug, and extend. Future developers who work on the system will understand which steps must stay together, and why.</p>
+        </div>
+      </section>
+
+    </article><!-- end content-body -->
+
+    <!-- ─── Back Matter ───────────────────────────────── -->
+    <div class="back-matter">
+
+      <!-- Summary -->
+      <div class="back-section" id="summary">
+        <div class="back-section-title">Chapter Summary</div>
+        <ul class="summary-points">
+          <li><strong>Data integrity</strong> means that the database accurately and consistently represents the reality it is designed to describe. Integrity breaks down through missing data, incorrect data, inconsistent data, orphaned data, and partially completed operations.</li>
+          <li>Some real-world actions require multiple database operations that must all succeed together, or all fail together. A bank transfer, a library checkout, a course enrollment, an appointment booking, and an online order are all examples of multi-step operations where partial completion causes serious problems.</li>
+          <li>A <strong>transaction</strong> is a sequence of database operations treated as a single unit of work. Either all operations are committed and made permanent, or none of them are applied. The key SQL commands for explicit transaction control are <code>BEGIN TRANSACTION</code>, <code>COMMIT</code>, and <code>ROLLBACK</code>.</li>
+          <li><strong>Commit</strong> makes a transaction's changes permanent and visible to other users. <strong>Rollback</strong> undoes all changes made during a transaction that has not yet been committed, returning the database to its state before the transaction began.</li>
+          <li><strong>Atomicity</strong> is the property that guarantees a transaction is treated as an indivisible unit, all operations succeed together or none of them are applied. <strong>Consistency</strong> means that a transaction takes the database from one valid state to another valid state, satisfying all constraints and rules. Together, atomicity and consistency protect the integrity of the database.</li>
+          <li><strong>Concurrency</strong> occurs when multiple transactions run simultaneously against the same database, creating risks such as lost updates, dirty reads, and inconsistent reads. Databases manage concurrency through locking and isolation levels, which are advanced topics, but students should understand the basic problem and the importance of correct transaction design even in systems that seem unlikely to have concurrent users.</li>
+          <li>Designing for reliable changes means identifying which operations belong together, keeping transactions short, checking for errors at each step, never committing partial work, using constraints to support transaction integrity, planning for failure, and documenting transaction boundaries.</li>
+        </ul>
+      </div>
+
+      <!-- Key Terms -->
+      <div class="back-section" id="key-terms">
+        <div class="back-section-title">Key Terms</div>
+        <div class="key-terms-grid">
+          <div class="term-card">
+            <div class="term-word">Data Integrity</div>
+            <p class="term-def">The property of a database in which the stored data accurately, completely, and consistently represents the reality it is designed to describe.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Transaction</div>
+            <p class="term-def">A sequence of database operations treated as a single unit of work. All operations either succeed and are committed, or the entire set of changes is rolled back.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">BEGIN TRANSACTION</div>
+            <p class="term-def">The SQL command that starts an explicit transaction.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">COMMIT</div>
+            <p class="term-def">The SQL command that makes a transaction's changes permanent and visible to other users. Once committed, changes cannot be undone by a rollback.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">ROLLBACK</div>
+            <p class="term-def">The SQL command that undoes all changes made during a transaction that has not yet been committed. The database is returned to the state it was in before the transaction began.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Atomicity</div>
+            <p class="term-def">The property that guarantees a transaction is treated as an indivisible unit. Either all operations in the transaction succeed and are committed, or none of them are applied.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Consistency</div>
+            <p class="term-def">The property that guarantees a transaction takes the database from one valid state to another valid state, satisfying all defined constraints and rules.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Concurrency</div>
+            <p class="term-def">The situation in which multiple transactions run simultaneously against the same database. Concurrency requires careful management to prevent data integrity problems.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Lost Update</div>
+            <p class="term-def">A concurrency problem in which two transactions read the same data, both make changes, and the second write overwrites the first, silently discarding one of the updates.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Dirty Read</div>
+            <p class="term-def">A concurrency problem in which one transaction reads data that another transaction has modified but not yet committed.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Locking</div>
+            <p class="term-def">A mechanism databases use to prevent multiple transactions from modifying the same data at exactly the same moment, reducing concurrency-related integrity problems.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Isolation Level</div>
+            <p class="term-def">A setting that controls how visible one transaction's uncommitted changes are to other concurrent transactions.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">Partial Completion</div>
+            <p class="term-def">A state in which some but not all steps of a multi-step operation have been applied. Transactions are designed to prevent partial completion from becoming permanent.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transaction Scenario Practice -->
+      <div class="back-section" id="scenario-practice">
+        <div class="back-section-title">Transaction Scenario Practice</div>
+        <p class="practice-intro">Read each scenario carefully. Identify the database operations that should be grouped into a transaction. Explain what would go wrong if the operations were not grouped together.</p>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Scenario A</div>
+          <p>A hospital patient checks in for an appointment. The system must mark the appointment status as In Progress and update the waiting room display to show the patient has been called.</p>
+          <ul class="questions-list">
+            <li>What are the two operations that should be grouped into a transaction?</li>
+            <li>What would happen if the appointment status was updated but the waiting room display was not?</li>
+            <li>What would happen if the waiting room display was updated but the appointment status was not?</li>
+          </ul>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Scenario B</div>
+          <p>A student returns a library book. The system must close the loan record by recording the return date and update the book's status back to available.</p>
+          <ul class="questions-list">
+            <li>What are the two operations that should be grouped into a transaction?</li>
+            <li>What would happen if the loan was closed but the availability was not updated?</li>
+            <li>What would happen if the availability was updated but the loan was not closed?</li>
+          </ul>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Scenario C</div>
+          <p>A company processes a payroll run. For each employee, the system must record the payment amount in a payroll log table and update the employee's year-to-date earnings total.</p>
+          <ul class="questions-list">
+            <li>What operations belong together for each employee's payment record?</li>
+            <li>What would go wrong if the payroll log entry was written but the year-to-date total was not updated?</li>
+            <li>How does this scenario scale when there are 200 employees? Should all 200 employees be in one transaction, or in 200 separate transactions? Discuss the tradeoffs.</li>
+          </ul>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Scenario D</div>
+          <p>An online ticket reservation system allows customers to reserve seats at an event. When a reservation is made, the system must insert the reservation record, reduce the available seat count, and generate a confirmation code.</p>
+          <ul class="questions-list">
+            <li>What three operations should be grouped into a transaction?</li>
+            <li>If two customers attempt to reserve the last remaining seat at exactly the same moment, what problem might occur? What database mechanism helps prevent this?</li>
+            <li>If the confirmation code generation fails due to a system error, should the reservation and seat count update be committed or rolled back? Why?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Commit and Rollback Questions -->
+      <div class="back-section" id="commit-rollback">
+        <div class="back-section-title">Commit and Rollback Questions</div>
+        <p class="practice-intro">Answer the following questions using your understanding of commit and rollback.</p>
+        <ul class="questions-list">
+          <li>A transaction begins, successfully inserts a row into the <code>Enrollments</code> table, and then encounters a constraint violation when attempting to update the <code>Courses</code> table. The application issues a <code>ROLLBACK</code>. Is the enrollment record saved in the database? Explain your answer.</li>
+          <li>A transaction begins, successfully executes three updates, and then commits. Immediately after the commit, a power outage shuts down the database server. Are the three updates saved? Explain.</li>
+          <li>A developer writes a transaction that inserts a row, commits, and then attempts a second insert. The second insert fails. Can the first insert be rolled back? Why or why not?</li>
+          <li>In a library system, a transaction is used to process a book checkout. The transaction begins, inserts the loan record, and then the application crashes before issuing either a commit or rollback. When the database server restarts, what happens to the incomplete transaction?</li>
+          <li>A transaction executes five updates. Three succeed and two fail. The application does not check for errors and issues a <code>COMMIT</code>. What risks does this create? What should the application have done instead?</li>
+        </ul>
+      </div>
+
+      <!-- Integrity Analysis -->
+      <div class="back-section" id="integrity-analysis">
+        <div class="back-section-title">Integrity Analysis</div>
+        <p class="practice-intro">For each situation below, identify the type of integrity problem and explain how transactions could help prevent it.</p>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Situation 1</div>
+          <p>A student enrollment system processes enrollments one step at a time without transactions. During a network outage, the enrollment record is inserted but the course count update is never executed. The enrollment is recorded, but the course shows a count of 24 when 25 students are actually enrolled.</p>
+          <ul class="questions-list">
+            <li>What type of integrity problem has occurred?</li>
+            <li>How would a transaction have prevented this?</li>
+          </ul>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Situation 2</div>
+          <p>A bank's transfer system runs the two balance updates as separate operations. A system error occurs after the debit but before the credit. The customer's savings account loses 300, but the checking account is not credited.</p>
+          <ul class="questions-list">
+            <li>What type of integrity problem has occurred?</li>
+            <li>What is the real-world consequence?</li>
+            <li>How would a transaction have prevented this?</li>
+          </ul>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Situation 3</div>
+          <p>An appointment system allows multiple staff members to book appointments. Two staff members attempt to book the same doctor at the same time slot simultaneously. Both bookings appear to succeed. The doctor's schedule now shows two patients in the same slot.</p>
+          <ul class="questions-list">
+            <li>What concurrency problem has occurred?</li>
+            <li>What mechanism should the system use to prevent this?</li>
+          </ul>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Situation 4</div>
+          <p>A library checkout system marks a book as unavailable but forgets to insert the loan record. When a patron asks at the desk where their checked-out book is, the system cannot find any loan record, even though the book is marked unavailable.</p>
+          <ul class="questions-list">
+            <li>What type of integrity problem has occurred?</li>
+            <li>How would grouping both operations in a transaction have helped?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Error Analysis -->
+      <div class="back-section" id="error-analysis">
+        <div class="back-section-title">Error Analysis</div>
+        <p class="practice-intro">Each of the following SQL transaction examples contains a problem. Identify the problem and explain how to fix it.</p>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Example A</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">INSERT INTO</span> Loans (resource_id, user_id, loan_date, due_date)
+<span class="kw">VALUES</span> (5023, 1088, <span class="str">'2024-11-01'</span>, <span class="str">'2024-11-15'</span>);
+
+<span class="kw">COMMIT</span>;
+
+<span class="kw">UPDATE</span> Resources
+<span class="kw">SET</span> available = 0
+<span class="kw">WHERE</span> resource_id = 5023;</code></pre>
+          </div>
+          <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col);">What is wrong with this transaction? What will happen if the <code>UPDATE</code> fails after the <code>COMMIT</code>?</p>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Example B</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">UPDATE</span> Accounts <span class="kw">SET</span> balance = balance - 500 <span class="kw">WHERE</span> account_id = 101;
+<span class="kw">UPDATE</span> Accounts <span class="kw">SET</span> balance = balance + 500 <span class="kw">WHERE</span> account_id = 202;
+
+<span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">COMMIT</span>;</code></pre>
+          </div>
+          <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col);">What is structurally wrong with this SQL? What would you expect the database to do?</p>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Example C</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">UPDATE</span> Courses
+<span class="kw">SET</span> current_enrollment = current_enrollment + 1
+<span class="kw">WHERE</span> course_id = 201;
+
+<span class="kw">INSERT INTO</span> Enrollments (student_id, course_id, enrolled_date)
+<span class="kw">VALUES</span> (4451, 201, <span class="str">'2024-08-15'</span>);</code></pre>
+          </div>
+          <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col);">These two operations have no transaction wrapping. What could go wrong if the <code>INSERT</code> fails after the <code>UPDATE</code> has already executed?</p>
+        </div>
+
+        <div class="scenario-block">
+          <div class="scenario-label">Example D</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">BEGIN TRANSACTION</span>;
+
+<span class="kw">DELETE FROM</span> Orders <span class="kw">WHERE</span> order_id = 9901;
+<span class="kw">DELETE FROM</span> Order_Items <span class="kw">WHERE</span> order_id = 9901;
+
+<span class="kw">COMMIT</span>;</code></pre>
+          </div>
+          <p style="font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-mid); max-width: var(--col);">Is this transaction in the correct order? What referential integrity problem might occur with foreign key constraints enforced? Rewrite the transaction with the operations in the correct order.</p>
+        </div>
+      </div>
+
+      <!-- Real-World Applications -->
+      <div class="back-section" id="real-world">
+        <div class="back-section-title">Real-World Applications</div>
+        <ul class="questions-list">
+          <li>A ride-sharing app matches a passenger with a driver. The system must assign the driver to the trip, update the driver's status to In Trip, and update the passenger's booking to Confirmed. Design a transaction for this process. What should happen if the driver's status update fails?</li>
+          <li>A university registration system allows students to add or drop courses during a registration period. Describe the transaction structure for dropping a course. What operations must happen together? What constraints should be checked before committing?</li>
+          <li>A hospital pharmacy system dispenses medication to a patient. The system must record the dispensing event in the patient's medication log, reduce the pharmacy inventory count, and update the prescription status to Dispensed. Design the transaction. What should happen if the inventory is insufficient?</li>
+          <li>A subscription streaming service processes a payment. The system must record the payment in the payment history, extend the user's subscription expiration date, and send a renewal confirmation. Which operations belong in the transaction? If the confirmation sending step fails, should the payment and subscription update be rolled back? Why or why not? Discuss the tradeoffs.</li>
+          <li>An airport check-in system assigns a passenger to a seat. The system must insert the seat assignment record and update the seat status to Occupied. What problem occurs if two agents at different terminals try to assign two passengers to the same seat simultaneously? How does transaction isolation help?</li>
+        </ul>
+      </div>
+
+      <!-- Mixed Review -->
+      <div class="back-section" id="mixed-review">
+        <div class="back-section-title">Mixed Review</div>
+        <p class="practice-intro">The following questions review earlier chapters alongside the ideas introduced in Chapter 16.</p>
+        <ul class="questions-list">
+          <li><strong>From Chapter 6:</strong> A foreign key constraint ensures that every loan record references a valid resource. How does this constraint interact with transaction rollback? If an insert into the <code>Loans</code> table fails because it references a non-existent resource ID, what happens to any previous steps in the same transaction?</li>
+          <li><strong>From Chapter 15:</strong> The chapter on data modification emphasized checking <code>WHERE</code> conditions before updating or deleting. How does transaction control add another layer of safety on top of careful <code>WHERE</code> conditions?</li>
+          <li><strong>From Chapter 14:</strong> A view is a saved query that presents data from one or more underlying tables. If a transaction modifies the underlying tables that a view is built on, and the transaction is then rolled back, what does the view show after the rollback?</li>
+          <li><strong>From Chapter 12:</strong> A summary query counts the number of active loans per resource. If a checkout transaction is in progress but not yet committed, should the loan count query running simultaneously see the new loan? What does this question reveal about isolation levels?</li>
+          <li><strong>From Chapter 4:</strong> Data quality problems can result from partially completed operations. Describe two specific data quality issues that would result from processing a student enrollment without transaction protection. How does transaction atomicity prevent these issues?</li>
+        </ul>
+      </div>
+
+      <!-- Review Questions -->
+      <div class="back-section" id="review">
+        <div class="back-section-title">Review Questions</div>
+        <ul class="questions-list">
+          <li>In your own words, explain what data integrity means and give two examples of how it can break down.</li>
+          <li>What is a transaction? Why do some database operations need to be grouped into a single transaction?</li>
+          <li>What does <code>COMMIT</code> do? What does <code>ROLLBACK</code> do? When should each be used?</li>
+          <li>Explain atomicity in your own words. Why is atomicity described as an all-or-nothing guarantee?</li>
+          <li>What is the difference between atomicity and consistency? How do they work together to protect data integrity?</li>
+          <li>Give an example of a real-world system where concurrency creates a data integrity risk. Describe the risk and explain how transactions help manage it.</li>
+          <li>Why should transactions be kept short? What problems can arise from long-running transactions?</li>
+          <li>A developer commits after each step of a five-step process instead of wrapping all five steps in a single transaction. What risk does this create? Give a specific example of what could go wrong.</li>
+          <li>How does a database handle a transaction that was in progress when the server crashed? What state does the database return to after the server restarts?</li>
+          <li>Explain the relationship between constraints and transactions. How do foreign key constraints, uniqueness constraints, and check constraints interact with transaction rollback?</li>
+        </ul>
+      </div>
+
+      <!-- Preview -->
+      <div class="back-section" id="preview">
+        <div class="back-section-title">Preview of Chapter 17</div>
+        <div class="preview-box">
+          <div class="preview-box-label">Coming Next — Chapter 17: Indexes and Query Performance at an Introductory Level</div>
+          <p>Chapter 16 explained how transactions keep multi-step database operations safe and consistent. Chapter 17 turns attention to a different kind of database reliability: performance.</p>
+          <p>As databases grow larger, queries that once ran quickly may begin to slow down. A query that searches through ten records completes almost instantly. The same query searching through ten million records may take much longer, especially without the right database structures in place. Chapter 17 introduces indexes as structures that help databases find data faster, why primary key indexes exist automatically, when to create additional indexes, and what tradeoffs indexes involve. The chapter will remain conceptual and practical, appropriate for students who are not yet studying advanced database administration, but who need to understand why performance is a design concern from the start.</p>
+        </div>
+      </div>
+
+    </div><!-- end back-matter -->
+
+    <!-- Footer -->
+    <footer class="chapter-footer">
+      <span>Data, Databases, and Information Systems &mdash; MGU Computer Science Series &mdash; Library Textbook Edition</span>
+      <span>Chapter 16 of 28 &mdash; Part IV: Managing and Changing Data</span>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>
