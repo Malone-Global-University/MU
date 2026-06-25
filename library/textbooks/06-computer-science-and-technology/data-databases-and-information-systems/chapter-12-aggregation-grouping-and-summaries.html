@@ -1,0 +1,2200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 12: Aggregation, Grouping, and Summaries — MGU CS Series</title>
+<style>
+
+/* ─── Design Tokens ──────────────────────────────────────────────────── */
+:root {
+  --ink:         #1a1a2e;
+  --ink-mid:     #3d3d5c;
+  --ink-light:   #6b6b8a;
+  --rule:        #d4d4e8;
+  --page:        #fafafa;
+  --surface:     #ffffff;
+  --accent:      #2d5be3;
+  --accent-dim:  #e8eefb;
+  --accent-dark: #1a3ba0;
+  --highlight:   #f0f4ff;
+  --code-bg:     #f4f6fb;
+  --warn:        #4a3800;
+  --warn-bg:     #fffbeb;
+  --warn-rule:   #d4a500;
+  --positive:    #1a4a2e;
+  --positive-bg: #edfaf3;
+  --positive-rule:#2a8a52;
+  --error:       #8a1a3a;
+  --error-bg:    #fdeef2;
+  --error-rule:  #d4006e;
+
+  --serif:   'Georgia', 'Times New Roman', serif;
+  --sans:    'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:    'Courier New', 'Consolas', monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-md:   1.125rem;
+  --text-lg:   1.25rem;
+  --text-xl:   1.5rem;
+  --text-2xl:  1.875rem;
+  --text-3xl:  2.375rem;
+  --text-4xl:  3rem;
+
+  --radius:  4px;
+  --col:     680px;
+  --wide:    860px;
+}
+
+/* ─── Reset & Base ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 17px; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--serif);
+  font-size: var(--text-base);
+  line-height: 1.78;
+  color: var(--ink);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Layout Shell ───────────────────────────────────────────────────── */
+.page-wrap {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+/* ─── Sidebar Nav ────────────────────────────────────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--ink);
+  color: #c8c8e0;
+  padding: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #3d3d5c transparent;
+}
+
+.sidebar-brand {
+  padding: 0 1.5rem 1.5rem;
+  border-bottom: 1px solid #2a2a45;
+}
+
+.sidebar-series {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7878aa;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #e8e8f4;
+  line-height: 1.4;
+}
+
+.sidebar-nav {
+  padding: 1.25rem 0 1rem;
+  flex: 1;
+}
+
+.nav-part-label {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5a80;
+  padding: 0.85rem 1.5rem 0.25rem;
+}
+
+.nav-link {
+  display: block;
+  padding: 0.3rem 1.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #9898be;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: color 0.15s, background 0.15s;
+  border-left: 2px solid transparent;
+}
+
+.nav-link:hover {
+  color: #e8e8f4;
+  background: rgba(255,255,255,0.04);
+  border-left-color: #5a6ee8;
+}
+
+.nav-link.current {
+  color: #b8c4ff;
+  border-left-color: var(--accent);
+  background: rgba(45, 91, 227, 0.12);
+}
+
+.nav-link.section-link {
+  padding-left: 2.1rem;
+  font-size: 0.72rem;
+  color: #6a6a90;
+}
+
+.nav-link.section-link:hover { color: #c0c0e0; }
+
+/* ─── Main Content Area ──────────────────────────────────────────────── */
+.main {
+  min-width: 0;
+  background: var(--surface);
+}
+
+/* ─── Chapter Header ─────────────────────────────────────────────────── */
+.chapter-header {
+  background: var(--ink);
+  color: white;
+  padding: 4rem 3.5rem 3.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.chapter-header::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 420px;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 40%, rgba(45,91,227,0.18) 100%);
+  pointer-events: none;
+}
+
+.chapter-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, #7a9cff 50%, transparent 100%);
+}
+
+.chapter-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.part-badge {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(45,91,227,0.35);
+  color: #b0c4ff;
+  padding: 0.2rem 0.65rem;
+  border-radius: 2px;
+  border: 1px solid rgba(45,91,227,0.5);
+}
+
+.chapter-number-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: #7878aa;
+  letter-spacing: 0.05em;
+}
+
+.chapter-number {
+  font-family: var(--sans);
+  font-size: 5rem;
+  font-weight: 800;
+  color: rgba(255,255,255,0.06);
+  position: absolute;
+  top: 2rem;
+  right: 3rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  user-select: none;
+}
+
+.chapter-title {
+  font-family: var(--serif);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #f0f0fc;
+  max-width: 620px;
+  margin-bottom: 1.5rem;
+}
+
+.chapter-intro-summary {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: #9898c0;
+  line-height: 1.6;
+  max-width: 580px;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ─── Section Contents Strip ─────────────────────────────────────────── */
+.toc-strip {
+  background: var(--highlight);
+  border-bottom: 1px solid var(--rule);
+  padding: 1.5rem 3.5rem;
+}
+
+.toc-strip-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 0.75rem;
+}
+
+.toc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.25rem 2rem;
+}
+
+.toc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-mid);
+}
+
+.toc-num {
+  color: var(--accent);
+  font-weight: 700;
+  min-width: 2.5rem;
+  font-size: 0.7rem;
+}
+
+.toc-item a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.toc-item a:hover { color: var(--accent); }
+
+/* ─── Content Body ───────────────────────────────────────────────────── */
+.content-body {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 3rem 3.5rem 4rem;
+}
+
+/* ─── Section ────────────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 3.5rem;
+}
+
+.section-anchor {
+  display: block;
+  position: relative;
+  top: -80px;
+  visibility: hidden;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.section-num {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 2.5rem;
+  letter-spacing: 0.02em;
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+/* ─── Subsection ─────────────────────────────────────────────────────── */
+.subsection {
+  margin: 1.75rem 0;
+}
+
+.subsection-title {
+  font-family: var(--sans);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+  line-height: 1.3;
+}
+
+/* ─── Prose ──────────────────────────────────────────────────────────── */
+p {
+  margin-bottom: 1.1rem;
+  color: var(--ink-mid);
+  max-width: var(--col);
+}
+
+p strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+p em { color: var(--ink-mid); }
+
+/* ─── Tables ─────────────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.75rem 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.table-caption {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--ink-light);
+  padding: 0.5rem 1rem 0;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--rule);
+  font-style: italic;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+thead th {
+  background: var(--ink);
+  color: #c8c8e0;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+tbody tr { border-bottom: 1px solid var(--rule); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--highlight); }
+
+tbody td {
+  padding: 0.55rem 1rem;
+  color: var(--ink-mid);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+tbody td:first-child {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+.fn-table thead th { background: var(--accent-dark); }
+
+.blank-cell {
+  color: var(--ink-light);
+  font-style: italic;
+}
+
+/* ─── Code & SQL Blocks ──────────────────────────────────────────────── */
+.code-block {
+  margin: 1.5rem 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--rule);
+}
+
+.code-label {
+  background: var(--ink);
+  color: #7878aa;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.code-label-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+.code-block.is-broken .code-label-dot { background: var(--error-rule); }
+.code-block.is-broken .code-label { color: #c08aa0; }
+
+pre {
+  background: var(--code-bg);
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* SQL keyword coloring via classes */
+.kw { color: #1a3ba0; font-weight: 700; }
+.str { color: #2a6a00; }
+.cm { color: #888; font-style: italic; }
+.fn { color: #8a1a8a; font-weight: 700; }
+
+/* Inline code */
+p code, li code {
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  font-size: 0.82em;
+  color: var(--accent-dark);
+}
+
+/* ─── Callout Boxes ──────────────────────────────────────────────────── */
+.callout {
+  margin: 1.75rem 0;
+  padding: 1.1rem 1.4rem;
+  border-radius: var(--radius);
+  border-left: 3px solid;
+  max-width: var(--col);
+}
+
+.callout-note {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.callout-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-rule);
+}
+
+.callout-positive {
+  background: var(--positive-bg);
+  border-color: var(--positive-rule);
+}
+
+.callout-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.callout-note .callout-title    { color: var(--accent-dark); }
+.callout-warn .callout-title    { color: var(--warn); }
+.callout-positive .callout-title{ color: var(--positive); }
+
+.callout p { margin-bottom: 0; max-width: none; }
+.callout p + p { margin-top: 0.5rem; }
+
+/* ─── Function Reference Grid ─────────────────────────────────────────── */
+.components-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.component-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  border-top: 3px solid var(--accent);
+}
+
+.component-card-name {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.component-card p {
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ─── Comparison Strip (WHERE vs HAVING style) ──────────────────────── */
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+  margin: 1.5rem 0;
+  max-width: var(--col);
+}
+
+.scope-card {
+  padding: 1rem 1.1rem;
+  background: var(--highlight);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.scope-card-num {
+  font-family: var(--sans);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: rgba(45,91,227,0.15);
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.scope-card-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.35rem;
+}
+
+.scope-card p {
+  font-size: 0.8rem;
+  margin: 0;
+  color: var(--ink-light);
+  line-height: 1.5;
+}
+
+/* ─── Order of Operations List ──────────────────────────────────────── */
+.habits-list {
+  counter-reset: habit;
+  list-style: none;
+  max-width: var(--col);
+  margin: 1rem 0;
+}
+
+.habits-list li {
+  counter-increment: habit;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  align-items: flex-start;
+}
+
+.habits-list li::before {
+  content: counter(habit);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  border-radius: 50%;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.habits-list li div {
+  flex: 1;
+}
+
+.habits-list li strong {
+  display: block;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  margin-bottom: 0.2rem;
+}
+
+.habits-list li p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* ─── Back Matter ────────────────────────────────────────────────────── */
+.back-matter {
+  background: var(--page);
+  border-top: 2px solid var(--rule);
+}
+
+.back-section {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 2.5rem 3.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.back-section:last-child { border-bottom: none; }
+
+.back-section-title {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--accent-dim);
+}
+
+.back-section-intro {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  max-width: var(--col);
+  margin-bottom: 1.25rem;
+}
+
+/* Summary points */
+.summary-points {
+  list-style: none;
+  max-width: var(--col);
+}
+
+.summary-points li {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.6;
+}
+
+.summary-points li::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* Key terms */
+.key-terms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  max-width: var(--wide);
+}
+
+.term-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+}
+
+.term-word {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+
+.term-def {
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Practice questions */
+.practice-section {
+  margin-bottom: 1.75rem;
+}
+
+.practice-section-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+}
+
+.questions-list {
+  list-style: none;
+  counter-reset: question;
+  max-width: var(--col);
+}
+
+.questions-list li {
+  counter-increment: question;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  line-height: 1.65;
+}
+
+.questions-list li::before {
+  content: counter(question) '.';
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 1.5rem;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* Query reading items (with a question prompt beneath the code) */
+.query-reading-item {
+  margin-bottom: 2rem;
+  max-width: var(--col);
+}
+
+.query-reading-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  margin-bottom: 0.5rem;
+}
+
+.query-reading-question {
+  background: var(--highlight);
+  border-left: 3px solid var(--accent);
+  padding: 0.75rem 1rem;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  border-radius: var(--radius);
+  font-style: italic;
+}
+
+/* Predict the result exercises */
+.predict-exercise {
+  margin-bottom: 2.25rem;
+  max-width: var(--col);
+}
+
+.predict-exercise-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  margin-bottom: 0.5rem;
+}
+
+.predict-prompt {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  margin-bottom: 0.75rem;
+}
+
+/* Misconceptions / broken queries */
+.misconception {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid #d4006e;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  max-width: var(--col);
+}
+
+.misconception-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d4006e;
+  margin-bottom: 0.35rem;
+}
+
+.misconception-title {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.4rem;
+}
+
+.misconception p {
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* Debugging practice cards */
+.debug-card {
+  margin-bottom: 2rem;
+  max-width: var(--col);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.debug-card-label {
+  background: var(--error-bg);
+  color: var(--error);
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.6rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.debug-card-body {
+  padding: 1rem 1.1rem;
+}
+
+.debug-card-body pre {
+  margin-bottom: 0.85rem;
+  border-radius: var(--radius);
+}
+
+.debug-card-question {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-mid);
+  font-style: italic;
+  margin: 0;
+}
+
+/* Preview */
+.preview-box {
+  background: var(--ink);
+  color: #c8c8e0;
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+  max-width: var(--col);
+}
+
+.preview-box-label {
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a6ee8;
+  margin-bottom: 0.6rem;
+}
+
+.preview-box p {
+  color: #b0b0d4;
+  font-size: var(--text-sm);
+  margin: 0;
+  line-height: 1.7;
+  max-width: none;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+.chapter-footer {
+  background: var(--ink);
+  color: #5a5a80;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  padding: 1.25rem 3.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chapter-footer a { color: #7878aa; text-decoration: none; }
+.chapter-footer a:hover { color: #b0b0d0; }
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .page-wrap { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .chapter-header,
+  .toc-strip,
+  .content-body,
+  .back-section { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .chapter-number { font-size: 3rem; }
+  .components-grid,
+  .scope-grid { grid-template-columns: 1fr; }
+  .key-terms-grid { grid-template-columns: 1fr; }
+  .chapter-footer { flex-direction: column; gap: 0.5rem; text-align: center; }
+}
+
+@media (max-width: 540px) {
+  .toc-grid { grid-template-columns: 1fr; }
+  .chapter-title { font-size: var(--text-2xl); }
+}
+
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- ─── Sidebar ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-series">MGU CS Series</span>
+      <span class="sidebar-title">Data, Databases, and Information Systems</span>
+    </div>
+    <nav class="sidebar-nav" aria-label="Chapter navigation">
+      <span class="nav-part-label">Part III — SQL and Querying Data</span>
+      <a class="nav-link current" href="#chapter-start">Ch. 12 — Aggregation, Grouping, and Summaries</a>
+      <a class="nav-link section-link" href="#s12-1">12.1 Why Summaries Matter</a>
+      <a class="nav-link section-link" href="#s12-2">12.2 Counting with COUNT</a>
+      <a class="nav-link section-link" href="#s12-3">12.3 Totals with SUM</a>
+      <a class="nav-link section-link" href="#s12-4">12.4 Averages with AVG</a>
+      <a class="nav-link section-link" href="#s12-5">12.5 Minimums and Maximums</a>
+      <a class="nav-link section-link" href="#s12-6">12.6 Grouping with GROUP BY</a>
+      <a class="nav-link section-link" href="#s12-7">12.7 Filtering Groups with HAVING</a>
+      <a class="nav-link section-link" href="#s12-8">12.8 Summary Column Aliases</a>
+      <a class="nav-link section-link" href="#s12-9">12.9 Row Filters Versus Group Filters</a>
+      <a class="nav-link section-link" href="#s12-10">12.10 Summary Queries in Reports</a>
+      <span class="nav-part-label" style="margin-top:0.5rem;">Back Matter</span>
+      <a class="nav-link section-link" href="#summary">Chapter Summary</a>
+      <a class="nav-link section-link" href="#key-terms">Key Terms</a>
+      <a class="nav-link section-link" href="#table-review">Table Review</a>
+      <a class="nav-link section-link" href="#query-reading">Query Reading</a>
+      <a class="nav-link section-link" href="#predict">Predict the Result</a>
+      <a class="nav-link section-link" href="#aggregation-practice">Aggregation Practice</a>
+      <a class="nav-link section-link" href="#report-questions">Report Query Questions</a>
+      <a class="nav-link section-link" href="#debugging">Debugging Practice</a>
+      <a class="nav-link section-link" href="#misconceptions">Misconceptions</a>
+      <a class="nav-link section-link" href="#real-world">Real-World Applications</a>
+      <a class="nav-link section-link" href="#mixed-review">Mixed Review</a>
+      <a class="nav-link section-link" href="#preview">Preview of Chapter 13</a>
+
+      <span class="nav-part-label" style="margin-top:0.75rem;">Coming Next</span>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 13 — Joining Tables</a>
+      <a class="nav-link" href="#" style="opacity:0.45;">Ch. 14 — Subqueries, Views, and Reusable Queries</a>
+    </nav>
+  </aside>
+
+  <!-- ─── Main ────────────────────────────────────────── -->
+  <main class="main" id="chapter-start">
+
+    <!-- Chapter Header -->
+    <header class="chapter-header">
+      <div class="chapter-number" aria-hidden="true">12</div>
+      <div class="chapter-eyebrow">
+        <span class="part-badge">Part III — SQL and Querying Data</span>
+        <span class="chapter-number-label">Chapter 12 of 28</span>
+      </div>
+      <h1 class="chapter-title">Aggregation, Grouping, and Summaries</h1>
+      <p class="chapter-intro-summary">
+        Individual records tell you about one student, one book, one order, or one appointment. But most real questions about data are not about one thing, they are about many things at once. This chapter introduces aggregate functions, GROUP BY, and HAVING as the tools that turn raw records into the summaries behind every report and dashboard.
+      </p>
+    </header>
+
+    <!-- TOC Strip -->
+    <div class="toc-strip" aria-label="Sections in this chapter">
+      <div class="toc-strip-title">Sections in This Chapter</div>
+      <div class="toc-grid">
+        <div class="toc-item"><span class="toc-num">12.1</span><a href="#s12-1">Why Summaries Matter</a></div>
+        <div class="toc-item"><span class="toc-num">12.2</span><a href="#s12-2">Counting Records with COUNT</a></div>
+        <div class="toc-item"><span class="toc-num">12.3</span><a href="#s12-3">Totals with SUM</a></div>
+        <div class="toc-item"><span class="toc-num">12.4</span><a href="#s12-4">Averages with AVG</a></div>
+        <div class="toc-item"><span class="toc-num">12.5</span><a href="#s12-5">Minimums and Maximums</a></div>
+        <div class="toc-item"><span class="toc-num">12.6</span><a href="#s12-6">Grouping with GROUP BY</a></div>
+        <div class="toc-item"><span class="toc-num">12.7</span><a href="#s12-7">Filtering Groups with HAVING</a></div>
+        <div class="toc-item"><span class="toc-num">12.8</span><a href="#s12-8">Summary Column Aliases</a></div>
+        <div class="toc-item"><span class="toc-num">12.9</span><a href="#s12-9">Row Filters Versus Group Filters</a></div>
+        <div class="toc-item"><span class="toc-num">12.10</span><a href="#s12-10">Summary Queries in Reports</a></div>
+      </div>
+    </div>
+
+    <!-- Content Body -->
+    <article class="content-body">
+
+      <!-- Chapter Introduction -->
+      <section class="section">
+        <p>Individual records tell you about one student, one book, one order, or one appointment. But most real questions about data are not about one thing. They are about many things at once. How many students enrolled this term? What is the average score on an assignment? Which subject has the most resources? What was the highest loan total last month?</p>
+        <p>These are summary questions. They collapse many rows into a smaller number of meaningful answers. SQL answers them with aggregate functions and the <code>GROUP BY</code> clause.</p>
+        <p>This chapter introduces aggregation as the SQL skill that turns raw records into useful information. Students will learn to count, total, average, and find extremes across a dataset. They will learn to group results by category. They will learn to filter groups with <code>HAVING</code>, which works differently from the <code>WHERE</code> clause they already know. And they will connect these query skills to the reports and dashboards that real people use to make decisions.</p>
+        <div class="callout callout-note">
+          <div class="callout-title">Note for Students</div>
+          <p>Aggregation is where SQL becomes genuinely powerful for understanding data, not just retrieving it. The functions in this chapter are short to type, but the thinking behind them deserves your full attention.</p>
+        </div>
+      </section>
+
+      <!-- 12.1 -->
+      <section class="section" id="s12-1">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.1</span>
+          <h2 class="section-title">Why Summaries Matter</h2>
+        </div>
+
+        <p>Raw data is rarely the answer to a question.</p>
+        <p>Suppose a school stores every assignment submission in a table. On any given day, that table might contain thousands of rows. No one reads thousands of rows to understand how a class is performing. Instead, someone calculates a summary: the average score, the number of submissions, the percentage that met the deadline. The summary turns the raw data into something a teacher, administrator, or student can actually understand and act on.</p>
+        <p>Summaries appear everywhere in real information systems. A library report shows how many resources were borrowed each month. A hospital dashboard shows average wait times by department. A store system shows total sales by product category. A university system shows enrollment counts by course and term. None of these require looking at every individual row. They require collapsing many rows into a smaller number of meaningful numbers.</p>
+        <p>In SQL, this collapsing is called <strong>aggregation</strong>. Aggregate functions compute a single result from a set of rows. The most common ones are <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>, <code>MIN</code>, and <code>MAX</code>.</p>
+
+        <div class="callout callout-positive">
+          <div class="callout-title">Central Idea</div>
+          <p>Understanding aggregation is not just a technical skill, it is a thinking skill. Before writing an aggregate query, a student must understand what question is being asked, what rows should be included in the calculation, and whether the results should be grouped by some category or computed across the whole table. Getting those decisions right is as important as getting the syntax right.</p>
+        </div>
+      </section>
+
+      <!-- 12.2 -->
+      <section class="section" id="s12-2">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.2</span>
+          <h2 class="section-title">Counting Records with <code>COUNT</code></h2>
+        </div>
+
+        <p>The simplest aggregate function is <code>COUNT</code>. It answers the question: how many rows match this condition?</p>
+        <p><code>COUNT(*)</code> counts every row in the result set, including rows with missing values in some columns. <code>COUNT(column_name)</code> counts only rows where that specific column is not null.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Example table: <code>enrollments</code></div>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Enrollments table example">
+          <table>
+            <thead>
+              <tr><th>enrollment_id</th><th>student_id</th><th>course_id</th><th>grade</th><th>enrolled_date</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>101</td><td>CS101</td><td>A</td><td>2024-09-01</td></tr>
+              <tr><td>2</td><td>102</td><td>CS101</td><td>B</td><td>2024-09-01</td></tr>
+              <tr><td>3</td><td>103</td><td>CS101</td><td class="blank-cell">NULL</td><td>2024-09-02</td></tr>
+              <tr><td>4</td><td>101</td><td>CS202</td><td>A</td><td>2024-09-01</td></tr>
+              <tr><td>5</td><td>104</td><td>CS202</td><td>C</td><td>2024-09-03</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p><strong>Query: How many total enrollment records exist?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">AS</span> total_enrollments
+<span class="kw">FROM</span> enrollments;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of total enrollments query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>total_enrollments</th></tr></thead>
+            <tbody><tr><td>5</td></tr></tbody>
+          </table>
+        </div>
+
+        <p><strong>Query: How many enrollments have a recorded grade?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(grade) <span class="kw">AS</span> graded_enrollments
+<span class="kw">FROM</span> enrollments;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of graded enrollments query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>graded_enrollments</th></tr></thead>
+            <tbody><tr><td>4</td></tr></tbody>
+          </table>
+        </div>
+
+        <p>Notice that <code>COUNT(grade)</code> returns 4, not 5, because one row has <code>NULL</code> in the <code>grade</code> column. <code>COUNT(*)</code> counts all rows. <code>COUNT(column_name)</code> skips nulls.</p>
+        <p>This distinction matters whenever data is incomplete. A count of all rows tells you how many records exist. A count of a specific column tells you how many records have a value in that column. These are different questions, and they can have different answers.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Using <code>COUNT</code> with <code>WHERE</code></div>
+          <p>You can combine <code>COUNT</code> with <code>WHERE</code> to count only the rows that meet a condition.</p>
+          <p><strong>Query: How many students enrolled in CS101?</strong></p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">AS</span> cs101_enrollments
+<span class="kw">FROM</span> enrollments
+<span class="kw">WHERE</span> course_id = <span class="str">'CS101'</span>;</code></pre>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Result of CS101 enrollments query">
+            <div class="table-caption">Result</div>
+            <table>
+              <thead><tr><th>cs101_enrollments</th></tr></thead>
+              <tbody><tr><td>3</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Using <code>DISTINCT</code> with <code>COUNT</code></div>
+          <p>Sometimes you want to count unique values, not all values. <code>COUNT(DISTINCT column_name)</code> counts only the distinct non-null values in a column.</p>
+          <p><strong>Query: How many distinct students are enrolled in any course?</strong></p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> student_id) <span class="kw">AS</span> unique_students
+<span class="kw">FROM</span> enrollments;</code></pre>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Result of unique students query">
+            <div class="table-caption">Result</div>
+            <table>
+              <thead><tr><th>unique_students</th></tr></thead>
+              <tbody><tr><td>4</td></tr></tbody>
+            </table>
+          </div>
+
+          <p>Student 101 appears twice, enrolled in two courses, but is counted only once. The result is 4 unique students, not 5 rows.</p>
+        </div>
+      </section>
+
+      <!-- 12.3 -->
+      <section class="section" id="s12-3">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.3</span>
+          <h2 class="section-title">Totals with <code>SUM</code></h2>
+        </div>
+
+        <p><code>SUM</code> adds up all the values in a numeric column across the rows in the result.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Example table: <code>loans</code></div>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Loans table example">
+          <table>
+            <thead>
+              <tr><th>loan_id</th><th>user_id</th><th>resource_id</th><th>days_borrowed</th><th>fine_amount</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>201</td><td>R01</td><td>7</td><td>0.00</td></tr>
+              <tr><td>2</td><td>202</td><td>R02</td><td>14</td><td>1.50</td></tr>
+              <tr><td>3</td><td>201</td><td>R03</td><td>21</td><td>3.00</td></tr>
+              <tr><td>4</td><td>203</td><td>R04</td><td>3</td><td>0.00</td></tr>
+              <tr><td>5</td><td>202</td><td>R05</td><td>10</td><td>0.75</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p><strong>Query: What is the total amount of fines across all loans?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">SUM</span>(fine_amount) <span class="kw">AS</span> total_fines
+<span class="kw">FROM</span> loans;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of total fines query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>total_fines</th></tr></thead>
+            <tbody><tr><td>5.25</td></tr></tbody>
+          </table>
+        </div>
+
+        <p><strong>Query: What is the total number of days borrowed across all loans?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">SUM</span>(days_borrowed) <span class="kw">AS</span> total_days
+<span class="kw">FROM</span> loans;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of total days query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>total_days</th></tr></thead>
+            <tbody><tr><td>55</td></tr></tbody>
+          </table>
+        </div>
+
+        <p><code>SUM</code> ignores null values. If a column has some null entries, those rows are skipped in the total, which is usually the desired behavior.</p>
+        <p><code>SUM</code> only makes sense on numeric columns. Trying to sum a text column or a date column will produce an error in most database systems.</p>
+      </section>
+
+      <!-- 12.4 -->
+      <section class="section" id="s12-4">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.4</span>
+          <h2 class="section-title">Averages with <code>AVG</code></h2>
+        </div>
+
+        <p><code>AVG</code> computes the arithmetic mean of a numeric column. It adds up all non-null values and divides by the number of non-null rows.</p>
+        <p><strong>Query: What is the average number of days borrowed per loan?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">AVG</span>(days_borrowed) <span class="kw">AS</span> average_days
+<span class="kw">FROM</span> loans;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of average days query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>average_days</th></tr></thead>
+            <tbody><tr><td>11.0</td></tr></tbody>
+          </table>
+        </div>
+
+        <p><code>AVG</code> is straightforward, but students should be aware of a common mistake. Null values are excluded from both the sum and the count that <code>AVG</code> uses internally. If a column has many nulls, the average reflects only the rows that have data, which may not represent the full population.</p>
+
+        <div class="callout callout-warn">
+          <div class="callout-title">Watch Closely</div>
+          <p>If a table of 100 students has assignment scores for only 60 of them, <code>AVG(score)</code> will compute the average over 60 rows, not 100. Whether this is the right answer depends on whether the missing scores should be treated as zero or treated as unknown. SQL assumes unknown and excludes them.</p>
+        </div>
+
+        <p><strong>Query: What is the average fine amount?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">AVG</span>(fine_amount) <span class="kw">AS</span> average_fine
+<span class="kw">FROM</span> loans;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of average fine query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>average_fine</th></tr></thead>
+            <tbody><tr><td>1.05</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 12.5 -->
+      <section class="section" id="s12-5">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.5</span>
+          <h2 class="section-title">Minimums and Maximums</h2>
+        </div>
+
+        <p><code>MIN</code> and <code>MAX</code> find the smallest and largest values in a column.</p>
+        <p><strong>Query: What is the shortest loan duration?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">MIN</span>(days_borrowed) <span class="kw">AS</span> shortest_loan
+<span class="kw">FROM</span> loans;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of shortest loan query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>shortest_loan</th></tr></thead>
+            <tbody><tr><td>3</td></tr></tbody>
+          </table>
+        </div>
+
+        <p><strong>Query: What is the largest fine?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">MAX</span>(fine_amount) <span class="kw">AS</span> largest_fine
+<span class="kw">FROM</span> loans;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of largest fine query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>largest_fine</th></tr></thead>
+            <tbody><tr><td>3.00</td></tr></tbody>
+          </table>
+        </div>
+
+        <p><code>MIN</code> and <code>MAX</code> also work on text columns, where they return the alphabetically first and last values according to the database's collation rules. They work on date columns, where they return the earliest and latest dates.</p>
+        <p><strong>Query: What is the earliest enrollment date in the enrollments table?</strong></p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span> <span class="fn">MIN</span>(enrolled_date) <span class="kw">AS</span> first_enrollment
+<span class="kw">FROM</span> enrollments;</code></pre>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="Result of first enrollment query">
+          <div class="table-caption">Result</div>
+          <table>
+            <thead><tr><th>first_enrollment</th></tr></thead>
+            <tbody><tr><td>2024-09-01</td></tr></tbody>
+          </table>
+        </div>
+
+        <p>Like all aggregate functions, <code>MIN</code> and <code>MAX</code> ignore null values.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Summary So Far</div>
+          <div class="table-wrap fn-table" role="region" aria-label="Aggregate function summary">
+            <table>
+              <thead><tr><th>Function</th><th>What it returns</th></tr></thead>
+              <tbody>
+                <tr><td>COUNT(*)</td><td>Number of rows</td></tr>
+                <tr><td>COUNT(col)</td><td>Number of non-null values in a column</td></tr>
+                <tr><td>COUNT(DISTINCT col)</td><td>Number of distinct non-null values</td></tr>
+                <tr><td>SUM(col)</td><td>Total of all non-null numeric values</td></tr>
+                <tr><td>AVG(col)</td><td>Mean of all non-null numeric values</td></tr>
+                <tr><td>MIN(col)</td><td>Smallest non-null value</td></tr>
+                <tr><td>MAX(col)</td><td>Largest non-null value</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>All of these functions collapse many rows into one value. That is the defining feature of an aggregate function.</p>
+        </div>
+      </section>
+
+      <!-- 12.6 -->
+      <section class="section" id="s12-6">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.6</span>
+          <h2 class="section-title">Grouping with <code>GROUP BY</code></h2>
+        </div>
+
+        <p>The aggregate functions in sections 12.2 through 12.5 all collapsed the entire result set into a single row. But most real summary questions want results broken down by some category. How many enrollments per course? What is the total fines per user? What is the average score per assignment?</p>
+        <p><code>GROUP BY</code> divides the rows into groups based on one or more column values, and then applies the aggregate function separately within each group.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Syntax</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Syntax Pattern</div>
+            <pre><code><span class="kw">SELECT</span> grouping_column, aggregate_function(value_column)
+<span class="kw">FROM</span> table_name
+<span class="kw">GROUP BY</span> grouping_column;</code></pre>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Example: Enrollment Count per Course</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> course_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> enrollment_count
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id;</code></pre>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Result of enrollment count per course">
+            <div class="table-caption">Result</div>
+            <table>
+              <thead><tr><th>course_id</th><th>enrollment_count</th></tr></thead>
+              <tbody>
+                <tr><td>CS101</td><td>3</td></tr>
+                <tr><td>CS202</td><td>2</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>The database splits the <code>enrollments</code> table into two groups, one for each <code>course_id</code>. Then it counts the rows in each group separately and returns one row of results per group.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Example: Total Fines per User</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> user_id, <span class="fn">SUM</span>(fine_amount) <span class="kw">AS</span> total_fines
+<span class="kw">FROM</span> loans
+<span class="kw">GROUP BY</span> user_id;</code></pre>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Result of total fines per user">
+            <div class="table-caption">Result</div>
+            <table>
+              <thead><tr><th>user_id</th><th>total_fines</th></tr></thead>
+              <tbody>
+                <tr><td>201</td><td>3.00</td></tr>
+                <tr><td>202</td><td>2.25</td></tr>
+                <tr><td>203</td><td>0.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Example: Average Days Borrowed per User</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> user_id, <span class="fn">AVG</span>(days_borrowed) <span class="kw">AS</span> avg_days
+<span class="kw">FROM</span> loans
+<span class="kw">GROUP BY</span> user_id;</code></pre>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Result of average days per user">
+            <div class="table-caption">Result</div>
+            <table>
+              <thead><tr><th>user_id</th><th>avg_days</th></tr></thead>
+              <tbody>
+                <tr><td>201</td><td>14.0</td></tr>
+                <tr><td>202</td><td>12.0</td></tr>
+                <tr><td>203</td><td>3.0</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">The Rule About <code>SELECT</code> and <code>GROUP BY</code></div>
+          <p>When a query uses <code>GROUP BY</code>, every column in the <code>SELECT</code> clause must either be listed in the <code>GROUP BY</code> clause or be wrapped in an aggregate function. This rule exists because each group produces exactly one row of output. If you try to include a column that has different values within the same group, the database would not know which value to show.</p>
+
+          <div class="code-block is-broken">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Invalid Query</div>
+            <pre><code><span class="cm">-- BROKEN: enrolled_date is not in GROUP BY and not aggregated</span>
+<span class="kw">SELECT</span> course_id, enrolled_date, <span class="fn">COUNT</span>(*)
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id;</code></pre>
+          </div>
+
+          <p>The <code>enrollments</code> table has multiple <code>enrolled_date</code> values within the <code>CS101</code> group. The database cannot produce one result row for <code>CS101</code> while also showing a single <code>enrolled_date</code> that represents the whole group. The query will produce an error or unpredictable results depending on the database system.</p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Valid Fixes</div>
+            <pre><code><span class="cm">-- Option 1: Add enrolled_date to GROUP BY</span>
+<span class="kw">SELECT</span> course_id, enrolled_date, <span class="fn">COUNT</span>(*)
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id, enrolled_date;
+
+<span class="cm">-- Option 2: Aggregate enrolled_date instead</span>
+<span class="kw">SELECT</span> course_id, <span class="fn">MIN</span>(enrolled_date) <span class="kw">AS</span> first_enrollment_date, <span class="fn">COUNT</span>(*)
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id;</code></pre>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Grouping by Multiple Columns</div>
+          <p>You can group by more than one column to get finer-grained summaries.</p>
+          <p><strong>Query: How many enrollments exist per student per course?</strong></p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> student_id, course_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> enrollment_count
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> student_id, course_id;</code></pre>
+          </div>
+          <p>This creates a group for each unique combination of <code>student_id</code> and <code>course_id</code>.</p>
+        </div>
+      </section>
+
+      <!-- 12.7 -->
+      <section class="section" id="s12-7">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.7</span>
+          <h2 class="section-title">Filtering Groups with <code>HAVING</code></h2>
+        </div>
+
+        <p><code>WHERE</code> filters individual rows before aggregation. <code>HAVING</code> filters groups after aggregation.</p>
+        <p>This distinction is important. <code>WHERE</code> runs first and decides which rows enter the aggregation. <code>HAVING</code> runs after the aggregate functions have computed, and decides which groups appear in the final result.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Syntax</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Syntax Pattern</div>
+            <pre><code><span class="kw">SELECT</span> grouping_column, aggregate_function(value_column)
+<span class="kw">FROM</span> table_name
+<span class="kw">GROUP BY</span> grouping_column
+<span class="kw">HAVING</span> aggregate_function(value_column) condition;</code></pre>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Example: Show Only Courses with More Than Two Enrollments</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> course_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> enrollment_count
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id
+<span class="kw">HAVING</span> <span class="fn">COUNT</span>(*) > 2;</code></pre>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Result of courses with more than two enrollments">
+            <div class="table-caption">Result</div>
+            <table>
+              <thead><tr><th>course_id</th><th>enrollment_count</th></tr></thead>
+              <tbody><tr><td>CS101</td><td>3</td></tr></tbody>
+            </table>
+          </div>
+
+          <p>CS202 has only 2 enrollments, so it is excluded. CS101 has 3, so it appears.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Example: Show Only Users Whose Total Fines Exceed One Dollar</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> user_id, <span class="fn">SUM</span>(fine_amount) <span class="kw">AS</span> total_fines
+<span class="kw">FROM</span> loans
+<span class="kw">GROUP BY</span> user_id
+<span class="kw">HAVING</span> <span class="fn">SUM</span>(fine_amount) > 1.00;</code></pre>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Result of users with fines over one dollar">
+            <div class="table-caption">Result</div>
+            <table>
+              <thead><tr><th>user_id</th><th>total_fines</th></tr></thead>
+              <tbody>
+                <tr><td>201</td><td>3.00</td></tr>
+                <tr><td>202</td><td>2.25</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>User 203 has total fines of 0.00, which does not exceed 1.00, so they do not appear.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title"><code>WHERE</code> Versus <code>HAVING</code>: A Side-by-Side Comparison</div>
+          <div class="scope-grid" aria-label="WHERE versus HAVING comparison">
+            <div class="scope-card">
+              <div class="scope-card-title">Filters</div>
+              <p><strong>WHERE</strong> — individual rows<br><strong>HAVING</strong> — groups</p>
+            </div>
+            <div class="scope-card">
+              <div class="scope-card-title">Runs</div>
+              <p><strong>WHERE</strong> — before GROUP BY<br><strong>HAVING</strong> — after GROUP BY</p>
+            </div>
+            <div class="scope-card">
+              <div class="scope-card-title">Can Reference</div>
+              <p><strong>WHERE</strong> — any column<br><strong>HAVING</strong> — aggregate functions and grouped columns</p>
+            </div>
+            <div class="scope-card">
+              <div class="scope-card-title">Common Use</div>
+              <p><strong>WHERE</strong> — limiting raw data<br><strong>HAVING</strong> — limiting summary results</p>
+            </div>
+          </div>
+
+          <p>A query can use both <code>WHERE</code> and <code>HAVING</code> at the same time.</p>
+          <p><strong>Example: Among loans made in 2024, show only users whose total fines exceed one dollar</strong></p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> user_id, <span class="fn">SUM</span>(fine_amount) <span class="kw">AS</span> total_fines
+<span class="kw">FROM</span> loans
+<span class="kw">WHERE</span> loan_id >= 1
+  <span class="kw">AND</span> fine_amount <span class="kw">IS NOT NULL</span>
+<span class="kw">GROUP BY</span> user_id
+<span class="kw">HAVING</span> <span class="fn">SUM</span>(fine_amount) > 1.00;</code></pre>
+          </div>
+
+          <p>Here <code>WHERE</code> removes rows before grouping. Then <code>HAVING</code> filters the grouped results afterward.</p>
+        </div>
+      </section>
+
+      <!-- 12.8 -->
+      <section class="section" id="s12-8">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.8</span>
+          <h2 class="section-title">Summary Column Aliases</h2>
+        </div>
+
+        <p>Aggregate functions produce columns in the result set, but those columns do not have natural names from the original table. Without an alias, the column header might appear as something like <code>COUNT(*)</code> or <code>SUM(fine_amount)</code>, which is not readable in a report or dashboard.</p>
+        <p>Aliases with <code>AS</code> give aggregate columns meaningful names.</p>
+
+        <div class="code-block">
+          <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+          <pre><code><span class="kw">SELECT</span>
+    course_id,
+    <span class="fn">COUNT</span>(*)            <span class="kw">AS</span> enrollment_count,
+    <span class="fn">COUNT</span>(grade)        <span class="kw">AS</span> graded_count,
+    <span class="fn">AVG</span>(grade)          <span class="kw">AS</span> average_grade
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id;</code></pre>
+        </div>
+
+        <p>The alias names <code>enrollment_count</code>, <code>graded_count</code>, and <code>average_grade</code> appear as the column headers in the result set. They make the output clear without requiring the reader to parse SQL syntax.</p>
+        <p>Aliases also allow you to reference the column cleanly in programming code that reads query results. A column named <code>COUNT(*)</code> is awkward to work with in most languages. A column named <code>enrollment_count</code> is not.</p>
+      </section>
+
+      <!-- 12.9 -->
+      <section class="section" id="s12-9">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.9</span>
+          <h2 class="section-title">Row Filters Versus Group Filters</h2>
+        </div>
+
+        <p>Students sometimes confuse when to use <code>WHERE</code> and when to use <code>HAVING</code>. A useful mental model is to think about what is being filtered, and when in the process that filtering happens.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">The Order of SQL Operations</div>
+          <p>SQL clauses do not execute in the order they are written. The logical order is shown below.</p>
+
+          <ol class="habits-list">
+            <li><div><strong>FROM</strong><p>Identify the table, or joined tables.</p></div></li>
+            <li><div><strong>WHERE</strong><p>Filter individual rows.</p></div></li>
+            <li><div><strong>GROUP BY</strong><p>Divide remaining rows into groups.</p></div></li>
+            <li><div><strong>Aggregate Functions</strong><p>Compute within each group.</p></div></li>
+            <li><div><strong>HAVING</strong><p>Filter groups.</p></div></li>
+            <li><div><strong>SELECT</strong><p>Choose which columns appear in the result.</p></div></li>
+            <li><div><strong>ORDER BY</strong><p>Sort the final result.</p></div></li>
+            <li><div><strong>LIMIT</strong><p>Limit the number of rows returned.</p></div></li>
+          </ol>
+
+          <p>Understanding this order explains why <code>WHERE</code> cannot reference aggregate functions: aggregates do not exist yet when <code>WHERE</code> runs. Only <code>HAVING</code>, which comes after aggregation, can reference them.</p>
+
+          <div class="code-block is-broken">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Invalid Query</div>
+            <pre><code><span class="cm">-- BROKEN: WHERE cannot reference COUNT(*)</span>
+<span class="kw">SELECT</span> course_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> enrollment_count
+<span class="kw">FROM</span> enrollments
+<span class="kw">WHERE</span> <span class="fn">COUNT</span>(*) > 2
+<span class="kw">GROUP BY</span> course_id;</code></pre>
+          </div>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Valid Query</div>
+            <pre><code><span class="cm">-- CORRECT: HAVING references COUNT(*) after aggregation</span>
+<span class="kw">SELECT</span> course_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> enrollment_count
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id
+<span class="kw">HAVING</span> <span class="fn">COUNT</span>(*) > 2;</code></pre>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">When to Use <code>WHERE</code> and When to Use <code>HAVING</code></div>
+          <p>Use <code>WHERE</code> to restrict which rows enter the aggregation. This makes the aggregation faster and more focused. Use <code>HAVING</code> to restrict which groups appear in the result after aggregation.</p>
+
+          <p><strong>Example: Average loan duration for users who borrowed at least three times</strong></p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> user_id, <span class="fn">AVG</span>(days_borrowed) <span class="kw">AS</span> avg_days, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> loan_count
+<span class="kw">FROM</span> loans
+<span class="kw">GROUP BY</span> user_id
+<span class="kw">HAVING</span> <span class="fn">COUNT</span>(*) >= 3;</code></pre>
+          </div>
+
+          <p>There is no row-level condition here, so no <code>WHERE</code> is needed. The <code>HAVING</code> clause does the work of keeping only groups with at least three loans.</p>
+
+          <p><strong>Example: Average loan duration for resources borrowed in September 2024, for users who borrowed multiple times</strong></p>
+          <p>If the <code>loans</code> table had a <code>loan_date</code> column, the query might look like this:</p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> user_id, <span class="fn">AVG</span>(days_borrowed) <span class="kw">AS</span> avg_days
+<span class="kw">FROM</span> loans
+<span class="kw">WHERE</span> loan_date >= <span class="str">'2024-09-01'</span>
+  <span class="kw">AND</span> loan_date < <span class="str">'2024-10-01'</span>
+<span class="kw">GROUP BY</span> user_id
+<span class="kw">HAVING</span> <span class="fn">COUNT</span>(*) > 1;</code></pre>
+          </div>
+
+          <p>The <code>WHERE</code> clause limits rows to September 2024 loans only. Then the grouping and aggregation happen. Then <code>HAVING</code> keeps only users who appear more than once within that filtered set.</p>
+        </div>
+      </section>
+
+      <!-- 12.10 -->
+      <section class="section" id="s12-10">
+        <a class="section-anchor" aria-hidden="true"></a>
+        <div class="section-header">
+          <span class="section-num">12.10</span>
+          <h2 class="section-title">Summary Queries in Reports</h2>
+        </div>
+
+        <p>Aggregate queries are the engine behind most reports and dashboards in real information systems. Understanding how aggregate queries map to real outputs makes them easier to design and debug.</p>
+
+        <div class="subsection">
+          <div class="subsection-title">Report: Enrollment Summary by Course</div>
+          <p>A school administrator might need a report showing, for each course, how many students are enrolled, how many have received grades, and the average grade. This maps directly to a summary query.</p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span>
+    course_id,
+    <span class="fn">COUNT</span>(*)        <span class="kw">AS</span> total_enrollments,
+    <span class="fn">COUNT</span>(grade)    <span class="kw">AS</span> graded_students,
+    <span class="fn">AVG</span>(grade)      <span class="kw">AS</span> avg_grade,
+    <span class="fn">MIN</span>(grade)      <span class="kw">AS</span> lowest_grade,
+    <span class="fn">MAX</span>(grade)      <span class="kw">AS</span> highest_grade
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id
+<span class="kw">ORDER BY</span> course_id;</code></pre>
+          </div>
+
+          <p>Note the <code>ORDER BY</code> at the end. Reports usually need sorted output. <code>ORDER BY</code> sorts the final results and can sort by grouped columns or by aggregate results.</p>
+
+          <p><strong>Example: Sort by enrollment count, largest first</strong></p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> course_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> enrollment_count
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id
+<span class="kw">ORDER BY</span> <span class="fn">COUNT</span>(*) <span class="kw">DESC</span>;</code></pre>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Report: Fine Summary per User, Excluding Zero Balances</div>
+          <p>A library billing report might want only users who currently owe fines.</p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span>
+    user_id,
+    <span class="fn">COUNT</span>(*)            <span class="kw">AS</span> loans_with_fines,
+    <span class="fn">SUM</span>(fine_amount)    <span class="kw">AS</span> total_owed
+<span class="kw">FROM</span> loans
+<span class="kw">WHERE</span> fine_amount > 0
+<span class="kw">GROUP BY</span> user_id
+<span class="kw">ORDER BY</span> <span class="fn">SUM</span>(fine_amount) <span class="kw">DESC</span>;</code></pre>
+          </div>
+
+          <p>The <code>WHERE fine_amount > 0</code> removes rows where the fine is zero before grouping. Then <code>HAVING</code> is not needed because the <code>WHERE</code> clause already excluded the zero-fine rows at the individual row level.</p>
+
+          <div class="callout callout-note">
+            <div class="callout-title">Efficiency Note</div>
+            <p>This approach is more efficient than using <code>HAVING SUM(fine_amount) > 0</code> because rows are eliminated early. <code>HAVING</code> requires the database to form all groups first and then discard them. <code>WHERE</code> eliminates rows before grouping, which means fewer rows enter the grouping step.</p>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Dashboard Statistic: Total Resources in the Catalog</div>
+          <p>Sometimes a dashboard needs a single headline number. This is just aggregation without grouping.</p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">AS</span> total_resources
+<span class="kw">FROM</span> resources;</code></pre>
+          </div>
+
+          <p>Or a set of headline numbers:</p>
+
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL — Example Query</div>
+            <pre><code><span class="kw">SELECT</span>
+    <span class="fn">COUNT</span>(*)                        <span class="kw">AS</span> total_resources,
+    <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> subject_id)      <span class="kw">AS</span> subjects_covered,
+    <span class="fn">MIN</span>(published_year)             <span class="kw">AS</span> earliest_publication,
+    <span class="fn">MAX</span>(published_year)             <span class="kw">AS</span> most_recent_publication
+<span class="kw">FROM</span> resources;</code></pre>
+          </div>
+
+          <p>This query returns one row with four summary columns, a typical input for a dashboard header.</p>
+        </div>
+      </section>
+
+    </article><!-- end content-body -->
+
+    <!-- ─── Back Matter ───────────────────────────────── -->
+    <div class="back-matter">
+
+      <!-- Summary -->
+      <div class="back-section" id="summary">
+        <div class="back-section-title">Chapter Summary</div>
+        <ul class="summary-points">
+          <li>This chapter introduced <strong>aggregation</strong> as the SQL skill that collapses many rows into meaningful summaries. The aggregate functions <strong>COUNT</strong>, <strong>SUM</strong>, <strong>AVG</strong>, <strong>MIN</strong>, and <strong>MAX</strong> each answer a different kind of summary question.</li>
+          <li><strong>COUNT(*)</strong> counts rows. <strong>COUNT(column)</strong> counts non-null values. <strong>SUM</strong> totals numeric values. <strong>AVG</strong> computes the mean. <strong>MIN</strong> and <strong>MAX</strong> find the extremes.</li>
+          <li><strong>GROUP BY</strong> divides rows into groups by one or more columns and applies aggregate functions within each group independently. Every column in the SELECT clause must either appear in the GROUP BY clause or be wrapped in an aggregate function, since groups collapse into single rows in the output.</li>
+          <li><strong>HAVING</strong> filters groups after aggregation, while <strong>WHERE</strong> filters individual rows before aggregation. Both can appear in the same query, and each serves a distinct purpose.</li>
+          <li>The order of SQL operations, from FROM through WHERE, then GROUP BY, then HAVING, then SELECT and ORDER BY, explains why WHERE cannot reference aggregate functions and why HAVING can.</li>
+          <li><strong>Aliases</strong> give aggregate columns readable names that appear clearly in reports and dashboards.</li>
+          <li>Summary queries are the foundation of most real reporting in information systems. When a teacher checks class averages, when a librarian reviews loan statistics, when an administrator compares enrollments by department, the underlying mechanism is an aggregate SQL query. Designing those queries well means understanding the question being asked, choosing the right rows, choosing the right grouping, and filtering the right things at the right stage.</li>
+        </ul>
+      </div>
+
+      <!-- Key Terms -->
+      <div class="back-section" id="key-terms">
+        <div class="back-section-title">Key Terms</div>
+        <div class="key-terms-grid">
+          <div class="term-card">
+            <div class="term-word">aggregate function</div>
+            <p class="term-def">A SQL function that computes a single result from a set of rows. The core aggregate functions are COUNT, SUM, AVG, MIN, and MAX.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">aggregation</div>
+            <p class="term-def">The process of combining many rows into one computed value or one row per group.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">AVG</div>
+            <p class="term-def">An aggregate function that returns the arithmetic mean of all non-null values in a numeric column.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">COUNT(*)</div>
+            <p class="term-def">An aggregate function that returns the number of rows in the result set, including rows with null values in other columns.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">COUNT(column)</div>
+            <p class="term-def">An aggregate function that returns the number of non-null values in a specific column.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">COUNT(DISTINCT column)</div>
+            <p class="term-def">An aggregate function that returns the number of distinct non-null values in a column.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">GROUP BY</div>
+            <p class="term-def">A SQL clause that divides rows into groups based on one or more column values, allowing aggregate functions to be applied within each group.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">group filter</div>
+            <p class="term-def">A condition applied after aggregation, using HAVING, that determines which groups appear in the final result.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">HAVING</div>
+            <p class="term-def">A SQL clause that filters groups after GROUP BY has been applied. It can reference aggregate functions. It runs after GROUP BY and before SELECT.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">MAX</div>
+            <p class="term-def">An aggregate function that returns the largest non-null value in a column.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">MIN</div>
+            <p class="term-def">An aggregate function that returns the smallest non-null value in a column.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">row filter</div>
+            <p class="term-def">A condition applied before aggregation, using WHERE, that determines which rows enter the grouping and aggregation steps.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-word">SUM</div>
+            <p class="term-def">An aggregate function that returns the total of all non-null values in a numeric column.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table Review -->
+      <div class="back-section" id="table-review">
+        <div class="back-section-title">Table Review</div>
+        <p class="back-section-intro">Practice Table A, the <code>submissions</code> table, is used throughout the Query Reading and Predict the Result sections below.</p>
+
+        <div class="table-wrap" role="region" aria-label="Practice Table A: submissions">
+          <div class="table-caption">Practice Table A — <code>submissions</code></div>
+          <table>
+            <thead>
+              <tr><th>submission_id</th><th>student_id</th><th>assignment_id</th><th>score</th><th>submitted_on</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>101</td><td>A1</td><td>88</td><td>2024-10-01</td></tr>
+              <tr><td>2</td><td>102</td><td>A1</td><td>74</td><td>2024-10-01</td></tr>
+              <tr><td>3</td><td>103</td><td>A1</td><td>92</td><td>2024-10-02</td></tr>
+              <tr><td>4</td><td>101</td><td>A2</td><td>79</td><td>2024-10-08</td></tr>
+              <tr><td>5</td><td>102</td><td>A2</td><td class="blank-cell">NULL</td><td>2024-10-09</td></tr>
+              <tr><td>6</td><td>104</td><td>A1</td><td>65</td><td>2024-10-03</td></tr>
+              <tr><td>7</td><td>103</td><td>A2</td><td>85</td><td>2024-10-07</td></tr>
+              <tr><td>8</td><td>104</td><td>A2</td><td>71</td><td>2024-10-08</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Query Reading -->
+      <div class="back-section" id="query-reading">
+        <div class="back-section-title">Query Reading</div>
+        <p class="back-section-intro">Read each query carefully. Before looking at the answer, predict what the result table will contain. All queries use Practice Table A above.</p>
+
+        <div class="query-reading-item">
+          <div class="query-reading-label">Query 1</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">AS</span> total_submissions
+<span class="kw">FROM</span> submissions;</code></pre>
+          </div>
+          <div class="query-reading-question">What does this query return? How many rows will the result contain? What value should appear?</div>
+        </div>
+
+        <div class="query-reading-item">
+          <div class="query-reading-label">Query 2</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(score) <span class="kw">AS</span> graded_submissions
+<span class="kw">FROM</span> submissions;</code></pre>
+          </div>
+          <div class="query-reading-question">Why might this return a different number than Query 1? Which row causes the difference?</div>
+        </div>
+
+        <div class="query-reading-item">
+          <div class="query-reading-label">Query 3</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> assignment_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> submission_count
+<span class="kw">FROM</span> submissions
+<span class="kw">GROUP BY</span> assignment_id;</code></pre>
+          </div>
+          <div class="query-reading-question">How many rows will the result contain? What will each row represent?</div>
+        </div>
+
+        <div class="query-reading-item">
+          <div class="query-reading-label">Query 4</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> assignment_id, <span class="fn">AVG</span>(score) <span class="kw">AS</span> avg_score, <span class="fn">MIN</span>(score) <span class="kw">AS</span> min_score, <span class="fn">MAX</span>(score) <span class="kw">AS</span> max_score
+<span class="kw">FROM</span> submissions
+<span class="kw">GROUP BY</span> assignment_id;</code></pre>
+          </div>
+          <div class="query-reading-question">How does AVG(score) handle the NULL value in the submissions table? Which group does that null belong to? How does its absence affect the average?</div>
+        </div>
+
+        <div class="query-reading-item">
+          <div class="query-reading-label">Query 5</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> student_id, <span class="fn">SUM</span>(score) <span class="kw">AS</span> total_points
+<span class="kw">FROM</span> submissions
+<span class="kw">GROUP BY</span> student_id
+<span class="kw">ORDER BY</span> <span class="fn">SUM</span>(score) <span class="kw">DESC</span>;</code></pre>
+          </div>
+          <div class="query-reading-question">List the students in the order they will appear. What total should each have? What happens to the student with a NULL score?</div>
+        </div>
+
+        <div class="query-reading-item">
+          <div class="query-reading-label">Query 6</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> assignment_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> submission_count
+<span class="kw">FROM</span> submissions
+<span class="kw">GROUP BY</span> assignment_id
+<span class="kw">HAVING</span> <span class="fn">COUNT</span>(*) > 3;</code></pre>
+          </div>
+          <div class="query-reading-question">Which assignment will appear in the result? Which will be excluded? Why?</div>
+        </div>
+      </div>
+
+      <!-- Predict the Result -->
+      <div class="back-section" id="predict">
+        <div class="back-section-title">Predict the Result</div>
+        <p class="back-section-intro">For each query below, write out the full result table before checking your answer. Use Practice Table A.</p>
+
+        <div class="predict-exercise">
+          <div class="predict-exercise-label">Exercise A</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> assignment_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> count, <span class="fn">AVG</span>(score) <span class="kw">AS</span> avg
+<span class="kw">FROM</span> submissions
+<span class="kw">WHERE</span> score <span class="kw">IS NOT NULL</span>
+<span class="kw">GROUP BY</span> assignment_id;</code></pre>
+          </div>
+          <div class="predict-prompt">Fill in the result table.</div>
+          <div class="table-wrap" role="region" aria-label="Exercise A blank result table">
+            <table>
+              <thead><tr><th>assignment_id</th><th>count</th><th>avg</th></tr></thead>
+              <tbody>
+                <tr><td class="blank-cell">?</td><td class="blank-cell">?</td><td class="blank-cell">?</td></tr>
+                <tr><td class="blank-cell">?</td><td class="blank-cell">?</td><td class="blank-cell">?</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="predict-exercise">
+          <div class="predict-exercise-label">Exercise B</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> student_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> submissions
+<span class="kw">FROM</span> submissions
+<span class="kw">GROUP BY</span> student_id
+<span class="kw">HAVING</span> <span class="fn">COUNT</span>(*) = 2;</code></pre>
+          </div>
+          <div class="predict-prompt">Which students appear? How many rows does the result contain?</div>
+        </div>
+
+        <div class="predict-exercise">
+          <div class="predict-exercise-label">Exercise C</div>
+          <div class="code-block">
+            <div class="code-label"><span class="code-label-dot"></span>SQL</div>
+            <pre><code><span class="kw">SELECT</span> <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> student_id) <span class="kw">AS</span> unique_students
+<span class="kw">FROM</span> submissions
+<span class="kw">WHERE</span> assignment_id = <span class="str">'A1'</span>;</code></pre>
+          </div>
+          <div class="predict-prompt">How many distinct students submitted Assignment A1? Write the result.</div>
+        </div>
+      </div>
+
+      <!-- Aggregation Practice -->
+      <div class="back-section" id="aggregation-practice">
+        <div class="back-section-title">Aggregation Practice</div>
+        <ul class="questions-list">
+          <li>Write a query that returns the total number of rows in the <code>submissions</code> table.</li>
+          <li>Write a query that returns the average score across all graded submissions.</li>
+          <li>Write a query that counts how many submissions exist for each student. Include <code>student_id</code> and a column named <code>total_submissions</code> in your result.</li>
+          <li>Write a query that finds the highest score and the lowest score on Assignment A1.</li>
+          <li>Write a query that returns the total points earned by each student. Sort the results from highest to lowest. Include only students whose total is above 150 points.</li>
+          <li>Write a query that counts, for each assignment, how many submissions have a non-null score. Include only assignments where at least three graded submissions exist.</li>
+        </ul>
+      </div>
+
+      <!-- Report Query Questions -->
+      <div class="back-section" id="report-questions">
+        <div class="back-section-title">Report Query Questions</div>
+        <ul class="questions-list">
+          <li>A library administrator wants to know how many loans each user has made, sorted by most loans first. Which table would you query? What aggregate function and grouping would you use?</li>
+          <li>A teacher wants a report showing, for each assignment, the number of submissions, the average score, the highest score, and the lowest score. Write the query that would produce this report.</li>
+          <li>A department manager wants to see only the courses that have more than 20 enrollments. How would you structure this query? Would you use WHERE, HAVING, or both?</li>
+          <li>A dashboard needs a single number showing the total count of resources in a library catalog. Write the query. What kind of result does it produce?</li>
+          <li>A school wants to identify students who have submitted all assignments, meaning they appear in at least as many rows as the total number of distinct assignments. Describe in plain English how a COUNT and GROUP BY query could help answer this question. You do not need to write the SQL.</li>
+        </ul>
+      </div>
+
+      <!-- Debugging Practice -->
+      <div class="back-section" id="debugging">
+        <div class="back-section-title">Debugging Practice</div>
+        <p class="back-section-intro">Each query below contains an error. Identify the error and explain how to fix it.</p>
+
+        <div class="debug-card">
+          <div class="debug-card-label">Broken Query 1</div>
+          <div class="debug-card-body">
+            <pre><code><span class="kw">SELECT</span> course_id, enrolled_date, <span class="fn">COUNT</span>(*)
+<span class="kw">FROM</span> enrollments
+<span class="kw">GROUP BY</span> course_id;</code></pre>
+            <p class="debug-card-question">What is the problem? What are two ways to fix it?</p>
+          </div>
+        </div>
+
+        <div class="debug-card">
+          <div class="debug-card-label">Broken Query 2</div>
+          <div class="debug-card-body">
+            <pre><code><span class="kw">SELECT</span> student_id, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> submission_count
+<span class="kw">FROM</span> submissions
+<span class="kw">WHERE</span> <span class="fn">COUNT</span>(*) > 2
+<span class="kw">GROUP BY</span> student_id;</code></pre>
+            <p class="debug-card-question">What is the problem? What clause should be used instead?</p>
+          </div>
+        </div>
+
+        <div class="debug-card">
+          <div class="debug-card-label">Broken Query 3</div>
+          <div class="debug-card-body">
+            <pre><code><span class="kw">SELECT</span> assignment_id, <span class="fn">SUM</span>(score) <span class="kw">AS</span> total
+<span class="kw">FROM</span> submissions
+<span class="kw">HAVING</span> assignment_id = <span class="str">'A1'</span>
+<span class="kw">GROUP BY</span> assignment_id;</code></pre>
+            <p class="debug-card-question">This query has a clause in the wrong position. What is the correct order?</p>
+          </div>
+        </div>
+
+        <div class="debug-card">
+          <div class="debug-card-label">Broken Query 4</div>
+          <div class="debug-card-body">
+            <pre><code><span class="kw">SELECT</span> <span class="fn">AVG</span>(score)
+<span class="kw">FROM</span> submissions
+<span class="kw">GROUP BY</span> assignment_id;</code></pre>
+            <p class="debug-card-question">This query will run, but the result may be confusing or unusable in a report. What is missing? Why does it matter?</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misconceptions -->
+      <div class="back-section" id="misconceptions">
+        <div class="back-section-title">Common Misconceptions</div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 1</div>
+          <div class="misconception-title">WHERE can filter on aggregate functions.</div>
+          <p>Students sometimes write <code>WHERE COUNT(*) > 5</code> expecting it to filter groups. This does not work. WHERE runs before grouping. At the time WHERE executes, no groups have been formed yet, so no aggregate values exist. Use HAVING to filter on aggregate results.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 2</div>
+          <div class="misconception-title">COUNT(column) and COUNT(*) always return the same number.</div>
+          <p>They return the same number only when the specified column has no null values. COUNT(*) counts all rows. COUNT(column) skips nulls. When a column has nulls, these two counts will differ. This distinction is important for data quality analysis.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 3</div>
+          <div class="misconception-title">AVG automatically handles missing data fairly.</div>
+          <p>AVG excludes nulls. If some records have null values in the column being averaged, the denominator in the average is the number of non-null values, not the total number of rows. This means the average reflects only the records with data. Depending on the question being asked, this may or may not be the right answer.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 4</div>
+          <div class="misconception-title">HAVING is just a second WHERE clause.</div>
+          <p>HAVING and WHERE look similar, but they run at different times and operate on different things. WHERE filters rows before aggregation. HAVING filters groups after aggregation. They are not interchangeable.</p>
+        </div>
+
+        <div class="misconception">
+          <div class="misconception-label">Misconception 5</div>
+          <div class="misconception-title">GROUP BY sorts the result.</div>
+          <p>GROUP BY does not guarantee any particular sort order in the output. To sort aggregated results, you must add an ORDER BY clause explicitly.</p>
+        </div>
+      </div>
+
+      <!-- Real-World Applications -->
+      <div class="back-section" id="real-world">
+        <div class="back-section-title">Real-World Applications</div>
+        <ul class="questions-list">
+          <li>A public library uses a database to track loans. The head librarian wants a monthly report showing the ten resources that were borrowed most frequently. What aggregate function and grouping strategy would produce this report?</li>
+          <li>A university enrollment office needs to know how many students are enrolled in each department this term. The <code>enrollments</code> table links students to courses, and a <code>courses</code> table links courses to departments. Describe the joins and aggregation needed to answer this question.</li>
+          <li>A hospital billing system records a charge amount for every appointment. The finance team wants to know the average charge per department, but only for departments that have processed more than 100 appointments this year. Which clause would restrict the result to high-volume departments, and which clause would restrict the appointments to this year only?</li>
+          <li>An online store wants to find customers who have placed more than five orders in the past thirty days. Describe how GROUP BY, HAVING, and a date filter in WHERE would work together to answer this question.</li>
+          <li>A school gradebook system stores one row per student per assignment. A teacher asks: which students have an average score below 70? How would you write a query that answers this question, and would you use WHERE or HAVING to filter by the average score threshold?</li>
+        </ul>
+      </div>
+
+      <!-- Mixed Review -->
+      <div class="back-section" id="mixed-review">
+        <div class="back-section-title">Mixed Review</div>
+        <p class="back-section-intro">These questions draw on material from Chapters 10, 11, and 12.</p>
+        <ul class="questions-list">
+          <li>Write a query that selects all rows from the <code>loans</code> table where <code>fine_amount</code> is greater than zero. Sort the results by <code>fine_amount</code> descending. (Chapter 11)</li>
+          <li>Explain the difference between IS NULL and = 0 when filtering. Why does this matter for aggregate functions? (Chapters 11 and 12)</li>
+          <li>A query uses <code>WHERE loan_date >= '2024-01-01'</code> and also <code>GROUP BY user_id</code> and <code>HAVING COUNT(*) > 3</code>. Describe in plain English what this query is finding. (Chapter 12)</li>
+          <li>A student writes a query that selects <code>course_id</code>, <code>student_id</code>, and <code>COUNT(*)</code> from the enrollments table, grouped only by <code>course_id</code>, and gets an error. Explain why this fails. What change would make it valid? (Chapter 12)</li>
+          <li>What does <code>COUNT(DISTINCT user_id)</code> return in a loans table? How does this differ from <code>COUNT(user_id)</code> if some users appear multiple times? (Chapter 12)</li>
+        </ul>
+      </div>
+
+      <!-- Preview -->
+      <div class="back-section" id="preview">
+        <div class="back-section-title">Preview of Chapter 13</div>
+        <div class="preview-box">
+          <div class="preview-box-label">Coming Next — Chapter 13: Joining Tables</div>
+          <p>Chapter 12 has shown how to summarize data within a single table. But real questions often involve data spread across multiple tables. How many resources has each author contributed? Which students are enrolled in courses taught by a specific instructor? What fines are associated with which resources and users?</p>
+          <p style="margin-top: 0.75rem;">Answering these questions requires joining tables. Chapter 13 introduces SQL joins as the mechanism for combining related data across tables. Students will learn INNER JOIN, join conditions, table aliases, one-to-many joins, many-to-many joins through junction tables, and the common mistakes that produce duplicate or missing rows. Joining is one of the most important skills in SQL, and it builds directly on the relational design and querying skills from earlier chapters.</p>
+        </div>
+      </div>
+
+    </div><!-- end back-matter -->
+
+    <!-- Footer -->
+    <footer class="chapter-footer">
+      <span>Data, Databases, and Information Systems &mdash; MGU Computer Science Series &mdash; Library Textbook Edition</span>
+      <span>Chapter 12 of 28 &mdash; Part III: SQL and Querying Data</span>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>
