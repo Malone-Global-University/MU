@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project 11 — Balance Room Airflow with Dampers and Registers</title>
+  <style>
+    :root {
+      --navy-950: #061c33;
+      --navy-900: #09243f;
+      --navy-850: #0b2d52;
+      --navy-800: #123b66;
+      --blue-700: #075fa8;
+      --blue-600: #0b74c9;
+      --blue-500: #1782d7;
+      --ink: #122033;
+      --muted: #52606f;
+      --paper: #fbfaf5;
+      --paper-2: #f4f0e8;
+      --line: #d8d2c7;
+      --shadow: 0 14px 30px rgba(6, 28, 51, .12);
+      --red: #b5282f;
+      --orange: #c96525;
+      --green: #5c7f35;
+      --purple: #65529b;
+      --teal: #1a7c83;
+      --gold: #9f7328;
+      --steel: #2f79a9;
+      --gray: #5a6472;
+      --yellow: #a3821f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Inter", "Segoe UI", Arial, sans-serif;
+      background:
+        radial-gradient(circle at 18% 10%, rgba(9, 36, 63, .04), transparent 27%),
+        radial-gradient(circle at 88% 42%, rgba(10, 116, 201, .04), transparent 30%),
+        linear-gradient(0deg, rgba(255,255,255,.45), rgba(255,255,255,.45)),
+        repeating-linear-gradient(90deg, rgba(6,28,51,.018) 0 1px, transparent 1px 4px),
+        var(--paper);
+      line-height: 1.52;
+    }
+
+    .book-header {
+      background: linear-gradient(90deg, var(--navy-950), var(--navy-850));
+      color: #fff;
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      padding: 0 42px;
+      border-bottom: 8px solid var(--blue-600);
+      box-shadow: 0 3px 16px rgba(0,0,0,.22);
+      letter-spacing: .045em;
+      text-transform: uppercase;
+      font-family: "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+      font-weight: 800;
+    }
+
+    .book-header .series { color: #b8c6d5; font-size: 15px; margin-right: 22px; white-space: nowrap; }
+    .book-header .divider { opacity: .55; margin-right: 22px; font-weight: 400; }
+    .book-header .book-title { font-size: 15px; color: #f5f8fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .page { max-width: 1400px; margin: 0 auto; padding: 34px 38px 0; }
+
+    .breadcrumb { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; color: var(--blue-700); font-size: 14px; font-weight: 800; }
+    .breadcrumb span:not(:last-child)::after { content: "›"; margin-left: 12px; color: #66788a; font-weight: 900; }
+
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 44px; align-items: start; }
+    .hero-left { display: grid; grid-template-columns: 185px minmax(0, 1fr); gap: 28px; align-items: start; }
+
+    .chapter-stamp {
+      width: 185px; height: 185px; border-radius: 12px; color: #fff; background: var(--navy-850);
+      box-shadow: 0 10px 22px rgba(6, 28, 51, .18); position: relative; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-transform: uppercase; transform: translateY(1px);
+    }
+    .chapter-stamp .label { font-family: "Arial Narrow", "Roboto Condensed", Arial, sans-serif; letter-spacing: .16em; font-weight: 900; font-size: 24px; margin-bottom: 8px; color: rgba(255, 255, 255, .92); }
+    .chapter-stamp .number { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: 112px; line-height: .82; letter-spacing: -.06em; color: #fff; }
+
+    .chapter-header__title { margin: 10px 0 16px; font-family: Georgia, "Times New Roman", serif; color: var(--navy-850); font-size: clamp(40px, 5.6vw, 54px); line-height: 1.05; letter-spacing: -.035em; text-transform: uppercase; text-shadow: 0 1px 0 rgba(255,255,255,.9); }
+    .chapter-header__number { margin: 0; color: var(--blue-700); font-family: "Arial Narrow", Arial, sans-serif; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; font-size: 15px; }
+
+    .rule { width: 100%; height: 4px; background: var(--blue-600); margin: 20px 0 24px; }
+    .chapter-header__summary { max-width: 560px; margin: 0; font-size: 17px; color: #152438; }
+
+    .glance { background: rgba(255,255,255,.52); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); overflow: hidden; }
+    .glance .tab { background: linear-gradient(90deg, var(--navy-850), var(--blue-600)); color: #fff; display: inline-block; padding: 9px 18px 8px; font-family: "Arial Narrow", Arial, sans-serif; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; border-bottom-right-radius: 5px; }
+    .glance-body { padding: 12px 22px 17px; }
+    .glance-row { display: grid; grid-template-columns: 42px 1fr; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px dashed #c9c2b8; }
+    .glance-row:last-child { border-bottom: none; }
+    .glance-icon { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--blue-700); border: 2px solid rgba(11, 95, 168, .2); font-size: 20px; background: rgba(11,116,201,.05); }
+    .glance-label { font-weight: 900; color: #1a2e44; font-size: 13px; line-height: 1.15; }
+    .glance-value { font-size: 15px; color: #18273a; }
+
+    .cue-legend { margin: 34px 0 34px; border: 1px solid var(--line); background: rgba(255,255,255,.35); box-shadow: 0 2px 9px rgba(6,28,51,.07); display: grid; grid-template-columns: 170px repeat(6, minmax(112px, 1fr)); gap: 8px; padding: 20px; }
+    .cue-legend-intro h2, .section-title, .table-card h2, .note-title { margin: 0 0 10px; color: var(--blue-700); font-family: "Arial Narrow", "Roboto Condensed", Arial, sans-serif; font-weight: 900; letter-spacing: .025em; text-transform: uppercase; line-height: 1.1; }
+    .cue-legend-intro h2 { font-size: 18px; }
+    .cue-legend-intro p { margin: 0; font-size: 12px; color: #17273b; }
+
+    .cue-legend-card { min-height: 150px; border: 1px solid #d4c3ac; background: rgba(255,255,255,.5); padding: 13px 11px 10px; border-radius: 3px; display: flex; flex-direction: column; justify-content: flex-start; }
+    .cue-legend-card .icon { font-size: 28px; margin-bottom: 9px; font-weight: 900; }
+    .cue-legend-card h3 { margin: 0 0 9px; font-family: "Arial Narrow", "Roboto Condensed", Arial, sans-serif; font-size: 14px; letter-spacing: .03em; line-height: 1.05; text-transform: uppercase; }
+    .cue-legend-card p { margin: 0; font-size: 12px; color: #172437; line-height: 1.4; }
+
+    .cue { margin: 18px 0; border-radius: 4px; padding: 14px 16px; border: 1px solid; }
+    .cue h4 { margin: 0 0 6px; font-family: "Arial Narrow", Arial, sans-serif; text-transform: uppercase; letter-spacing: .04em; font-size: 14px; }
+    .cue p { margin: 0; font-size: 15px; }
+
+    .cue-safety, .cue-legend-card.cue-safety { color: var(--orange); border-color: #e2a677; background: rgba(201,101,37,.06); }
+    .cue-critical, .cue-legend-card.cue-critical { color: var(--red); border-color: #c34b55; background: rgba(181,40,47,.06); }
+    .cue-field, .cue-legend-card.cue-field { color: #1f91ad; border-color: #84bccc; background: rgba(31,145,173,.06); }
+    .cue-code, .cue-legend-card.cue-code { color: var(--green); border-color: #a1b383; background: rgba(92,127,53,.06); }
+    .cue-manufacturer, .cue-legend-card.cue-manufacturer { color: var(--purple); border-color: #a99cd2; background: rgba(101,82,155,.06); }
+    .cue-measurement, .cue-legend-card.cue-measurement { color: var(--gold); border-color: #d2ae72; background: rgba(159,115,40,.06); }
+
+    .toolbox { margin: 18px 0; border-radius: 4px; padding: 14px 16px; border-left: 6px solid; background: rgba(255,255,255,.55); box-shadow: 0 2px 8px rgba(6,28,51,.06); }
+    .toolbox h4 { margin: 0 0 6px; font-family: "Arial Narrow", Arial, sans-serif; text-transform: uppercase; letter-spacing: .04em; font-size: 13px; }
+    .toolbox p { margin: 0; font-size: 15px; color: #1b2d42; }
+    .toolbox-note { border-color: var(--gray); } .toolbox-note h4 { color: var(--gray); }
+    .toolbox-tip { border-color: var(--blue-600); } .toolbox-tip h4 { color: var(--blue-700); }
+    .toolbox-mistake { border-color: var(--orange); } .toolbox-mistake h4 { color: var(--orange); }
+    .toolbox-observation { border-color: var(--green); } .toolbox-observation h4 { color: var(--green); }
+    .toolbox-inspection { border-color: var(--yellow); } .toolbox-inspection h4 { color: var(--yellow); }
+    .toolbox-code { border-color: var(--red); } .toolbox-code h4 { color: var(--red); }
+
+    .main-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr); gap: 38px; align-items: start; margin-bottom: 34px; }
+    .left-column { padding: 0 2px 0 16px; }
+    .right-column { border-left: 1px dotted #b8b0a4; padding-left: 36px; }
+
+    .content-block { margin-bottom: 28px; border-bottom: 1px dotted #c7c0b5; padding-bottom: 22px; }
+    .content-block:last-child { border-bottom: none; }
+
+    .section-title { font-size: 22px; border-bottom: 3px solid var(--blue-600); padding-bottom: 6px; margin-bottom: 14px; }
+    .content-block p { margin: 0 0 16px; font-size: 17px; color: #1b2d42; }
+
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li { position: relative; padding: 7px 0 7px 34px; border-bottom: 1px dotted #c7c0b5; font-size: 16px; }
+    .checklist li::before { content: "✓"; position: absolute; left: 0; top: 8px; width: 21px; height: 21px; border-radius: 50%; background: var(--blue-700); color: white; font-size: 14px; line-height: 21px; text-align: center; font-weight: 900; }
+
+    .table-card h2 { font-size: 21px; }
+    .title-rule { border-bottom: 3px solid var(--blue-600); padding-bottom: 7px; margin-bottom: 20px; }
+
+    table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,.54); box-shadow: 0 2px 10px rgba(6,28,51,.08); border: 1px solid #c9c2b7; overflow: hidden; margin-bottom: 8px; }
+    th { background: linear-gradient(90deg, var(--navy-850), var(--blue-700)); color: white; padding: 10px 13px; text-transform: uppercase; font-family: "Arial Narrow", Arial, sans-serif; font-size: 13px; letter-spacing: .045em; text-align: left; }
+    td { border: 1px solid #d6d0c5; padding: 11px 14px; vertical-align: middle; font-size: 15px; background: rgba(255,255,255,.38); }
+    td.icon-cell { width: 52px; text-align: center; font-size: 24px; color: var(--blue-700); }
+    td.item-cell { width: 30%; font-weight: 800; color: #1b2d42; }
+
+    .note-box { margin-top: 24px; border: 1px solid #a9c5dd; background: linear-gradient(180deg, rgba(238,247,255,.85), rgba(255,255,255,.45)); border-radius: 6px; padding: 18px 20px; box-shadow: 0 2px 8px rgba(6,28,51,.06); }
+    .note-title { font-size: 16px; color: var(--blue-700); margin-bottom: 8px; }
+    .note-box p { margin: 0; font-size: 16px; color: #1b2d42; }
+
+    .work-order { margin: 34px 0 40px; border: 1px solid #c9c1b1; background: rgba(255,255,255,.5); box-shadow: var(--shadow); border-radius: 4px; overflow: hidden; }
+    .work-order__header { background: linear-gradient(90deg, var(--navy-900), var(--blue-700)); color: #fff; padding: 18px 24px 16px; }
+    .work-order__competency-code { display: inline-block; margin: 0 0 8px; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.4); padding: 3px 10px; border-radius: 3px; font-family: "Arial Narrow", Arial, sans-serif; font-weight: 900; letter-spacing: .08em; font-size: 13px; }
+    .work-order__type { margin: 0 0 4px; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: #bcd7ef; font-weight: 800; }
+    .work-order__title { margin: 0; font-family: "Arial Narrow", "Roboto Condensed", Arial, sans-serif; font-weight: 900; text-transform: uppercase; font-size: 24px; letter-spacing: .01em; }
+    .work-order__meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 14px 24px; background: rgba(11,116,201,.06); border-bottom: 1px solid #d3ccbc; font-size: 14px; }
+    .work-order__meta p { margin: 0; }
+    .work-order__competencies { padding: 16px 24px; }
+    .work-order__competencies h3 { margin: 0 0 8px; font-family: "Arial Narrow", Arial, sans-serif; text-transform: uppercase; color: var(--blue-700); font-size: 14px; letter-spacing: .04em; }
+    .work-order__competencies ul { margin: 0; padding-left: 20px; }
+    .work-order__competencies li { font-size: 15px; margin-bottom: 4px; }
+
+    .work-order-body { padding: 4px 24px 24px; }
+    .work-order-body h3.wo-sub { color: var(--blue-700); font-family: "Arial Narrow", Arial, sans-serif; text-transform: uppercase; letter-spacing: .03em; font-size: 16px; border-bottom: 2px solid #d3ccbc; padding-bottom: 5px; margin: 22px 0 10px; }
+    .work-order-body p { font-size: 15.5px; margin: 0 0 12px; }
+    .work-order-body ul, .work-order-body ol { margin: 0 0 12px; padding-left: 22px; font-size: 15.5px; }
+    .work-order-body li { margin-bottom: 6px; }
+
+    .step-block { counter-reset: step; }
+    .step-block li { list-style: none; position: relative; padding: 8px 0 8px 40px; border-bottom: 1px dotted #c7c0b5; counter-increment: step; }
+    .step-block li::before { content: counter(step); position: absolute; left: 0; top: 8px; width: 26px; height: 26px; border-radius: 50%; background: var(--navy-850); color: #fff; font-weight: 900; font-size: 13px; text-align: center; line-height: 26px; }
+
+    .photo-placeholder { margin: 14px 0; border: 1px dashed #b7ac97; background: rgba(255,255,255,.4); padding: 14px; border-radius: 4px; text-align: center; }
+    .photo-placeholder img { max-width: 100%; }
+    .photo-placeholder figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; font-style: italic; }
+
+    .related-skills, .next-project { margin-top: 16px; font-size: 14.5px; color: #223347; border-top: 1px dashed #c7c0b5; padding-top: 12px; }
+    .related-skills strong, .next-project strong { color: var(--blue-700); }
+
+    .priority-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+    .priority-card { min-height: 92px; border: 1px solid #c8c0b4; background: rgba(255,255,255,.42); padding: 12px; border-top: 5px solid var(--blue-600); }
+    .priority-card strong { display: block; color: var(--navy-850); text-transform: uppercase; font-family: "Arial Narrow", Arial, sans-serif; letter-spacing: .035em; margin-bottom: 5px; }
+    .priority-card span { font-size: 13px; color: #334456; }
+
+    .shop-terms-list { columns: 2; column-gap: 40px; }
+    .shop-terms-list dt { font-weight: 900; color: var(--navy-850); margin-top: 10px; }
+    .shop-terms-list dd { margin: 2px 0 6px; font-size: 15px; }
+
+    .knowledge-check ol { padding-left: 22px; }
+    .knowledge-check li { margin-bottom: 10px; font-size: 16px; }
+
+    .chapter-nav { width: 100vw; margin-left: calc(50% - 50vw); background: linear-gradient(90deg, var(--navy-950), #071f38 45%, var(--navy-850)); color: white; min-height: 86px; display: grid; grid-template-columns: 240px minmax(260px, 1fr) 300px; align-items: center; padding: 12px 42px; box-shadow: 0 -6px 20px rgba(0,0,0,.2); }
+
+    .nav-button { display: flex; flex-direction: column; gap: 2px; color: white; text-decoration: none; font-size: 13px; }
+    .nav-button strong { font-family: "Arial Narrow", Arial, sans-serif; text-transform: uppercase; font-size: 18px; letter-spacing: .045em; }
+    .nav-button.prev strong::before { content: "← "; font-size: 28px; vertical-align: -2px; }
+    .nav-button.next strong::after { content: " →"; font-size: 28px; vertical-align: -2px; }
+    .nav-button.next { text-align: right; }
+    .nav-button.disabled { opacity: .45; pointer-events: none; }
+
+    .progress { text-align: center; }
+    .progress-title { color: #60a6e5; font-weight: 900; text-transform: uppercase; font-family: "Arial Narrow", Arial, sans-serif; letter-spacing: .08em; font-size: 18px; margin-bottom: 10px; }
+    .dots { display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.18); position: relative; }
+    .dot::after { content: ""; position: absolute; left: 10px; top: 5px; width: 10px; height: 2px; background: rgba(255,255,255,.16); }
+    .dot:last-child::after { display: none; }
+    .dot.active { background: var(--blue-600); box-shadow: 0 0 0 3px rgba(11,116,201,.14); }
+
+    @media (max-width: 1020px) {
+      .hero-grid, .main-grid { grid-template-columns: 1fr; }
+      .right-column { border-left: none; padding-left: 0; }
+      .cue-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cue-legend-intro { grid-column: 1 / -1; }
+      .chapter-nav { grid-template-columns: 1fr; gap: 12px; text-align: center; }
+      .nav-button, .nav-button.next { text-align: center; }
+      .work-order__meta { grid-template-columns: repeat(2, 1fr); }
+      .shop-terms-list { columns: 1; }
+    }
+
+    @media (max-width: 700px) {
+      .book-header { padding: 14px 18px; flex-wrap: wrap; gap: 6px; }
+      .book-header .divider { display: none; }
+      .page { padding: 24px 18px 0; }
+      .hero-left { grid-template-columns: 1fr; }
+      .chapter-stamp { width: 155px; height: 155px; }
+      .chapter-stamp .label { font-size: 23px; }
+      .chapter-stamp .number { font-size: 96px; }
+      .cue-legend { grid-template-columns: 1fr; padding: 14px; }
+      .priority-grid { grid-template-columns: 1fr; }
+      .chapter-nav { padding: 18px; }
+      td.item-cell { width: auto; }
+      .work-order__meta { grid-template-columns: 1fr; }
+    }
+
+    .project-panel { margin: 18px 0; border: 1px solid #d3ccb9; background: rgba(255,255,255,.45); padding: 18px 20px; box-shadow: 0 2px 8px rgba(6,28,51,.07); border-radius: 4px; }
+    .project-panel h3 { margin: 0 0 8px; color: var(--blue-700); font-family: "Arial Narrow", Arial, sans-serif; text-transform: uppercase; letter-spacing: .035em; font-size: 16px; border-bottom: 2px solid #d3ccbc; padding-bottom: 5px; }
+    .project-panel p { margin: 0 0 12px; font-size: 15.5px; color: #1b2d42; }
+    .zone-grid { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 10px; margin: 16px 0; }
+    .zone-card { border: 1px solid #c8c0b4; background: rgba(255,255,255,.42); padding: 12px; border-top: 5px solid var(--blue-600); min-height: 108px; }
+    .zone-card strong { display:block; color: var(--navy-850); text-transform: uppercase; font-family: "Arial Narrow", Arial, sans-serif; letter-spacing:.035em; margin-bottom: 5px; }
+    .zone-card span { font-size: 13px; color: #334456; }
+    .readiness-list li { margin-bottom: 7px; }
+    .placeholder-label { font-family: "Arial Narrow", Arial, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--blue-700); font-weight: 900; font-size: 14px; }
+    @media (max-width: 1020px) { .zone-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 700px) { .zone-grid { grid-template-columns: 1fr; } }
+
+  </style>
+<body>
+  <header class="book-header">
+    <div class="series">Residential Construction and Building Trades Library</div>
+    <div class="divider">|</div>
+    <div class="book-title">Book 09 — Residential HVAC: Heating, Cooling, Ventilation, Duct Systems, and Indoor Air Quality</div>
+  </header>
+
+  <main class="page">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <span>Residential HVAC</span>
+      <span>Projects</span>
+      <span>Project 11</span>
+    </nav>
+
+    <section class="hero-grid" aria-labelledby="project-title">
+      <div class="hero-left">
+        <aside class="chapter-stamp" aria-label="Project number">
+          <div class="label">Project</div>
+          <div class="number">11</div>
+        </aside>
+
+        <header class="chapter-header">
+          <p class="chapter-header__number">Project 11</p>
+          <h1 class="chapter-header__title" id="project-title">Balance Room Airflow with Dampers and Registers</h1>
+          <div class="rule"></div>
+          <p class="chapter-header__summary">Perform a controlled, room-by-room airflow-balancing adjustment on an approved residential or practice system, using moderate register and balancing-damper changes to correct comfort complaints without changing equipment capacity, duct design, or masking a defect that requires professional testing and balancing or design correction.</p>
+        </header>
+      </div>
+
+      <aside class="glance" aria-labelledby="brief-title">
+        <div class="tab" id="brief-title">Project Brief</div>
+        <div class="glance-body">
+          <div class="glance-row">
+            <div class="glance-icon">▥</div>
+            <div><div class="glance-label">Difficulty</div><div class="glance-value">Intermediate</div></div>
+          </div>
+          <div class="glance-row">
+            <div class="glance-icon">◷</div>
+            <div><div class="glance-label">Time</div><div class="glance-value">2–4 hours, plus stabilization time between adjustments</div></div>
+          </div>
+          <div class="glance-row">
+            <div class="glance-icon">$</div>
+            <div><div class="glance-label">Cost</div><div class="glance-value">$0–$25 for marking labels and a room-thermometer, if not already on hand</div></div>
+          </div>
+          <div class="glance-row">
+            <div class="glance-icon">🔧</div>
+            <div><div class="glance-label">Tools</div><div class="glance-value">Flathead or damper-key tool matching the installed balancing dampers, thermometer or the approved airflow-comparison instrument specified by the balancing plan, flashlight, clipboard, marking labels</div></div>
+          </div>
+          <div class="glance-row">
+            <div class="glance-icon">□</div>
+            <div><div class="glance-label">Materials</div><div class="glance-value">HVAC System Map (Chapter 1), duct-deficiency report (Chapter 5), approved balancing plan, HVAC Room-Airflow Balancing Worksheet, damper-position labels</div></div>
+          </div>
+          <div class="glance-row">
+            <div class="glance-icon">▰</div>
+            <div><div class="glance-label">Competencies</div><div class="glance-value">HV-061 – HV-066</div></div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="cue-legend" aria-labelledby="cue-legend-title">
+      <div class="cue-legend-intro">
+        <h2 id="cue-legend-title">Field Cue System</h2>
+        <p>These cues appear at the point of work. They identify safety, code, manufacturer, and measurement issues before a damper adjustment becomes a masked defect or an equipment fault.</p>
+      </div>
+
+      <article class="cue-legend-card cue-safety">
+        <div class="icon">△</div>
+        <h3>Safety Cue</h3>
+        <p>Task-specific safety guidance for ordinary work hazards.</p>
+      </article>
+
+      <article class="cue-legend-card cue-critical">
+        <div class="icon">✋</div>
+        <h3>Critical Safety Cue</h3>
+        <p>Serious injury, shock, combustion, or exposure hazard is possible.</p>
+      </article>
+
+      <article class="cue-legend-card cue-field">
+        <div class="icon">⛑</div>
+        <h3>Field Safety Cue</h3>
+        <p>Practical work-area safety: lighting, footing, access, and housekeeping.</p>
+      </article>
+
+      <article class="cue-legend-card cue-code">
+        <div class="icon">▤</div>
+        <h3>Code Alert</h3>
+        <p>Local requirements vary. Verify permit, inspection, and jurisdictional rules.</p>
+      </article>
+
+      <article class="cue-legend-card cue-manufacturer">
+        <div class="icon">▧</div>
+        <h3>Manufacturer Cue</h3>
+        <p>Follow product-specific instructions for equipment, controls, and labels.</p>
+      </article>
+
+      <article class="cue-legend-card cue-measurement">
+        <div class="icon">▱</div>
+        <h3>Measurement Cue</h3>
+        <p>Reference-point, verification, and documentation guidance.</p>
+      </article>
+    </section>
+
+    <section class="main-grid">
+      <div class="left-column">
+        <article class="content-block">
+          <h2 class="section-title">Job Overview</h2>
+          <p>This project qualifies you to perform a controlled, room-by-room airflow-balancing adjustment on one residential or training HVAC system. The finished work product is one completed HVAC Room-Airflow Balancing Worksheet: a written record of baseline conditions, each damper or register adjustment made, the room and system response to each adjustment, the final approved damper and register positions, and any condition that could not be corrected within the approved adjustment range.</p>
+          <p>You will confirm that filters, grilles, ducts, returns, doors, and equipment are serviceable before balancing; record baseline operating conditions and room temperatures or airflow observations; identify rooms with high, low, or unstable delivery; locate and mark the original position of each balancing damper; make one small adjustment at a time; allow the system to stabilize and compare results after each change; restore any adjustment that worsens performance; and establish, mark, and record the final approved positions.</p>
+          <p>This project depends directly on the system map produced in Chapter 1, the readiness and shutdown procedure of Chapter 2, and the duct-inspection and airflow-diagnosis report produced in Chapter 5. It does not repeat duct inspection, sealing, or repair work; it adjusts accessible dampers and registers within a system that Chapter 5 has already confirmed is serviceable enough to balance.</p>
+        </article>
+
+        <article class="content-block">
+          <h2 class="section-title">Skills You Will Demonstrate</h2>
+          <ul class="checklist">
+            <li><strong>HV-061</strong> — Identify hot and cold rooms using baseline temperature or airflow observations recorded under stable operating conditions.</li>
+            <li><strong>HV-062</strong> — Adjust supply registers in small, documented increments to correct identified room airflow imbalances.</li>
+            <li><strong>HV-063</strong> — Adjust balancing dampers in small, documented increments from marked original positions.</li>
+            <li><strong>HV-064</strong> — Compare room airflow before and after each adjustment using the same setup and measurement method.</li>
+            <li><strong>HV-065</strong> — Reduce restrictions caused by obstructed grilles or closed doors without resorting to excessive damper closure.</li>
+            <li><strong>HV-066</strong> — Document balancing changes, including baseline conditions, each adjustment, and the final approved positions.</li>
+          </ul>
+        </article>
+
+        <article class="content-block">
+          <h2 class="section-title">Where This Skill Fits</h2>
+          <p>Balancing follows directly from the duct inspection and airflow-diagnosis work of Chapter 5. That chapter identifies deficiencies that fall inside this book's scope, including register and damper conditions that a moderate balancing adjustment can correct. This chapter performs that correction. It does not redesign the duct system, resize equipment, or replace a defective duct component; those actions remain within Chapters 6 through 10 or a licensed design review.</p>
+          <p>The documentation habit established here — recording a baseline, one adjustment at a time, the result of each adjustment, and the final approved positions — is the same discipline used for the comfort-diagnostic report in Chapter 19 and the balancing procedure repeated on the Chapter 20 capstone system.</p>
+        </article>
+
+        <article class="content-block">
+          <h2 class="section-title">Scope and Intended Use</h2>
+          <p>This project covers:</p>
+          <ul class="checklist">
+            <li>confirming that filters, grilles, ducts, returns, doors, and equipment are serviceable before balancing begins</li>
+            <li>recording baseline outdoor conditions, thermostat setting, equipment mode, fan setting, door position, and operating duration</li>
+            <li>recording baseline room temperatures or approved airflow measurements or comparison observations</li>
+            <li>identifying rooms with high, low, or unstable delivery</li>
+            <li>verifying that return paths and supply grilles are unobstructed before adjusting a damper</li>
+            <li>locating balancing dampers and marking their original positions</li>
+            <li>making one small damper or register adjustment at a time and allowing the system to stabilize before the next observation</li>
+            <li>comparing the adjusted room and other affected rooms after each change</li>
+            <li>restoring any adjustment that worsens system performance</li>
+            <li>establishing, marking, and recording the final approved damper and register positions</li>
+            <li>recommending professional testing and balancing when room airflow cannot be corrected within the approved adjustment range</li>
+          </ul>
+          <p>This project does <strong>not</strong> authorize the learner to:</p>
+          <ul class="checklist">
+            <li>change equipment capacity, blower speed configuration, or duct design as a balancing correction</li>
+            <li>fully close multiple supply registers or create excessive system restriction to force airflow to a different room</li>
+            <li>compensate for severe duct damage, an inadequate return path, an equipment fault, or a design problem by extreme damper closure</li>
+            <li>cut new return openings, add ducts, or resize branches; those changes require the approved design referenced in Chapter 9</li>
+            <li>begin balancing on a system with unresolved duct deficiencies, filter loading, or blocked grilles identified in Chapter 3, Chapter 4, or Chapter 5 and not yet corrected</li>
+          </ul>
+          <p>Any room that cannot be corrected within the approved adjustment range, and any adjustment that produces whistle, turbulence, duct vibration, blower strain, or a cycling change, must be recorded and referred to professional testing and balancing rather than forced with additional damper closure.</p>
+        </article>
+
+        <aside class="toolbox toolbox-note">
+          <h4>Trade Note</h4>
+          <p>Balancing is a moderate adjustment, not a redesign. A duct system that is properly sized, sealed, and insulated will respond to small damper and register changes with a predictable, stable improvement. A duct system with severe damage, an undersized return, or a leaking connection will not respond to balancing in a way that lasts, and forcing it with extreme damper closure only adds noise, restriction, and blower strain on top of the original defect. When balancing does not produce a stable, moderate correction, the defect belongs in a professional testing-and-balancing or design referral, not in a tighter damper setting.</p>
+        </aside>
+      </div>
+
+      <aside class="right-column">
+        <div class="table-card">
+          <h2 class="title-rule">Common Tools and Equipment</h2>
+          <table aria-label="Common tools and equipment for this project">
+            <thead>
+              <tr><th colspan="2">Item</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Flathead screwdriver or damper-key tool</td><td>Operating the installed balancing damper quadrant or key matching the equipment on site</td></tr>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Thermometer or approved airflow-comparison instrument</td><td>Recording baseline and post-adjustment room temperature or airflow readings using the balancing plan's specified method</td></tr>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Flashlight or headlamp</td><td>Locating balancing dampers in ducts, closets, and low-light areas</td></tr>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Clipboard</td><td>Supporting the HVAC Room-Airflow Balancing Worksheet during the walk-through</td></tr>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Damper-position labels</td><td>Marking the original and each adjusted damper position for later reference and reversal</td></tr>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">HVAC System Map, duct-deficiency report, and approved balancing plan</td><td>Confirming room layout, damper locations, prior deficiencies, and approved comfort targets before adjusting anything</td></tr>
+            </tbody>
+          </table>
+
+          <h2 class="title-rule" style="margin-top:20px;">PPE and Materials</h2>
+          <table aria-label="PPE and materials for this project">
+            <thead>
+              <tr><th colspan="2">Item</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Eye protection</td><td>Worn when accessing dampers in attics, crawlspaces, or overhead duct locations</td></tr>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Closed-toe footwear</td><td>Worn at all times during this project</td></tr>
+              <tr><td class="icon-cell">▣</td><td class="item-cell">Marking labels or tags</td><td>Recording the original damper position before the first adjustment</td></tr>
+            </tbody>
+          </table>
+          <p style="font-size:14px; color:#334456; margin-top:8px;"><strong>Required PPE for this project:</strong> eye protection when accessing dampers in attics, crawlspaces, or overhead locations; closed-toe footwear at all times.</p>
+        </div>
+
+        <aside class="note-box">
+          <h3 class="note-title">Setup Standard</h3>
+          <p>Do not begin adjusting any damper or register until the baseline has been recorded and the original damper positions are marked. Do not change more than one damper or register at a time, and do not proceed to the next adjustment until the system has stabilized and the current adjustment's result has been recorded.</p>
+        </aside>
+
+        <aside class="toolbox toolbox-tip">
+          <h4>Shop Tip</h4>
+          <p>Photograph or sketch each damper's marked original position before touching it. If a later adjustment produces an unwanted result somewhere else in the system, the fastest correction is returning to a known, recorded starting point rather than guessing at where the damper was before you began.</p>
+        </aside>
+      </aside>
+    </section>
+
+    <article class="content-block">
+      <h2 class="section-title">Reference Conventions</h2>
+      <p>Establish these references before beginning the balancing walk-through, and do not change the defined room set mid-project.</p>
+
+      <table aria-label="Reference conventions for this project">
+        <thead>
+          <tr><th>Term</th><th>Definition</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="item-cell">Baseline condition</td><td>The recorded outdoor condition, thermostat setting, equipment mode, fan setting, door position, and operating duration in place before any adjustment is made</td></tr>
+          <tr><td class="item-cell">Stable operation</td><td>The system operating condition, reached after the equipment has run for the period specified by the balancing plan, at which room temperature or airflow readings are considered valid for comparison</td></tr>
+          <tr><td class="item-cell">Balancing damper</td><td>A duct-mounted damper with a quadrant, key, or lockable handle intended for airflow adjustment, distinct from a register's built-in louver control</td></tr>
+          <tr><td class="item-cell">Marked original position</td><td>The damper or register setting recorded and labeled before the first adjustment of this project, to which the component can be returned if an adjustment must be reversed</td></tr>
+          <tr><td class="item-cell">Small adjustment</td><td>One incremental change to a single damper or register, of the magnitude specified by the balancing plan, made and observed before any further adjustment is made anywhere in the system</td></tr>
+          <tr><td class="item-cell">Affected room</td><td>Any room other than the room being directly adjusted whose temperature, airflow, or comfort condition changes as a result of that adjustment</td></tr>
+        </tbody>
+      </table>
+
+      <div class="project-panel">
+        <h3>Balancing Definition Record</h3>
+        <p>Before beginning the walk-through, record the defined project scope directly on the HVAC Room-Airflow Balancing Worksheet:</p>
+        <p>System or zone (from Chapter 1 map): ______ &nbsp;&nbsp;&nbsp; Rooms included in this balancing project: ______ &nbsp;&nbsp;&nbsp; Approved balancing plan reference: ______</p>
+        <p>Chapter 5 duct-deficiency report reviewed: ______ (Yes/No) &nbsp;&nbsp;&nbsp; Date started: ____________ &nbsp;&nbsp;&nbsp; Builder name: ____________</p>
+      </div>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Prerequisites</h2>
+      <ul class="checklist">
+        <li>Completed HVAC System Map and Existing-Condition Record from Chapter 1</li>
+        <li>Completed duct-deficiency report from Chapter 5, with all deficiencies inside this book's scope corrected or otherwise resolved before balancing begins</li>
+        <li>Current filter installed and rack sealed per Chapter 3, and grilles cleaned and airflow paths cleared per Chapter 4</li>
+        <li>An approved balancing plan identifying the rooms, comfort targets, measurement method, and adjustment increments to be used</li>
+        <li>Authorization from the property owner or responsible party to adjust dampers and registers and to operate the equipment through repeated cycles</li>
+        <li>A stop-work decision authority — the learner, supervisor, or licensed HVAC professional who will be notified if a room cannot be corrected within the approved adjustment range</li>
+      </ul>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Common Field Fundamentals</h2>
+      <p>Balancing succeeds or fails on discipline: one adjustment at a time, a stabilization period after each one, and a comparison against the same baseline setup every time. Skipping stabilization, changing more than one damper before observing a result, or comparing against a different setup than the baseline produces a balancing record that cannot be trusted and an adjustment that cannot be reproduced later.</p>
+
+      <div class="zone-grid" aria-label="Room-airflow balancing overview">
+        <div class="zone-card"><strong>Serviceability check</strong><span>Filters, grilles, ducts, returns, doors, and equipment confirmed serviceable before balancing begins</span></div>
+        <div class="zone-card"><strong>Baseline record</strong><span>Outdoor condition, thermostat setting, equipment mode, fan setting, door position, and stable-operation readings recorded</span></div>
+        <div class="zone-card"><strong>Room identification</strong><span>Rooms with high, low, or unstable delivery identified from baseline readings</span></div>
+        <div class="zone-card"><strong>Damper location and marking</strong><span>Balancing dampers located and their original positions marked before any adjustment</span></div>
+        <div class="zone-card"><strong>Incremental adjustment</strong><span>One small damper or register change made, then the system allowed to stabilize before the next observation</span></div>
+        <div class="zone-card"><strong>Comparison</strong><span>Adjusted room and other affected rooms compared against baseline using the same setup after each change</span></div>
+        <div class="zone-card"><strong>Reversal of failed adjustments</strong><span>Any adjustment that worsens system performance restored to its prior recorded position</span></div>
+        <div class="zone-card"><strong>Final documentation</strong><span>Final approved damper and register positions marked, recorded, and compared against unresolved conditions</span></div>
+      </div>
+
+      <h3 class="wo-sub">Serviceable System Before Balancing</h3>
+      <p>Balancing is not a substitute for filter service, grille cleaning, duct sealing, or return-path repair. Confirm the current filter is installed and the rack is sealed per Chapter 3, that grilles are clean and airflow paths are clear per Chapter 4, and that no unresolved duct deficiency from the Chapter 5 report remains outstanding for a room included in this project. Do not begin balancing a room whose airflow deficiency has an unresolved cause identified in an earlier chapter; correct that cause first.</p>
+
+      <aside class="cue cue-measurement">
+        <h4>Measurement Cue — One Setup, One Baseline, Every Comparison</h4>
+        <p>Record the outdoor condition, thermostat setting, equipment mode, fan setting, door position, and operating duration in place at baseline, and reproduce that same setup for every comparison made during this project. A room reading taken with a different door position, a different fan setting, or a different outdoor condition than the baseline is not a valid comparison and cannot be used to judge whether an adjustment improved or worsened the room.</p>
+      </aside>
+
+      <aside class="cue cue-safety">
+        <h4>Safety Cue — One Adjustment at a Time</h4>
+        <p>Make one small damper or register adjustment at a time and allow the system to stabilize before making the next one. Do not fully close multiple supply registers at once, and do not stack several damper changes together before observing a result. Changing several components at once makes it impossible to identify which adjustment produced which result and increases the risk of unrecognized excessive restriction.</p>
+      </aside>
+
+      <aside class="cue cue-field">
+        <h4>Field Safety Cue — Listen for Whistle, Turbulence, and Blower Strain</h4>
+        <p>After every adjustment, listen for whistle, turbulence, duct vibration, blower strain, or a change in the equipment's cycling pattern. Any of these conditions signals excessive restriction. Restore the adjustment that produced the condition to its prior recorded position rather than continuing to a further adjustment.</p>
+      </aside>
+
+      <aside class="cue cue-code">
+        <h4>Code Alert — Balancing Does Not Authorize Design Changes</h4>
+        <p>This project adjusts existing, accessible dampers and registers only. It does not authorize adding ducts, enlarging a return, resizing a branch, or changing equipment capacity. A room that cannot be corrected within the approved adjustment range requires professional testing and balancing or a design review under Chapter 9, not a duct or equipment change performed as part of this project.</p>
+      </aside>
+    </article>
+
+    <article class="work-order" id="balance-room-airflow">
+      <header class="work-order__header">
+        <p class="work-order__competency-code">HV-061 – HV-066</p>
+        <p class="work-order__type">Airflow-Balancing / Comfort-Adjustment Qualification</p>
+        <h2 class="work-order__title">Balance Room Airflow with Dampers and Registers</h2>
+      </header>
+
+      <div class="work-order__meta">
+        <p><strong>Difficulty:</strong> Intermediate</p>
+        <p><strong>Estimated Time:</strong> 2–4 hours, plus stabilization time</p>
+        <p><strong>Estimated Cost:</strong> $0–$25</p>
+        <p><strong>Finished Work:</strong> One completed HVAC Room-Airflow Balancing Worksheet documenting baseline conditions, each adjustment, and final approved positions</p>
+      </div>
+
+      <div class="work-order-body">
+        <h3 class="wo-sub">A. Finished-Project Specification</h3>
+        <p><strong>Quantity:</strong> one defined room set, one recorded baseline condition, a complete record of every damper or register adjustment made and its observed result, one final set of approved damper and register positions marked and recorded, and one completed HVAC Room-Airflow Balancing Worksheet identifying any room that could not be corrected within the approved adjustment range.</p>
+
+        <h3 class="wo-sub">B. Room-Airflow Balancing Schedule</h3>
+        <table aria-label="Room-airflow balancing schedule">
+          <thead>
+            <tr><th>Item</th><th>Target Condition</th><th>Verification Method</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="item-cell">System serviceability</td><td>Filters, grilles, ducts, returns, doors, and equipment confirmed serviceable before balancing begins</td><td>Review of Chapter 3, 4, and 5 records</td></tr>
+            <tr><td class="item-cell">Baseline condition</td><td>Outdoor condition, thermostat setting, equipment mode, fan setting, door position, and operating duration recorded before adjustment</td><td>Written record on worksheet</td></tr>
+            <tr><td class="item-cell">Baseline room readings</td><td>Room temperatures or approved airflow measurements recorded under stable operation for every room in the defined set</td><td>Instrument reading or approved comparison method</td></tr>
+            <tr><td class="item-cell">Damper original positions</td><td>Every balancing damper located and its original position marked before the first adjustment</td><td>Visual confirmation and label</td></tr>
+            <tr><td class="item-cell">Incremental adjustments</td><td>One small damper or register change made and observed before any further adjustment is made</td><td>Written record on worksheet</td></tr>
+            <tr><td class="item-cell">Post-adjustment comparison</td><td>Adjusted room and other affected rooms compared against baseline using the same setup</td><td>Instrument reading or approved comparison method</td></tr>
+            <tr><td class="item-cell">Final positions</td><td>Final approved damper and register positions marked and recorded</td><td>Visual confirmation and label</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="wo-sub">C. Material Takeoff</h3>
+        <ul class="checklist">
+          <li><strong>Documentation materials:</strong> one HVAC Room-Airflow Balancing Worksheet.</li>
+          <li><strong>Field materials:</strong> damper-position labels for marking the original position of each balancing damper before adjustment and the final approved position after balancing is complete.</li>
+          <li><strong>Reference materials:</strong> the HVAC System Map (Chapter 1), the duct-deficiency report (Chapter 5), and the approved balancing plan identifying comfort targets, measurement method, and adjustment increments.</li>
+        </ul>
+
+        <h3 class="wo-sub">D. Acceptance Standards</h3>
+        <table aria-label="Acceptance standards for room-airflow balancing">
+          <thead>
+            <tr><th>Check</th><th>Standard</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="item-cell">Serviceability</td><td>No unresolved filter, grille, or duct deficiency from Chapters 3 through 5 remains outstanding for a room in the defined set</td></tr>
+            <tr><td class="item-cell">Baseline documentation</td><td>Outdoor condition, thermostat setting, equipment mode, fan setting, door position, operating duration, and every baseline room reading recorded before the first adjustment</td></tr>
+            <tr><td class="item-cell">Damper marking</td><td>Every balancing damper's original position marked and recorded before adjustment</td></tr>
+            <tr><td class="item-cell">Adjustment discipline</td><td>Only one damper or register adjusted at a time, followed by a stabilization period and a same-setup comparison before any further adjustment</td></tr>
+            <tr><td class="item-cell">Reversal of failed adjustments</td><td>Any adjustment that produces whistle, turbulence, duct vibration, blower strain, a cycling change, or a worsened room condition restored to its prior recorded position</td></tr>
+            <tr><td class="item-cell">Final documentation</td><td>Final approved damper and register positions marked and recorded, with unresolved rooms identified for professional referral</td></tr>
+            <tr><td class="item-cell">Procedure</td><td>Serviceability confirmation, baseline recording, room identification, damper marking, incremental adjustment, comparison, and final documentation completed independently and in sequence</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="wo-sub">E. Serviceability Confirmation and Baseline Setup</h3>
+        <ol class="step-block">
+          <li><strong>Review the system map, comfort complaint, room use, thermostat location, prior duct inspection, and approved balancing plan.</strong> Confirm the defined room set matches the approved balancing plan before proceeding.</li>
+          <li><strong>Confirm that filters, grilles, ducts, returns, doors, and equipment are in serviceable condition before balancing.</strong> Do not proceed if an unresolved deficiency from Chapter 3, 4, or 5 remains for any room in the defined set.</li>
+          <li><strong>Record outdoor conditions, thermostat setting, equipment mode, fan setting, door position, and operating duration.</strong> Write these baseline conditions on the worksheet before the equipment reaches stable operation.</li>
+          <li><strong>Allow the system to reach stable operation.</strong> Wait the period specified by the approved balancing plan before taking any reading.</li>
+          <li><strong>Record baseline room temperatures and approved airflow measurements or comparison observations.</strong> Take one reading per room in the defined set, using the instrument and method specified by the balancing plan.</li>
+        </ol>
+
+        <h3 class="wo-sub">F. Room Identification and Path Verification</h3>
+        <ol class="step-block">
+          <li><strong>Identify rooms with high, low, or unstable delivery.</strong> Compare each room's baseline reading against the approved comfort target and mark rooms outside the target range.</li>
+          <li><strong>Verify that return paths and supply grilles are unobstructed.</strong> Confirm this condition for every room identified in Step 6 before touching any damper.</li>
+        </ol>
+
+        <h3 class="wo-sub">G. Damper Location and Incremental Adjustment</h3>
+        <ol class="step-block">
+          <li><strong>Locate balancing dampers and mark their original positions.</strong> Record the location and marked position of every damper serving a room in the defined set.</li>
+          <li><strong>Make one small damper or register adjustment at a time.</strong> Select the single highest-priority room from Step 6 and make one adjustment of the increment specified by the balancing plan.</li>
+          <li><strong>Do not fully close multiple supply registers or create excessive system restriction.</strong> Confirm no more than the intended register or damper has been changed before proceeding to Step 12.</li>
+          <li><strong>Allow the system to stabilize after each adjustment.</strong> Wait the period specified by the approved balancing plan before taking any comparison reading.</li>
+        </ol>
+
+        <h3 class="wo-sub">H. Comparison, Reversal, and Repetition</h3>
+        <ol class="step-block">
+          <li><strong>Repeat airflow and room-condition observations using the same setup.</strong> Reproduce the exact baseline thermostat setting, equipment mode, fan setting, and door position before taking the comparison reading.</li>
+          <li><strong>Compare changes at the adjusted room and other affected rooms.</strong> Record whether the adjusted room moved toward its comfort target and whether any other room's reading changed as a result.</li>
+          <li><strong>Listen for whistle, turbulence, duct vibration, blower strain, or cycling changes.</strong> Note any of these conditions on the worksheet at the time they are observed.</li>
+          <li><strong>Restore any adjustment that worsens system performance.</strong> Return the damper or register to its prior recorded position and record the reversal before making a different adjustment.</li>
+          <li><strong>Do not compensate for severe duct damage, inadequate return, equipment faults, or design problems by extreme damper closure.</strong> Refer any room that does not respond to a moderate adjustment to professional testing and balancing rather than continuing to close the damper further.</li>
+        </ol>
+
+        <h3 class="wo-sub">I. Final Positions and Documentation</h3>
+        <ol class="step-block">
+          <li><strong>Establish the final approved damper and register positions.</strong> Confirm every room in the defined set has been addressed, either corrected within the approved range or identified for professional referral.</li>
+          <li><strong>Mark or record each final position.</strong> Apply a label or written record identifying the final position of every damper and register adjusted during this project.</li>
+          <li><strong>Prepare a balancing record showing baseline, adjustments, final observations, and unresolved conditions.</strong> Complete the HVAC Room-Airflow Balancing Worksheet with every entry required by Section D.</li>
+          <li><strong>Recommend professional testing and balancing when room airflow cannot be corrected within the approved adjustment range.</strong> Record the recommendation and the specific room and condition it applies to.</li>
+        </ol>
+      </div>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Common Readiness Inspection</h2>
+      <p>Inspect every completed balancing project using the same checks regardless of which residence or training system the project involves.</p>
+      <ul class="checklist readiness-list">
+        <li><strong>Serviceability check:</strong> confirm no unresolved filter, grille, or duct deficiency from Chapters 3 through 5 remains outstanding for a room in the defined set.</li>
+        <li><strong>Baseline check:</strong> confirm the outdoor condition, thermostat setting, equipment mode, fan setting, door position, operating duration, and every baseline room reading were recorded before the first adjustment.</li>
+        <li><strong>Damper-marking check:</strong> confirm every balancing damper's original position was marked and recorded before adjustment.</li>
+        <li><strong>Adjustment-discipline check:</strong> confirm only one damper or register was adjusted at a time, followed by stabilization and a same-setup comparison.</li>
+        <li><strong>Reversal check:</strong> confirm every adjustment that worsened performance or produced whistle, turbulence, vibration, blower strain, or a cycling change was restored to its prior recorded position.</li>
+        <li><strong>Final-documentation check:</strong> confirm the final approved damper and register positions are marked, recorded, and compared against any unresolved condition.</li>
+      </ul>
+      <p>Complete the HVAC Room-Airflow Balancing Worksheet in the Inspection Checklist section below before beginning Project 12.</p>
+    </article>
+
+    <article class="content-block">
+      <figure class="photo-placeholder">
+        <div class="placeholder-label">Image Placeholder</div>
+        <figcaption>Recommended image: a balancing damper quadrant with its marked original position labeled before adjustment.</figcaption>
+      </figure>
+      <figure class="photo-placeholder">
+        <div class="placeholder-label">Image Placeholder</div>
+        <figcaption>Recommended image: a room thermometer or airflow-comparison instrument positioned for a baseline reading.</figcaption>
+      </figure>
+      <figure class="photo-placeholder">
+        <div class="placeholder-label">Image Placeholder</div>
+        <figcaption>Recommended image: a supply register with its louvers set to a documented adjusted position.</figcaption>
+      </figure>
+      <figure class="photo-placeholder">
+        <div class="placeholder-label">Image Placeholder</div>
+        <figcaption>Recommended image: a completed HVAC Room-Airflow Balancing Worksheet showing baseline, adjustment, and final-position entries.</figcaption>
+      </figure>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Failure Points and Troubleshooting</h2>
+
+      <aside class="toolbox toolbox-observation">
+        <h4>A Room Remains Outside Its Comfort Target After a Moderate Adjustment</h4>
+        <p><strong>Probable cause:</strong> an undersized branch duct, an unresolved return-path restriction, or an equipment-capacity condition rather than a damper or register setting.<br>
+        <strong>Confirmation:</strong> review the Chapter 5 duct-deficiency report for the affected room and confirm the return path and supply grille remain unobstructed.<br>
+        <strong>Correction:</strong> restore the damper to its last stable recorded position and record the room as requiring professional testing and balancing or a design referral; do not force the correction with extreme damper closure elsewhere.<br>
+        <strong>Reinspection:</strong> confirm the referral is recorded on the worksheet with the room, symptom, and recommended next step.</p>
+      </aside>
+
+      <aside class="toolbox toolbox-observation">
+        <h4>An Adjustment Produces Whistle, Turbulence, or Blower Strain</h4>
+        <p><strong>Probable cause:</strong> the adjustment created excessive restriction at the damper or register, or a prior adjustment elsewhere in the system combined with the new one to over-restrict the total airflow.<br>
+        <strong>Confirmation:</strong> listen at the adjusted component and at the equipment; compare the current system restriction against the baseline condition.<br>
+        <strong>Correction:</strong> restore the most recent adjustment to its prior recorded position and reassess whether a smaller increment is appropriate.<br>
+        <strong>Reinspection:</strong> repeat the stabilization and comparison steps after the reversal and confirm the noise or strain condition no longer appears.</p>
+      </aside>
+
+      <aside class="toolbox toolbox-observation">
+        <h4>A Comparison Reading Does Not Match the Baseline Setup</h4>
+        <p><strong>Probable cause:</strong> the thermostat setting, fan setting, door position, or outdoor condition changed between the baseline reading and the comparison reading.<br>
+        <strong>Confirmation:</strong> check the recorded baseline setup against the current condition at the time of the comparison reading.<br>
+        <strong>Correction:</strong> reproduce the exact baseline setup before taking a valid comparison reading; discard any reading taken under a different setup.<br>
+        <strong>Reinspection:</strong> confirm the corrected comparison reading is recorded on the worksheet with the matching setup noted.</p>
+      </aside>
+
+      <aside class="toolbox toolbox-observation">
+        <h4>An Adjustment Improves One Room but Worsens Another</h4>
+        <p><strong>Probable cause:</strong> the adjusted damper or register also affects airflow distribution to a connected branch or room sharing the same trunk or return path.<br>
+        <strong>Confirmation:</strong> compare the affected room's reading against its own baseline using the same setup.<br>
+        <strong>Correction:</strong> reduce the size of the adjustment increment, or restore the adjustment and record both rooms as requiring a smaller, more carefully sequenced correction.<br>
+        <strong>Reinspection:</strong> repeat the comparison for both rooms after the revised adjustment and confirm neither room has moved outside its comfort target.</p>
+      </aside>
+
+      <aside class="toolbox toolbox-observation">
+        <h4>A Balancing Damper Cannot Be Located or Operated</h4>
+        <p><strong>Probable cause:</strong> the damper is concealed behind insulation, finished surfaces, or an inaccessible duct section, or the quadrant or key is missing or seized.<br>
+        <strong>Confirmation:</strong> check the HVAC System Map from Chapter 1 for the recorded damper location and inspect the accessible duct section for a quadrant, handle, or key slot.<br>
+        <strong>Correction:</strong> record the damper as inaccessible on the worksheet and adjust only the accessible register for that room; do not force a seized or concealed damper.<br>
+        <strong>Reinspection:</strong> confirm the inaccessible-damper entry appears on the worksheet with the room and location noted for later reference.</p>
+      </aside>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Cleanup</h2>
+      <p>This project ends with the final damper and register positions marked, recorded, and left in place, not reopened or adjusted further until a later project's balancing plan calls for a change.</p>
+      <ul class="checklist">
+        <li>Confirm every adjusted damper and register carries a label or record of its final approved position</li>
+        <li>Confirm every access panel, closet door, or duct cover opened to reach a damper is closed and secured</li>
+        <li>Confirm the thermostat, fan setting, and door positions are returned to the setting requested by the occupant after testing is complete</li>
+        <li>Store the damper-key tool, thermometer, and worksheet in a protected, undamaged condition</li>
+        <li>Store the completed HVAC Room-Airflow Balancing Worksheet for reference by later projects, including Chapter 19 and the Chapter 20 capstone</li>
+      </ul>
+    </article>
+
+    <article class="content-block shop-terms">
+      <h2 class="section-title">Field Terms</h2>
+      <dl class="shop-terms-list">
+        <dt>Baseline Condition</dt><dd>The recorded outdoor condition, thermostat setting, equipment mode, fan setting, door position, and operating duration in place before any adjustment is made.</dd>
+        <dt>Stable Operation</dt><dd>The operating condition reached after the equipment has run for the period specified by the balancing plan, at which readings are considered valid for comparison.</dd>
+        <dt>Balancing Damper</dt><dd>A duct-mounted damper with a quadrant, key, or lockable handle intended for airflow adjustment, distinct from a register's built-in louver control.</dd>
+        <dt>Marked Original Position</dt><dd>The damper or register setting recorded and labeled before the first adjustment, to which the component can be returned if an adjustment must be reversed.</dd>
+        <dt>Small Adjustment</dt><dd>One incremental change to a single damper or register, made and observed before any further adjustment is made anywhere in the system.</dd>
+        <dt>Affected Room</dt><dd>Any room other than the room being directly adjusted whose temperature, airflow, or comfort condition changes as a result of that adjustment.</dd>
+        <dt>Comfort Target</dt><dd>The approved room temperature or airflow range established by the balancing plan against which baseline and comparison readings are judged.</dd>
+        <dt>Professional Testing and Balancing Referral</dt><dd>The recommendation, recorded on the worksheet, that a room's airflow condition requires measurement and correction beyond this project's approved adjustment range.</dd>
+      </dl>
+    </article>
+
+    <article class="content-block knowledge-check">
+      <h2 class="section-title">Skill Check</h2>
+      <ol>
+        <li>Why must filters, grilles, ducts, returns, doors, and equipment be confirmed serviceable before balancing begins?</li>
+        <li>Why must the exact baseline setup — thermostat setting, fan setting, door position, and outdoor condition — be reproduced for every comparison reading?</li>
+        <li>Why must only one damper or register be adjusted at a time, followed by a stabilization period, before making the next adjustment?</li>
+        <li>What must the learner do when an adjustment produces whistle, turbulence, duct vibration, blower strain, or a cycling change?</li>
+        <li>Why is fully closing multiple supply registers to force airflow toward one room not an approved balancing technique?</li>
+        <li>What must the learner do when a room's airflow cannot be corrected within the approved adjustment range?</li>
+        <li>Why must a balancing damper's original position be marked before the first adjustment is made?</li>
+        <li>Why does this project not authorize adding ducts, enlarging a return, or resizing a branch as a balancing correction?</li>
+        <li>What must be recorded on the HVAC Room-Airflow Balancing Worksheet before a later chapter project may reference this system's balanced condition?</li>
+        <li>Why must an adjustment that worsens performance in an affected room be restored to its prior recorded position rather than compensated for elsewhere?</li>
+      </ol>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Competency Rubric</h2>
+      <table aria-label="Competency rubric for Chapter 11">
+        <thead>
+          <tr><th>Competency</th><th>Independent Pass Standard</th><th>Not Demonstrated</th><th>With Assistance</th><th>Independently</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="item-cell">HV-061</td><td>Identifies hot and cold rooms using baseline temperature or airflow observations recorded under stable operating conditions</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">HV-062</td><td>Adjusts supply registers in small, documented increments to correct identified room airflow imbalances</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">HV-063</td><td>Adjusts balancing dampers in small, documented increments from marked original positions</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">HV-064</td><td>Compares room airflow before and after each adjustment using the same setup and measurement method</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">HV-065</td><td>Reduces restrictions caused by obstructed grilles or closed doors without resorting to excessive damper closure</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">HV-066</td><td>Documents balancing changes, including baseline conditions, each adjustment, and the final approved positions</td><td></td><td></td><td></td></tr>
+        </tbody>
+      </table>
+      <p>Mark one column per competency. Only <strong>Demonstrated Independently</strong> awards the competency; <strong>Demonstrated with Assistance</strong> authorizes additional supervised practice but does not complete the requirement.</p>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Inspection Checklist — HVAC Room-Airflow Balancing Worksheet</h2>
+      <table aria-label="HVAC room-airflow balancing worksheet">
+        <thead>
+          <tr><th>Item</th><th>Target Condition</th><th>Result</th><th>Pass/Fail</th><th>Correction (if any)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="item-cell">Serviceability confirmation</td><td>No unresolved filter, grille, or duct deficiency remains for any room in the defined set</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">Baseline record</td><td>Outdoor condition, thermostat setting, equipment mode, fan setting, door position, operating duration, and baseline room readings recorded</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">Damper marking</td><td>Every balancing damper's original position marked and recorded before adjustment</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">Adjustment discipline</td><td>One damper or register adjusted at a time, followed by stabilization and a same-setup comparison</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">Reversal of failed adjustments</td><td>Every adjustment that worsened performance or produced noise, vibration, or strain restored to its prior recorded position</td><td></td><td></td><td></td></tr>
+          <tr><td class="item-cell">Final documentation</td><td>Final approved damper and register positions marked and recorded, with unresolved rooms identified for professional referral</td><td></td><td></td><td></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Unresolved rooms and referral notes:</strong> ____________________________________________</p>
+      <p><strong>Balancing declared complete:</strong> ______ (Pass/Fail) &nbsp;&nbsp;&nbsp; <strong>Date:</strong> ____________ &nbsp;&nbsp;&nbsp; <strong>Builder name:</strong> ____________</p>
+    </article>
+
+    <article class="content-block">
+      <h2 class="section-title">Performance Check</h2>
+      <p>With serviceability confirmed, baseline conditions recorded, hot and cold rooms identified, balancing dampers located and marked, incremental adjustments made and compared against baseline, failed adjustments restored, and final positions marked and recorded, review the finished balancing project against the Acceptance Standards table and confirm that no unresolved deficiency from Chapters 3 through 5 remains for a room in the defined set, that the baseline setup was reproduced for every comparison reading, that only one damper or register was adjusted at a time, that every adjustment producing noise, vibration, strain, or a worsened result was restored, and that the final approved positions and any professional referral are recorded on the worksheet. Complete the HVAC Room-Airflow Balancing Worksheet and correct any failed item before beginning Project 12. If an item fails, identify whether the error occurred in serviceability confirmation, baseline recording, room identification, damper marking, incremental adjustment, comparison, or documentation before correcting it and re-running the affected check.</p>
+    </article>
+
+    <article class="content-block what-you-accomplished">
+      <h2 class="section-title">Project Closeout</h2>
+      <p>You have completed the eleventh project in the residential HVAC sequence: balancing room airflow with dampers and registers. This project required you to confirm system serviceability, record baseline operating conditions and room readings, identify hot and cold rooms, locate and mark balancing dampers, make one small adjustment at a time and compare it against the recorded baseline, restore any adjustment that worsened performance, and complete a documented balancing record with final approved positions (<strong>HV-061</strong> through <strong>HV-066</strong>).</p>
+      <p>You now have a documented, moderately balanced system with a recorded baseline, adjustment history, and final positions you can reference for every later project. That record carries directly into the next project: replacing this same system's low-voltage thermostat using the equipment configuration and control terminals identified in the system map.</p>
+      <p><strong>Retain your HVAC Room-Airflow Balancing Worksheet. You will reference this exact baseline and final-position record in the Chapter 19 comfort-diagnostic project and in the Chapter 20 capstone balancing procedure.</strong></p>
+    </article>
+
+    <footer class="chapter-nav" aria-label="Project navigation">
+      <a class="nav-button prev" href="chapter-10-install-flexible-duct-branch.html">
+        <strong>Previous</strong>
+        <span>Project 10: Install a Flexible<br />Duct Branch to a Supply Register</span>
+      </a>
+      <div class="progress">
+        <div class="progress-title">Project 11 / 20</div>
+        <div class="dots" aria-hidden="true">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+      <a class="nav-button next" href="chapter-12-install-low-voltage-thermostat.html">
+        <strong>Next</strong>
+        <span>Project 12: Install a Low-<br />Voltage Thermostat</span>
+      </a>
+    </footer>
+  </main>
+</body>
+</html>
