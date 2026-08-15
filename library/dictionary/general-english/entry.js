@@ -15,7 +15,14 @@ async function loadShardIndex() {
 async function fetchShard(url) {
   try {
     const res = await fetch(url);
-    return await res.json();
+
+if (!res.ok) {
+  throw new Error(
+    `Failed to fetch ${url}: ${res.status} ${res.statusText}`
+  );
+}
+
+return await res.json();
   } catch (err) {
     console.error("Failed to fetch shard:", err);
     return {};
@@ -81,8 +88,8 @@ function makeId(lemma) {
 
 // Render HTML (button has id only; handler attached later)
 function renderEntryContent(entry) {
-  const pronunciationText = entry.pronunciation?.phonetic || entry.pronunciation?.ipa || "";
-  let sensesHtml = "";
+const ipa = entry.pronunciation?.ipa || "";
+const phonetic = entry.pronunciation?.phonetic || "";  let sensesHtml = "";
 
   if (entry.senses?.length) {
     sensesHtml = entry.senses
@@ -105,7 +112,8 @@ function renderEntryContent(entry) {
     <p><strong>Tier:</strong> ${entry.tier}</p>
     <p><strong>Difficulty:</strong> ${entry.difficulty || "N/A"}</p>
     <p><strong>Part of Speech:</strong> ${entry.partOfSpeech || "N/A"}</p>
-    ${pronunciationText ? `<p><strong>Pronunciation:</strong> ${pronunciationText}</p>` : ""}
+    <p><strong>IPA:</strong> ${ipa || "Data unavailable"}</p>
+    <p><strong>Pronunciation:</strong> ${phonetic || "Data unavailable"}</p>
     ${sensesHtml}
     ${entry.synonyms?.length ? `<p><strong>Synonyms:</strong> ${entry.synonyms.join(", ")}</p>` : ""}
     ${entry.antonyms?.length ? `<p><strong>Antonyms:</strong> ${entry.antonyms.join(", ")}</p>` : ""}
