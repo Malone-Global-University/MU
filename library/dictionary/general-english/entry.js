@@ -3,7 +3,7 @@
 // Load the shard index
 async function loadShardIndex() {
   try {
-    const res = await fetch("/library/dictionary/dictionary-index.json");
+    const res = await fetch("/library/dictionary/general-english/dictionary-index.json");
     return await res.json();
   } catch (err) {
     console.error("Failed to load shard index:", err);
