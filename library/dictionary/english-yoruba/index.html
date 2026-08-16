@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+ <!-- ========== HEAD ========== -->
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Search and browse SAT, GRE, and rare-level dictionary entries.">
+  <title>Dictionary Index | MGU Library | Malone Global University</title>
+  <link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/component/lib.css"/>
+  <style>
+    /* ----- Pills Styling ----- */
+    #letter-pills, #index { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    a.letter-pill, #index a {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      background: #e0e0e0;
+      color: #000;
+    }
+    a.letter-pill:hover, #index a:hover {
+      background: #d0d0d0;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    /* ----- Tier Filter ----- */
+    #tier-filter { margin-bottom: 20px; padding: 5px 10px; font-size: 1rem; }
+
+    /* ----- Loading ----- */
+    #loading { margin-top: 20px; font-style: italic; }
+
+    #index a {
+  padding: 8px 16px;
+  display: inline-block;        /* required for pill shape */
+  border-radius: 999px; /* pill-box style */
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 1.6s ease;
+}
+
+/* Dark Mode Pills */
+:root.dark #index a {
+  background: var(--accent); /* blue */
+  color: #fff;              /* white text */
+}
+:root.dark #index a:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* Light Mode Pills */
+:root.light #index a {
+  background: #f0f0f0;
+  color: #121212;
+}
+:root.light #index a:hover {
+  background: #d0d0d0;
+}
+
+/* System Default (high-contrast safe) */
+#index a {
+  background: #e0e0e0;
+  color: #000;
+}
+
+</style>
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="8-16-2026" data-updated="8-16-2026">
+
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script> 
+
+<!-- ========== HERO ========== -->
+<section class="hero">
+    <h1>Malone University Dictionary</h1>
+    <p>Search authoritative definitions by SAT, GRE, or Rare literary tier.</p>
+  </section>
+
+<!--  ======== BREADCRUMB ======== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+
+<!--  ======== Main ======== -->
+<main id="main-content" role="main">
+
+<label for="difficulty-filter">Difficulty:</label>
+<select id="difficulty-filter">
+  <option value="">All</option>
+  <option value="Elementary">Elementary</option>
+  <option value="Middle School">Middle School</option>
+  <option value="High School">High School</option>
+  <option value="College">College</option>
+  <option value="Post-graduate">Post-graduate</option>
+</select>
+
+  <!-- Tier Filter -->
+  <label for="tier-filter">Filter by Tier:</label>
+  <select id="tier-filter">
+    <option value="">All</option>
+    <option value="SAT">SAT</option>
+    <option value="GRE">GRE</option>
+    <option value="Rare">Rare</option>
+  </select>
+
+  <!-- Search Bar -->
+  <form id="search-bar">
+    <input type="text" id="search-input" placeholder="Search for a word..." />
+    <button type="submit">Search</button>
+  </form>
+
+  <!-- Clickable Letter Pills -->
+  <div id="letter-pills"></div>
+
+  <!-- Dictionary Index -->
+  <div id="index"></div>
+  <div id="loading">Select a letter or search to load dictionary.</div>
+
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+
+<script>
+fetch('/component/bottom-nav.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('bottom-nav-placeholder').innerHTML = data;
+  });
+
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+
+    const pageDates = document.getElementById('page-dates');
+
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+
+<script>
+const indexContainer = document.getElementById('index');
+const loadingText = document.getElementById('loading');
+const difficultyFilter = document.getElementById('difficulty-filter'); // NEW
+const tierFilter = document.getElementById('tier-filter');
+const letterPillsContainer = document.getElementById('letter-pills');
+
+let shardIndex = {};
+let loadedShards = {};
+
+// Load top-level shard index
+async function loadIndex() {
+  const res = await fetch('/library/dictionary/english-yoruba/dictionary-index.json');
+  shardIndex = await res.json();
+}
+
+// Fetch shard by letter, with caching
+async function fetchShard(letter) {
+  letter = letter.toLowerCase();
+  if (loadedShards[letter]) return loadedShards[letter];
+  const url = shardIndex[letter];
+  if (!url) return {};
+  const res = await fetch(url);
+  const data = await res.json();
+  loadedShards[letter] = data;
+  return data;
+}
+
+// Render words with BOTH filters
+function renderWords(words, filterTier = "", filterDifficulty = "") {
+  indexContainer.innerHTML = "";
+  Object.keys(words)
+    .filter(word => {
+      const entry = words[word];
+      return (!filterTier || entry.tier === filterTier) &&
+             (!filterDifficulty || entry.difficulty === filterDifficulty);
+    })
+    .sort()
+    .forEach(word => {
+      const link = document.createElement('a');
+      link.href = `entry.html?word=${encodeURIComponent(word)}`;
+      link.textContent = word;
+      indexContainer.appendChild(link);
+    });
+}
+
+
+// Render clickable letter pills
+function renderLetterPills() {
+  const letters = Object.keys(shardIndex).sort();
+  letterPillsContainer.innerHTML = "";
+  letters.forEach(letter => {
+    const pill = document.createElement('a');
+    pill.href = "#";
+    pill.textContent = letter.toUpperCase();
+    pill.className = "letter-pill";
+    pill.addEventListener('click', async e => {
+      e.preventDefault();
+      const shard = await fetchShard(letter);
+      renderWords(shard, tierFilter.value, difficultyFilter.value); // UPDATED 8/29/2025
+    });
+    letterPillsContainer.appendChild(pill);
+  });
+}
+
+// Handle search
+async function handleSearch(word) {
+  if (!word) return;
+  const firstLetter = word[0].toLowerCase();
+  const shard = await fetchShard(firstLetter);
+  const filtered = {};
+  Object.keys(shard).forEach(k => {
+    if (k.toLowerCase().startsWith(word.toLowerCase())) filtered[k] = shard[k];
+  });
+  renderWords(filtered, tierFilter.value, difficultyFilter.value); // UPDATED
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await loadIndex();
+    loadingText.style.display = 'none';
+    renderLetterPills();
+
+    tierFilter.addEventListener('change', async () => {
+      const word = document.getElementById('search-input').value.trim();
+      if (word) await handleSearch(word);
+    });
+
+    difficultyFilter.addEventListener('change', async () => {
+      const word = document.getElementById('search-input').value.trim();
+      if (word) await handleSearch(word);
+    });
+
+    document.getElementById('search-bar').addEventListener('submit', async e => {
+      e.preventDefault();
+      const word = document.getElementById('search-input').value.trim();
+      await handleSearch(word);
+    });
+  } catch (err) {
+    loadingText.textContent = 'Failed to load dictionary.';
+    console.error(err);
+  }
+});
+</script>
+
+</body>
+</html>
