@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Learn convex hulls in computational geometry, including geometric meaning, orientation tests, extreme points, gift wrapping, Graham scan, monotone chain, degeneracies, complexity, verification, and practical applications.">
+  <title>Convex Hulls | Malone Math | Malone Global University</title>
+  <link rel="icon" href="/image/global/favicon.ico">
+  <link rel="stylesheet" href="/component/dept.css">
+
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']],
+        processEscapes: true
+      }
+    };
+  </script>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+</head>
+
+<body id="top" data-uploaded="8-30-2026" data-updated="8-30-2026">
+
+<div id="header-placeholder"></div>
+
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+
+<!-- ========== HERO ========== -->
+
+<section class="hero">
+  <h1>Convex Hulls</h1>
+
+  <p>
+    Given a collection of points, the convex hull is the smallest convex region
+    containing all of them. It can be imagined as the shape formed by stretching
+    a rubber band around the outside points and letting it contract. In
+    computational geometry, convex hulls turn an unstructured point cloud into
+    an ordered outer boundary that supports faster analysis, simplification,
+    collision tests, shape comparison, mapping, and many later geometric
+    constructions.
+  </p>
+</section>
+
+<!-- ========== BREADCRUMB ========== -->
+
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+
+<!-- ========== MAIN CONTENT ========== -->
+
+<main id="main-content" role="main">
+
+<section>
+  <h2>The Central Idea</h2>
+
+  <p>
+    Let
+  </p>
+
+  \[
+  S=\{P_1,P_2,\ldots,P_n\}
+  \]
+
+  <p>
+    be a finite set of points.
+  </p>
+
+  <p>
+    The <strong>convex hull</strong> of \(S\), written
+  </p>
+
+  \[
+  \operatorname{conv}(S),
+  \]
+
+  <p>
+    is the smallest convex set containing every point of \(S\).
+  </p>
+
+  <p>
+    In the plane, the boundary of the hull is usually a convex polygon whose
+    vertices are selected from the original point set.
+  </p>
+</section>
+
+<section>
+  <h2>What Does Convex Mean?</h2>
+
+  <p>
+    A set is <strong>convex</strong> if every segment joining two points of the
+    set remains entirely inside the set.
+  </p>
+
+  <p>
+    If \(A\) and \(B\) belong to a convex set, then every point
+  </p>
+
+  \[
+  (1-t)A+tB
+  \]
+
+  <p>
+    with
+  </p>
+
+  \[
+  0\le t\le1
+  \]
+
+  <p>
+    also belongs to the set.
+  </p>
+</section>
+
+<section>
+  <h2>The Rubber-Band Picture</h2>
+
+  <p>
+    Imagine placing nails at the input points and stretching a rubber band
+    around all of them.
+  </p>
+
+  <p>
+    When released, the band contracts until it touches only the outermost
+    points.
+  </p>
+
+  <p>
+    The polygon traced by the band is the convex hull.
+  </p>
+
+  <p>
+    Interior points do not affect the hull boundary.
+  </p>
+</section>
+
+<section>
+  <h2>Hull Vertices Are Extreme Points</h2>
+
+  <p>
+    A point on a hull vertex is an <strong>extreme point</strong>.
+  </p>
+
+  <p>
+    It cannot be written as a strict convex combination of the other points in
+    the set.
+  </p>
+
+  <p>
+    Geometrically, there is a supporting line through that point with all other
+    points lying on one side.
+  </p>
+</section>
+
+<section>
+  <h2>Interior Points Do Not Change the Hull</h2>
+
+  <p>
+    Suppose a point \(P\) lies strictly inside the convex hull of the other
+    points.
+  </p>
+
+  <p>
+    Removing \(P\) does not change the hull:
+  </p>
+
+  \[
+  \boxed{
+  \operatorname{conv}(S)
+  =
+  \operatorname{conv}(S\setminus\{P\})
+  }.
+  \]
+
+  <p>
+    Convex hull algorithms therefore seek the relatively small subset of
+    boundary points that determines the outer shape.
+  </p>
+</section>
+
+<section>
+  <h2>The Hull Boundary Has an Order</h2>
+
+  <p>
+    A convex hull is not merely an unordered set of extreme points.
+  </p>
+
+  <p>
+    For most geometric uses, the vertices should be listed cyclically:
+  </p>
+
+  \[
+  H_0,H_1,\ldots,H_{h-1}.
+  \]
+
+  <p>
+    They are usually stored in clockwise or counterclockwise order.
+  </p>
+
+  <p>
+    Here \(h\) denotes the number of hull vertices.
+  </p>
+</section>
+
+<section>
+  <h2>Orientation Is the Fundamental Predicate</h2>
+
+  <p>
+    For three points \(A\), \(B\), and \(C\), compute
+  </p>
+
+  \[
+  \boxed{
+  \operatorname{orient}(A,B,C)
+  =
+  (x_B-x_A)(y_C-y_A)
+  -
+  (y_B-y_A)(x_C-x_A)
+  }.
+  \]
+
+  <p>
+    Under the usual Cartesian orientation:
+  </p>
+
+  <ul>
+    <li>positive means a counterclockwise turn;</li>
+    <li>negative means a clockwise turn;</li>
+    <li>zero means collinear.</li>
+  </ul>
+
+  <p>
+    Nearly every standard planar convex hull algorithm depends on this test.
+  </p>
+</section>
+
+<section>
+  <h2>Why Turns Matter</h2>
+
+  <p>
+    If hull vertices are being built counterclockwise, the boundary should not
+    make an inward clockwise turn.
+  </p>
+
+  <p>
+    A candidate sequence
+  </p>
+
+  \[
+  A\to B\to C
+  \]
+
+  <p>
+    with
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,C)<0
+  \]
+
+  <p>
+    bends inward relative to a counterclockwise convex boundary.
+  </p>
+
+  <p>
+    Many hull algorithms remove such points as they construct the boundary.
+  </p>
+</section>
+
+<section>
+  <h2>The Smallest Possible Inputs</h2>
+
+  <p>
+    Degenerate inputs should be classified explicitly.
+  </p>
+
+  <ul>
+    <li>An empty point set has no hull.</li>
+    <li>One distinct point has a one-point hull.</li>
+    <li>Two distinct points have a segment as their hull.</li>
+    <li>Three noncollinear points have a triangular hull.</li>
+  </ul>
+
+  <p>
+    General algorithms should either handle these cases directly or define a
+    consistent output convention.
+  </p>
+</section>
+
+<section>
+  <h2>All Points Collinear</h2>
+
+  <p>
+    If every point lies on the same line, the convex hull is not a
+    two-dimensional polygon.
+  </p>
+
+  <p>
+    The geometric hull is the segment joining the two extreme endpoints.
+  </p>
+
+  <p>
+    Depending on the desired output, an implementation may return:
+  </p>
+
+  <ul>
+    <li>only the two extreme endpoints;</li>
+    <li>all boundary points in sorted order.</li>
+  </ul>
+
+  <p>
+    The convention should be chosen deliberately.
+  </p>
+</section>
+
+<section>
+  <h2>Duplicate Points</h2>
+
+  <p>
+    Repeated coordinates do not create new geometry.
+  </p>
+
+  <p>
+    Many hull algorithms simplify the input by removing duplicate points before
+    processing.
+  </p>
+
+  <p>
+    This prevents repeated vertices and unnecessary orientation tests.
+  </p>
+</section>
+
+<section>
+  <h2>Finding an Extreme Starting Point</h2>
+
+  <p>
+    A common starting vertex is the point with smallest \(x\)-coordinate.
+  </p>
+
+  <p>
+    If several points share that value, use the one with smallest
+    \(y\)-coordinate.
+  </p>
+
+  <p>
+    Such a point must lie on the convex hull because no point exists farther to
+    its left.
+  </p>
+</section>
+
+<section>
+  <h2>Gift Wrapping</h2>
+
+  <p>
+    The <strong>gift-wrapping algorithm</strong>, also called
+    <strong>Jarvis march</strong>, builds the hull one edge at a time.
+  </p>
+
+  <p>
+    Starting from a known hull point, it searches all remaining points for the
+    next point that gives the most extreme turn around the set.
+  </p>
+
+  <p>
+    The process continues until it returns to the starting point.
+  </p>
+</section>
+
+<section>
+  <h2>The Gift-Wrapping Picture</h2>
+
+  <p>
+    Imagine rotating a directed line around the current hull point.
+  </p>
+
+  <p>
+    The next hull point is the first point encountered as the line sweeps around
+    the outside of the point set.
+  </p>
+
+  <p>
+    Repeating this motion wraps the boundary around the point cloud.
+  </p>
+</section>
+
+<section>
+  <h2>Choosing the Next Gift-Wrapping Point</h2>
+
+  <p>
+    Suppose \(P\) is the current hull point.
+  </p>
+
+  <p>
+    Begin with some candidate \(Q\ne P\).
+  </p>
+
+  <p>
+    For every other point \(R\), compare
+  </p>
+
+  \[
+  \operatorname{orient}(P,Q,R).
+  \]
+
+  <p>
+    If \(R\) lies farther to the outside than \(Q\) under the chosen orientation
+    convention, replace \(Q\) by \(R\).
+  </p>
+
+  <p>
+    After scanning all points, the final \(Q\) is the next hull vertex.
+  </p>
+</section>
+
+<section>
+  <h2>Collinear Candidates in Gift Wrapping</h2>
+
+  <p>
+    Suppose several points are collinear in the direction of the next hull edge.
+  </p>
+
+  <p>
+    If only extreme hull vertices are desired, choose the farthest collinear
+    point.
+  </p>
+
+  <p>
+    Otherwise, an interior point on that edge could incorrectly become a hull
+    vertex and force later cleanup.
+  </p>
+</section>
+
+<section>
+  <h2>Gift-Wrapping Complexity</h2>
+
+  <p>
+    If there are \(n\) input points and \(h\) hull vertices, gift wrapping scans
+    the point set once for each hull edge.
+  </p>
+
+  <p>
+    Its running time is therefore
+  </p>
+
+  \[
+  \boxed{O(nh)}.
+  \]
+
+  <p>
+    This can be attractive when the hull contains relatively few points.
+  </p>
+</section>
+
+<section>
+  <h2>Output-Sensitive Algorithms</h2>
+
+  <p>
+    Gift wrapping is called <strong>output-sensitive</strong> because its
+    running time depends on the output size \(h\) as well as the input size
+    \(n\).
+  </p>
+
+  <p>
+    A point set with millions of interior points but only a small number of hull
+    vertices may therefore behave differently from a set in which most points
+    lie on the hull.
+  </p>
+</section>
+
+<section>
+  <h2>Graham Scan</h2>
+
+  <p>
+    <strong>Graham scan</strong> follows a different strategy.
+  </p>
+
+  <ol>
+    <li>Choose an extreme pivot point.</li>
+    <li>Sort the other points by polar angle around the pivot.</li>
+    <li>Process them in angular order.</li>
+    <li>Maintain a stack of candidate hull vertices.</li>
+    <li>Remove points whenever the boundary makes an inward turn.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Choosing a Graham-Scan Pivot</h2>
+
+  <p>
+    A standard choice is the point with smallest \(y\)-coordinate.
+  </p>
+
+  <p>
+    If several points share that value, choose the one with smallest
+    \(x\)-coordinate.
+  </p>
+
+  <p>
+    This point is guaranteed to lie on the hull and provides a consistent
+    reference for angular sorting.
+  </p>
+</section>
+
+<section>
+  <h2>Polar-Angle Ordering</h2>
+
+  <p>
+    After choosing pivot \(P_0\), each other point \(P\) has a direction
+  </p>
+
+  \[
+  P-P_0.
+  \]
+
+  <p>
+    Graham scan processes these directions in increasing polar angle.
+  </p>
+
+  <p>
+    Conceptually, this rotates a ray around the pivot and encounters the points
+    in directional order.
+  </p>
+</section>
+
+<section>
+  <h2>Angles Need Not Be Computed Explicitly</h2>
+
+  <p>
+    An implementation does not necessarily need to compute
+  </p>
+
+  \[
+  \theta=\operatorname{atan2}(y-y_0,x-x_0)
+  \]
+
+  <p>
+    for every point.
+  </p>
+
+  <p>
+    Orientation tests and quadrant information can compare directions without
+    evaluating trigonometric functions.
+  </p>
+
+  <p>
+    This is another example of replacing a geometric quantity with a simpler
+    predicate.
+  </p>
+</section>
+
+<section>
+  <h2>The Graham-Scan Stack</h2>
+
+  <p>
+    Suppose the current stack ends with points
+  </p>
+
+  \[
+  A,\ B
+  \]
+
+  <p>
+    and the next sorted point is \(C\).
+  </p>
+
+  <p>
+    For a counterclockwise hull, inspect
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,C).
+  \]
+
+  <p>
+    If the result represents an unacceptable clockwise turn, remove \(B\) and
+    test again with the new top of the stack.
+  </p>
+</section>
+
+<section>
+  <h2>Why Removing an Inward Point Is Safe</h2>
+
+  <p>
+    If the ordered path
+  </p>
+
+  \[
+  A\to B\to C
+  \]
+
+  <p>
+    makes an inward turn, then \(B\) cannot remain an extreme vertex of the
+    convex outer boundary between \(A\) and \(C\).
+  </p>
+
+  <p>
+    Removing \(B\) restores the possibility of a convex boundary.
+  </p>
+</section>
+
+<section>
+  <h2>Graham-Scan Complexity</h2>
+
+  <p>
+    The scan itself is linear after sorting because each point is pushed onto
+    and popped from the stack only a limited number of times.
+  </p>
+
+  <p>
+    The angular sort dominates the running time:
+  </p>
+
+  \[
+  \boxed{O(n\log n)}.
+  \]
+</section>
+
+<section>
+  <h2>Monotone Chain</h2>
+
+  <p>
+    Another widely used hull algorithm is the
+    <strong>monotone chain</strong> method, often associated with Andrew's
+    algorithm.
+  </p>
+
+  <p>
+    It avoids polar-angle sorting.
+  </p>
+
+  <p>
+    Instead, it sorts points lexicographically by coordinate and constructs:
+  </p>
+
+  <ul>
+    <li>a lower hull;</li>
+    <li>an upper hull.</li>
+  </ul>
+
+  <p>
+    The two chains are then joined.
+  </p>
+</section>
+
+<section>
+  <h2>Lexicographic Sorting</h2>
+
+  <p>
+    Sort points primarily by \(x\), and use \(y\) to break ties:
+  </p>
+
+  \[
+  (x_1,y_1)<(x_2,y_2)
+  \]
+
+  <p>
+    when either
+  </p>
+
+  \[
+  x_1<x_2,
+  \]
+
+  <p>
+    or
+  </p>
+
+  \[
+  x_1=x_2
+  \quad\text{and}\quad
+  y_1<y_2.
+  \]
+
+  <p>
+    The leftmost and rightmost points then anchor the two hull chains.
+  </p>
+</section>
+
+<section>
+  <h2>Building the Lower Hull</h2>
+
+  <p>
+    Process the sorted points from left to right.
+  </p>
+
+  <p>
+    Maintain a list of candidate lower-hull vertices.
+  </p>
+
+  <p>
+    Whenever the last two vertices and the new point make an unacceptable turn,
+    remove the middle vertex.
+  </p>
+
+  <p>
+    Continue until adding the new point preserves convexity.
+  </p>
+</section>
+
+<section>
+  <h2>Building the Upper Hull</h2>
+
+  <p>
+    Process the same sorted points in reverse order.
+  </p>
+
+  <p>
+    Apply the same turn logic to build the upper chain.
+  </p>
+
+  <p>
+    The lower and upper chains share their leftmost and rightmost endpoints, so
+    duplicate endpoint copies are removed before concatenation.
+  </p>
+</section>
+
+<section>
+  <h2>Monotone-Chain Complexity</h2>
+
+  <p>
+    Sorting requires
+  </p>
+
+  \[
+  O(n\log n)
+  \]
+
+  <p>
+    time.
+  </p>
+
+  <p>
+    The two scans together require only linear time.
+  </p>
+
+  <p>
+    Therefore,
+  </p>
+
+  \[
+  \boxed{O(n\log n)}
+  \]
+
+  <p>
+    is the overall complexity.
+  </p>
+</section>
+
+<section>
+  <h2>Why Monotone Chain Is Popular</h2>
+
+  <p>
+    Monotone chain is often attractive because it uses:
+  </p>
+
+  <ul>
+    <li>ordinary coordinate sorting;</li>
+    <li>the same orientation predicate already used elsewhere;</li>
+    <li>a simple stack-like construction;</li>
+    <li>straightforward handling of duplicates.</li>
+  </ul>
+
+  <p>
+    It is one of the most practical general-purpose planar hull algorithms.
+  </p>
+</section>
+
+<section>
+  <h2>Whether to Keep Collinear Boundary Points</h2>
+
+  <p>
+    Suppose three consecutive boundary points satisfy
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,C)=0.
+  \]
+
+  <p>
+    An implementation must decide whether \(B\) should remain in the hull
+    output.
+  </p>
+
+  <p>
+    There are two common conventions:
+  </p>
+
+  <ul>
+    <li>return only extreme corner vertices;</li>
+    <li>return every input point lying on the hull boundary.</li>
+  </ul>
+
+  <p>
+    The orientation inequality in the scan changes according to this choice.
+  </p>
+</section>
+
+<section>
+  <h2>Strict and Non-Strict Turn Tests</h2>
+
+  <p>
+    A lower-hull construction might remove points while
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,C)\le0
+  \]
+
+  <p>
+    if collinear interior edge points should be discarded.
+  </p>
+
+  <p>
+    It might instead remove only when
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,C)<0
+  \]
+
+  <p>
+    if collinear boundary points should be retained.
+  </p>
+
+  <p>
+    This small inequality choice changes the output convention.
+  </p>
+</section>
+
+<section>
+  <h2>Example Point Set</h2>
+
+  <p>
+    Consider
+  </p>
+
+  \[
+  S=
+  \{
+  (0,0),
+  (1,1),
+  (2,0),
+  (2,2),
+  (0,2),
+  (1,\tfrac12)
+  \}.
+  \]
+
+  <p>
+    The points
+  </p>
+
+  \[
+  (1,1)
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  (1,\tfrac12)
+  \]
+
+  <p>
+    lie inside the square determined by the four corner points.
+  </p>
+
+  <p>
+    They do not appear as convex hull vertices.
+  </p>
+</section>
+
+<section>
+  <h2>Hull of the Example</h2>
+
+  <p>
+    The convex hull vertices are
+  </p>
+
+  \[
+  \boxed{
+  (0,0),
+  (2,0),
+  (2,2),
+  (0,2)
+  }.
+  \]
+
+  <p>
+    In counterclockwise order, these points form the boundary of the smallest
+    convex region containing the entire input set.
+  </p>
+</section>
+
+<section>
+  <h2>Verifying Convexity</h2>
+
+  <p>
+    Suppose a candidate hull is listed counterclockwise.
+  </p>
+
+  <p>
+    For every three consecutive vertices
+  </p>
+
+  \[
+  H_i,H_{i+1},H_{i+2},
+  \]
+
+  <p>
+    check that the turns are consistent with convexity.
+  </p>
+
+  <p>
+    Under a strict counterclockwise convention:
+  </p>
+
+  \[
+  \boxed{
+  \operatorname{orient}
+  (H_i,H_{i+1},H_{i+2})>0
+  }
+  \]
+
+  <p>
+    for every noncollinear corner.
+  </p>
+</section>
+
+<section>
+  <h2>Verifying Containment</h2>
+
+  <p>
+    A candidate hull must contain every input point.
+  </p>
+
+  <p>
+    Since the hull is convex, each input point can be tested against the
+    interior half-planes of the hull edges.
+  </p>
+
+  <p>
+    A convex candidate that excludes even one input point is not a valid hull.
+  </p>
+</section>
+
+<section>
+  <h2>Verifying Minimality</h2>
+
+  <p>
+    Convexity and containment alone do not guarantee that a candidate boundary
+    is the smallest possible convex set.
+  </p>
+
+  <p>
+    A true hull boundary is supported by extreme input points.
+  </p>
+
+  <p>
+    If a listed vertex lies strictly inside the convex polygon formed by the
+    other listed vertices, it is unnecessary and the output is not minimal.
+  </p>
+</section>
+
+<section>
+  <h2>Hull Edges Are Supporting Edges</h2>
+
+  <p>
+    For each directed hull edge, all input points lie on the same side or on the
+    supporting line.
+  </p>
+
+  <p>
+    For a counterclockwise hull edge from \(A\) to \(B\),
+  </p>
+
+  \[
+  \boxed{
+  \operatorname{orient}(A,B,P)\ge0
+  }
+  \]
+
+  <p>
+    for every input point \(P\), under the usual orientation convention.
+  </p>
+</section>
+
+<section>
+  <h2>Convex Combinations</h2>
+
+  <p>
+    The convex hull can also be defined algebraically.
+  </p>
+
+  <p>
+    A point \(X\) belongs to the convex hull of
+  </p>
+
+  \[
+  P_1,\ldots,P_n
+  \]
+
+  <p>
+    if it can be written
+  </p>
+
+  \[
+  \boxed{
+  X=
+  \lambda_1P_1+\cdots+\lambda_nP_n
+  }
+  \]
+
+  <p>
+    where
+  </p>
+
+  \[
+  \lambda_i\ge0
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  \lambda_1+\cdots+\lambda_n=1.
+  \]
+</section>
+
+<section>
+  <h2>Why the Algebraic Definition Matters</h2>
+
+  <p>
+    The convex-combination definition extends naturally beyond two dimensions.
+  </p>
+
+  <p>
+    It also reveals that the convex hull is not merely a boundary polygon.
+  </p>
+
+  <p>
+    The hull includes every point in the filled convex region generated by the
+    input points.
+  </p>
+</section>
+
+<section>
+  <h2>Hull Area</h2>
+
+  <p>
+    Once the hull vertices are ordered cyclically, its area can be computed
+    using the shoelace formula.
+  </p>
+
+  <p>
+    For vertices
+  </p>
+
+  \[
+  (x_0,y_0),\ldots,(x_{h-1},y_{h-1}),
+  \]
+
+  <p>
+    the area is
+  </p>
+
+  \[
+  \boxed{
+  A=
+  \frac12
+  \left|
+  \sum_{i=0}^{h-1}
+  \left(
+  x_i y_{i+1}-y_i x_{i+1}
+  \right)
+  \right|
+  }
+  \]
+
+  <p>
+    with indices taken cyclically.
+  </p>
+</section>
+
+<section>
+  <h2>Hull Perimeter</h2>
+
+  <p>
+    The perimeter is the sum of edge lengths:
+  </p>
+
+  \[
+  \boxed{
+  L=
+  \sum_{i=0}^{h-1}
+  \|H_{i+1}-H_i\|
+  }.
+  \]
+
+  <p>
+    Once the hull is known, global size measures become much easier to compute.
+  </p>
+</section>
+
+<section>
+  <h2>Diameter of a Point Set</h2>
+
+  <p>
+    The farthest pair of points in a finite planar set must lie on the convex
+    hull.
+  </p>
+
+  <p>
+    Therefore, interior points can be discarded before searching for the
+    diameter.
+  </p>
+
+  <p>
+    This is a major reason convex hulls are useful as a preprocessing step.
+  </p>
+</section>
+
+<section>
+  <h2>Bounding and Collision Applications</h2>
+
+  <p>
+    A convex hull can serve as a compact outer approximation of a more detailed
+    object.
+  </p>
+
+  <p>
+    This can simplify:
+  </p>
+
+  <ul>
+    <li>broad-phase collision tests;</li>
+    <li>visibility calculations;</li>
+    <li>spatial indexing;</li>
+    <li>shape comparison;</li>
+    <li>graphics and physical simulation.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Convex Hulls in Mapping and Data Analysis</h2>
+
+  <p>
+    Given spatial observations, a hull can summarize the outer extent of the
+    sample.
+  </p>
+
+  <p>
+    Examples include:
+  </p>
+
+  <ul>
+    <li>approximate geographic extent;</li>
+    <li>outer boundary of measured locations;</li>
+    <li>range envelopes;</li>
+    <li>cluster summaries;</li>
+    <li>initial regions for later spatial processing.</li>
+  </ul>
+
+  <p>
+    A convex hull may include empty space between observations, so it should not
+    automatically be interpreted as the exact occupied region.
+  </p>
+</section>
+
+<section>
+  <h2>Convex Hulls Can Overgeneralize Shape</h2>
+
+  <p>
+    Because the hull must remain convex, it fills inward dents and gaps.
+  </p>
+
+  <p>
+    A crescent-shaped or U-shaped point distribution can therefore have a hull
+    containing substantial area with no sample points.
+  </p>
+
+  <p>
+    Convex hulls summarize outer extent, not concave detail.
+  </p>
+</section>
+
+<section>
+  <h2>Higher-Dimensional Convex Hulls</h2>
+
+  <p>
+    In three dimensions, the convex hull of a finite point set is generally a
+    convex polyhedron.
+  </p>
+
+  <p>
+    In higher dimensions, it becomes a convex polytope.
+  </p>
+
+  <p>
+    The central idea remains the same:
+  </p>
+
+  \[
+  \boxed{
+  \text{smallest convex set containing the input points}
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Numerical Robustness</h2>
+
+  <p>
+    Hull algorithms make discrete decisions from orientation signs.
+  </p>
+
+  <p>
+    A tiny numerical error can incorrectly classify three nearly collinear
+    points as clockwise or counterclockwise.
+  </p>
+
+  <p>
+    Such an error can alter the combinatorial structure of the hull.
+  </p>
+</section>
+
+<section>
+  <h2>Near-Collinear Points</h2>
+
+  <p>
+    If
+  </p>
+
+  \[
+  |\operatorname{orient}(A,B,C)|
+  \]
+
+  <p>
+    is very small, the points are nearly collinear.
+  </p>
+
+  <p>
+    A floating-point implementation may use a tolerance, higher precision, or
+    an exact orientation predicate depending on the reliability required.
+  </p>
+</section>
+
+<section>
+  <h2>Exact Predicates Can Protect Hull Structure</h2>
+
+  <p>
+    Since orientation is a sign test, exact or adaptive arithmetic can be used
+    to determine whether the determinant is truly positive, negative, or zero.
+  </p>
+
+  <p>
+    This is especially valuable when:
+  </p>
+
+  <ul>
+    <li>coordinates are large;</li>
+    <li>points are nearly collinear;</li>
+    <li>topological consistency matters;</li>
+    <li>the hull feeds later geometric algorithms.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sorting and Stability</h2>
+
+  <p>
+    Sorting is a major step in Graham scan and monotone chain.
+  </p>
+
+  <p>
+    Tie rules should be explicit for points sharing:
+  </p>
+
+  <ul>
+    <li>the same coordinates;</li>
+    <li>the same polar direction;</li>
+    <li>the same \(x\)-coordinate;</li>
+    <li>the same \(y\)-coordinate.</li>
+  </ul>
+
+  <p>
+    Deterministic tie handling makes the hull output reproducible.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Keeping Interior Points as Hull Vertices</h2>
+
+  <p>
+    A hull vertex must contribute to the outer convex boundary.
+  </p>
+
+  <p>
+    A point strictly inside the polygon formed by other hull vertices should not
+    remain in the hull output.
+  </p>
+
+  <p>
+    Orientation-based scan algorithms remove such candidates automatically.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Ignoring Collinear Tie Cases</h2>
+
+  <p>
+    Several points may lie on the same hull edge.
+  </p>
+
+  <p>
+    If the implementation does not define whether to keep all boundary points
+    or only edge endpoints, results can become inconsistent.
+  </p>
+
+  <p>
+    The desired output convention should determine the collinear comparison
+    rule.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Sorting by Slope</h2>
+
+  <p>
+    Slope can be inconvenient for angular ordering because vertical directions
+    require division by zero and directions in different quadrants can share
+    related slope values.
+  </p>
+
+  <p>
+    Polar-angle ordering or orientation-based comparison is generally more
+    reliable.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Forgetting to Remove Duplicate Endpoints</h2>
+
+  <p>
+    In monotone chain, the lower and upper hulls both contain the extreme
+    leftmost and rightmost points.
+  </p>
+
+  <p>
+    If the chains are concatenated without removing repeated endpoint copies,
+    the final cyclic boundary contains duplicates.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Assuming Every Turn Must Be Strict</h2>
+
+  <p>
+    Whether a collinear boundary point should be removed depends on the output
+    specification.
+  </p>
+
+  <p>
+    Using
+  </p>
+
+  \[
+  <0
+  \]
+
+  <p>
+    versus
+  </p>
+
+  \[
+  \le0
+  \]
+
+  <p>
+    in the orientation condition can change which collinear points survive.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Using a Hull as an Exact Shape Boundary</h2>
+
+  <p>
+    A convex hull fills concavities.
+  </p>
+
+  <p>
+    It should not be treated as an exact reconstruction of a concave object or
+    sampled region unless convexity is independently justified.
+  </p>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Gift Wrapping</h2>
+
+  <ol>
+    <li>Remove duplicate points if appropriate.</li>
+    <li>Handle zero-, one-, and two-point inputs directly.</li>
+    <li>Choose a guaranteed extreme starting point.</li>
+    <li>At the current hull point, scan every point for the most extreme next direction.</li>
+    <li>Resolve collinear ties according to the hull-output convention.</li>
+    <li>Add the selected point to the hull.</li>
+    <li>Repeat until the algorithm returns to the start.</li>
+    <li>Verify orientation and containment if needed.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Graham Scan</h2>
+
+  <ol>
+    <li>Remove duplicates.</li>
+    <li>Choose an extreme pivot.</li>
+    <li>Sort the remaining points by polar direction around the pivot.</li>
+    <li>Resolve equal-angle points consistently.</li>
+    <li>Initialize the hull stack.</li>
+    <li>Process sorted points in order.</li>
+    <li>Pop while the latest turn violates the convexity convention.</li>
+    <li>Push the new point.</li>
+    <li>Return the resulting cyclic boundary.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Monotone Chain</h2>
+
+  <ol>
+    <li>Remove duplicate points.</li>
+    <li>Sort lexicographically by \(x\), then \(y\).</li>
+    <li>Build the lower hull from left to right.</li>
+    <li>Remove the latest point whenever the turn violates the chosen convexity rule.</li>
+    <li>Build the upper hull from right to left.</li>
+    <li>Remove duplicated extreme endpoints before concatenating the chains.</li>
+    <li>Return the hull in cyclic order.</li>
+    <li>Check special cases such as complete collinearity.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Choosing a Hull Algorithm</h2>
+
+  <p>
+    No single hull algorithm is best in every setting.
+  </p>
+
+  <ul>
+    <li>Gift wrapping is conceptually simple and output-sensitive.</li>
+    <li>Graham scan is classical and efficient after angular sorting.</li>
+    <li>Monotone chain is simple to implement with ordinary coordinate sorting.</li>
+  </ul>
+
+  <p>
+    The best choice depends on input size, expected hull size, numerical
+    requirements, existing data order, and implementation context.
+  </p>
+</section>
+
+<section>
+  <h2>Practice 1: Identify Interior Points</h2>
+
+  <p>
+    Consider
+  </p>
+
+  \[
+  S=
+  \{
+  (0,0),
+  (4,0),
+  (4,4),
+  (0,4),
+  (2,2)
+  \}.
+  \]
+
+  <p>
+    Which point is not a hull vertex?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 2: Small Input</h2>
+
+  <p>
+    What is the convex hull of
+  </p>
+
+  \[
+  \{(1,2),(5,2)\}?
+  \]
+</section>
+
+<section>
+  <h2>Practice 3: Collinear Input</h2>
+
+  <p>
+    If the point set is
+  </p>
+
+  \[
+  \{(0,0),(1,0),(3,0),(5,0)\},
+  \]
+
+  <p>
+    what is the geometric convex hull?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 4: Orientation</h2>
+
+  <p>
+    Compute
+  </p>
+
+  \[
+  \operatorname{orient}
+  \bigl((0,0),(3,0),(2,4)\bigr)
+  \]
+
+  <p>
+    and classify the turn.
+  </p>
+</section>
+
+<section>
+  <h2>Practice 5: Inward Turn</h2>
+
+  <p>
+    A counterclockwise hull construction currently ends with
+  </p>
+
+  \[
+  A=(0,0),\qquad B=(2,2),
+  \]
+
+  <p>
+    and considers
+  </p>
+
+  \[
+  C=(4,1).
+  \]
+
+  <p>
+    Compute the orientation and decide whether \(B\) can remain as the middle
+    point of a counterclockwise convex turn.
+  </p>
+</section>
+
+<section>
+  <h2>Practice 6: Gift-Wrapping Complexity</h2>
+
+  <p>
+    A point set contains \(n=1000\) points and its hull contains \(h=10\)
+    vertices.
+  </p>
+
+  <p>
+    What asymptotic work does gift wrapping perform?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 7: Graham-Scan Complexity</h2>
+
+  <p>
+    What step dominates the asymptotic running time of Graham scan?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 8: Monotone Chain</h2>
+
+  <p>
+    What are the two boundary pieces constructed by monotone chain?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 9: Collinear Boundary Convention</h2>
+
+  <p>
+    Three points \(A,B,C\) lie on the same hull edge, with \(B\) between
+    \(A\) and \(C\).
+  </p>
+
+  <p>
+    If the output should contain only extreme corners, should \(B\) remain?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 10: Hull as Shape Approximation</h2>
+
+  <p>
+    Why can a convex hull be a poor exact representation of a strongly concave
+    point distribution?
+  </p>
+</section>
+
+<section>
+  <h2>Practice Answers</h2>
+
+  <h3>Practice 1</h3>
+
+  <p>
+    The four corner points form a square.
+  </p>
+
+  <p>
+    The point
+  </p>
+
+  \[
+  \boxed{(2,2)}
+  \]
+
+  <p>
+    lies strictly inside and is not a hull vertex.
+  </p>
+
+  <h3>Practice 2</h3>
+
+  <p>
+    With two distinct points, the hull is the segment joining them:
+  </p>
+
+  \[
+  \boxed{
+  \overline{(1,2)(5,2)}
+  }.
+  \]
+
+  <h3>Practice 3</h3>
+
+  <p>
+    All points are collinear, so the geometric hull is the segment joining the
+    extreme endpoints:
+  </p>
+
+  \[
+  \boxed{
+  \overline{(0,0)(5,0)}
+  }.
+  \]
+
+  <h3>Practice 4</h3>
+
+  \[
+  \operatorname{orient}
+  =
+  3(4)-0(2)
+  =
+  12.
+  \]
+
+  <p>
+    Since the result is positive,
+  </p>
+
+  \[
+  \boxed{\text{the turn is counterclockwise}.}
+  \]
+
+  <h3>Practice 5</h3>
+
+  \[
+  \operatorname{orient}(A,B,C)
+  =
+  2(1)-2(4)
+  =
+  2-8
+  =
+  -6.
+  \]
+
+  <p>
+    The turn is clockwise, so under a counterclockwise hull construction,
+  </p>
+
+  \[
+  \boxed{B\text{ must be removed from that candidate turn}.}
+  \]
+
+  <h3>Practice 6</h3>
+
+  <p>
+    Gift wrapping performs
+  </p>
+
+  \[
+  O(nh).
+  \]
+
+  <p>
+    Here that is proportional to
+  </p>
+
+  \[
+  1000\cdot10=10000
+  \]
+
+  <p>
+    point examinations up to constant factors.
+  </p>
+
+  <h3>Practice 7</h3>
+
+  <p>
+    The angular sorting step dominates, giving
+  </p>
+
+  \[
+  \boxed{O(n\log n)}.
+  \]
+
+  <h3>Practice 8</h3>
+
+  <p>
+    Monotone chain constructs
+  </p>
+
+  \[
+  \boxed{\text{a lower hull and an upper hull}}.
+  \]
+
+  <h3>Practice 9</h3>
+
+  <p>
+    No. If only extreme corners are desired, the middle collinear point is
+    unnecessary.
+  </p>
+
+  \[
+  \boxed{B\text{ should be omitted}.}
+  \]
+
+  <h3>Practice 10</h3>
+
+  <p>
+    A convex hull fills all inward dents because the hull must remain convex.
+  </p>
+
+  <p>
+    It can therefore contain substantial empty area that is not part of the
+    actual concave distribution.
+  </p>
+</section>
+
+<section>
+  <h2>What to Remember</h2>
+
+  <p>
+    A convex hull extracts the outer convex structure of a point set.
+  </p>
+
+  <ul>
+    <li>the hull is the smallest convex set containing all input points;</li>
+    <li>interior points do not affect the hull boundary;</li>
+    <li>orientation tests determine whether candidate turns preserve convexity;</li>
+    <li>gift wrapping constructs hull edges one at a time in \(O(nh)\) time;</li>
+    <li>Graham scan sorts by direction and then removes inward turns;</li>
+    <li>monotone chain sorts lexicographically and builds lower and upper hulls;</li>
+    <li>Graham scan and monotone chain run in \(O(n\log n)\) time;</li>
+    <li>duplicate and collinear points require explicit output conventions;</li>
+    <li>near-collinear configurations require numerical care;</li>
+    <li>the hull supports later measurements, collision tests, spatial summaries, and geometric constructions.</li>
+  </ul>
+
+  <p>
+    The broader computational principle is that a complicated point cloud can
+    often be simplified by identifying the small subset of extreme data that
+    controls its outer geometry.
+  </p>
+</section>
+
+<section>
+  <h2>Where We Go Next</h2>
+
+  <p>
+    Convex hulls construct an outer boundary from a point set. The next lesson
+    turns to a complementary problem: decomposing a region into simpler pieces.
+  </p>
+
+  <p>
+    <strong>Triangulation</strong> develops methods for dividing polygons,
+    surfaces, and point sets into triangles, one of the most important
+    structural operations in computational geometry.
+  </p>
+</section>
+
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+
+<div id="bottom-nav-placeholder"></div>
+</main>
+
+<!-- ========== FOOTER ========== -->
+
+<div id="footer-placeholder"></div>
+
+<!-- ========== COMPONENT SCRIPTS ========== -->
+
+<script>
+fetch('/component/bottom-nav.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('bottom-nav-placeholder').innerHTML = data;
+  });
+
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+
+</body>
+</html>

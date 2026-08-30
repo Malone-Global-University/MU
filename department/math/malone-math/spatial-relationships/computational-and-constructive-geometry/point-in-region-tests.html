@@ -1,0 +1,2181 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Learn computational point-in-region tests, including bounding boxes, half-plane tests, convex polygon methods, ray casting, winding numbers, boundary classification, circles, and numerical robustness.">
+  <title>Point-in-Region Tests | Malone Math | Malone Global University</title>
+  <link rel="icon" href="/image/global/favicon.ico">
+  <link rel="stylesheet" href="/component/dept.css">
+
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']],
+        processEscapes: true
+      }
+    };
+  </script>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+</head>
+
+<body id="top" data-uploaded="8-29-2026" data-updated="8-29-2026">
+
+<div id="header-placeholder"></div>
+
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+
+<!-- ========== HERO ========== -->
+
+<section class="hero">
+  <h1>Point-in-Region Tests</h1>
+
+  <p>
+    A point-in-region test asks a simple geometric question with many practical
+    consequences: does a given point lie inside a region, outside it, or exactly
+    on its boundary? Computational geometry answers this by turning boundaries
+    into algebraic predicates, counting crossings, comparing orientations, or
+    measuring distance from a center. These tests appear in graphics, mapping,
+    collision systems, geographic information systems, computer-aided design,
+    and spatial analysis.
+  </p>
+</section>
+
+<!-- ========== BREADCRUMB ========== -->
+
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+
+<!-- ========== MAIN CONTENT ========== -->
+
+<main id="main-content" role="main">
+
+<section>
+  <h2>The Central Idea</h2>
+
+  <p>
+    A region divides space into different kinds of locations.
+  </p>
+
+  <p>
+    For a typical closed planar region, a point may be:
+  </p>
+
+  <ul>
+    <li>strictly inside the region;</li>
+    <li>strictly outside the region;</li>
+    <li>on the boundary.</li>
+  </ul>
+
+  <p>
+    A robust point-in-region algorithm should make these cases explicit rather
+    than treating every input as only true or false.
+  </p>
+</section>
+
+<section>
+  <h2>Classification as a Computational Output</h2>
+
+  <p>
+    Instead of returning only
+  </p>
+
+  \[
+  \text{inside}=\text{true or false},
+  \]
+
+  <p>
+    many systems use a three-way classification:
+  </p>
+
+  \[
+  \boxed{
+  \{\text{outside},\text{boundary},\text{inside}\}
+  }.
+  \]
+
+  <p>
+    This avoids ambiguity when later computations need to distinguish a point
+    touching an edge from a point strictly contained in the region.
+  </p>
+</section>
+
+<section>
+  <h2>The Region Must Have a Representation</h2>
+
+  <p>
+    A point-in-region test depends on how the region is represented.
+  </p>
+
+  <p>
+    Common representations include:
+  </p>
+
+  <ul>
+    <li>axis-aligned rectangles;</li>
+    <li>circles and ellipses;</li>
+    <li>convex polygons;</li>
+    <li>general simple polygons;</li>
+    <li>polygons with holes;</li>
+    <li>implicit inequalities;</li>
+    <li>meshes and higher-dimensional solids.</li>
+  </ul>
+
+  <p>
+    Different representations support different algorithms.
+  </p>
+</section>
+
+<section>
+  <h2>The Simplest Region: An Axis-Aligned Rectangle</h2>
+
+  <p>
+    Suppose a rectangle is described by
+  </p>
+
+  \[
+  x_{\min}\le x\le x_{\max}
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  y_{\min}\le y\le y_{\max}.
+  \]
+
+  <p>
+    Then the point
+  </p>
+
+  \[
+  P=(x,y)
+  \]
+
+  <p>
+    lies inside or on the rectangle exactly when
+  </p>
+
+  \[
+  \boxed{
+  x_{\min}\le x\le x_{\max}
+  \quad\text{and}\quad
+  y_{\min}\le y\le y_{\max}
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Strict Interior versus Boundary for a Rectangle</h2>
+
+  <p>
+    The strict interior uses strict inequalities:
+  </p>
+
+  \[
+  \boxed{
+  x_{\min}<x<x_{\max}
+  \quad\text{and}\quad
+  y_{\min}<y<y_{\max}
+  }.
+  \]
+
+  <p>
+    A point lies on the boundary when it satisfies the inclusive box test and
+    at least one coordinate lies on an extreme:
+  </p>
+
+  \[
+  x=x_{\min},
+  \quad
+  x=x_{\max},
+  \quad
+  y=y_{\min},
+  \quad\text{or}\quad
+  y=y_{\max}.
+  \]
+</section>
+
+<section>
+  <h2>Bounding Boxes as an Early Filter</h2>
+
+  <p>
+    Before performing a more expensive point-in-polygon test, first compare the
+    point with the polygon's axis-aligned bounding box.
+  </p>
+
+  <p>
+    If the point lies outside that box, it cannot lie inside the polygon.
+  </p>
+
+  <p>
+    This provides a quick rejection:
+  </p>
+
+  \[
+  \boxed{
+  P\notin\operatorname{AABB}(R)
+  \implies
+  P\notin R
+  }.
+  \]
+
+  <p>
+    Passing the bounding-box test does not prove that the point is inside.
+  </p>
+</section>
+
+<section>
+  <h2>Point-in-Circle Test</h2>
+
+  <p>
+    Let a circle have center
+  </p>
+
+  \[
+  C=(c_x,c_y)
+  \]
+
+  <p>
+    and radius \(r\).
+  </p>
+
+  <p>
+    A point
+  </p>
+
+  \[
+  P=(x,y)
+  \]
+
+  <p>
+    lies inside or on the circle when
+  </p>
+
+  \[
+  \boxed{
+  (x-c_x)^2+(y-c_y)^2\le r^2
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Squared Distance Avoids an Unnecessary Square Root</h2>
+
+  <p>
+    The point-in-circle test could be written as
+  </p>
+
+  \[
+  \|P-C\|\le r.
+  \]
+
+  <p>
+    But this would require computing a square root.
+  </p>
+
+  <p>
+    Since both sides are nonnegative, it is equivalent to compare squared
+    quantities:
+  </p>
+
+  \[
+  \boxed{
+  \|P-C\|^2\le r^2
+  }.
+  \]
+
+  <p>
+    This is usually the simpler computational test.
+  </p>
+</section>
+
+<section>
+  <h2>Interior, Boundary, and Exterior of a Circle</h2>
+
+  <p>
+    Define
+  </p>
+
+  \[
+  d^2=(x-c_x)^2+(y-c_y)^2.
+  \]
+
+  <p>
+    Then:
+  </p>
+
+  <ul>
+    <li>if \(d^2<r^2\), the point is inside;</li>
+    <li>if \(d^2=r^2\), the point is on the boundary;</li>
+    <li>if \(d^2>r^2\), the point is outside.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Regions Defined by Inequalities</h2>
+
+  <p>
+    Some regions are naturally described directly by inequalities.
+  </p>
+
+  <p>
+    For example,
+  </p>
+
+  \[
+  x^2+y^2\le 25
+  \]
+
+  <p>
+    describes the disk of radius \(5\) centered at the origin.
+  </p>
+
+  <p>
+    A point-in-region test is then simply evaluation of the defining
+    inequality.
+  </p>
+</section>
+
+<section>
+  <h2>Half-Planes</h2>
+
+  <p>
+    A line
+  </p>
+
+  \[
+  ax+by=c
+  \]
+
+  <p>
+    divides the plane into two half-planes:
+  </p>
+
+  \[
+  ax+by<c
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  ax+by>c.
+  \]
+
+  <p>
+    Therefore, evaluating
+  </p>
+
+  \[
+  ax+by-c
+  \]
+
+  <p>
+    tells us which side of the line contains a point.
+  </p>
+</section>
+
+<section>
+  <h2>Orientation as a Side-of-Line Test</h2>
+
+  <p>
+    For a directed edge from \(A\) to \(B\), the orientation value
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,P)
+  \]
+
+  <p>
+    classifies the side containing \(P\).
+  </p>
+
+  <ul>
+    <li>A positive value places \(P\) to the left of the directed line.</li>
+    <li>A negative value places \(P\) to the right.</li>
+    <li>Zero means \(P\) is collinear with \(A\) and \(B\).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Convex Regions as Intersections of Half-Planes</h2>
+
+  <p>
+    A convex polygon can be viewed as the intersection of the interior
+    half-planes determined by its edges.
+  </p>
+
+  <p>
+    If the vertices are listed counterclockwise, a point lies inside or on the
+    polygon when it never lies strictly to the right of any directed boundary
+    edge.
+  </p>
+
+  <p>
+    Thus a convex-polygon membership test can repeatedly evaluate
+  </p>
+
+  \[
+  \operatorname{orient}(V_i,V_{i+1},P).
+  \]
+</section>
+
+<section>
+  <h2>Convex Polygon Test</h2>
+
+  <p>
+    Suppose the vertices
+  </p>
+
+  \[
+  V_0,V_1,\ldots,V_{n-1}
+  \]
+
+  <p>
+    are listed counterclockwise.
+  </p>
+
+  <p>
+    For each edge
+  </p>
+
+  \[
+  V_iV_{i+1},
+  \]
+
+  <p>
+    with indices taken cyclically, compute
+  </p>
+
+  \[
+  o_i=\operatorname{orient}(V_i,V_{i+1},P).
+  \]
+
+  <p>
+    If every \(o_i\ge0\), the point lies inside or on the boundary.
+  </p>
+</section>
+
+<section>
+  <h2>Why the Convex Test Works</h2>
+
+  <p>
+    A convex polygon contains every segment joining two of its points.
+  </p>
+
+  <p>
+    Equivalently, its interior is contained consistently on the same side of
+    every directed edge when the vertices are ordered consistently.
+  </p>
+
+  <p>
+    This property does not hold for general concave polygons, so the same simple
+    all-edges test cannot be used there without modification.
+  </p>
+</section>
+
+<section>
+  <h2>Example: Point in a Convex Triangle</h2>
+
+  <p>
+    Let
+  </p>
+
+  \[
+  A=(0,0),\qquad
+  B=(6,0),\qquad
+  C=(2,5)
+  \]
+
+  <p>
+    be listed counterclockwise, and test
+  </p>
+
+  \[
+  P=(2,2).
+  \]
+
+  <p>
+    Compute
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,P)=12,
+  \]
+
+  \[
+  \operatorname{orient}(B,C,P)=14,
+  \]
+
+  \[
+  \operatorname{orient}(C,A,P)=6.
+  \]
+
+  <p>
+    All are positive, so
+  </p>
+
+  \[
+  \boxed{P\text{ lies inside the triangle}.}
+  \]
+</section>
+
+<section>
+  <h2>Boundary Detection for a Polygon</h2>
+
+  <p>
+    Before classifying a point as strictly inside or outside, it is often useful
+    to test whether it lies on any polygon edge.
+  </p>
+
+  <p>
+    For each segment \(V_iV_{i+1}\), test:
+  </p>
+
+  \[
+  \operatorname{orient}(V_i,V_{i+1},P)=0
+  \]
+
+  <p>
+    together with the coordinate bounds for the segment.
+  </p>
+
+  <p>
+    If both conditions hold, classify the point as
+  </p>
+
+  \[
+  \boxed{\text{boundary}}.
+  \]
+</section>
+
+<section>
+  <h2>General Polygons Need a Different Strategy</h2>
+
+  <p>
+    A concave polygon may turn inward.
+  </p>
+
+  <p>
+    A point inside such a polygon can lie on different sides of different
+    directed edges.
+  </p>
+
+  <p>
+    Two widely used general methods are:
+  </p>
+
+  <ul>
+    <li>the ray-casting or crossing-number method;</li>
+    <li>the winding-number method.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>The Ray-Casting Idea</h2>
+
+  <p>
+    Start at the test point \(P\) and imagine a ray extending indefinitely in
+    one direction, commonly to the right.
+  </p>
+
+  <p>
+    Count how many times this ray crosses the polygon boundary.
+  </p>
+
+  <p>
+    For a simple polygon:
+  </p>
+
+  \[
+  \boxed{
+  \text{odd crossings}\Rightarrow\text{inside}
+  }
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  \boxed{
+  \text{even crossings}\Rightarrow\text{outside}.
+  }
+  \]
+</section>
+
+<section>
+  <h2>Why Crossing Parity Works</h2>
+
+  <p>
+    Far away from a bounded polygon, the ray is outside the region.
+  </p>
+
+  <p>
+    Each ordinary boundary crossing switches between outside and inside:
+  </p>
+
+  \[
+  \text{outside}
+  \leftrightarrow
+  \text{inside}.
+  \]
+
+  <p>
+    After an odd number of switches, the starting point lies inside. After an
+    even number, it lies outside.
+  </p>
+</section>
+
+<section>
+  <h2>Ray Casting with a Horizontal Ray</h2>
+
+  <p>
+    Let the test point be
+  </p>
+
+  \[
+  P=(x_P,y_P).
+  \]
+
+  <p>
+    For each polygon edge from
+  </p>
+
+  \[
+  A=(x_A,y_A)
+  \]
+
+  <p>
+    to
+  </p>
+
+  \[
+  B=(x_B,y_B),
+  \]
+
+  <p>
+    determine whether the edge crosses the horizontal level
+  </p>
+
+  \[
+  y=y_P.
+  \]
+
+  <p>
+    Only edges that straddle that level can produce a crossing.
+  </p>
+</section>
+
+<section>
+  <h2>A Useful Straddle Test</h2>
+
+  <p>
+    One common convention treats an edge as crossing the horizontal level when
+  </p>
+
+  \[
+  \boxed{
+  (y_A>y_P)\ne(y_B>y_P)
+  }.
+  \]
+
+  <p>
+    This logical test says exactly one endpoint lies above the ray's horizontal
+    level.
+  </p>
+
+  <p>
+    The asymmetric convention is important because it avoids counting a shared
+    polygon vertex twice.
+  </p>
+</section>
+
+<section>
+  <h2>Finding the Crossing Coordinate</h2>
+
+  <p>
+    If the edge straddles \(y=y_P\), the horizontal coordinate where the edge
+    reaches that level is
+  </p>
+
+  \[
+  \boxed{
+  x_{\text{cross}}
+  =
+  x_A+
+  \frac{(y_P-y_A)(x_B-x_A)}
+       {y_B-y_A}
+  }.
+  \]
+
+  <p>
+    If
+  </p>
+
+  \[
+  x_{\text{cross}}>x_P,
+  \]
+
+  <p>
+    then the crossing lies to the right of the test point and contributes to
+    the ray count.
+  </p>
+</section>
+
+<section>
+  <h2>A Standard Ray-Casting Predicate</h2>
+
+  <p>
+    For an edge \(AB\), toggle the inside/outside state when both of the
+    following are true:
+  </p>
+
+  \[
+  (y_A>y_P)\ne(y_B>y_P)
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  x_P<
+  x_A+
+  \frac{(y_P-y_A)(x_B-x_A)}
+       {y_B-y_A}.
+  \]
+
+  <p>
+    After all edges are processed, the final parity determines the result,
+    provided boundary cases were handled separately.
+  </p>
+</section>
+
+<section>
+  <h2>Why Vertices Require Care</h2>
+
+  <p>
+    Suppose the ray passes exactly through a polygon vertex shared by two
+    edges.
+  </p>
+
+  <p>
+    Naively counting both incident edges would count one geometric crossing
+    twice.
+  </p>
+
+  <p>
+    Correct implementations adopt a consistent endpoint convention, such as
+    treating one endpoint of an edge as included and the other as excluded.
+  </p>
+</section>
+
+<section>
+  <h2>Horizontal Edges Require Care</h2>
+
+  <p>
+    If an edge is horizontal,
+  </p>
+
+  \[
+  y_A=y_B,
+  \]
+
+  <p>
+    then a horizontal test ray may overlap its vertical level.
+  </p>
+
+  <p>
+    The usual straddle rule automatically excludes ordinary horizontal edges
+    from the crossing count.
+  </p>
+
+  <p>
+    Boundary membership should be checked separately before ray casting.
+  </p>
+</section>
+
+<section>
+  <h2>Ray Direction Is Arbitrary in Principle</h2>
+
+  <p>
+    The ray does not have to point rightward.
+  </p>
+
+  <p>
+    It may extend left, upward, downward, or in another direction, provided the
+    crossing rules are implemented consistently and degenerate alignments are
+    handled.
+  </p>
+
+  <p>
+    Horizontal rays are popular because their arithmetic is convenient.
+  </p>
+</section>
+
+<section>
+  <h2>The Winding-Number Idea</h2>
+
+  <p>
+    Instead of counting crossings only by parity, the winding-number method
+    tracks how the polygon boundary winds around the test point.
+  </p>
+
+  <p>
+    For a simple consistently oriented polygon:
+  </p>
+
+  \[
+  \boxed{
+  \text{winding number}=0
+  \Rightarrow
+  \text{outside}
+  }
+  \]
+
+  <p>
+    while a nonzero winding number indicates that the point is enclosed.
+  </p>
+</section>
+
+<section>
+  <h2>Signed Crossings in the Winding Number</h2>
+
+  <p>
+    As polygon edges cross a horizontal level through \(P\), upward and
+    downward crossings are treated differently.
+  </p>
+
+  <p>
+    Orientation tests determine whether a crossing passes on the appropriate
+    side of the point.
+  </p>
+
+  <p>
+    The accumulated signed count measures how many net times the boundary wraps
+    around \(P\).
+  </p>
+</section>
+
+<section>
+  <h2>Crossing Number versus Winding Number</h2>
+
+  <p>
+    For ordinary simple polygons, both methods can correctly distinguish inside
+    from outside.
+  </p>
+
+  <p>
+    The crossing-number method asks whether the number of crossings is odd or
+    even.
+  </p>
+
+  <p>
+    The winding-number method retains directional information and is especially
+    useful when orientation or more general winding behavior matters.
+  </p>
+</section>
+
+<section>
+  <h2>Simple Polygons</h2>
+
+  <p>
+    A <strong>simple polygon</strong> has boundary edges that meet only at
+    adjacent shared endpoints.
+  </p>
+
+  <p>
+    In particular, the boundary does not cross itself.
+  </p>
+
+  <p>
+    Standard inside/outside intuition is clearest for simple polygons because
+    the boundary separates the plane into a well-defined interior and exterior.
+  </p>
+</section>
+
+<section>
+  <h2>Self-Intersecting Polygons Need a Filling Rule</h2>
+
+  <p>
+    If a polygonal path crosses itself, the word <em>inside</em> becomes
+    convention-dependent.
+  </p>
+
+  <p>
+    Common filling rules include:
+  </p>
+
+  <ul>
+    <li>the even-odd rule;</li>
+    <li>the nonzero winding rule.</li>
+  </ul>
+
+  <p>
+    These rules can classify some self-intersecting configurations differently.
+  </p>
+
+  <p>
+    Therefore, the algorithm must match the intended region definition.
+  </p>
+</section>
+
+<section>
+  <h2>The Even-Odd Filling Rule</h2>
+
+  <p>
+    The even-odd rule uses crossing parity.
+  </p>
+
+  <p>
+    A point is treated as filled when a ray from the point crosses the boundary
+    an odd number of times.
+  </p>
+
+  <p>
+    Direction does not matter; only parity matters.
+  </p>
+</section>
+
+<section>
+  <h2>The Nonzero Winding Rule</h2>
+
+  <p>
+    The nonzero winding rule uses the signed winding of the boundary around the
+    point.
+  </p>
+
+  <p>
+    A point is filled when the net winding number is nonzero.
+  </p>
+
+  <p>
+    Because direction matters, different boundary orientations can affect the
+    result.
+  </p>
+</section>
+
+<section>
+  <h2>Polygons with Holes</h2>
+
+  <p>
+    A region may have an outer boundary and one or more inner boundaries
+    representing holes.
+  </p>
+
+  <p>
+    One strategy is:
+  </p>
+
+  <ol>
+    <li>test whether the point lies inside the outer boundary;</li>
+    <li>test whether it lies inside any hole;</li>
+    <li>classify it as part of the region only if it is inside the outer boundary and outside every hole.</li>
+  </ol>
+
+  <p>
+    Boundary conventions must still be specified for both outer and inner
+    boundaries.
+  </p>
+</section>
+
+<section>
+  <h2>Orientation Conventions for Holes</h2>
+
+  <p>
+    In winding-based systems, boundary orientation can encode region structure.
+  </p>
+
+  <p>
+    A common convention lists:
+  </p>
+
+  <ul>
+    <li>outer boundaries counterclockwise;</li>
+    <li>hole boundaries clockwise.</li>
+  </ul>
+
+  <p>
+    The opposite convention may also be used. Consistency is what matters.
+  </p>
+</section>
+
+<section>
+  <h2>Triangles Have Specialized Tests</h2>
+
+  <p>
+    Because a triangle has only three edges, several efficient membership tests
+    are available.
+  </p>
+
+  <p>
+    One uses orientation signs.
+  </p>
+
+  <p>
+    Another uses barycentric coordinates.
+  </p>
+
+  <p>
+    These specialized tests are common in computer graphics, mesh processing,
+    and interpolation.
+  </p>
+</section>
+
+<section>
+  <h2>Barycentric Coordinates</h2>
+
+  <p>
+    For a nondegenerate triangle with vertices \(A\), \(B\), and \(C\), a point
+    \(P\) can be represented as
+  </p>
+
+  \[
+  \boxed{
+  P=\alpha A+\beta B+\gamma C
+  }
+  \]
+
+  <p>
+    with
+  </p>
+
+  \[
+  \boxed{
+  \alpha+\beta+\gamma=1.
+  }
+  \]
+
+  <p>
+    The values \(\alpha,\beta,\gamma\) are the barycentric coordinates of
+    \(P\) relative to the triangle.
+  </p>
+</section>
+
+<section>
+  <h2>Barycentric Point-in-Triangle Test</h2>
+
+  <p>
+    A point lies inside or on a nondegenerate triangle when
+  </p>
+
+  \[
+  \boxed{
+  \alpha\ge0,\qquad
+  \beta\ge0,\qquad
+  \gamma\ge0
+  }.
+  \]
+
+  <p>
+    It lies strictly inside when all three values are positive.
+  </p>
+
+  <p>
+    A zero barycentric coordinate places the point on the edge opposite the
+    corresponding vertex.
+  </p>
+</section>
+
+<section>
+  <h2>Area Interpretation of Barycentric Coordinates</h2>
+
+  <p>
+    The barycentric coordinates may be interpreted through signed triangle
+    areas.
+  </p>
+
+  <p>
+    For example,
+  </p>
+
+  \[
+  \alpha
+  =
+  \frac{
+  \operatorname{area}(PBC)
+  }{
+  \operatorname{area}(ABC)
+  },
+  \]
+
+  <p>
+    with analogous formulas for \(\beta\) and \(\gamma\), using a consistent
+    signed-area convention.
+  </p>
+
+  <p>
+    Thus point-in-triangle testing is closely connected to the orientation
+    determinant introduced earlier.
+  </p>
+</section>
+
+<section>
+  <h2>Convex Polygon Testing Can Be Accelerated</h2>
+
+  <p>
+    The straightforward half-plane method checks every edge, requiring work
+    proportional to the number of vertices.
+  </p>
+
+  <p>
+    For a fixed convex polygon with many repeated queries, the polygon can also
+    be organized into angular sectors from one reference vertex.
+  </p>
+
+  <p>
+    A binary search can locate the relevant triangle fan sector, after which a
+    point-in-triangle test completes the query.
+  </p>
+
+  <p>
+    This is an example of preprocessing geometry to make later queries faster.
+  </p>
+</section>
+
+<section>
+  <h2>Many Queries Change the Best Algorithm</h2>
+
+  <p>
+    If only one point will be tested against one polygon, a simple linear scan
+    may be ideal.
+  </p>
+
+  <p>
+    If millions of points will be tested against the same region, it may be
+    worthwhile to build:
+  </p>
+
+  <ul>
+    <li>spatial indexes;</li>
+    <li>hierarchical bounding regions;</li>
+    <li>triangulations;</li>
+    <li>grid accelerators;</li>
+    <li>specialized convex-query structures.</li>
+  </ul>
+
+  <p>
+    Algorithm choice depends not only on geometry but also on workload.
+  </p>
+</section>
+
+<section>
+  <h2>Broad Phase and Narrow Phase</h2>
+
+  <p>
+    As with intersection problems, point-in-region systems often use a
+    two-stage design.
+  </p>
+
+  <p>
+    The <strong>broad phase</strong> rejects points using inexpensive bounds.
+  </p>
+
+  <p>
+    The <strong>narrow phase</strong> applies the exact region-specific test.
+  </p>
+
+  <p>
+    For a polygon:
+  </p>
+
+  \[
+  \boxed{
+  \text{bounding-box test}
+  \rightarrow
+  \text{polygon test}
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Boundary Policy Is Part of the Problem Definition</h2>
+
+  <p>
+    Applications do not always want the same treatment of boundary points.
+  </p>
+
+  <p>
+    A geographic database may treat a boundary location as belonging to both
+    adjacent regions.
+  </p>
+
+  <p>
+    A tiling algorithm may deliberately assign shared boundaries to only one
+    cell to avoid duplication.
+  </p>
+
+  <p>
+    Therefore, the inclusion convention should be defined before the algorithm
+    is implemented.
+  </p>
+</section>
+
+<section>
+  <h2>Open, Closed, and Half-Open Regions</h2>
+
+  <p>
+    A closed region includes its boundary.
+  </p>
+
+  <p>
+    An open region excludes its boundary.
+  </p>
+
+  <p>
+    Computational partitions sometimes use half-open conventions so that
+    neighboring regions do not both claim the same boundary point.
+  </p>
+
+  <p>
+    These are mathematical design choices as well as implementation choices.
+  </p>
+</section>
+
+<section>
+  <h2>Numerical Boundary Ambiguity</h2>
+
+  <p>
+    In exact mathematics, a point may satisfy
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,P)=0
+  \]
+
+  <p>
+    exactly.
+  </p>
+
+  <p>
+    In floating-point arithmetic, the computed value may instead be a very small
+    positive or negative number.
+  </p>
+
+  <p>
+    This can cause a boundary point to be misclassified as inside or outside.
+  </p>
+</section>
+
+<section>
+  <h2>Using a Tolerance for Boundary Tests</h2>
+
+  <p>
+    A practical approximate test may classify a value \(r\) as effectively zero
+    when
+  </p>
+
+  \[
+  \boxed{
+  |r|\le\varepsilon.
+  }
+  \]
+
+  <p>
+    For example, a near-collinearity test may use
+  </p>
+
+  \[
+  |\operatorname{orient}(A,B,P)|
+  \le\varepsilon.
+  \]
+
+  <p>
+    The tolerance must be chosen with attention to coordinate scale and the
+    needs of the application.
+  </p>
+</section>
+
+<section>
+  <h2>Exact Predicates</h2>
+
+  <p>
+    Some geometric applications require guaranteed topological consistency.
+  </p>
+
+  <p>
+    In such cases, approximate floating-point predicates may be replaced or
+    supplemented with:
+  </p>
+
+  <ul>
+    <li>integer arithmetic when coordinates permit it;</li>
+    <li>rational arithmetic;</li>
+    <li>extended precision;</li>
+    <li>adaptive exact predicates.</li>
+  </ul>
+
+  <p>
+    The goal is to prevent numerical noise from changing discrete geometric
+    decisions.
+  </p>
+</section>
+
+<section>
+  <h2>Degenerate Polygons</h2>
+
+  <p>
+    A polygonal input may contain:
+  </p>
+
+  <ul>
+    <li>repeated consecutive vertices;</li>
+    <li>zero-length edges;</li>
+    <li>collinear neighboring edges;</li>
+    <li>too few distinct vertices to enclose area;</li>
+    <li>self-intersections when a simple polygon was expected.</li>
+  </ul>
+
+  <p>
+    Robust software should either normalize these cases or reject them
+    explicitly.
+  </p>
+</section>
+
+<section>
+  <h2>Repeated Vertices</h2>
+
+  <p>
+    If two consecutive polygon vertices are identical, the edge between them
+    has zero length.
+  </p>
+
+  <p>
+    This usually contributes no useful boundary geometry and may interfere with
+    algorithms that assume every edge has distinct endpoints.
+  </p>
+
+  <p>
+    Preprocessing may remove repeated consecutive vertices.
+  </p>
+</section>
+
+<section>
+  <h2>Collinear Adjacent Edges</h2>
+
+  <p>
+    A polygon may contain three consecutive vertices
+  </p>
+
+  \[
+  A,\ B,\ C
+  \]
+
+  <p>
+    with
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,C)=0.
+  \]
+
+  <p>
+    If \(B\) lies between \(A\) and \(C\), then \(B\) does not change the
+    geometric boundary.
+  </p>
+
+  <p>
+    Some systems keep such vertices; others simplify them away.
+  </p>
+</section>
+
+<section>
+  <h2>Example: Point in a Rectangle</h2>
+
+  <p>
+    Consider the rectangle
+  </p>
+
+  \[
+  -2\le x\le5
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  1\le y\le7.
+  \]
+
+  <p>
+    Test
+  </p>
+
+  \[
+  P=(3,4).
+  \]
+
+  <p>
+    Since
+  </p>
+
+  \[
+  -2<3<5
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  1<4<7,
+  \]
+
+  <p>
+    the point lies strictly inside.
+  </p>
+</section>
+
+<section>
+  <h2>Example: Point on a Rectangle Boundary</h2>
+
+  <p>
+    Using the same rectangle, consider
+  </p>
+
+  \[
+  Q=(5,3).
+  \]
+
+  <p>
+    The point satisfies the inclusive bounds, but
+  </p>
+
+  \[
+  x=5=x_{\max}.
+  \]
+
+  <p>
+    Therefore,
+  </p>
+
+  \[
+  \boxed{Q\text{ lies on the boundary}.}
+  \]
+</section>
+
+<section>
+  <h2>Example: Point in a Circle</h2>
+
+  <p>
+    Let the circle have center
+  </p>
+
+  \[
+  C=(1,2)
+  \]
+
+  <p>
+    and radius
+  </p>
+
+  \[
+  r=5.
+  \]
+
+  <p>
+    Test
+  </p>
+
+  \[
+  P=(4,6).
+  \]
+
+  <p>
+    The squared distance is
+  </p>
+
+  \[
+  (4-1)^2+(6-2)^2
+  =
+  9+16
+  =
+  25.
+  \]
+
+  <p>
+    Since
+  </p>
+
+  \[
+  25=r^2,
+  \]
+
+  <p>
+    the point lies on the circle boundary.
+  </p>
+</section>
+
+<section>
+  <h2>Example: A Concave Polygon</h2>
+
+  <p>
+    Consider a polygon with an inward indentation.
+  </p>
+
+  <p>
+    A point can pass the polygon's bounding-box test and still lie in the
+    indentation outside the actual region.
+  </p>
+
+  <p>
+    This demonstrates why bounding boxes are filters rather than complete
+    point-in-polygon tests.
+  </p>
+
+  <p>
+    Ray casting or winding-number methods are needed for the full boundary.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Treating the Bounding Box as the Region</h2>
+
+  <p>
+    A polygon's axis-aligned bounding box generally contains points that are not
+    in the polygon.
+  </p>
+
+  <p>
+    Therefore,
+  </p>
+
+  \[
+  P\in\operatorname{AABB}(R)
+  \]
+
+  <p>
+    does not imply
+  </p>
+
+  \[
+  P\in R.
+  \]
+
+  <p>
+    The bounding box is an early rejection tool, not a universal membership
+    test.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Using the Convex Test on a Concave Polygon</h2>
+
+  <p>
+    The all-edges same-side test relies on convexity.
+  </p>
+
+  <p>
+    A concave polygon may contain valid interior points that lie on different
+    sides of different supporting edge lines.
+  </p>
+
+  <p>
+    For general simple polygons, use a method such as ray casting or winding
+    number instead.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Counting a Vertex Twice</h2>
+
+  <p>
+    A ray may pass through a polygon vertex shared by two edges.
+  </p>
+
+  <p>
+    Counting both edges as separate crossings can flip the parity incorrectly.
+  </p>
+
+  <p>
+    Use a consistent half-open crossing convention so that a shared vertex
+    contributes correctly.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Ignoring Boundary Cases</h2>
+
+  <p>
+    A point that lies exactly on a polygon edge is neither an ordinary interior
+    point nor an ordinary exterior point.
+  </p>
+
+  <p>
+    If boundary membership matters, test for it explicitly before applying the
+    inside/outside rule.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Assuming Every Polygon Is Simple</h2>
+
+  <p>
+    A self-intersecting polygon does not have a unique inside/outside
+    interpretation without a filling rule.
+  </p>
+
+  <p>
+    The even-odd and nonzero winding rules can disagree.
+  </p>
+
+  <p>
+    Therefore, the region definition must specify how self-intersections are to
+    be interpreted.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Comparing Floating-Point Values to Zero Blindly</h2>
+
+  <p>
+    Tests such as
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,P)=0
+  \]
+
+  <p>
+    are mathematically exact statements.
+  </p>
+
+  <p>
+    Floating-point arithmetic may require a tolerance or a more robust exact
+    predicate, depending on the application.
+  </p>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Point-in-Rectangle Testing</h2>
+
+  <ol>
+    <li>Compare \(x\) with \(x_{\min}\) and \(x_{\max}\).</li>
+    <li>Compare \(y\) with \(y_{\min}\) and \(y_{\max}\).</li>
+    <li>If any coordinate is outside its range, return outside.</li>
+    <li>If the point lies on any limiting coordinate and boundary is included, return boundary.</li>
+    <li>Otherwise return inside.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Point-in-Circle Testing</h2>
+
+  <ol>
+    <li>Subtract the center from the point.</li>
+    <li>Compute the squared distance \(d^2\).</li>
+    <li>Compare \(d^2\) with \(r^2\).</li>
+    <li>Return inside, boundary, or outside according to the comparison.</li>
+    <li>Use a suitable numerical policy when approximate arithmetic is involved.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Point-in-Convex-Polygon Testing</h2>
+
+  <ol>
+    <li>Confirm the polygon orientation or use a sign-consistent formulation.</li>
+    <li>Optionally reject the point using the polygon bounding box.</li>
+    <li>Test whether the point lies on any boundary edge.</li>
+    <li>Evaluate orientation against every directed edge.</li>
+    <li>If the signs are consistent with the polygon interior, return inside.</li>
+    <li>If one sign violates the interior half-plane condition, return outside.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Ray Casting</h2>
+
+  <ol>
+    <li>Reject with the bounding box when possible.</li>
+    <li>Test polygon edges for exact or approximate boundary membership.</li>
+    <li>Choose a consistent ray direction.</li>
+    <li>Process each edge with a half-open endpoint convention.</li>
+    <li>Count or toggle only genuine ray crossings.</li>
+    <li>Return inside for odd parity and outside for even parity.</li>
+    <li>Apply the application's chosen boundary policy.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Repeated Region Queries</h2>
+
+  <ol>
+    <li>Analyze the region type and expected number of queries.</li>
+    <li>Precompute the region bounding box.</li>
+    <li>Remove or classify degenerate boundary data if appropriate.</li>
+    <li>Choose a specialized test for circles, rectangles, or convex polygons when available.</li>
+    <li>Use a general polygon method only when the geometry requires it.</li>
+    <li>Consider spatial indexing or preprocessing when query volume is large.</li>
+    <li>Keep boundary and numerical conventions consistent across all queries.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Practice 1: Rectangle</h2>
+
+  <p>
+    Classify
+  </p>
+
+  \[
+  P=(3,5)
+  \]
+
+  <p>
+    relative to
+  </p>
+
+  \[
+  0\le x\le6,
+  \qquad
+  1\le y\le8.
+  \]
+</section>
+
+<section>
+  <h2>Practice 2: Rectangle Boundary</h2>
+
+  <p>
+    Classify
+  </p>
+
+  \[
+  P=(6,4)
+  \]
+
+  <p>
+    relative to the same rectangle.
+  </p>
+</section>
+
+<section>
+  <h2>Practice 3: Circle</h2>
+
+  <p>
+    A circle has center
+  </p>
+
+  \[
+  C=(2,-1)
+  \]
+
+  <p>
+    and radius \(5\). Classify
+  </p>
+
+  \[
+  P=(5,3).
+  \]
+</section>
+
+<section>
+  <h2>Practice 4: Outside a Circle</h2>
+
+  <p>
+    Using the same circle, classify
+  </p>
+
+  \[
+  Q=(8,3).
+  \]
+</section>
+
+<section>
+  <h2>Practice 5: Half-Plane</h2>
+
+  <p>
+    Determine the sign of
+  </p>
+
+  \[
+  2x-y-3
+  \]
+
+  <p>
+    at
+  </p>
+
+  \[
+  P=(4,2),
+  \]
+
+  <p>
+    and state which side of the line
+  </p>
+
+  \[
+  2x-y=3
+  \]
+
+  <p>
+    contains the point.
+  </p>
+</section>
+
+<section>
+  <h2>Practice 6: Orientation Side Test</h2>
+
+  <p>
+    Let
+  </p>
+
+  \[
+  A=(0,0),
+  \qquad
+  B=(5,0),
+  \qquad
+  P=(2,3).
+  \]
+
+  <p>
+    Determine whether \(P\) lies to the left, right, or on the directed line
+    from \(A\) to \(B\).
+  </p>
+</section>
+
+<section>
+  <h2>Practice 7: Triangle Boundary</h2>
+
+  <p>
+    Let
+  </p>
+
+  \[
+  A=(0,0),
+  \qquad
+  B=(6,0),
+  \qquad
+  C=(0,6).
+  \]
+
+  <p>
+    Classify
+  </p>
+
+  \[
+  P=(3,3).
+  \]
+</section>
+
+<section>
+  <h2>Practice 8: Ray-Casting Parity</h2>
+
+  <p>
+    A horizontal ray from a point crosses a simple polygon boundary \(5\)
+    times. Classify the point.
+  </p>
+</section>
+
+<section>
+  <h2>Practice 9: Ray-Casting Parity</h2>
+
+  <p>
+    A horizontal ray from another point crosses the boundary \(4\) times.
+    Classify the point.
+  </p>
+</section>
+
+<section>
+  <h2>Practice 10: Polygon with a Hole</h2>
+
+  <p>
+    A point lies inside the outer polygon boundary and also inside one of the
+    polygon's holes. Is the point part of the filled region?
+  </p>
+</section>
+
+<section>
+  <h2>Practice Answers</h2>
+
+  <h3>Practice 1</h3>
+
+  <p>
+    Since
+  </p>
+
+  \[
+  0<3<6
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  1<5<8,
+  \]
+
+  <p>
+    the point is
+  </p>
+
+  \[
+  \boxed{\text{inside}}.
+  \]
+
+  <h3>Practice 2</h3>
+
+  <p>
+    The point satisfies the inclusive bounds, and
+  </p>
+
+  \[
+  x=6=x_{\max}.
+  \]
+
+  <p>
+    Therefore,
+  </p>
+
+  \[
+  \boxed{\text{boundary}}.
+  \]
+
+  <h3>Practice 3</h3>
+
+  <p>
+    Compute
+  </p>
+
+  \[
+  d^2=(5-2)^2+(3-(-1))^2.
+  \]
+
+  \[
+  d^2=3^2+4^2=25.
+  \]
+
+  <p>
+    Since
+  </p>
+
+  \[
+  r^2=25,
+  \]
+
+  <p>
+    the point is
+  </p>
+
+  \[
+  \boxed{\text{boundary}}.
+  \]
+
+  <h3>Practice 4</h3>
+
+  \[
+  d^2=(8-2)^2+(3-(-1))^2
+  =
+  36+16
+  =
+  52.
+  \]
+
+  <p>
+    Since
+  </p>
+
+  \[
+  52>25,
+  \]
+
+  <p>
+    the point is
+  </p>
+
+  \[
+  \boxed{\text{outside}}.
+  \]
+
+  <h3>Practice 5</h3>
+
+  \[
+  2(4)-2-3=3.
+  \]
+
+  <p>
+    The result is positive, so \(P\) lies in the half-plane
+  </p>
+
+  \[
+  \boxed{2x-y>3}.
+  \]
+
+  <h3>Practice 6</h3>
+
+  \[
+  \operatorname{orient}(A,B,P)
+  =
+  5(3)-0(2)
+  =
+  15.
+  \]
+
+  <p>
+    Since the value is positive,
+  </p>
+
+  \[
+  \boxed{P\text{ lies to the left of }A\to B.}
+  \]
+
+  <h3>Practice 7</h3>
+
+  <p>
+    The hypotenuse from \(B\) to \(C\) satisfies
+  </p>
+
+  \[
+  x+y=6.
+  \]
+
+  <p>
+    For \(P=(3,3)\),
+  </p>
+
+  \[
+  3+3=6.
+  \]
+
+  <p>
+    Therefore,
+  </p>
+
+  \[
+  \boxed{P\text{ lies on the boundary}.}
+  \]
+
+  <h3>Practice 8</h3>
+
+  <p>
+    Five is odd, so under the even-odd rule,
+  </p>
+
+  \[
+  \boxed{\text{the point is inside}.}
+  \]
+
+  <h3>Practice 9</h3>
+
+  <p>
+    Four is even, so
+  </p>
+
+  \[
+  \boxed{\text{the point is outside}.}
+  \]
+
+  <h3>Practice 10</h3>
+
+  <p>
+    A hole is excluded from the filled region.
+  </p>
+
+  <p>
+    Therefore, a point inside both the outer boundary and a hole is
+  </p>
+
+  \[
+  \boxed{\text{outside the filled region}}.
+  \]
+</section>
+
+<section>
+  <h2>What to Remember</h2>
+
+  <p>
+    Point-in-region tests translate spatial containment into computational
+    predicates.
+  </p>
+
+  <ul>
+    <li>rectangles use coordinate-range tests;</li>
+    <li>circles use squared-distance comparisons;</li>
+    <li>half-planes use signs of linear expressions or orientation values;</li>
+    <li>convex polygons can be tested by consistent edge-side predicates;</li>
+    <li>general simple polygons can use ray casting or winding numbers;</li>
+    <li>ray casting requires careful endpoint and vertex conventions;</li>
+    <li>self-intersecting boundaries require an explicit filling rule;</li>
+    <li>holes require additional region logic;</li>
+    <li>triangles support efficient orientation and barycentric tests;</li>
+    <li>bounding boxes provide fast early rejection;</li>
+    <li>boundary policy and numerical tolerance are part of the algorithm design.</li>
+  </ul>
+
+  <p>
+    The key computational question is not merely whether a point satisfies an
+    equation, but how the entire boundary partitions space and how the
+    application wants that partition interpreted.
+  </p>
+</section>
+
+<section>
+  <h2>Where We Go Next</h2>
+
+  <p>
+    Point-in-region tests determine whether a location belongs to an existing
+    spatial boundary. The next lesson asks how to construct an important
+    boundary directly from a collection of points.
+  </p>
+
+  <p>
+    <strong>Convex Hulls</strong> develops methods for finding the smallest
+    convex region that contains a point set and introduces one of the central
+    constructive problems of computational geometry.
+  </p>
+</section>
+
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+
+<div id="bottom-nav-placeholder"></div>
+</main>
+
+<!-- ========== FOOTER ========== -->
+
+<div id="footer-placeholder"></div>
+
+<!-- ========== COMPONENT SCRIPTS ========== -->
+
+<script>
+fetch('/component/bottom-nav.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('bottom-nav-placeholder').innerHTML = data;
+  });
+
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+
+</body>
+</html>

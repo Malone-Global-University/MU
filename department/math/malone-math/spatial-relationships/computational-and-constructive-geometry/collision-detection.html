@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Learn collision detection in computational geometry, including broad-phase and narrow-phase testing, bounding volumes, interval overlap, circle and polygon tests, separating-axis logic, continuous collision detection, spatial acceleration, and numerical robustness.">
+  <title>Collision Detection | Malone Math | Malone Global University</title>
+  <link rel="icon" href="/image/global/favicon.ico">
+  <link rel="stylesheet" href="/component/dept.css">
+
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']],
+        processEscapes: true
+      }
+    };
+  </script>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+</head>
+
+<body id="top" data-uploaded="8-30-2026" data-updated="8-30-2026">
+
+<div id="header-placeholder"></div>
+
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+
+<!-- ========== HERO ========== -->
+
+<section class="hero">
+  <h1>Collision Detection</h1>
+
+  <p>
+    Collision detection determines whether geometric objects touch, overlap, or
+    pass through one another. A complete system rarely relies on one expensive
+    exact test. Instead, it combines inexpensive rejection tests, bounding
+    regions, geometric predicates, spatial partitions, and more detailed
+    narrow-phase calculations. These ideas are central to computer graphics,
+    physical simulation, robotics, games, engineering software, geographic
+    systems, and any computation involving interacting spatial objects.
+  </p>
+</section>
+
+<!-- ========== BREADCRUMB ========== -->
+
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+
+<!-- ========== MAIN CONTENT ========== -->
+
+<main id="main-content" role="main">
+
+<section>
+  <h2>The Central Idea</h2>
+
+  <p>
+    Two objects collide when their occupied regions have a nonempty
+    intersection.
+  </p>
+
+  <p>
+    If objects occupy regions \(A\) and \(B\), then collision means
+  </p>
+
+  \[
+  \boxed{
+  A\cap B\ne\varnothing
+  }.
+  \]
+
+  <p>
+    Computationally, however, testing this intersection directly may be
+    expensive. Efficient systems therefore organize collision detection into
+    stages.
+  </p>
+</section>
+
+<section>
+  <h2>Broad Phase and Narrow Phase</h2>
+
+  <p>
+    Collision detection is commonly divided into two major stages.
+  </p>
+
+  <ul>
+    <li><strong>Broad phase:</strong> quickly reject pairs that cannot collide.</li>
+    <li><strong>Narrow phase:</strong> apply a more exact geometric test to the remaining candidate pairs.</li>
+  </ul>
+
+  <p>
+    This structure avoids spending expensive computation on obviously separated
+    objects.
+  </p>
+</section>
+
+<section>
+  <h2>Why the Broad Phase Matters</h2>
+
+  <p>
+    Suppose a simulation contains
+  </p>
+
+  \[
+  n
+  \]
+
+  <p>
+    objects.
+  </p>
+
+  <p>
+    Testing every unordered pair directly would require
+  </p>
+
+  \[
+  \boxed{
+  \frac{n(n-1)}{2}
+  }
+  \]
+
+  <p>
+    pair checks.
+  </p>
+
+  <p>
+    For large \(n\), this quadratic growth becomes expensive.
+  </p>
+</section>
+
+<section>
+  <h2>Bounding Volumes</h2>
+
+  <p>
+    A <strong>bounding volume</strong> is a simpler region that contains a more
+    complicated object.
+  </p>
+
+  <p>
+    Common examples include:
+  </p>
+
+  <ul>
+    <li>axis-aligned bounding boxes;</li>
+    <li>oriented bounding boxes;</li>
+    <li>bounding circles or spheres;</li>
+    <li>capsules;</li>
+    <li>convex hulls.</li>
+  </ul>
+
+  <p>
+    If two bounding volumes are disjoint, the underlying objects are also
+    disjoint.
+  </p>
+</section>
+
+<section>
+  <h2>Bounding-Volume Rejection</h2>
+
+  <p>
+    Let
+  </p>
+
+  \[
+  A\subseteq B_A
+  \qquad\text{and}\qquad
+  B\subseteq B_B,
+  \]
+
+  <p>
+    where \(B_A\) and \(B_B\) are bounding volumes.
+  </p>
+
+  <p>
+    Then
+  </p>
+
+  \[
+  B_A\cap B_B=\varnothing
+  \]
+
+  <p>
+    implies
+  </p>
+
+  \[
+  \boxed{
+  A\cap B=\varnothing
+  }.
+  \]
+
+  <p>
+    This makes bounding-volume tests excellent early rejection tools.
+  </p>
+</section>
+
+<section>
+  <h2>Bounding-Volume Overlap Does Not Prove Collision</h2>
+
+  <p>
+    Two bounding boxes can overlap even when the objects inside them do not.
+  </p>
+
+  <p>
+    Therefore,
+  </p>
+
+  \[
+  B_A\cap B_B\ne\varnothing
+  \]
+
+  <p>
+    does not necessarily imply
+  </p>
+
+  \[
+  A\cap B\ne\varnothing.
+  \]
+
+  <p>
+    Broad-phase overlap produces a candidate pair, not a final answer.
+  </p>
+</section>
+
+<section>
+  <h2>Axis-Aligned Bounding Boxes</h2>
+
+  <p>
+    In two dimensions, an axis-aligned bounding box, or AABB, can be represented
+    by
+  </p>
+
+  \[
+  [x_{\min},x_{\max}]
+  \times
+  [y_{\min},y_{\max}].
+  \]
+
+  <p>
+    Two AABBs overlap when their intervals overlap on both coordinate axes.
+  </p>
+</section>
+
+<section>
+  <h2>One-Dimensional Interval Overlap</h2>
+
+  <p>
+    Two closed intervals
+  </p>
+
+  \[
+  [a_{\min},a_{\max}]
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  [b_{\min},b_{\max}]
+  \]
+
+  <p>
+    overlap when
+  </p>
+
+  \[
+  \boxed{
+  a_{\max}\ge b_{\min}
+  \quad\text{and}\quad
+  b_{\max}\ge a_{\min}
+  }.
+  \]
+</section>
+
+<section>
+  <h2>AABB Collision Test</h2>
+
+  <p>
+    Two closed AABBs overlap when
+  </p>
+
+  \[
+  x_{A,\max}\ge x_{B,\min},
+  \]
+
+  \[
+  x_{B,\max}\ge x_{A,\min},
+  \]
+
+  \[
+  y_{A,\max}\ge y_{B,\min},
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  y_{B,\max}\ge y_{A,\min}.
+  \]
+
+  <p>
+    Failure on even one axis proves separation.
+  </p>
+</section>
+
+<section>
+  <h2>Separating Axes</h2>
+
+  <p>
+    The AABB test illustrates a broader principle:
+    if two objects are separated along even one projection axis, they cannot
+    overlap in full space.
+  </p>
+
+  <p>
+    This idea leads to the
+    <strong>separating axis theorem</strong>.
+  </p>
+</section>
+
+<section>
+  <h2>The Separating Axis Theorem</h2>
+
+  <p>
+    For two convex polygons, they are disjoint if and only if there exists a
+    line direction onto which their projected intervals do not overlap.
+  </p>
+
+  <p>
+    Such a direction is called a <strong>separating axis</strong>.
+  </p>
+
+  \[
+  \boxed{
+  \text{one separating axis}
+  \Rightarrow
+  \text{no collision}
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Candidate Axes for Convex Polygons</h2>
+
+  <p>
+    In two dimensions, it is sufficient to test axes perpendicular to the edges
+    of both polygons.
+  </p>
+
+  <p>
+    If no such axis separates the projected intervals, the convex polygons
+    overlap or touch.
+  </p>
+</section>
+
+<section>
+  <h2>Projecting a Point onto an Axis</h2>
+
+  <p>
+    Let \(\mathbf{a}\) be a chosen axis direction.
+  </p>
+
+  <p>
+    A vertex \(P\) can be projected using the dot product:
+  </p>
+
+  \[
+  \boxed{
+  s=P\cdot\mathbf{a}
+  }.
+  \]
+
+  <p>
+    The polygon's projection interval is found from the minimum and maximum
+    values of \(s\) over all its vertices.
+  </p>
+</section>
+
+<section>
+  <h2>Projection Intervals</h2>
+
+  <p>
+    For polygon \(A\), compute
+  </p>
+
+  \[
+  I_A=
+  [s_{A,\min},s_{A,\max}].
+  \]
+
+  <p>
+    For polygon \(B\), compute
+  </p>
+
+  \[
+  I_B=
+  [s_{B,\min},s_{B,\max}].
+  \]
+
+  <p>
+    If the intervals are disjoint on any candidate axis, the polygons are
+    separated.
+  </p>
+</section>
+
+<section>
+  <h2>Touching versus Penetrating</h2>
+
+  <p>
+    Boundary policy affects the interval comparison.
+  </p>
+
+  <p>
+    If touching counts as collision, then intervals that meet at one endpoint
+    are considered overlapping.
+  </p>
+
+  <p>
+    If only positive-area penetration counts, strict interval overlap may be
+    required.
+  </p>
+</section>
+
+<section>
+  <h2>Circle-Circle Collision</h2>
+
+  <p>
+    Let two circles have centers
+  </p>
+
+  \[
+  C_1,\qquad C_2
+  \]
+
+  <p>
+    and radii
+  </p>
+
+  \[
+  r_1,\qquad r_2.
+  \]
+
+  <p>
+    They overlap or touch when
+  </p>
+
+  \[
+  \boxed{
+  \|C_2-C_1\|\le r_1+r_2
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Squared Circle-Circle Test</h2>
+
+  <p>
+    The square root is unnecessary.
+  </p>
+
+  <p>
+    Instead test
+  </p>
+
+  \[
+  \boxed{
+  \|C_2-C_1\|^2
+  \le
+  (r_1+r_2)^2
+  }.
+  \]
+
+  <p>
+    This is usually faster and numerically simpler.
+  </p>
+</section>
+
+<section>
+  <h2>Circle-Point Collision</h2>
+
+  <p>
+    A point \(P\) lies inside or on a circle centered at \(C\) with radius \(r\)
+    when
+  </p>
+
+  \[
+  \boxed{
+  \|P-C\|^2\le r^2
+  }.
+  \]
+
+  <p>
+    This is the same point-in-circle predicate used in point-in-region testing.
+  </p>
+</section>
+
+<section>
+  <h2>Circle-Segment Collision</h2>
+
+  <p>
+    A circle intersects a segment when the minimum distance from the circle
+    center to the segment is at most the radius.
+  </p>
+
+  <p>
+    Therefore, the key construction is the closest point on the segment.
+  </p>
+</section>
+
+<section>
+  <h2>Closest Point on a Segment</h2>
+
+  <p>
+    Let segment \(AB\) be parameterized as
+  </p>
+
+  \[
+  S(t)=A+t(B-A),
+  \qquad
+  0\le t\le1.
+  \]
+
+  <p>
+    The unconstrained projection parameter of point \(P\) is
+  </p>
+
+  \[
+  t_0=
+  \frac{(P-A)\cdot(B-A)}
+  {(B-A)\cdot(B-A)}.
+  \]
+</section>
+
+<section>
+  <h2>Clamping the Projection</h2>
+
+  <p>
+    The closest point on the finite segment uses
+  </p>
+
+  \[
+  \boxed{
+  t=
+  \operatorname{clamp}(t_0,0,1)
+  }.
+  \]
+
+  <p>
+    Then
+  </p>
+
+  \[
+  Q=A+t(B-A)
+  \]
+
+  <p>
+    is the closest point on the segment to \(P\).
+  </p>
+</section>
+
+<section>
+  <h2>Completing the Circle-Segment Test</h2>
+
+  <p>
+    Let \(C\) be the circle center and \(Q\) the closest point on segment \(AB\).
+  </p>
+
+  <p>
+    Collision occurs when
+  </p>
+
+  \[
+  \boxed{
+  \|C-Q\|^2\le r^2
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Segment-Segment Collision</h2>
+
+  <p>
+    Segment collision can use the orientation predicates developed earlier.
+  </p>
+
+  <p>
+    For segments \(AB\) and \(CD\), compute
+  </p>
+
+  \[
+  o_1=\operatorname{orient}(A,B,C),
+  \]
+
+  \[
+  o_2=\operatorname{orient}(A,B,D),
+  \]
+
+  \[
+  o_3=\operatorname{orient}(C,D,A),
+  \]
+
+  \[
+  o_4=\operatorname{orient}(C,D,B).
+  \]
+</section>
+
+<section>
+  <h2>Proper Segment Crossing</h2>
+
+  <p>
+    When no orientation value is zero, the segments properly cross when
+  </p>
+
+  \[
+  \boxed{
+  o_1o_2<0
+  \quad\text{and}\quad
+  o_3o_4<0
+  }.
+  \]
+
+  <p>
+    Endpoint contact and collinear overlap must be handled separately.
+  </p>
+</section>
+
+<section>
+  <h2>Polygon Collision</h2>
+
+  <p>
+    Collision between general polygons can involve:
+  </p>
+
+  <ul>
+    <li>edge-edge intersections;</li>
+    <li>one polygon lying inside another;</li>
+    <li>shared boundary portions;</li>
+    <li>touching at vertices or edges.</li>
+  </ul>
+
+  <p>
+    A complete test must account for all of these possibilities.
+  </p>
+</section>
+
+<section>
+  <h2>Convex Polygon Collision</h2>
+
+  <p>
+    For convex polygons, the separating axis theorem provides an elegant
+    complete test.
+  </p>
+
+  <p>
+    Test projection overlap on axes normal to every edge of both polygons.
+  </p>
+
+  <p>
+    If all intervals overlap, the polygons intersect or touch.
+  </p>
+</section>
+
+<section>
+  <h2>Concave Polygon Collision</h2>
+
+  <p>
+    The standard separating axis theorem does not directly reduce concave
+    polygon collision to only edge-normal projections.
+  </p>
+
+  <p>
+    Common strategies include:
+  </p>
+
+  <ul>
+    <li>triangulating or convexly decomposing the polygons;</li>
+    <li>testing boundary intersections plus containment;</li>
+    <li>using hierarchical bounding structures.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Convex Decomposition</h2>
+
+  <p>
+    A concave object can be divided into several convex pieces.
+  </p>
+
+  <p>
+    Collision detection then reduces to testing pairs of convex components.
+  </p>
+
+  <p>
+    This shifts complexity from the narrow-phase predicate into preprocessing.
+  </p>
+</section>
+
+<section>
+  <h2>Bounding Circles and Spheres</h2>
+
+  <p>
+    Circles and spheres are rotation-invariant bounding volumes.
+  </p>
+
+  <p>
+    Their overlap test depends only on center distance and radius sum.
+  </p>
+
+  <p>
+    This makes them computationally inexpensive, although they may fit elongated
+    objects poorly.
+  </p>
+</section>
+
+<section>
+  <h2>Oriented Bounding Boxes</h2>
+
+  <p>
+    An oriented bounding box, or OBB, may rotate with the object.
+  </p>
+
+  <p>
+    It can fit a rotated or elongated shape more tightly than an AABB.
+  </p>
+
+  <p>
+    The tradeoff is a more expensive overlap test.
+  </p>
+</section>
+
+<section>
+  <h2>Tightness versus Test Cost</h2>
+
+  <p>
+    Bounding volumes involve a design tradeoff:
+  </p>
+
+  \[
+  \boxed{
+  \text{tighter fit}
+  \quad\longleftrightarrow\quad
+  \text{more expensive test}
+  }.
+  \]
+
+  <p>
+    A sphere may be cheap but loose.
+  </p>
+
+  <p>
+    A convex hull may be tight but require a more sophisticated narrow-phase
+    test.
+  </p>
+</section>
+
+<section>
+  <h2>Bounding-Volume Hierarchies</h2>
+
+  <p>
+    A complex object can be organized into a tree of bounding volumes.
+  </p>
+
+  <p>
+    The root encloses the whole object.
+  </p>
+
+  <p>
+    Child nodes enclose smaller parts.
+  </p>
+
+  <p>
+    Leaves contain individual primitives or small groups of them.
+  </p>
+</section>
+
+<section>
+  <h2>Hierarchy Traversal</h2>
+
+  <p>
+    To test two objects:
+  </p>
+
+  <ol>
+    <li>compare their root bounding volumes;</li>
+    <li>if separated, stop;</li>
+    <li>if overlapping, compare child regions;</li>
+    <li>continue only where overlap persists;</li>
+    <li>apply primitive tests near the leaves.</li>
+  </ol>
+
+  <p>
+    This focuses work on geometrically relevant regions.
+  </p>
+</section>
+
+<section>
+  <h2>Spatial Grids for Collision Detection</h2>
+
+  <p>
+    A domain can be partitioned into grid cells.
+  </p>
+
+  <p>
+    Each object is assigned to the cells it occupies.
+  </p>
+
+  <p>
+    Only objects sharing one or more cells need to become candidate collision
+    pairs.
+  </p>
+</section>
+
+<section>
+  <h2>Spatial Hashing</h2>
+
+  <p>
+    A spatial hash maps grid coordinates to storage locations using a hash
+    function.
+  </p>
+
+  <p>
+    This provides grid-like spatial organization without allocating every
+    possible cell in advance.
+  </p>
+
+  <p>
+    It is especially useful in large sparse domains.
+  </p>
+</section>
+
+<section>
+  <h2>Quadtrees and Octrees</h2>
+
+  <p>
+    Quadtrees partition two-dimensional space hierarchically.
+  </p>
+
+  <p>
+    Octrees provide the analogous idea in three dimensions.
+  </p>
+
+  <p>
+    Dense regions can be subdivided more deeply than sparse regions, making
+    these structures useful for adaptive broad-phase collision detection.
+  </p>
+</section>
+
+<section>
+  <h2>Sweep and Prune</h2>
+
+  <p>
+    <strong>Sweep and prune</strong> projects object bounds onto one or more
+    coordinate axes.
+  </p>
+
+  <p>
+    Objects whose intervals do not overlap on an axis cannot collide.
+  </p>
+
+  <p>
+    Maintaining sorted interval endpoints can make repeated broad-phase updates
+    efficient when objects move gradually.
+  </p>
+</section>
+
+<section>
+  <h2>Static versus Dynamic Collision Detection</h2>
+
+  <p>
+    <strong>Static collision detection</strong> asks whether objects overlap at
+    a particular instant.
+  </p>
+
+  <p>
+    <strong>Dynamic</strong> or <strong>continuous collision detection</strong>
+    asks whether they collide at any time during a motion interval.
+  </p>
+</section>
+
+<section>
+  <h2>Why Discrete Time Steps Can Miss Collisions</h2>
+
+  <p>
+    Suppose an object is on one side of a thin wall at time \(t_0\) and on the
+    other side at time \(t_1\).
+  </p>
+
+  <p>
+    If collision is tested only at the endpoints, the object may appear
+    nonintersecting at both times even though it passed through the wall.
+  </p>
+
+  <p>
+    This failure is often called <strong>tunneling</strong>.
+  </p>
+</section>
+
+<section>
+  <h2>Continuous Collision Detection</h2>
+
+  <p>
+    Continuous collision detection incorporates motion into the geometric test.
+  </p>
+
+  <p>
+    Instead of asking only
+  </p>
+
+  \[
+  A(t_0)\cap B(t_0)\ne\varnothing,
+  \]
+
+  <p>
+    it asks whether there exists
+  </p>
+
+  \[
+  t\in[t_0,t_1]
+  \]
+
+  <p>
+    such that
+  </p>
+
+  \[
+  \boxed{
+  A(t)\cap B(t)\ne\varnothing
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Time of Impact</h2>
+
+  <p>
+    A continuous collision solver may seek the earliest
+  </p>
+
+  \[
+  t^*
+  \]
+
+  <p>
+    satisfying the collision condition.
+  </p>
+
+  <p>
+    This value is called the <strong>time of impact</strong>.
+  </p>
+
+  <p>
+    After finding \(t^*\), a physical simulation can resolve the collision and
+    continue from that event.
+  </p>
+</section>
+
+<section>
+  <h2>Moving Circle against Moving Circle</h2>
+
+  <p>
+    Suppose two circle centers move linearly:
+  </p>
+
+  \[
+  C_1(t)=C_{1,0}+tV_1
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  C_2(t)=C_{2,0}+tV_2.
+  \]
+
+  <p>
+    Collision occurs when
+  </p>
+
+  \[
+  \|C_2(t)-C_1(t)\|^2
+  =
+  (r_1+r_2)^2.
+  \]
+</section>
+
+<section>
+  <h2>Relative Motion Simplifies the Problem</h2>
+
+  <p>
+    Define relative position
+  </p>
+
+  \[
+  P=C_{2,0}-C_{1,0}
+  \]
+
+  <p>
+    and relative velocity
+  </p>
+
+  \[
+  V=V_2-V_1.
+  \]
+
+  <p>
+    Then the moving-circle collision equation becomes
+  </p>
+
+  \[
+  \boxed{
+  \|P+tV\|^2
+  =
+  (r_1+r_2)^2
+  }.
+  \]
+
+  <p>
+    This is a quadratic equation in \(t\).
+  </p>
+</section>
+
+<section>
+  <h2>Contact Normal</h2>
+
+  <p>
+    Once a collision point or time is known, a system may need a
+    <strong>contact normal</strong>.
+  </p>
+
+  <p>
+    For two circles with distinct centers, a natural normal is
+  </p>
+
+  \[
+  \boxed{
+  \mathbf{n}
+  =
+  \frac{C_2-C_1}
+  {\|C_2-C_1\|}
+  }.
+  \]
+
+  <p>
+    The normal points from one object toward the other.
+  </p>
+</section>
+
+<section>
+  <h2>Penetration Depth</h2>
+
+  <p>
+    For overlapping circles, the center distance is
+  </p>
+
+  \[
+  d=\|C_2-C_1\|.
+  \]
+
+  <p>
+    The penetration depth is
+  </p>
+
+  \[
+  \boxed{
+  \delta=
+  r_1+r_2-d
+  }.
+  \]
+
+  <p>
+    A positive \(\delta\) measures how far the circles overlap along the center
+    direction.
+  </p>
+</section>
+
+<section>
+  <h2>Collision Detection versus Collision Response</h2>
+
+  <p>
+    Collision detection answers questions such as:
+  </p>
+
+  <ul>
+    <li>Did contact occur?</li>
+    <li>Where did it occur?</li>
+    <li>When did it occur?</li>
+    <li>What is the contact normal?</li>
+    <li>How deep is the overlap?</li>
+  </ul>
+
+  <p>
+    Collision response determines what happens afterward.
+  </p>
+
+  <p>
+    The two tasks are related but distinct.
+  </p>
+</section>
+
+<section>
+  <h2>Meshes and Collision Detection</h2>
+
+  <p>
+    A triangular mesh represents a complex object as many simple primitives.
+  </p>
+
+  <p>
+    Collision can then be reduced to:
+  </p>
+
+  <ul>
+    <li>bounding-volume tests between mesh regions;</li>
+    <li>triangle-triangle tests near candidate contacts;</li>
+    <li>edge and vertex feature tests.</li>
+  </ul>
+
+  <p>
+    Hierarchies prevent every triangle from being tested against every other
+    triangle.
+  </p>
+</section>
+
+<section>
+  <h2>Point-Triangle Collision</h2>
+
+  <p>
+    In two dimensions, point-triangle collision is a point-in-region test.
+  </p>
+
+  <p>
+    In three dimensions, the point must first lie on the triangle's plane and
+    then inside the triangular boundary.
+  </p>
+
+  <p>
+    Barycentric coordinates are often useful for the second step.
+  </p>
+</section>
+
+<section>
+  <h2>Triangle-Triangle Collision</h2>
+
+  <p>
+    In two dimensions, triangle collision can be tested with:
+  </p>
+
+  <ul>
+    <li>the separating axis theorem;</li>
+    <li>edge intersection plus containment;</li>
+    <li>other convex-polygon predicates.</li>
+  </ul>
+
+  <p>
+    In three dimensions, additional plane and feature relationships must be
+    considered.
+  </p>
+</section>
+
+<section>
+  <h2>Degenerate Objects</h2>
+
+  <p>
+    Collision systems must define behavior for:
+  </p>
+
+  <ul>
+    <li>zero-length segments;</li>
+    <li>zero-radius circles;</li>
+    <li>zero-area triangles;</li>
+    <li>duplicate vertices;</li>
+    <li>coincident surfaces;</li>
+    <li>objects already interpenetrating at the start of a time step.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Contact Classification</h2>
+
+  <p>
+    A useful collision routine may distinguish:
+  </p>
+
+  \[
+  \boxed{
+  \{\text{separated},\text{touching},\text{penetrating}\}
+  }.
+  \]
+
+  <p>
+    Some systems also need to classify overlapping boundaries or coincident
+    geometric features.
+  </p>
+</section>
+
+<section>
+  <h2>Numerical Robustness</h2>
+
+  <p>
+    Collision detection frequently operates near boundaries where quantities
+    should theoretically be zero.
+  </p>
+
+  <p>
+    Examples include:
+  </p>
+
+  \[
+  d-(r_1+r_2)=0
+  \]
+
+  <p>
+    or
+  </p>
+
+  \[
+  \operatorname{orient}(A,B,C)=0.
+  \]
+
+  <p>
+    Floating-point error can change a touching case into an apparent gap or
+    penetration.
+  </p>
+</section>
+
+<section>
+  <h2>Collision Tolerances</h2>
+
+  <p>
+    A practical system may use a tolerance
+  </p>
+
+  \[
+  \varepsilon>0
+  \]
+
+  <p>
+    and treat sufficiently small separation values as contact.
+  </p>
+
+  <p>
+    The tolerance should reflect scale and application requirements rather than
+    being chosen arbitrarily.
+  </p>
+</section>
+
+<section>
+  <h2>Temporal Tolerances</h2>
+
+  <p>
+    Continuous collision detection can also require tolerances in time.
+  </p>
+
+  <p>
+    A computed impact parameter near
+  </p>
+
+  \[
+  t=0
+  \]
+
+  <p>
+    or
+  </p>
+
+  \[
+  t=1
+  \]
+
+  <p>
+    may need careful clamping or classification so that contacts are not lost
+    because of tiny numerical drift.
+  </p>
+</section>
+
+<section>
+  <h2>False Positives and False Negatives</h2>
+
+  <p>
+    A <strong>false positive</strong> reports collision when the objects are
+    actually separated.
+  </p>
+
+  <p>
+    A <strong>false negative</strong> misses a real collision.
+  </p>
+
+  <p>
+    In many safety-critical or physical applications, false negatives are
+    especially dangerous.
+  </p>
+</section>
+
+<section>
+  <h2>Conservative Collision Tests</h2>
+
+  <p>
+    A conservative broad-phase test may intentionally produce some false
+    positives.
+  </p>
+
+  <p>
+    That is acceptable if the narrow phase later removes them.
+  </p>
+
+  <p>
+    What the broad phase must avoid is incorrectly rejecting a pair that truly
+    collides.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Treating Bounding-Box Overlap as Exact Collision</h2>
+
+  <p>
+    Bounding boxes may overlap while the actual objects remain separated.
+  </p>
+
+  <p>
+    Broad-phase overlap means only:
+  </p>
+
+  \[
+  \boxed{
+  \text{perform a more detailed test}
+  }.
+  \]
+</section>
+
+<section>
+  <h2>Common Error: Testing Only Object Positions at Frame Boundaries</h2>
+
+  <p>
+    Fast-moving objects can pass completely through thin obstacles between two
+    sampled times.
+  </p>
+
+  <p>
+    Continuous collision detection or sufficiently conservative swept tests are
+    needed when tunneling matters.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Using the Separating Axis Theorem Directly on Concave Polygons</h2>
+
+  <p>
+    The standard edge-normal SAT test is complete for convex polygons.
+  </p>
+
+  <p>
+    Concave polygons generally require decomposition or another strategy.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Forgetting Collinear Segment Cases</h2>
+
+  <p>
+    The proper-crossing orientation test does not by itself detect:
+  </p>
+
+  <ul>
+    <li>shared endpoints;</li>
+    <li>collinear overlap;</li>
+    <li>one endpoint lying on the other segment.</li>
+  </ul>
+
+  <p>
+    These cases must be handled explicitly.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Normalizing a Zero Contact Direction</h2>
+
+  <p>
+    If two circle centers coincide, then
+  </p>
+
+  \[
+  C_2-C_1=\mathbf{0}.
+  \]
+
+  <p>
+    The ordinary center-to-center contact normal cannot be normalized.
+  </p>
+
+  <p>
+    A fallback rule is required.
+  </p>
+</section>
+
+<section>
+  <h2>Common Error: Ignoring Collision Policy</h2>
+
+  <p>
+    A system must define whether:
+  </p>
+
+  <ul>
+    <li>touching counts as collision;</li>
+    <li>shared boundaries count;</li>
+    <li>initial overlap is allowed;</li>
+    <li>small gaps within tolerance count as contact.</li>
+  </ul>
+
+  <p>
+    Different policies produce different valid predicates.
+  </p>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for AABB Broad-Phase Testing</h2>
+
+  <ol>
+    <li>Compute or update the AABB of each object.</li>
+    <li>Compare the \(x\)-intervals.</li>
+    <li>If they are disjoint, reject the pair.</li>
+    <li>Compare the \(y\)-intervals.</li>
+    <li>If they are disjoint, reject the pair.</li>
+    <li>Otherwise, pass the pair to the narrow phase.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Circle-Circle Collision</h2>
+
+  <ol>
+    <li>Compute the center displacement \(D=C_2-C_1\).</li>
+    <li>Compute \(d^2=D\cdot D\).</li>
+    <li>Compute \(R=r_1+r_2\).</li>
+    <li>Compare \(d^2\) with \(R^2\).</li>
+    <li>Classify separated, touching, or penetrating according to policy.</li>
+    <li>If needed, compute contact normal and penetration depth.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for Convex Polygon Collision</h2>
+
+  <ol>
+    <li>Collect edge-normal axes from both polygons.</li>
+    <li>Project both polygons onto the first axis.</li>
+    <li>If the intervals are disjoint, return separated.</li>
+    <li>Repeat for every candidate axis.</li>
+    <li>If no separating axis exists, classify the polygons as overlapping or touching.</li>
+    <li>Apply the chosen boundary policy for exact contact.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>A Reliable Procedure for a General Collision Pipeline</h2>
+
+  <ol>
+    <li>Choose appropriate bounding volumes.</li>
+    <li>Use a spatial structure to reduce candidate pairs.</li>
+    <li>Apply broad-phase overlap tests.</li>
+    <li>Send surviving pairs to geometry-specific narrow-phase tests.</li>
+    <li>Classify contact type.</li>
+    <li>Compute contact location, normal, depth, or time of impact when required.</li>
+    <li>Handle degeneracies and tolerances consistently.</li>
+    <li>Verify against representative edge cases.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Practice 1: Pair Count</h2>
+
+  <p>
+    How many unordered object pairs are possible when
+  </p>
+
+  \[
+  n=10?
+  \]
+</section>
+
+<section>
+  <h2>Practice 2: Interval Overlap</h2>
+
+  <p>
+    Do the intervals
+  </p>
+
+  \[
+  [2,7]
+  \]
+
+  <p>
+    and
+  </p>
+
+  \[
+  [6,10]
+  \]
+
+  <p>
+    overlap?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 3: AABB Rejection</h2>
+
+  <p>
+    Two AABBs overlap on the \(x\)-axis but are disjoint on the \(y\)-axis.
+    Can the boxes collide?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 4: Circle-Circle Test</h2>
+
+  <p>
+    Two circles have radii
+  </p>
+
+  \[
+  r_1=3,
+  \qquad
+  r_2=2
+  \]
+
+  <p>
+    and their centers are \(4\) units apart. Do they overlap or touch?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 5: Circle Separation</h2>
+
+  <p>
+    Two circles have radii \(2\) and \(1\), and their centers are \(5\) units
+    apart. Are they separated?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 6: Separating Axis</h2>
+
+  <p>
+    If the projections of two convex polygons are disjoint on one tested axis,
+    what can you conclude?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 7: Broad Phase</h2>
+
+  <p>
+    What is the purpose of the broad phase?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 8: Tunneling</h2>
+
+  <p>
+    What collision-detection problem occurs when a fast object passes through a
+    thin obstacle between discrete time samples?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 9: Penetration Depth</h2>
+
+  <p>
+    Two circles have radii \(4\) and \(3\), and their centers are \(5\) units
+    apart. What is their penetration depth?
+  </p>
+</section>
+
+<section>
+  <h2>Practice 10: Bounding-Volume Hierarchy</h2>
+
+  <p>
+    Why is a hierarchy useful when testing collisions between highly detailed
+    mesh objects?
+  </p>
+</section>
+
+<section>
+  <h2>Practice Answers</h2>
+
+  <h3>Practice 1</h3>
+
+  \[
+  \frac{10(10-1)}{2}
+  =
+  \frac{90}{2}
+  =
+  \boxed{45}.
+  \]
+
+  <h3>Practice 2</h3>
+
+  <p>
+    The intervals share the range from \(6\) through \(7\), so
+  </p>
+
+  \[
+  \boxed{\text{yes}}.
+  \]
+
+  <h3>Practice 3</h3>
+
+  <p>
+    No. Separation on one axis is enough to prove the AABBs are disjoint.
+  </p>
+
+  \[
+  \boxed{\text{No collision}.}
+  \]
+
+  <h3>Practice 4</h3>
+
+  <p>
+    The radius sum is
+  </p>
+
+  \[
+  3+2=5.
+  \]
+
+  <p>
+    Since
+  </p>
+
+  \[
+  4<5,
+  \]
+
+  <p>
+    the circles
+  </p>
+
+  \[
+  \boxed{\text{overlap}}.
+  \]
+
+  <h3>Practice 5</h3>
+
+  <p>
+    The radius sum is
+  </p>
+
+  \[
+  2+1=3.
+  \]
+
+  <p>
+    Since
+  </p>
+
+  \[
+  5>3,
+  \]
+
+  <p>
+    the circles are
+  </p>
+
+  \[
+  \boxed{\text{separated}}.
+  \]
+
+  <h3>Practice 6</h3>
+
+  <p>
+    A separating axis has been found, so
+  </p>
+
+  \[
+  \boxed{\text{the convex polygons do not collide}.}
+  \]
+
+  <h3>Practice 7</h3>
+
+  <p>
+    The broad phase quickly eliminates object pairs that cannot collide so that
+    expensive exact tests are applied only to plausible candidates.
+  </p>
+
+  <h3>Practice 8</h3>
+
+  <p>
+    The problem is called
+  </p>
+
+  \[
+  \boxed{\text{tunneling}}.
+  \]
+
+  <h3>Practice 9</h3>
+
+  \[
+  \delta=
+  4+3-5
+  =
+  \boxed{2}.
+  \]
+
+  <h3>Practice 10</h3>
+
+  <p>
+    The hierarchy rejects large separated regions early, so only nearby
+    subregions and primitive triangles require detailed collision tests.
+  </p>
+</section>
+
+<section>
+  <h2>What to Remember</h2>
+
+  <p>
+    Collision detection combines fast rejection with exact geometric testing.
+  </p>
+
+  <ul>
+    <li>collision means the occupied regions have nonempty intersection;</li>
+    <li>broad-phase tests reduce the number of candidate pairs;</li>
+    <li>bounding volumes provide conservative rejection tests;</li>
+    <li>AABB overlap reduces to interval overlap on each coordinate axis;</li>
+    <li>circle collision uses center distance and radius sums;</li>
+    <li>segment tests rely on orientation and boundary cases;</li>
+    <li>the separating axis theorem provides a complete convex-polygon test;</li>
+    <li>concave objects can be decomposed into convex pieces;</li>
+    <li>spatial grids, trees, sweep methods, and hierarchies accelerate broad-phase testing;</li>
+    <li>continuous collision detection prevents tunneling between sampled times;</li>
+    <li>numerical tolerances and contact policy are part of the algorithm design.</li>
+  </ul>
+
+  <p>
+    The larger computational principle is that difficult spatial interactions
+    become manageable when simple conservative tests eliminate impossible cases
+    before more expensive exact geometry is applied.
+  </p>
+</section>
+
+<section>
+  <h2>Where We Go Next</h2>
+
+  <p>
+    Collision detection works with computational representations of geometry.
+    The next lesson examines two of the most important ways geometric
+    information itself is encoded.
+  </p>
+
+  <p>
+    <strong>Raster and Vector Representation</strong> compares grid-based and
+    coordinate-based models of spatial information and explains how each
+    representation supports different algorithms, resolutions, and geometric
+    operations.
+  </p>
+</section>
+
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+
+<div id="bottom-nav-placeholder"></div>
+</main>
+
+<!-- ========== FOOTER ========== -->
+
+<div id="footer-placeholder"></div>
+
+<!-- ========== COMPONENT SCRIPTS ========== -->
+
+<script>
+fetch('/component/bottom-nav.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('bottom-nav-placeholder').innerHTML = data;
+  });
+
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+
+</body>
+</html>
