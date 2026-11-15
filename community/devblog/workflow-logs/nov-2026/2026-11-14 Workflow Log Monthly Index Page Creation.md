@@ -1,0 +1,117 @@
+# WORKFLOW NOTE
+
+**Title**  
+May and June 2026 Workflow Log Monthly Index Page Creation
+
+**Date**  
+2026-11-14
+
+**Area**  
+Malone Global University — Community / Devblog / Workflow Logs
+
+**Affected directories:**
+- `C:\MGU\community\devblog\workflow-logs\may-2026\`
+- `C:\MGU\community\devblog\workflow-logs\june-2026\`
+
+**Problem**  
+The MGU Workflow Logs archive contained monthly directories holding development and operational records, but May 2026 and June 2026 did not have dedicated monthly index pages.
+
+The existing parent `workflow-logs/index.html` contained numerous May 2026 file links directly within the main archive page. This arrangement did not provide a dedicated monthly navigation interface and would become increasingly difficult to maintain as additional records accumulated.
+
+June 2026 also contained workflow logs requiring a dedicated directory index. The two months needed consistent navigation, standardized page formatting, and links matching the filenames in the local archive.
+
+**Intended Goal**  
+Create two standalone monthly `index.html` pages that provide direct access to the archived workflow records while preserving the existing MGU website architecture.
+
+Each page should:
+
+- Follow the established Workflow Logs HTML template and institutional styling.
+- Use the existing `/component/com.css` stylesheet.
+- Preserve the dynamic header, breadcrumb, bottom navigation, and footer.
+- Provide accurate links to the corresponding monthly files.
+- Handle filenames containing spaces, punctuation, and Unicode characters.
+- Include navigation back to the parent Workflow Logs archive and related Devblog sections.
+- Be deployable directly within its corresponding monthly directory.
+
+**Root Cause**  
+The original archive structure had a centralized parent index but had not yet been extended into a fully developed month-level index system.
+
+The files were organized into monthly directories, but their presentation and navigation remained dependent on the parent page. A directory inventory was available, yet it had not been converted into dedicated month-specific HTML navigation pages.
+
+This was an information architecture and index-generation gap rather than a failure of the underlying workflow records.
+
+**Steps Taken**
+
+1. Reviewed the existing `workflow-logs/index.html` source as the authoritative page template.
+
+2. Examined the supplied Windows PowerShell directory inventory generated with `Get-ChildItem -Recurse -Name` from `C:\MGU\community\devblog\workflow-logs`.
+
+3. Identified 191 May 2026 directory entries and 16 June 2026 entries.
+
+4. Extracted the `.txt` workflow records from each monthly directory: 189 for May and 16 for June.
+
+5. Created `may-2026/index.html` with a dedicated May archive heading, descriptive content, and alphabetical navigation sections: A–F, G–L, M–R, and S–Z.
+
+6. Created `june-2026/index.html` with a dedicated June archive heading, descriptive content, and a complete list of its 16 text records.
+
+7. Generated relative file links so each HTML page could reference text files within its own directory rather than requiring paths through the parent archive.
+
+8. Applied URL encoding to filenames containing spaces, punctuation, and Unicode characters while retaining readable link labels.
+
+9. Preserved the MGU stylesheet reference, dynamically injected site components, semantic page structure, and standard Devblog navigation.
+
+10. Added archive navigation allowing users to return to the parent Workflow Logs page or move between the May and June archives.
+
+11. Compared generated `.txt` links against the filenames in the supplied inventory to identify missing or unexpected entries.
+
+12. Packaged the two index files into `workflow-log-indexes.zip`, preserving their respective monthly directory structure.
+
+**Key Change**  
+Converted the May and June 2026 workflow-log directories into independently navigable monthly archives using standardized MGU index pages with inventory-matched text-file links.
+
+**Outcome**  
+Two deployment-ready HTML index files were produced:
+
+- `may-2026/index.html` — 189 linked text records, organized into four alphabetical groups.
+- `june-2026/index.html` — 16 linked text records.
+
+The pages provide a consistent interface for browsing historical development activity and reduce the need to maintain a large, centralized file list on the parent Workflow Logs page.
+
+Both pages retain the existing MGU website structure without introducing a separate stylesheet or visual design system.
+
+A ZIP archive was also generated for straightforward transfer to the local development directory.
+
+**Validation**  
+The generated HTML files were inspected programmatically.
+
+Confirmed:
+
+- Both files contain the correct monthly document titles and H1 headings.
+- Both reference `/component/com.css`.
+- Both contain the standard breadcrumb, footer, and bottom-navigation placeholders.
+- May contains 189 `.txt` links and June contains 16.
+- All generated text-file link targets match entries in the supplied PowerShell inventory after URL decoding.
+- No unexpected `.txt` file links were found.
+- The May page includes four alphabetical navigation groups.
+
+**Validation limitations:** The supplied inventory, rather than direct access to the local Windows directories, was used to validate filenames. Browser rendering, live server responses, dynamic component loading, and post-deployment behavior were not independently tested.
+
+**Rules Going Forward**
+
+1. Every monthly Workflow Logs directory should contain its own `index.html`.
+2. Use the existing MGU Workflow Logs template rather than creating independent styling.
+3. Preserve the established stylesheet and site component injection system.
+4. Generate file links from an actual directory inventory whenever possible.
+5. Preserve exact filename spelling and capitalization; encode special characters in URLs.
+6. Use relative links for records stored in the same directory.
+7. Organize large monthly collections alphabetically for navigation.
+8. Validate generated links against the source inventory before deployment.
+9. Keep the parent Workflow Logs index focused on archive discovery and month-level navigation.
+10. Record any excluded files, naming anomalies, or deployment limitations rather than assuming complete coverage.
+
+
+Their file types and intended archive treatment should be reviewed before deciding whether to add them to the May index.
+
+The parent Workflow Logs page may also need an update to replace or supplement its existing long May file list with links to the new monthly indexes. That update was not part of this completed session.
+
+The November 2026 directory already appears in the inventory and contains `MGU File Audit System v2.0.txt`. It can receive its own monthly index using the same established pattern when required.
