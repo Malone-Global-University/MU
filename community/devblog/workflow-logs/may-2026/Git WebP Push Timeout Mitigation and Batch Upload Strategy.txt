@@ -1,0 +1,49 @@
+WORKFLOW NOTE
+
+Title
+Git WebP Push Timeout Mitigation and Batch Upload Strategy
+
+Date
+2026-05-21
+
+Area
+GitHub repository upload workflow / large WebP asset deployment pipeline
+
+Problem
+Large batches of `.webp` infographic files were failing during `git push` operations. Git uploads stalled during the “Writing objects” stage and eventually produced `RPC failed`, `HTTP 408`, and `fatal: the remote end hung up unexpectedly` errors. Upload progress sometimes froze around 18% before disconnecting.
+
+Intended Goal
+The repository should reliably accept large batches of infographic image uploads without timeout failures or interrupted pushes. Upload behavior should remain stable and predictable during media-heavy commits.
+
+Root Cause
+Git was attempting to upload a large pack of binary `.webp` image files over a slow HTTPS connection. Binary image assets compress poorly in Git packfiles, causing long upload durations that increased the likelihood of HTTP timeout and remote disconnect behavior.
+
+Steps Taken
+
+1. Reviewed Git push output including object enumeration, compression stage, and HTTP 408 timeout messages.
+2. Identified that `.webp` files behave as binary blobs and therefore upload less efficiently than text/code assets.
+3. Evaluated upload size and confirmed total payload was approximately 25–30 MB across ~151 images averaging ~168 KB each.
+4. Adjusted Git client settings to improve long upload reliability, including HTTP/1.1 usage and relaxed timeout behavior.
+5. Monitored active upload progress during the “Writing objects” stage to confirm transfer continuation rather than a hard freeze.
+6. Established a safer operational workflow limiting future `.webp` upload batches to roughly 60 images per commit/push cycle.
+7. Confirmed that smaller image batches had previously uploaded successfully and represented a more reliable deployment pattern.
+
+Key Change
+Large `.webp` asset pushes were restructured into smaller batch uploads to reduce timeout and remote disconnect failures during Git operations.
+
+Outcome
+The upload process was better understood structurally, and a stable operational strategy was defined for future infographic deployments. Smaller batch commits reduced the likelihood of stalled pushes and HTTP timeout failures.
+
+Validation
+Observed upload progress advancing beyond earlier failure points during the “Writing objects” stage. Compared current behavior against previously successful smaller upload batches and confirmed that reduced batch sizes align with stable GitHub push behavior.
+
+Rules Going Forward
+
+* Keep `.webp` image pushes to approximately 60 files per batch when possible.
+* Avoid extremely large binary-heavy commits over slower HTTPS connections.
+* Use smaller sequential commits for infographic libraries and media archives.
+* Treat “fatal: the remote end hung up unexpectedly” as a transport failure unless remote commit hashes confirm success.
+* Prefer operational stability over massive single-batch uploads.
+
+Notes
+The issue was not caused by unusually large individual files but by cumulative binary upload duration and slow transfer speed. SSH transport remains a possible future improvement if HTTPS instability continues during large media deployments.

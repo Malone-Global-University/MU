@@ -1,0 +1,112 @@
+WORKFLOW NOTE
+
+Title
+Dynamic Breadcrumb Injection Fix
+
+Date
+2026-05-21
+
+Area
+MGU site navigation / breadcrumbs / shared JavaScript components
+
+Problem
+Breadcrumbs were not visible on pages even though the page contained the correct breadcrumb placeholder:
+
+```html
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+```
+
+The page loaded the shared header first, then dynamically appended `/component/main.js` after the header fetch completed. Because of that load order, the breadcrumb script could miss the normal `DOMContentLoaded` event.
+
+Intended Goal
+Breadcrumbs should be injected automatically from the current URL path so that moving or renaming folders does not require manually rewriting breadcrumb HTML on every page.
+
+Root Cause
+The breadcrumb builder was attached only to:
+
+```js
+document.addEventListener("DOMContentLoaded", buildBreadcrumbs);
+```
+
+But `main.js` was being loaded dynamically after `header.html` finished loading. On some pages, `DOMContentLoaded` had already fired before `main.js` was appended, so the breadcrumb function never ran.
+
+A secondary risk was that other parts of `main.js`, such as theme toggle or mobile navigation code, could fail if expected elements like `theme-toggle`, `nav-menu`, or `nav-toggle` were missing from a page. A JavaScript error there could stop the rest of the file before breadcrumbs were built.
+
+Steps Taken
+
+1. Confirmed that the page already had the correct breadcrumb placeholder:
+
+```html
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+```
+
+2. Identified that `/component/main.js` was being loaded dynamically only after the header fetch completed:
+
+```js
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+```
+
+3. Determined that the breadcrumb script should not rely only on `DOMContentLoaded`.
+
+4. Replaced the simple listener with a safer ready-state check:
+
+```js
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", buildBreadcrumbs);
+} else {
+  buildBreadcrumbs();
+}
+```
+
+5. Recommended null checks around theme and navigation elements so missing header controls do not break the whole script.
+
+6. Reviewed the page structure and found an extra unmatched closing `</section>` near the bottom of the page.
+
+Key Change
+The breadcrumb script now runs immediately if the page is already loaded, instead of depending only on `DOMContentLoaded`.
+
+Outcome
+Breadcrumbs can now be injected reliably even when `main.js` is loaded dynamically after the header. The site can use one reusable breadcrumb placeholder across pages while allowing the script to generate breadcrumb links from the actual URL path.
+
+Validation
+The provided Department Directory page includes the correct breadcrumb placeholder inside `<main>` after the hero section. For `/department/index.html`, the generated breadcrumb should resolve to:
+
+```text
+Home › Department
+```
+
+The structure is valid once the extra unmatched closing `</section>` is removed.
+
+Rules Going Forward
+Use this breadcrumb placeholder on pages:
+
+```html
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+```
+
+Do not hard-code breadcrumbs on pages that use the automatic breadcrumb builder.
+
+Always make shared JavaScript defensive. Any element that may not exist on every page should be checked before attaching event listeners.
+
+Use this loading pattern for scripts that may be dynamically appended:
+
+```js
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", buildFunction);
+} else {
+  buildFunction();
+}
+```
+
+Keep breadcrumb styling centralized in one shared CSS location, preferably the existing breadcrumb component CSS, so all departments and pages display consistently.
+
+Notes
+This fix fits the MGU static-site workflow well because the breadcrumb text and links will follow folder moves automatically. The tradeoff is that the breadcrumb labels come from folder names, so special cases such as `mgu`, `k-12`, `html`, `css`, `ai`, `pdf`, `docx`, `ode`, and `pde` should remain in the `titleCaseSlug()` exception map.

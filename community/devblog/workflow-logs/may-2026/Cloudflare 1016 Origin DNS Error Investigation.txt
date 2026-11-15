@@ -1,0 +1,79 @@
+WORKFLOW NOTE
+
+Title
+Cloudflare 1016 Origin DNS Error Investigation
+
+Date
+2026-05-10
+
+Area
+Domain DNS / Cloudflare Proxy / Netlify Origin Routing
+
+Problem
+The public website `maloneuniversity.org` intermittently displayed a Cloudflare **Error 1016: Origin DNS error** page. The browser successfully reached Cloudflare, but Cloudflare reported that it could not resolve the requested domain’s origin. The user had not changed DNS settings in months, and Cloudflare still showed orange-cloud proxied records, creating confusion about why the site was not resolving correctly.
+
+Intended Goal
+`maloneuniversity.org` and any related `www` hostname should resolve through Cloudflare and correctly route to the real hosting origin, likely the Netlify-hosted site. Visitors should reach the live MGU website instead of Cloudflare’s 1016 error page.
+
+Root Cause
+The issue was identified as an origin-resolution problem rather than a basic domain-registration or visitor-side DNS problem. Cloudflare was active and proxying the domain, but the origin target behind the proxied DNS record was not resolving correctly. Orange-cloud status only proves that Cloudflare is proxying the record; it does not prove that the record’s origin IP or CNAME target is valid.
+
+Steps Taken
+
+1. Reviewed the screenshot showing **Error 1016**, the Ray ID, timestamp, and message: “Origin DNS error.”
+
+2. Clarified that Cloudflare itself was reachable, meaning the domain was still connected to Cloudflare nameservers.
+
+3. Explained that the likely failure point was the origin DNS target behind the Cloudflare record, not the public domain itself.
+
+4. Distinguished between the public hostnames `maloneuniversity.org` and `www.maloneuniversity.org` and the deeper origin hostname or IP address listed in Cloudflare’s DNS **Content / Target** column.
+
+5. Explained that orange-cloud proxying does not guarantee the origin resolves; it only means Cloudflare is standing in front of the DNS record.
+
+6. Recommended checking Cloudflare DNS records for `@`, `maloneuniversity.org`, and `www`.
+
+7. Recommended testing resolution locally with PowerShell commands:
+
+```powershell
+Resolve-DnsName maloneuniversity.org
+Resolve-DnsName www.maloneuniversity.org
+```
+
+8. Recommended copying the Cloudflare DNS **Content / Target** hostname and testing it directly with:
+
+```powershell
+Resolve-DnsName your-target-hostname-here
+```
+
+9. Explained that if the target hostname fails to resolve, Cloudflare will return Error 1016 even if the main domain still appears to be correctly proxied.
+
+Key Change
+The investigation reframed the problem from “Cloudflare orange cloud should mean DNS is working” to “Cloudflare is active, but the origin hostname or IP behind the proxied record may be broken or unreachable.”
+
+Outcome
+The user gained a clearer diagnostic path: inspect the DNS record target inside Cloudflare, verify whether the origin hostname resolves, and confirm whether Netlify or another host still has the custom domain attached correctly.
+
+Validation
+Validation should be done by checking both the public hostname and the origin target:
+
+```powershell
+Resolve-DnsName maloneuniversity.org
+Resolve-DnsName www.maloneuniversity.org
+Resolve-DnsName [Cloudflare Content/Target hostname]
+```
+
+A working configuration should ultimately resolve to a valid origin IP or host-provided target. If gray-cloud DNS-only mode works but orange-cloud mode fails, the problem is likely Cloudflare proxy/routing. If gray-cloud mode also fails, the underlying DNS target is broken.
+
+Rules Going Forward
+Do not assume orange-cloud status means the origin is healthy.
+
+Always inspect the Cloudflare DNS **Type**, **Name**, and **Content / Target** fields when diagnosing 1016.
+
+For Netlify-hosted sites, verify both sides: Cloudflare DNS records and Netlify custom-domain attachment.
+
+Keep a record of the expected origin hostname, such as the correct `*.netlify.app` target, so future DNS errors can be checked quickly.
+
+When troubleshooting, test root and `www` separately because one can be valid while the other is broken.
+
+Notes
+This error can appear even when the user has not touched DNS recently. The origin host, hosting-provider routing, custom-domain attachment, CNAME target, or proxy behavior can change independently of Cloudflare’s visible orange-cloud setting.

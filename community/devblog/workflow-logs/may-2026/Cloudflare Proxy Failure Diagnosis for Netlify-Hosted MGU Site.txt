@@ -1,0 +1,83 @@
+WORKFLOW NOTE
+
+Title
+Cloudflare Proxy Failure Diagnosis for Netlify-Hosted MGU Site
+
+Date
+2026-05-10
+
+Area
+DNS, Cloudflare proxying, Netlify hosting, Malone Global University website delivery
+
+Problem
+The site `maloneuniversity.org` and `www.maloneuniversity.org` would not load in the browser. PowerShell DNS checks showed that both hostnames resolved successfully, but browser access and `curl` requests returned Cloudflare errors. The confusing part was that the domain appeared to resolve normally, yet the site still failed through Cloudflare.
+
+Intended Goal
+The domain should load the live Netlify-hosted Malone Global University site through `maloneuniversity.org` and `www.maloneuniversity.org` without Cloudflare returning a 530 / 1016 origin DNS error.
+
+Root Cause
+The Netlify origin itself was working, but Cloudflare’s orange-cloud proxy layer was failing between the public domain and the Netlify target. The public DNS records resolved to Cloudflare IPs because the records were proxied. Direct testing showed that `malone-global.netlify.app` returned `200 OK` from Netlify, while the custom domains returned `530` from Cloudflare. This isolated the issue to Cloudflare’s proxied route, not the local machine, not the public domain DNS, and not the Netlify site.
+
+Steps Taken
+
+1. Confirmed that `maloneuniversity.org` and `www.maloneuniversity.org` resolved publicly using `Resolve-DnsName`.
+
+2. Confirmed that both domains were reachable on port 443 using `Test-NetConnection`, proving the local computer could reach Cloudflare.
+
+3. Used `curl.exe -I https://maloneuniversity.org` and `curl.exe -I https://www.maloneuniversity.org` to confirm that Cloudflare, not Netlify, was returning `HTTP/1.1 530`.
+
+4. Inspected the Cloudflare DNS records and identified that both the root domain and `www` were CNAME records pointing to `malone-global.netlify.app` with orange-cloud proxying enabled.
+
+5. Tested the Netlify target directly with `nslookup malone-global.netlify.app` and `Resolve-DnsName malone-global.netlify.app`, confirming that the target hostname resolved.
+
+6. Tested the Netlify site directly with `curl.exe -I https://malone-global.netlify.app`, confirming that Netlify returned `HTTP/1.1 200 OK`.
+
+7. Determined that the safest immediate repair would be switching the two website records from **Proxied** / orange cloud to **DNS only** / gray cloud, allowing Netlify to serve the site directly.
+
+8. Separated the DNS/proxy problem from the stale JavaScript/cache problem caused by recent breadcrumb injection work.
+
+9. Reviewed the breadcrumb injection pattern and identified cache-busting script versioning as the correct way to reduce stale JS issues during development.
+
+Key Change
+The main correction was identifying Cloudflare’s orange-cloud proxy layer as the failing component and recommending DNS-only records for the Netlify-hosted website.
+
+Outcome
+The troubleshooting narrowed the failure to a specific layer: Cloudflare proxying. The Netlify origin was confirmed healthy, the public DNS records were confirmed active, and the browser failure was shown to occur only when requests passed through Cloudflare. This made the likely fix clear: gray-cloud the root and `www` website records while leaving email and other DNS records alone.
+
+Validation
+Validation was done through PowerShell and `curl` tests:
+
+`Resolve-DnsName maloneuniversity.org` returned Cloudflare A and AAAA records.
+
+`Resolve-DnsName www.maloneuniversity.org` returned Cloudflare A and AAAA records.
+
+`Test-NetConnection maloneuniversity.org -Port 443` succeeded.
+
+`Test-NetConnection www.maloneuniversity.org -Port 443` succeeded.
+
+`curl.exe -I https://malone-global.netlify.app` returned `HTTP/1.1 200 OK` and `Server: Netlify`.
+
+`curl.exe -I https://maloneuniversity.org` returned `HTTP/1.1 530` and `Server: cloudflare`.
+
+`curl.exe -I https://www.maloneuniversity.org` returned `HTTP/1.1 530` and `Server: cloudflare`.
+
+Rules Going Forward
+For Netlify-hosted static sites, prefer Cloudflare **DNS only** for the root and `www` website records unless a specific Cloudflare proxy feature is required.
+
+Do not change MX, TXT, SPF, DKIM, DMARC, or email-related records when troubleshooting website loading issues.
+
+When Cloudflare returns 530 / 1016 but the Netlify target works directly, treat the proxy layer as the suspect, not the site content.
+
+Use `curl.exe -I` to distinguish whether the response is coming from Cloudflare or Netlify.
+
+When updating shared JavaScript files such as header, footer, breadcrumb, or main site scripts, use versioned URLs to prevent stale cache confusion.
+
+Example:
+
+```html
+<script src="/component/main.js?v=2026-05-10"></script>
+<script src="/component/breadcrumb.js?v=2026-05-10"></script>
+```
+
+Notes
+The recent breadcrumb JavaScript work may have caused stale page behavior, but it would not normally cause a Cloudflare origin DNS error. These were likely overlapping issues: stale frontend cache on one side and Cloudflare proxy failure on the other. The breadcrumb script itself was structurally sound; the main improvement is to version shared JS imports during active development.

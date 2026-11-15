@@ -1,0 +1,125 @@
+WORKFLOW NOTE
+
+Title
+PowerShell Text List Sorting and File Inventory Workflow
+
+Date
+2026-05-21
+
+Area
+PowerShell / MGU local file management / infographic file inventory
+
+Problem
+A text list needed to be alphabetized, saved back to a file, compared against another list, and then rebuilt from the actual contents of a folder. The user also accidentally ran `Set-Content ".\file-list.txt"` by itself, which caused PowerShell to ask for manual `Value[0]`, `Value[1]`, etc. input instead of writing a piped file list.
+
+Intended Goal
+Use PowerShell to reliably create, sort, save, and compare text lists of filenames for MGU asset folders, especially infographic folders. The correct workflow should allow the user to enter a folder, generate a clean alphabetized `file-list.txt`, exclude the inventory file itself, and verify lists or files when needed.
+
+Root Cause
+The confusion came from the difference between commands that output text and commands that write text to a file. `Set-Content` needs either piped input or a `-Value` argument. When it was run alone, PowerShell entered interactive input mode because no content had been supplied.
+
+Steps Taken
+
+1. Used `Get-Content "C:\mgu\list.txt" | Sort-Object` to alphabetize an existing text list in the console.
+
+2. Added `Set-Content` to save the alphabetized output into a new file:
+
+```powershell
+Get-Content "C:\mgu\list.txt" | Sort-Object | Set-Content "C:\mgu\list_sorted.txt"
+```
+
+3. Provided a safe overwrite pattern using a temporary file before replacing the original:
+
+```powershell
+$path = "C:\mgu\list.txt"
+Get-Content $path | Sort-Object | Set-Content "C:\mgu\list-sorted-temp.txt"
+Move-Item "C:\mgu\list-sorted-temp.txt" $path -Force
+```
+
+4. Introduced `Get-FileHash` for byte-for-byte file integrity checks:
+
+```powershell
+(Get-FileHash "C:\mgu\list.txt").Hash -eq (Get-FileHash "C:\mgu\list_sorted.txt").Hash
+```
+
+5. Introduced `Compare-Object` for checking whether two text lists contain the same items, optionally ignoring order:
+
+```powershell
+Compare-Object `
+  (Get-Content "C:\mgu\list.txt" | Sort-Object) `
+  (Get-Content "C:\mgu\list_sorted.txt" | Sort-Object)
+```
+
+6. Built a folder inventory command using `Get-ChildItem`, `Select-Object`, `Sort-Object`, and `Set-Content`:
+
+```powershell
+Get-ChildItem -File |
+Select-Object -ExpandProperty Name |
+Sort-Object |
+Set-Content ".\file-list.txt"
+```
+
+7. Improved the folder inventory command so future runs do not include `file-list.txt` inside its own listing:
+
+```powershell
+Get-ChildItem -File |
+Where-Object { $_.Name -ne "file-list.txt" } |
+Select-Object -ExpandProperty Name |
+Sort-Object |
+Set-Content ".\file-list.txt"
+```
+
+8. Explained how to cancel the accidental `Set-Content` interactive prompt using:
+
+```powershell
+Ctrl + C
+```
+
+9. Confirmed the proper command for checking the generated file afterward:
+
+```powershell
+Get-Content ".\file-list.txt"
+```
+
+Key Change
+The working pattern is now to pipe generated or sorted text into `Set-Content`, rather than running `Set-Content` alone.
+
+Outcome
+The user now has a repeatable PowerShell workflow for creating alphabetized file inventories inside MGU asset folders. The workflow can create clean `file-list.txt` files, avoid including the list file itself, compare lists for missing or extra filenames, and verify full file equality with hashes when needed.
+
+Validation
+Validation can be done by running:
+
+```powershell
+Get-Content ".\file-list.txt"
+```
+
+to visually confirm the output, or by comparing two sorted lists with:
+
+```powershell
+Compare-Object `
+  (Get-Content "C:\mgu\list.txt" | Sort-Object) `
+  (Get-Content "C:\mgu\file-list.txt" | Sort-Object)
+```
+
+No output from `Compare-Object` means both lists contain the same items. `Get-FileHash` can be used when the goal is byte-for-byte file integrity instead of list membership comparison.
+
+Rules Going Forward
+Always pipe content into `Set-Content` when writing generated output to a file.
+Use `Get-ChildItem -File` when listing only files, not folders.
+Use `Sort-Object` before saving lists that need alphabetical order.
+Exclude `file-list.txt` when generating a file inventory inside the same folder.
+Use `Compare-Object` for list membership checks and `Get-FileHash` for exact file integrity checks.
+
+Notes
+The most useful reusable command for this workflow is:
+
+```powershell
+Get-ChildItem -File |
+Where-Object { $_.Name -ne "file-list.txt" } |
+Select-Object -ExpandProperty Name |
+Sort-Object |
+Set-Content ".\file-list.txt"
+```
+
+This command should work from any current folder after using `cd` to enter the target directory.

@@ -1,0 +1,140 @@
+WORKFLOW NOTE
+
+Title
+Normalize Department Stylesheet Links to dept.css
+
+Date
+2026-05-17
+
+Area
+MGU Website / Department HTML Pages / CSS Link References
+
+Problem
+The `/department/` folder contained thousands of HTML files with inconsistent stylesheet references. Several variations of `main.css` were present, including `/component/css/main.css`, `/component/main.css`, self-closing versions, non-self-closing versions, and malformed colon-ending versions. The first bulk-edit script was safe, but the active replacement target was accidentally set to `/component/main.css` instead of the intended `/component/dept.css`. After running the script, Git also showed unwanted backup folders and log files because the script saved them inside the repository root.
+
+Intended Goal
+All incorrect department stylesheet links should be overwritten with the department-specific stylesheet link:
+
+```html
+<link rel="stylesheet" href="/component/dept.css">
+```
+
+Only actual department HTML files should be committed. Backup folders and script log files should not be staged, committed, or deployed.
+
+Root Cause
+The initial script included two possible replacement targets, but the wrong line was active. The backup and log paths were placed under `C:\MGU`, which is also the Git repository root, causing Git to treat those generated safety files as untracked files. The first replacement pattern also did not catch every malformed stylesheet variation, especially colon-ending versions. A later run also hit at least one empty HTML file, causing a null-input regex error.
+
+Steps Taken
+
+1. Confirmed from Git output that the script had actually modified many `department/...html` files, even though Git had not staged them yet.
+
+2. Identified that `git add .` was unsafe for this situation because it attempted to stage generated backup folders and log files along with the intended HTML changes.
+
+3. Recommended resetting staged files with:
+
+```powershell
+git reset
+```
+
+4. Recommended removing unwanted backup and log files from the repository root:
+
+```powershell
+Remove-Item -Recurse -Force .\_backup_department_css_links_* -ErrorAction SilentlyContinue
+Remove-Item -Force .\department_css_link_changes_*.txt -ErrorAction SilentlyContinue
+```
+
+5. Corrected the target stylesheet from:
+
+```html
+<link rel="stylesheet" href="/component/main.css">
+```
+
+to:
+
+```html
+<link rel="stylesheet" href="/component/dept.css">
+```
+
+6. Provided a targeted PowerShell fixer to replace existing `/component/main.css` links with `/component/dept.css`.
+
+7. Adjusted the script to handle empty HTML files safely by checking for null or whitespace content before running regex replacement.
+
+8. Confirmed a successful large-scale run that scanned 5,677 department HTML files and changed 4,984 files.
+
+9. Replaced the incompatible `Select-String -Recurse` verification command with a PowerShell-compatible pipeline using `Get-ChildItem -Recurse | Select-String`.
+
+10. Provided a broader regex pattern to catch all remaining incorrect stylesheet variations:
+
+```powershell
+$Pattern = '<link\s+rel="stylesheet"\s+href="/component/(css/)?main\.css"\s*/?[:>]+'
+```
+
+11. Recommended staging only the department folder instead of the whole repository:
+
+```powershell
+git add department/
+```
+
+12. Recommended committing with a clear message:
+
+```powershell
+git commit -m "Use department stylesheet for department pages"
+```
+
+Key Change
+The bulk replacement target was corrected to `/component/dept.css`, and the regex was expanded to catch both normal and malformed `main.css` link variations across the department HTML tree.
+
+Outcome
+The department folder was largely corrected from mixed `main.css` references to the intended department stylesheet reference. The workflow also avoided committing generated backup folders and log files. The Git staging process was narrowed so only intended department page changes would be included in the commit.
+
+Validation
+Validation was done through PowerShell output and Git status. The corrected script reported:
+
+```powershell
+Files scanned: 5677
+Files changed: 4984
+```
+
+Additional verification commands were prepared to count remaining bad links:
+
+```powershell
+$BadMainMatches = Get-ChildItem "C:\MGU\department" -Recurse -File -Filter *.html |
+    Select-String -Pattern '/component/css/main.css','/component/main.css'
+
+$GoodDeptMatches = Get-ChildItem "C:\MGU\department" -Recurse -File -Filter *.html |
+    Select-String -Pattern '/component/dept.css'
+
+"bad main.css count: $($BadMainMatches.Count)"
+"good dept.css count: $($GoodDeptMatches.Count)"
+```
+
+Remaining bad matches, if any, can be listed with:
+
+```powershell
+$BadMainMatches |
+    Select-Object Path, LineNumber, Line
+```
+
+Rules Going Forward
+Do not use `git add .` after running bulk scripts that create backups or logs. Stage only the intended content path, such as:
+
+```powershell
+git add department/
+```
+
+Do not save generated backups or logs inside the Git repository root. Use an external folder such as:
+
+```powershell
+C:\MGU_BACKUPS
+```
+
+For department pages, the standard stylesheet link should be:
+
+```html
+<link rel="stylesheet" href="/component/dept.css">
+```
+
+Bulk replacement scripts should include dry-run mode, null/empty file handling, error handling, and a verification step. Regex patterns should account for malformed legacy HTML when cleaning older generated pages.
+
+Notes
+The line-ending warnings from Git were not the main issue. They were Git normalization warnings about LF/CRLF handling. The main operational issues were the wrong active replacement target, backup/log files being created inside the repo, and a verification command that needed to be adjusted for the installed PowerShell version.

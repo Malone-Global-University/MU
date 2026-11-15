@@ -1,0 +1,114 @@
+WORKFLOW NOTE
+
+Title
+Recursive Image Conversion and Accidental Delete Recovery
+
+Date
+2026-05-21
+
+Area
+MGU image asset folders / `C:\MGU\desk\webp`
+
+Problem
+The image asset workflow started with the wrong target format. The original goal appeared to be converting PNG files into `.ico` files for folder icons, including files spread across many subfolders. After the recursive conversion approach was discussed, the intended output was corrected from `.ico` to `.webp`. During cleanup, delete commands were used to remove generated `.ico` files, but the process later led to an accidental deletion of all PNG source files.
+
+Intended Goal
+The image folders should contain correctly named `.webp` versions of the PNG source images while preserving the original PNG files unless deletion is intentional, previewed, and verified first.
+
+Root Cause
+The issue came from a format confusion and the risk of using recursive PowerShell delete commands without a dry-run preview. The folder contained many subfolders, so recursive commands affected a large asset tree at once. Once `Remove-Item` was applied to the wrong file type, PowerShell did not provide a simple built-in undo.
+
+Steps Taken
+
+1. Confirmed that ImageMagick can batch-convert PNG files recursively through PowerShell.
+
+2. Built a recursive conversion command for `.png` to `.ico` using matching source filenames and saving outputs beside the original files.
+
+3. Corrected the target format from `.ico` to `.webp` after realizing the real goal was WebP image conversion.
+
+4. Provided a recursive ImageMagick command to convert all PNG files in `C:\MGU\desk\webp` and its subfolders to matching `.webp` files.
+
+5. Provided safer variants that only create `.webp` files when a matching output does not already exist.
+
+6. Provided commands to preview and delete generated `.ico` files from all subfolders.
+
+7. Explained that `Remove-Item` usually deletes directly rather than moving files to the Recycle Bin, so there is no normal PowerShell undo.
+
+8. Identified recovery options: Recycle Bin, OneDrive Recycle Bin, File History, Previous Versions, Git restore, backups, or regenerating files from surviving sources.
+
+9. Restored the accidentally deleted PNGs by copying back a saved file set from 2026-05-04.
+
+10. Recommended verifying the restored PNG count with `Get-ChildItem -Recurse -Filter *.png | Measure-Object`.
+
+11. Recommended exporting a CSV inventory of restored PNGs before continuing.
+
+12. Recommended converting only PNGs that do not already have matching `.webp` files.
+
+Key Change
+The workflow was corrected from recursive PNG-to-ICO generation to recursive PNG-to-WebP conversion, with a stronger safety rule to preview destructive commands before running them.
+
+Outcome
+The source PNG files were recovered from the 2026-05-04 backup copy and pasted back into the asset folder tree. The image conversion workflow is now aimed at producing `.webp` files instead of `.ico` files. The session also established safer PowerShell habits for future recursive cleanup.
+
+Validation
+Validation should be done by running a recursive PNG count, exporting an inventory CSV, and checking which PNG files still lack matching `.webp` outputs:
+
+```powershell
+cd C:\MGU\desk\webp
+
+Get-ChildItem -Recurse -Filter *.png | Measure-Object
+```
+
+```powershell
+Get-ChildItem -Recurse -Filter *.png |
+Select-Object FullName, Length, LastWriteTime |
+Sort-Object FullName |
+Export-Csv ".\png-restored-inventory-2026-05-21.csv" -NoTypeInformation
+```
+
+```powershell
+Get-ChildItem -Recurse -Filter *.png | ForEach-Object {
+    $webp = Join-Path $_.DirectoryName "$($_.BaseName).webp"
+    if (-not (Test-Path $webp)) {
+        $_.FullName
+    }
+}
+```
+
+Rules Going Forward
+Always run a preview before recursive delete commands.
+
+Use `-WhatIf` before `Remove-Item` when working across subfolders.
+
+Keep source PNG files until the generated `.webp` files are verified.
+
+Use conversion commands that skip already existing outputs unless overwriting is intentional.
+
+Export an inventory CSV before large recursive file operations.
+
+Avoid running recursive commands from a broad parent folder unless the path is confirmed.
+
+Prefer moving files to a temporary quarantine folder before permanent deletion when cleaning generated assets.
+
+Notes
+The safer WebP conversion command is:
+
+```powershell
+cd C:\MGU\desk\webp
+
+Get-ChildItem -Recurse -Filter *.png | ForEach-Object {
+    $webp = Join-Path $_.DirectoryName "$($_.BaseName).webp"
+
+    if (-not (Test-Path $webp)) {
+        magick $_.FullName -quality 82 $webp
+    }
+}
+```
+
+The safer delete preview pattern is:
+
+```powershell
+Get-ChildItem -Recurse -Filter *.ico | Remove-Item -WhatIf
+```
+
+Only after the preview is correct should the actual delete command be run.

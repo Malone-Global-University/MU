@@ -1,0 +1,42 @@
+WORKFLOW NOTE
+
+Title
+Base44 Article Storage and Backup Debugging
+
+Date
+2026-05-21
+
+Area
+C:\news article generation, Base44 API, backup script
+
+Problem
+Generated news articles were not appearing as local files. The local `entries/Article.json` file only defined the article schema, while attempts to fetch saved articles into `articles-backup.json` produced either an empty file or Node.js module errors.
+
+Intended Goal
+Confirm where generated articles are stored and create a working method to export Base44-hosted article data into a local backup file.
+
+Root Cause
+Article data is stored remotely on Base44 servers through `base44.entities.Article.create()`, not in local JSON files. The backup script failed because the React/Vite client code used browser/Vite-only features such as the `@/` import alias and `import.meta.env`, which plain Node.js cannot resolve.
+
+Steps Taken
+
+1. Reviewed the project structure and identified `entries/Article.json` as a schema file, not an article data store.
+2. Traced `GenerateNews.jsx` and confirmed article generation uses `base44.integrations.Core.InvokeLLM()` while saving/publishing uses `base44.entities.Article.create()`.
+3. Created a `fetch-articles.js` approach to query `base44.entities.Article.list()` and write results to `entries/articles-backup.json`.
+4. Diagnosed Node failures caused by missing script location, `@/lib/app-params` alias resolution, duplicate `base44` declaration, and `import.meta.env` not existing in Node.
+5. Identified the need for a Node-compatible Base44 config, either through a separate `app-params.node.js` file or a `.env`/`dotenv` setup.
+
+Key Change
+The storage model was corrected from “articles are saved somewhere in local files” to “articles are stored remotely on Base44 and must be exported through the Base44 API.”
+
+Outcome
+The article storage path is now understood clearly. The remaining technical fix is to create a Node-safe Base44 parameter file or `.env` loader so the backup script can authenticate outside the Vite app.
+
+Validation
+Validation came from inspecting `Article.json`, `base44client.js`, and `GenerateNews.jsx`, then comparing the code flow against the PowerShell errors returned by Node.
+
+Rules Going Forward
+Do not treat files in `entries/` as live data unless they contain actual records. Treat `entries/*.json` schema files as entity definitions. Do not run Vite/browser imports directly in Node unless aliases and environment variables have been replaced with Node-compatible equivalents.
+
+Notes
+The safest next implementation is to leave the app’s existing `base44client.js` alone and create separate Node-only files such as `app-params.node.js` and `base44client.node.js` for backup/export scripts.

@@ -1,0 +1,68 @@
+WORKFLOW NOTE
+
+Title
+PowerShell HTML Link Filename Extraction Troubleshooting
+
+Date
+2026-05-21
+
+Area
+MGU file-list maintenance / PowerShell text processing
+
+Problem
+A sorted HTML list of physics infographic links needed to be processed so the filenames inside each `href="..."` attribute could be stripped out into a plain filename list. The original `Sort-Object` command sorted whole HTML lines rather than the visible link titles or the embedded filenames, and the later filename-extraction command appeared to run without creating the expected output file.
+
+Intended Goal
+Create reliable PowerShell commands that can take HTML list items such as `<li><a href="ac-vs-dc-current.webp">AC vs DC Current</a></li>` and output either `ac-vs-dc-current.webp` or `ac-vs-dc-current` into a separate text file. 
+
+Root Cause
+The first sorting issue occurred because PowerShell was sorting the full HTML line instead of a specific extracted field. The later file-creation issue was most likely caused by `C:\mgu\list.txt` not containing the expected HTML `<li><a href="...">` lines, so the regex found zero matches and passed no output into `Set-Content`.
+
+Steps Taken
+
+1. Explained that `Sort-Object` was sorting by the beginning of each HTML line and, practically, by the `href` filename rather than by visible link text.
+2. Provided a PowerShell sorting command that extracts the visible anchor text using the regex `>([^<]+)</a>` and sorts by that extracted title.
+3. Provided a separate PowerShell sorting command that extracts the filename from `href="..."` using the regex `href="([^"]+)"`.
+4. Provided a filename-extraction command that outputs only the filenames from each link.
+5. Provided a second extraction command using `[System.IO.Path]::GetFileNameWithoutExtension()` to remove `.webp`.
+6. Diagnosed why no new file appeared after running the command.
+7. Added `Test-Path`, `Get-Content | Select-Object -First 10`, and `Select-String -Pattern 'href='` checks to verify whether the expected input file actually contained the HTML list.
+8. Recommended storing extracted filenames in a variable first, then writing that variable to disk and printing the count of matched filenames.
+
+Key Change
+The workflow shifted from sorting or processing raw HTML lines to first extracting the exact target field from each line and then sorting or saving that extracted value.
+
+Outcome
+The correct PowerShell patterns were established for three separate tasks: sorting by visible title, sorting by filename, and stripping filenames out of HTML links. The remaining issue was narrowed down to a local file/path/content mismatch rather than a failure of the regex command itself.
+
+Validation
+The uploaded HTML list showed consistent `href="filename.webp"` patterns, which confirmed that the regex approach was valid for the pasted content. The user’s `Test-Path $outputFile` result returned `False`, indicating that the local command produced no output file, so the next validation step was to inspect the actual contents of `C:\mgu\list.txt` and test for `href=` matches directly.
+
+Rules Going Forward
+Always confirm the active folder with `Get-Location` before using relative paths.
+Always verify the input file with `Get-Content ".\filename.txt" | Select-Object -First 10` before processing.
+For HTML links, do not sort or transform the whole line unless that is truly the desired unit. Extract the intended field first.
+When writing generated lists, store results in a variable and print a count before assuming the output file was created correctly.
+Use full paths when debugging, then simplify to relative paths only after the workflow is confirmed.
+
+Notes
+A good reusable diagnostic version is:
+
+```powershell
+$inputFile = "C:\mgu\list.txt"
+$outputFile = "C:\mgu\filenames-only.txt"
+
+$filenames = Get-Content $inputFile | ForEach-Object {
+  if ($_ -match 'href="([^"]+)"') {
+    $matches[1]
+  }
+}
+
+$filenames | Set-Content $outputFile
+
+"Found $($filenames.Count) filenames"
+Test-Path $outputFile
+notepad $outputFile
+```
+
+If it reports `Found 0 filenames`, the command is not the problem; the input file is the wrong file or does not contain the expected HTML link list.

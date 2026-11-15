@@ -1,0 +1,224 @@
+# WORKFLOW NOTE
+
+## Title
+MGU File Audit System v2.0 — Initial Deployment, PowerShell Compatibility Corrections, Baseline Inventory, and Automated Scheduling
+
+## Date
+2026-11-14
+
+## Area
+Malone Global University (MGU) — Project File Management, Historical Auditing, PowerShell Automation, and Administrative Infrastructure
+
+**Project Root:** `C:\MGU`
+
+**Audit System:** `C:\MGU-Audit`
+
+**Application:** `C:\MGU-Audit\app\mgu-audit.ps1`
+
+**Environment:** Windows PowerShell 5.1
+
+## Problem
+The MGU project had accumulated tens of thousands of files across its academic departments, encyclopedias, and supporting directories without a centralized mechanism for auditing file creation and modification activity.
+
+The existing filesystem allowed individual file timestamps to be inspected, but there was no consolidated system for producing historical reports across the entire project root.
+
+The initial deployment of MGU File Audit System v2.0 encountered two operational problems:
+
+1. **PowerShell execution restrictions:** Windows PowerShell refused to execute `mgu-audit.ps1` because the script was not digitally signed.
+2. **Snapshot index variable collision:** Following successful baseline creation, the `Status` and `Report` operations failed with the error `Cannot bind argument to parameter 'LiteralPath' because it is an empty array.`
+
+These errors initially prevented the audit system from operating as a complete, reusable reporting platform.
+
+## Intended Goal
+Establish a permanent MGU file-auditing system capable of:
+
+- Recursively inventorying the entire `C:\MGU` project directory.
+- Recording file paths, creation timestamps, modification timestamps, file sizes, and SHA-256 hashes.
+- Preserving existing historical audit reports.
+- Generating CSV reports for user-selected start and end dates.
+- Comparing successive inventories to identify additions, modifications, and removals.
+- Retaining snapshot records outside the audited project directory.
+- Performing automatic daily snapshots through Windows Task Scheduler.
+- Supporting future department-level and publication-development analytics.
+
+The correct operational state required a successful baseline inventory, functioning status and reporting commands, preserved historical records, and a registered daily scheduled task.
+
+## Root Cause
+
+### 1. PowerShell execution policy
+The system's execution policy restricted unsigned PowerShell scripts. The audit script was not digitally signed, preventing its execution through the normal invocation method.
+
+This was an execution-policy restriction rather than a demonstrated defect in the file inventory operation.
+
+### 2. Case-insensitive PowerShell variable collision
+The audit script used `$Index` to store the path to the snapshot index CSV while also using `$index` to store an array of imported snapshot records.
+
+Windows PowerShell treats variable names as case-insensitive.
+
+Consequently, assignments such as:
+
+`$index = @()`
+
+overwrote the variable containing the snapshot index file path.
+
+Subsequent operations attempted to pass the empty array into a `LiteralPath` parameter, producing the binding error.
+
+The initial attempt to wrap CSV-reading results in array expressions did not address this underlying naming conflict.
+
+### 3. Initial absence of historical snapshot comparisons
+Before deployment, MGU had no permanent sequence of SHA-256 inventory snapshots.
+
+Historical filesystem timestamps were available, but complete records of past additions, deletions, and intermediate modifications could not be reconstructed retrospectively from those timestamps alone.
+
+## Steps Taken
+
+1. **Created initial historical audit reports.** Executed separate PowerShell audits covering existing historical creation timestamps and file activity during November 1–14, 2026. Produced two CSV files for review.
+
+2. **Reviewed and reconciled the reports.** Established that the November 1–14 activity report contained 4,703 qualifying files. Distinguished creation timestamps from modification timestamps and identified limitations in retrospective filesystem auditing.
+
+3. **Prepared MGU File Audit System v2.0.** Established the audit application under `C:\MGU-Audit\app`, with separate directories for legacy reports, snapshots, and generated reports.
+
+4. **Resolved execution-policy restrictions.** Applied a temporary execution-policy override for the active PowerShell session:
+
+   `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+
+   This permitted execution without permanently changing the system-wide policy.
+
+5. **Imported historical records.** Executed the application with `-Action Import`, successfully archiving both original CSV reports under `C:\MGU-Audit\legacy`.
+
+6. **Generated the initial SHA-256 baseline.** Executed `-Action Snapshot`, recursively inventorying 47,005 files with zero reported scanning errors. The resulting baseline was saved as:
+
+   `C:\MGU-Audit\snapshots\20261114-191607-5038775.csv`
+
+7. **Identified reporting failures.** Attempted `-Action Report` and `-Action Status`, both of which encountered the empty-array `LiteralPath` error. An initial array-handling patch did not resolve the issue.
+
+8. **Inspected the actual PowerShell script and snapshot index.** Used `Select-String`, `Get-Content`, and `Get-ChildItem` to examine the relevant code and confirm that the snapshot index and baseline CSV existed.
+
+9. **Corrected the variable collision.** Created a backup of the application script and replaced the uppercase `$Index` references with the distinct variable name `$SnapshotIndexPath`. Ten references were changed, separating the filesystem path variable from the lowercase `$index` record collection.
+
+10. **Verified application status.** Re-executed `-Action Status`. The application successfully reported one baseline snapshot containing 47,005 files, zero scanning errors, and the correct project root.
+
+11. **Verified date-range reporting.** Re-executed the November 1–14 timestamp report. The application returned exactly 4,703 matching files and generated:
+
+    `C:\MGU-Audit\reports\timestamps-20261114-213328-7955154.csv`
+
+12. **Registered automatic daily auditing.** Executed:
+
+    `& "C:\MGU-Audit\app\mgu-audit.ps1" -Action Schedule -ScheduleTime "23:30"`
+
+    Windows Task Scheduler confirmed the task `MGU File Audit v2 Daily` was registered in the `Ready` state, with its next execution scheduled for November 14, 2026, at 11:30 PM.
+
+13. **Tested observed-event reporting.** Generated a report for November 15–21, 2026, using `-Basis Observed`. The command completed successfully and reported zero observed events, consistent with the future reporting window and absence of a second snapshot at that time.
+
+## Key Change
+Separated the snapshot index filepath variable from the snapshot record collection, correcting a PowerShell case-insensitive naming collision that prevented the `Status` and `Report` operations from functioning.
+
+## Outcome
+MGU File Audit System v2.0 reached an operational state for baseline inventory, historical timestamp reporting, and scheduled-task registration.
+
+**Confirmed results:**
+
+| Measurement | Result |
+|---|---|
+| Baseline files inventoried | 47,005 |
+| Baseline scanning errors | 0 |
+| Initial observed changes | 0 — expected |
+| November 1–14 timestamp matches | 4,703 |
+| Historical CSV reports archived | 2 |
+| Baseline snapshots completed | 1 |
+| Status command | Successful |
+| Timestamp reporting | Successful |
+| Observed reporting command | Successful |
+| Daily scheduled task | Registered |
+| Scheduled execution time | 11:30 PM |
+| First unattended execution | Pending verification |
+
+The audit database remains separate from `C:\MGU`, preserving the distinction between university project assets and administrative audit records.
+
+The system now supports repeatable queries against saved filesystem metadata without requiring a complete hash recalculation for each timestamp report.
+
+## Validation
+
+### Baseline integrity
+The initial inventory completed with:
+
+`Files: 47005 | Observed changes: 0 | Errors: 0`
+
+The snapshot index independently identified the same file count and zero scanning errors.
+
+### Script correction
+Following the variable-name correction, the `Status` command successfully displayed:
+
+- Snapshot ID: `20261114-191607-5038775`
+- File count: `47005`
+- Error count: `0`
+- Root directory: `C:\MGU`
+
+### Historical reporting
+The corrected timestamp-report command returned:
+
+`Current snapshot timestamp matches: 4703`
+
+This matched the earlier November 1–14 activity report, providing a consistency check between the two reporting approaches.
+
+### Scheduled-task registration
+Windows Task Scheduler returned:
+
+`MGU File Audit v2 Daily — Ready`
+
+The next scheduled execution was listed as November 14, 2026, at 11:30 PM.
+
+The task's reported last-run date was a placeholder, and its status indicated that it had not yet executed. Therefore, successful unattended snapshot creation remained unverified at session close.
+
+### Observed-event reporting
+The observed-event command completed and generated a CSV report with zero events.
+
+This verified command execution and output generation, but not yet the correctness of multi-snapshot change detection.
+
+## Rules Going Forward
+
+1. **Maintain unique variable names regardless of capitalization.** PowerShell variables are case-insensitive. Distinct concepts must use distinct identifiers.
+
+2. **Preserve the original baseline.** Do not overwrite or delete the November 14 snapshot. Future audits should create additional timestamped inventory files.
+
+3. **Keep audit infrastructure outside the MGU project root.** Audit databases, reports, and logs must remain under `C:\MGU-Audit` or another separate administrative location.
+
+4. **Back up scripts before modifying them.** Maintain recoverable versions of application code before applying patches.
+
+5. **Use SHA-256 comparisons for substantive content-change detection.** Do not rely exclusively on Windows `CreationTime` or `LastWriteTime` to determine whether a document was authored or substantively revised.
+
+6. **Distinguish timestamps from observed events.** Filesystem timestamps represent recorded metadata. Observed events represent differences detected between completed snapshots, not necessarily the exact times when the underlying changes occurred.
+
+7. **Avoid unnecessary full-project rescans.** Generate timestamp reports from saved inventories whenever possible. Reserve SHA-256 rescanning for planned snapshots and verification needs.
+
+8. **Validate scheduled executions.** A scheduled task in the `Ready` state is not proof that an unattended execution has succeeded.
+
+9. **Preserve legacy audit records.** Existing reports must remain available for historical reference and reconciliation.
+
+10. **Monitor scanning errors and incomplete inventories.** A zero-error baseline is established, but every subsequent snapshot should be independently checked for failures or unexpected file-count changes.
+
+11. **Protect audit history.** Retain the snapshot index, individual snapshot CSVs, and observed-event records. Back up the audit database separately to reduce the risk of losing historical evidence.
+
+12. **Validate revisions against PowerShell 5.1.** All future application changes must remain compatible with the installed Windows PowerShell environment unless an explicit migration is approved.
+
+## Notes
+
+**Baseline date:** November 14, 2026
+
+**Baseline snapshot:** `20261114-191607-5038775`
+
+**Initial inventory:** 47,005 files
+
+**Daily auditing schedule:** 11:30 PM local Windows time
+
+**Scheduled task:** `MGU File Audit v2 Daily`
+
+**Corrected application backup:** `C:\MGU-Audit\app\mgu-audit-backup-20261114-213247.ps1`
+
+**Outstanding validation:** Confirm that the first unattended scheduled run creates a second snapshot, updates `snapshots.csv`, and correctly records any observed file changes.
+
+**Recommended next development phase:** MGU File Audit System v2.1 — Department Analytics and Reporting.
+
+Planned enhancements include department-level file counts, HTML publication statistics, file-type distributions, directory growth measurements, weekly and monthly activity summaries, and more convenient custom-date reporting.
+
+**Session disposition:** Initial deployment and reporting corrections completed. Daily task registration verified. Unattended execution and multi-snapshot comparison testing remain open.

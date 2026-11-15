@@ -1,0 +1,74 @@
+WORKFLOW NOTE
+
+Title
+MGU Webpage SQLite Ledger and Maintenance Reporting Setup
+
+Date
+2026-05-21
+
+Area
+MGU website maintenance system, offline database, page inventory, reporting scripts
+
+Problem
+The MGU website had grown to a scale where manual webpage tracking was no longer practical. A CSV ledger was useful conceptually, but the site contained thousands of HTML pages, making spreadsheet-based tracking difficult for creation dates, last updated dates, maintenance schedules, page health, and future reporting. After the initial database was created, the user also encountered a `SQLITE_BUSY` / “database is locked” error while attempting to upgrade the database schema.
+
+Intended Goal
+Create an offline database-backed webpage ledger that can scan the MGU static site, store one record per HTML page, track creation and update metadata, generate maintenance reports, and eventually support richer quality checks such as missing titles, missing H1 headings, missing descriptions, stale pages, duplicate titles, breadcrumbs, canonical tags, word counts, link counts, and file metadata.
+
+Root Cause
+The site had reached institutional scale, with 11,506 scanned HTML pages, making manual tracking unreliable. The original ledger idea needed to move from CSV into SQLite so the data could be queried, reported, and extended. The database lock occurred because SQLite allows safe access but can block schema writes when another process, such as DB Browser for SQLite or a previous Node process, still has the database open or has not released a transaction.
+
+Steps Taken
+
+1. Defined the offline content-management pipeline: HTML pages are scanned by a filesystem script, metadata is stored in SQLite, and reports/indexes/search files can then be generated from the database.
+
+2. Recommended SQLite as the correct storage layer for MGU because it is offline, portable, fast, serverless, and appropriate for a static-site ledger with thousands of pages.
+
+3. Created the first database concept around a `webpages` table containing title, file path, URL, section, created date, last updated date, maintenance schedule, next review, status, notes, and scan timestamp.
+
+4. Built a starter Node.js scanner using `better-sqlite3` and `cheerio` to walk the local `C:\MGU` folder, find `.html` files, extract page metadata, and insert or update rows in `C:\MGU\database\mgu_content.db`.
+
+5. Confirmed that the scan successfully processed 11,506 HTML pages and that SQL queries were functioning properly against the database.
+
+6. Recommended DB Browser for SQLite as the desktop viewer/editor for inspecting the database visually and running queries.
+
+7. Designed a report-generator script, `C:\MGU\scripts\generate-reports.js`, to read the SQLite database and produce CSV reports plus an offline `maintenance_dashboard.html`.
+
+8. Defined first-generation reports including missing titles, missing H1 headings, missing meta descriptions, missing created dates, missing updated dates, duplicate titles, duplicate H1 headings, all pages by section, section-specific page lists, and possibly old pages.
+
+9. Recommended the next implementation phase: upgrade the scanner and database schema with filesystem metadata and page-quality metrics such as file size, filesystem created/modified timestamps, word count, reading time, breadcrumb flag, canonical flag, Open Graph flag, Twitter card flag, schema markup flag, MathJax flag, image count, internal link count, and external link count.
+
+10. Provided an `upgrade-webpages-table.js` schema migration script to add the new columns safely with `ALTER TABLE` only when columns do not already exist.
+
+11. Diagnosed the `SqliteError: database is locked` issue during the schema upgrade and identified likely causes: DB Browser still open, an active transaction, an old Node process, or a lingering Windows file lock.
+
+12. Recommended resolving the lock by closing DB Browser completely, checking for active Node processes with `Get-Process node`, stopping stale Node processes if needed, rerunning the upgrade script, and adding a `busy_timeout` option to the script so SQLite waits before failing.
+
+Key Change
+The MGU webpage inventory was moved from a manual ledger idea into a functioning offline SQLite database and report-generation workflow capable of managing 11,506 static HTML pages.
+
+Outcome
+The user now has a working `mgu_content.db` database containing the scanned MGU webpage inventory, confirmed query functionality, and a clear path for generating maintenance reports and upgrading the database into a richer site-quality diagnostic system. The site can now be managed through database queries and generated reports instead of manual counting or folder inspection.
+
+Validation
+Validation was confirmed when the scanner processed 11,506 pages and the user reported that all queries were functioning properly and producing useful data. The report-generator design was validated structurally by targeting known fields already present in the `webpages` table. The database-lock issue was validated by the Node error output showing `SQLITE_BUSY`, confirming that the problem was a file/transaction lock rather than a broken schema or missing script.
+
+Rules Going Forward
+Close DB Browser for SQLite before running scripts that write to or alter the database.
+
+Back up `mgu_content.db` before schema upgrades.
+
+Use Node scripts for repeatable scans and reports rather than manually editing thousands of rows.
+
+Treat the HTML files as the source content and the SQLite database as the organized ledger/reporting layer.
+
+Add new fields through safe migration scripts that check whether columns already exist before altering the table.
+
+Run the scanner after schema changes so the new columns are populated across all pages.
+
+Generate reports after each scan so cleanup work is based on current database state.
+
+Use CSV reports for cleanup tasks and the HTML dashboard for quick visual review.
+
+Notes
+The next major implementation should be completing the scanner upgrade so the new database fields are populated with filesystem metadata, word counts, page-quality flags, image counts, and link counts. After that, the report generator should be expanded to include `missing_breadcrumbs.csv`, `missing_canonical.csv`, `short_stub_pages.csv`, `large_pages.csv`, `recently_modified_files.csv`, `pages_with_mathjax.csv`, and `image_heavy_pages.csv`. Link validation and asset tracking should come after the main webpage records are richer and stable.
