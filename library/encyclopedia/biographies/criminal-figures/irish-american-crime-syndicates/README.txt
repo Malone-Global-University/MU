@@ -1,0 +1,35 @@
+Irish-American gang directory folder scaffold
+
+These 29 empty folders correspond to the organization names in the supplied Criminal Figures index. No gang article HTML files were supplied, so none are included.
+
+IMPORTANT: The supplied index currently links to FLAT files (e.g. /irish-american-crime-syndicates/forty-thieves.html), not folder index pages. To use these folders as page destinations, update each link to /irish-american-crime-syndicates/<slug>/ and create index.html within that folder. Alternatively, keep the existing flat .html structure.
+
+Forty Thieves -> forty-thieves/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/forty-thieves.html)
+Dead Rabbits -> dead-rabbits/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/dead-rabbits.html)
+Roach Guards -> roach-guards/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/roach-guards.html)
+Whyos -> whyos/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/whyos.html)
+Gopher Gang -> gopher-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/gopher-gang.html)
+Hudson Dusters -> hudson-dusters/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/hudson-dusters.html)
+White Hand Gang -> white-hand-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/white-hand-gang.html)
+Big Bill Dwyer Syndicate -> big-bill-dwyer-syndicate/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/big-bill-dwyer-syndicate.html)
+Mickey Spillane Gang -> mickey-spillane-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/mickey-spillane-gang.html)
+The Westies -> the-westies/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/the-westies.html)
+Dukies -> dukies/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/dukies.html)
+Shielders -> shielders/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/shielders.html)
+Ragen's Colts -> ragens-colts/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/ragens-colts.html)
+North Side Gang -> north-side-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/north-side-gang.html)
+Valley Gang -> valley-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/valley-gang.html)
+Touhy Gang -> touhy-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/touhy-gang.html)
+West Side O'Donnell Gang -> west-side-odonnell-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/west-side-odonnell-gang.html)
+South Side O'Donnell Gang -> south-side-odonnell-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/south-side-odonnell-gang.html)
+Saltis–McErlane Gang -> saltis-mcerlane-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/saltis-mcerlane-gang.html)
+Gustin Gang -> gustin-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/gustin-gang.html)
+Charlestown / McLaughlin Gang -> charlestown-mclaughlin-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/charlestown-mclaughlin-gang.html)
+Winter Hill Gang -> winter-hill-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/winter-hill-gang.html)
+Killeen Gang -> killeen-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/killeen-gang.html)
+Mullen Gang -> mullen-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/mullen-gang.html)
+Egan's Rats -> egans-rats/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/egans-rats.html)
+Hogan Gang -> hogan-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/hogan-gang.html)
+K&A Gang -> ka-gang/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/ka-gang.html)
+Danny Greene's Celtic Club -> danny-greenes-celtic-club/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/danny-greenes-celtic-club.html)
+Danny Hogan Organization -> danny-hogan-organization/ (currently /library/encyclopedia/crime/organizations/mafias-and-syndicates/irish-american-crime-syndicates/danny-hogan-organization.html)
