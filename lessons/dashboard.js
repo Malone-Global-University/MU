@@ -1,6 +1,6 @@
 /* MGU Lesson Dashboard — prototype content controller.
    Shell: index.html | Style: dashboard.css | Directory: catalog.json
-   Content: lessons/*.md. No lesson content is hard-coded into this script.
+   Content: content/{department}/{course}/*.md. No lesson content is hard-coded into this script.
    Supported extensions: :::answer, :::quiz, :::terms and [[term-id|label]]. */
 (() => {
   'use strict';
@@ -222,7 +222,7 @@
         }
         courseIds.add(course.id);
         for (const lesson of course.lessons || []) {
-          if (!/^[a-z0-9_-]+$/.test(lesson.id) || !/^lessons\/[a-z0-9_/-]+\.md$/.test(lesson.file) || lesson.file.includes('..')) {
+          if (!/^[a-z0-9_-]+$/.test(lesson.id) || !/^content\/[a-z0-9_/-]+\.md$/.test(lesson.file) || lesson.file.includes('..')) {
             throw new Error('A catalog lesson has an invalid ID or Markdown path.');
           }
           if (all.some(entry => entry.lesson.id === lesson.id)) throw new Error(`Duplicate lesson ID: ${lesson.id}`);
