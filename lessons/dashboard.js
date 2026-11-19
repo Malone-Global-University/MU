@@ -233,12 +233,12 @@
     return all;
   }
 
-  // Four-level, catalog-driven routing. Only an explicit ?lesson=... loads Markdown.
+  // Four-level, catalog-driven routing. Only an explicit ?content=... loads Markdown.
   const homeUrl = './';
   const departmentUrl = department => `?department=${encodeURIComponent(department.id)}`;
   const courseUrl = (department, course) =>
     `${departmentUrl(department)}&course=${encodeURIComponent(course.id)}`;
-  const lessonUrl = lesson => `?lesson=${encodeURIComponent(lesson.id)}`;
+  const lessonUrl = lesson => `?content=${encodeURIComponent(lesson.id)}`;
 
   function link(href, className, text) {
     const anchor = el('a', className, text);
@@ -538,13 +538,21 @@
       const catalog = JSON.parse(await getText('catalog.json'));
       const all = flatten(catalog);
       const params = new URLSearchParams(location.search);
-      const lessonId = params.get('lesson');
+      // ?content= is the public lesson route. Continue to accept old ?lesson= bookmarks.
+      // Other parameters (such as utm_source) are ignored by routing.
+      const contentId = params.get('content') || params.get('lesson');
+      if (!params.has('content') && params.has('lesson')) {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('content', params.get('lesson'));
+        currentUrl.searchParams.delete('lesson');
+        window.history.replaceState(null, '', currentUrl.pathname + currentUrl.search + currentUrl.hash);
+      }
       const departmentId = params.get('department');
       const courseId = params.get('course');
       let route;
-      if (lessonId) {
-        const entry = all.find(item => item.lesson.id === lessonId);
-        if (!entry) throw new Error(`Lesson ID "${lessonId}" was not found in catalog.json.`);
+      if (contentId) {
+        const entry = all.find(item => item.lesson.id === contentId);
+        if (!entry) throw new Error(`Content ID "${contentId}" was not found in catalog.json.`);
         route = {type: 'lesson', ...entry};
         showDirectory(catalog, route);
         showLesson(entry, await getText(entry.lesson.file));
