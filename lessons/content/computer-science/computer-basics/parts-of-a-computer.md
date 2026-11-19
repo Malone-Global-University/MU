@@ -117,14 +117,16 @@ A computer may connect to other devices through cables, built-in connectors, or 
 
 ### Common ports and what they do
 
+Common connection types include [[usb|USB]], [[hdmi|HDMI]], [[audio-jack|audio jacks]], [[ethernet|Ethernet]], and [[power-connector|power connectors]]. The table summarizes their everyday uses.
+
 | Port or connection | Common purpose | What to recognize |
 | --- | --- | --- |
-| [[usb|USB-A]] | Connects many keyboards, mice, flash drives, and accessories | Familiar flat, rectangular connector |
-| [[usb|USB-C]] | Connects compatible accessories; may support data, charging, and/or video | Small oval-shaped, reversible connector; capabilities differ by device |
-| [[hdmi|HDMI]] | Carries digital video and usually audio to a monitor or television | Often used for external displays |
-| [[audio-jack|3.5 mm audio jack]] | Connects compatible headphones, microphones, or headsets | Small round socket; input/output support varies |
-| [[ethernet|Ethernet port]] | Connects a computer to a wired network | Usually accepts a rectangular network-cable plug with a retaining clip |
-| [[power-connector|Power connector]] | Connects an approved charger or external power supply | Shape varies; some devices receive power through compatible USB-C ports |
+| USB-A | Connects many keyboards, mice, flash drives, and accessories | Familiar flat, rectangular connector |
+| USB-C | Connects compatible accessories; may support data, charging, and/or video | Small oval-shaped, reversible connector; capabilities differ by device |
+| HDMI | Carries digital video and usually audio to a monitor or television | Often used for external displays |
+| 3.5 mm audio jack | Connects compatible headphones, microphones, or headsets | Small round socket; input/output support varies |
+| Ethernet port | Connects a computer to a wired network | Usually accepts a rectangular network-cable plug with a retaining clip |
+| Power connector | Connects an approved charger or external power supply | Shape varies; some devices receive power through compatible USB-C ports |
 | SD or microSD slot | Accepts a supported removable memory card | A card slot rather than a normal USB socket |
 
 A USB-C port **does not automatically support every USB-C feature**. One device may use USB-C for charging and data, while another also supports an external monitor. Read the device's instructions before assuming a cable or adapter will work.
