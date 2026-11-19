@@ -311,7 +311,7 @@
     view.replaceChildren();
     const head = el('header', 'directory-page-header');
     head.appendChild(el('p', 'lesson-kicker', kicker));
-    head.appendChild(el('h1', '', title));
+    head.appendChild(el('h2', '', title));
     head.appendChild(el('p', 'directory-intro', description));
     view.appendChild(head);
     view.setAttribute('aria-busy', 'false');
@@ -333,7 +333,7 @@
 
   function showHome(catalog) {
     startDirectoryPage('MGU learning directory', 'Explore departmental lessons',
-      'Select a department, choose a course, and open a lesson. Each lesson is maintained separately from this dashboard.');
+      'Browse MGU departments, choose a course, and study at your own pace.');
     const departments = catalog.departments;
     const courses = departments.reduce((sum, department) => sum + (department.courses || []).length, 0);
     const lessons = departments.reduce((sum, department) => sum + countLessons(department), 0);
@@ -371,7 +371,7 @@
     }
     if (!grid.childElementCount) view.appendChild(el('p', 'directory-empty', 'No courses are published in this department yet.'));
     else view.appendChild(grid);
-    document.title = `${department.name} | MGU Lessons`;
+    document.title = `${department.name} | Departmental Lessons | Malone Global University`;
   }
 
   function showCourse(department, course) {
@@ -389,14 +389,14 @@
       const content = el('span', 'directory-lesson-info');
       content.appendChild(el('strong', '', lesson.title));
       const descriptors = [lesson.level, lesson.minutes && `${lesson.minutes} min study`].filter(Boolean);
-      content.appendChild(el('span', '', descriptors.join(' · ') || 'Markdown lesson'));
+      content.appendChild(el('span', '', descriptors.join(' · ') || 'Lesson'));
       a.appendChild(content);
       a.appendChild(el('span', 'directory-lesson-arrow', '→'));
       list.appendChild(a);
     }
     if (!list.childElementCount) view.appendChild(el('p', 'directory-empty', 'No lessons are published in this course yet.'));
     else view.appendChild(list);
-    document.title = `${course.name} | MGU Lessons`;
+    document.title = `${course.name} | Departmental Lessons | Malone Global University`;
   }
 
   function setupInteractions(body) {
@@ -441,11 +441,11 @@
     ]);
     const heading = el('header', 'lesson-header');
     heading.appendChild(el('p', 'lesson-kicker', 'Lesson workspace'));
-    heading.appendChild(el('h1', '', lesson.title));
+    heading.appendChild(el('h2', '', lesson.title));
     const meta = el('div', 'lesson-meta');
     if (lesson.level) meta.appendChild(el('span', '', lesson.level));
     if (lesson.minutes) meta.appendChild(el('span', '', `${lesson.minutes} min study`));
-    meta.appendChild(el('span', '', 'Markdown lesson'));
+    meta.appendChild(el('span', '', 'Interactive lesson'));
     heading.appendChild(meta);
     view.appendChild(heading);
     const body = el('article', 'markdown-body');
@@ -454,18 +454,14 @@
     body.innerHTML = renderMarkdown(content);
     view.appendChild(body);
     setupInteractions(body);
-    const source = el('div', 'lesson-source');
-    source.append('Lesson source: ');
-    source.appendChild(el('code', '', lesson.file));
-    view.appendChild(source);
     view.setAttribute('aria-busy', 'false');
-    document.title = `${lesson.title} | MGU Lessons`;
+    document.title = `${lesson.title} | Departmental Lessons | Malone Global University`;
   }
 
   function showError(error) {
     view.replaceChildren();
     const card = el('div', 'error-card');
-    card.appendChild(el('h1', '', 'This page could not be loaded'));
+    card.appendChild(el('h2', '', 'This page could not be loaded'));
     card.appendChild(el('p', '', error.message || String(error)));
     card.appendChild(el('p', '', 'Check catalog.json and the requested department, course, or lesson ID. When testing locally, use a web server (PowerShell: py -m http.server 8000).'));
     view.appendChild(card);
