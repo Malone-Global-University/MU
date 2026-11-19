@@ -209,8 +209,18 @@
       throw new Error('catalog.json does not use the expected schemaVersion 1 format.');
     }
     const all = [];
+    const departmentIds = new Set();
     for (const department of catalog.departments) {
+      if (!/^[a-z0-9_-]+$/.test(department.id) || departmentIds.has(department.id) || !Array.isArray(department.courses)) {
+        throw new Error('A catalog department has an invalid ID, duplicated ID, or missing courses list.');
+      }
+      departmentIds.add(department.id);
+      const courseIds = new Set();
       for (const course of department.courses || []) {
+        if (!/^[a-z0-9_-]+$/.test(course.id) || courseIds.has(course.id) || !Array.isArray(course.lessons)) {
+          throw new Error('A catalog course has an invalid ID, duplicated ID, or missing lessons list.');
+        }
+        courseIds.add(course.id);
         for (const lesson of course.lessons || []) {
           if (!/^[a-z0-9_-]+$/.test(lesson.id) || !/^lessons\/[a-z0-9_/-]+\.md$/.test(lesson.file) || lesson.file.includes('..')) {
             throw new Error('A catalog lesson has an invalid ID or Markdown path.');
@@ -223,24 +233,170 @@
     return all;
   }
 
-  function showDirectory(catalog, currentId) {
+  // Four-level, catalog-driven routing. Only an explicit ?lesson=... loads Markdown.
+  const homeUrl = './';
+  const departmentUrl = department => `?department=${encodeURIComponent(department.id)}`;
+  const courseUrl = (department, course) =>
+    `${departmentUrl(department)}&course=${encodeURIComponent(course.id)}`;
+  const lessonUrl = lesson => `?lesson=${encodeURIComponent(lesson.id)}`;
+
+  function link(href, className, text) {
+    const anchor = el('a', className, text);
+    anchor.href = href;
+    return anchor;
+  }
+
+  function buildBreadcrumbs(parts) {
+    const crumbs = el('nav', 'breadcrumbs');
+    crumbs.setAttribute('aria-label', 'Breadcrumb');
+    crumbs.appendChild(link(homeUrl, '', 'Lesson dashboard'));
+    for (const part of parts) {
+      crumbs.appendChild(el('span', 'separator', '/'));
+      if (part.href) crumbs.appendChild(link(part.href, '', part.text));
+      else crumbs.appendChild(el('span', '', part.text));
+    }
+    return crumbs;
+  }
+
+  function addBreadcrumbs(parts) { view.appendChild(buildBreadcrumbs(parts)); }
+
+  function showDirectory(catalog, route) {
     nav.replaceChildren();
+    const home = link(homeUrl, 'sidebar-home-link', 'Dashboard home');
+    if (route.type === 'home') {
+      home.classList.add('active');
+      home.setAttribute('aria-current', 'page');
+    }
+    nav.appendChild(home);
+
     for (const department of catalog.departments) {
       const group = el('section', 'department-group');
-      group.appendChild(el('div', 'department-title', department.name));
+      const depLink = link(departmentUrl(department), 'department-title department-nav-link', department.name);
+      if (route.type === 'department' && route.department?.id === department.id) {
+        depLink.classList.add('active');
+        depLink.setAttribute('aria-current', 'page');
+      }
+      group.appendChild(depLink);
       for (const course of department.courses || []) {
-        group.appendChild(el('div', 'course-title', course.name));
+        const panel = el('details', 'sidebar-course');
+        // The selected course is expanded; the remaining courses stay compact at scale.
+        panel.open = route.department?.id === department.id &&
+          (route.course?.id === course.id || route.type === 'department');
+        panel.appendChild(el('summary', 'course-title', course.name));
         const links = el('div', 'lesson-links');
+        const courseLink = link(courseUrl(department, course), 'lesson-link course-overview-link', 'View course');
+        if (route.type === 'course' && route.course?.id === course.id && route.department?.id === department.id) {
+          courseLink.classList.add('active');
+          courseLink.setAttribute('aria-current', 'page');
+        }
+        links.appendChild(courseLink);
         for (const lesson of course.lessons || []) {
-          const a = el('a', 'lesson-link', lesson.title);
-          a.href = `index.html?lesson=${encodeURIComponent(lesson.id)}`;
-          if (lesson.id === currentId) { a.classList.add('active'); a.setAttribute('aria-current', 'page'); }
+          const a = link(lessonUrl(lesson), 'lesson-link', lesson.title);
+          if (route.type === 'lesson' && route.lesson?.id === lesson.id) {
+            a.classList.add('active');
+            a.setAttribute('aria-current', 'page');
+          }
           links.appendChild(a);
         }
-        group.appendChild(links);
+        panel.appendChild(links);
+        group.appendChild(panel);
       }
       nav.appendChild(group);
     }
+  }
+
+  function startDirectoryPage(kicker, title, description) {
+    glossary.clear(); quizzes.clear(); quizSequence = 0;
+    closeTerm(false);
+    view.replaceChildren();
+    const head = el('header', 'directory-page-header');
+    head.appendChild(el('p', 'lesson-kicker', kicker));
+    head.appendChild(el('h1', '', title));
+    head.appendChild(el('p', 'directory-intro', description));
+    view.appendChild(head);
+    view.setAttribute('aria-busy', 'false');
+  }
+
+  function makeDirectoryCard(href, kicker, title, description, footer) {
+    const a = link(href, 'directory-card');
+    a.appendChild(el('span', 'directory-card-eyebrow', kicker));
+    a.appendChild(el('strong', 'directory-card-title', title));
+    a.appendChild(el('span', 'directory-card-description', description));
+    a.appendChild(el('span', 'directory-card-foot', footer));
+    return a;
+  }
+
+  function countLessons(department) {
+    return (department.courses || []).reduce((count, course) => count + (course.lessons || []).length, 0);
+  }
+  const quantity = (count, singular, plural = `${singular}s`) => `${count} ${count === 1 ? singular : plural}`;
+
+  function showHome(catalog) {
+    startDirectoryPage('MGU learning directory', 'Explore departmental lessons',
+      'Select a department, choose a course, and open a lesson. Each lesson is maintained separately from this dashboard.');
+    const departments = catalog.departments;
+    const courses = departments.reduce((sum, department) => sum + (department.courses || []).length, 0);
+    const lessons = departments.reduce((sum, department) => sum + countLessons(department), 0);
+    const counts = el('div', 'directory-counts');
+    counts.appendChild(el('span', '', quantity(departments.length, 'department')));
+    counts.appendChild(el('span', '', quantity(courses, 'course')));
+    counts.appendChild(el('span', '', quantity(lessons, 'lesson')));
+    view.appendChild(counts);
+    view.appendChild(el('h2', 'directory-section-title', 'Departments'));
+    const grid = el('div', 'directory-grid');
+    for (const department of departments) {
+      const courseCount = (department.courses || []).length;
+      grid.appendChild(makeDirectoryCard(
+        departmentUrl(department), 'Department', department.name,
+        department.description || 'Browse courses and lessons in this department.',
+        `${quantity(courseCount, 'course')} · ${quantity(countLessons(department), 'lesson')}  →`
+      ));
+    }
+    view.appendChild(grid);
+    document.title = 'Departmental Lessons | Malone Global University';
+  }
+
+  function showDepartment(department) {
+    startDirectoryPage('Department', department.name,
+      department.description || 'Select a course to see its available lessons.');
+    view.prepend(buildBreadcrumbs([{text: department.name}]));
+    view.appendChild(el('h2', 'directory-section-title', 'Courses'));
+    const grid = el('div', 'directory-grid');
+    for (const course of department.courses || []) {
+      grid.appendChild(makeDirectoryCard(
+        courseUrl(department, course), 'Course', course.name,
+        course.description || 'Open the course directory to browse its lessons.',
+        `${quantity((course.lessons || []).length, 'lesson')}  →`
+      ));
+    }
+    if (!grid.childElementCount) view.appendChild(el('p', 'directory-empty', 'No courses are published in this department yet.'));
+    else view.appendChild(grid);
+    document.title = `${department.name} | MGU Lessons`;
+  }
+
+  function showCourse(department, course) {
+    startDirectoryPage('Course directory', course.name,
+      course.description || `Browse the lessons in ${course.name}.`);
+    view.prepend(buildBreadcrumbs([
+      {text: department.name, href: departmentUrl(department)},
+      {text: course.name}
+    ]));
+    view.appendChild(el('h2', 'directory-section-title', 'Lessons'));
+    const list = el('div', 'directory-lesson-list');
+    for (const [i, lesson] of (course.lessons || []).entries()) {
+      const a = link(lessonUrl(lesson), 'directory-lesson-row');
+      a.appendChild(el('span', 'directory-lesson-number', String(i + 1).padStart(2, '0')));
+      const content = el('span', 'directory-lesson-info');
+      content.appendChild(el('strong', '', lesson.title));
+      const descriptors = [lesson.level, lesson.minutes && `${lesson.minutes} min study`].filter(Boolean);
+      content.appendChild(el('span', '', descriptors.join(' · ') || 'Markdown lesson'));
+      a.appendChild(content);
+      a.appendChild(el('span', 'directory-lesson-arrow', '→'));
+      list.appendChild(a);
+    }
+    if (!list.childElementCount) view.appendChild(el('p', 'directory-empty', 'No lessons are published in this course yet.'));
+    else view.appendChild(list);
+    document.title = `${course.name} | MGU Lessons`;
   }
 
   function setupInteractions(body) {
@@ -278,13 +434,11 @@
     glossary.clear(); quizzes.clear(); quizSequence = 0;
     const content = extractTerms(markdown);
     view.replaceChildren();
-    const breadcrumbs = el('nav', 'breadcrumbs');
-    breadcrumbs.setAttribute('aria-label', 'Current course');
-    [department.name, course.name].forEach((label, index) => {
-      if (index) breadcrumbs.appendChild(el('span', 'separator', '/'));
-      breadcrumbs.appendChild(el('span', '', label));
-    });
-    view.appendChild(breadcrumbs);
+    addBreadcrumbs([
+      {text: department.name, href: departmentUrl(department)},
+      {text: course.name, href: courseUrl(department, course)},
+      {text: lesson.title}
+    ]);
     const heading = el('header', 'lesson-header');
     heading.appendChild(el('p', 'lesson-kicker', 'Lesson workspace'));
     heading.appendChild(el('h1', '', lesson.title));
@@ -311,10 +465,9 @@
   function showError(error) {
     view.replaceChildren();
     const card = el('div', 'error-card');
-    card.appendChild(el('h1', '', 'The lesson could not be loaded'));
+    card.appendChild(el('h1', '', 'This page could not be loaded'));
     card.appendChild(el('p', '', error.message || String(error)));
-    card.appendChild(el('p', '', 'Run this dashboard through a local web server rather than opening index.html directly as a file.'));
-    card.appendChild(el('p', '', 'Example in PowerShell: py -m http.server 8000'));
+    card.appendChild(el('p', '', 'Check catalog.json and the requested department, course, or lesson ID. When testing locally, use a web server (PowerShell: py -m http.server 8000).'));
     view.appendChild(card);
     view.setAttribute('aria-busy', 'false');
   }
@@ -384,12 +537,38 @@
     try {
       const catalog = JSON.parse(await getText('catalog.json'));
       const all = flatten(catalog);
-      if (!all.length) throw new Error('The catalog has no lessons.');
-      const requested = new URLSearchParams(location.search).get('lesson');
-      const entry = requested ? all.find(item => item.lesson.id === requested) : all[0];
-      if (!entry) throw new Error(`Lesson ID "${requested}" was not found in catalog.json.`);
-      showDirectory(catalog, entry.lesson.id);
-      showLesson(entry, await getText(entry.lesson.file));
+      const params = new URLSearchParams(location.search);
+      const lessonId = params.get('lesson');
+      const departmentId = params.get('department');
+      const courseId = params.get('course');
+      let route;
+      if (lessonId) {
+        const entry = all.find(item => item.lesson.id === lessonId);
+        if (!entry) throw new Error(`Lesson ID "${lessonId}" was not found in catalog.json.`);
+        route = {type: 'lesson', ...entry};
+        showDirectory(catalog, route);
+        showLesson(entry, await getText(entry.lesson.file));
+      } else if (departmentId) {
+        const department = catalog.departments.find(item => item.id === departmentId);
+        if (!department) throw new Error(`Department ID "${departmentId}" was not found in catalog.json.`);
+        if (courseId) {
+          const course = (department.courses || []).find(item => item.id === courseId);
+          if (!course) throw new Error(`Course ID "${courseId}" was not found in department "${departmentId}".`);
+          route = {type: 'course', department, course};
+          showDirectory(catalog, route);
+          showCourse(department, course);
+        } else {
+          route = {type: 'department', department};
+          showDirectory(catalog, route);
+          showDepartment(department);
+        }
+      } else if (courseId) {
+        throw new Error('A course URL must also specify its department.');
+      } else {
+        route = {type: 'home'};
+        showDirectory(catalog, route);
+        showHome(catalog);
+      }
     } catch (error) { showError(error); }
   }
   init();
