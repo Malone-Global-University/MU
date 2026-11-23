@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Address Generation, TLBs, and Page Walks | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Specialist MGU Encyclopedia article about address-generation units, CPU TLB hierarchies, RISC-V Sv39 page walks, translation faults, page sizes, virtualization and translation performance.">
+<meta name="keywords" content="address generation unit, AGU, TLB, dTLB, iTLB, MMU, page table walker, Sv39, effective address, ASID, PCID, TLB shootdown, page fault, virtual memory, processor microarchitecture">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/address-generation-tlbs-and-page-walks">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Address Generation, TLBs, and Page Walks | MGU Encyclopedia">
+<meta property="og:description" content="Processor address generation, virtual-to-physical translation, translation caches, page-table walks, and performance trade-offs.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/address-generation-tlbs-and-page-walks">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Address Generation, TLBs, and Page Walks</h1>
+<p class="subtitle">From operand arithmetic to translated memory requests: how processor address-generation units, translation caches, and page-table walkers cooperate to keep instructions moving.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#scope-purpose-and-architectural-context">Scope, Purpose, and Architectural Context</a></li><li><a href="#the-end-to-end-memory-operation-path">The End-to-End Memory-Operation Path</a></li><li><a href="#effective-linear-virtual-and-physical-addresses">Effective, Linear, Virtual, and Physical Addresses</a></li><li><a href="#address-generation-units-and-execution-ports">Address-Generation Units and Execution Ports</a></li><li><a href="#addressing-modes-arithmetic-and-dependency-chains">Addressing Modes, Arithmetic, and Dependency Chains</a></li><li><a href="#address-width-canonicality-alignment-and-crossings">Address Width, Canonicality, Alignment, and Crossings</a></li><li><a href="#virtual-page-numbers-offsets-and-translation-mapping">Virtual Page Numbers, Offsets, and Translation Mapping</a></li><li><a href="#translation-lookaside-buffers-function-and-contents">Translation Lookaside Buffers: Function and Contents</a></li><li><a href="#instruction-tlbs-data-tlbs-and-shared-translation-levels">Instruction TLBs, Data TLBs, and Shared Translation Levels</a></li><li><a href="#tlb-lookup-organization-associativity-and-replacement">TLB Lookup Organization, Associativity, and Replacement</a></li><li><a href="#asids-pcids-and-translation-context-identity">ASIDs, PCIDs, and Translation Context Identity</a></li><li><a href="#tlb-reach-and-page-size-trade-offs">TLB Reach and Page-Size Trade-Offs</a></li><li><a href="#page-tables-and-multi-level-translation-structures">Page Tables and Multi-Level Translation Structures</a></li><li><a href="#risc-v-sv39-as-a-concrete-page-walk-example">RISC-V Sv39 as a Concrete Page-Walk Example</a></li><li><a href="#page-walk-engines-and-the-translation-miss-path">Page-Walk Engines and the Translation Miss Path</a></li><li><a href="#walk-caches-pte-locality-and-translation-refill">Walk Caches, PTE Locality, and Translation Refill</a></li><li><a href="#permissions-access-attributes-and-protection-checks">Permissions, Access Attributes, and Protection Checks</a></li><li><a href="#accessed-and-dirty-state-in-page-table-entries">Accessed and Dirty State in Page-Table Entries</a></li><li><a href="#tlb-misses-page-faults-and-cache-misses-compared">TLB Misses, Page Faults, and Cache Misses Compared</a></li><li><a href="#precise-exceptions-speculative-translations-and-recovery">Precise Exceptions, Speculative Translations, and Recovery</a></li><li><a href="#translation-invalidation-shootdowns-and-coherence">Translation Invalidation, Shootdowns, and Coherence</a></li><li><a href="#context-switches-shared-address-spaces-and-global-mappings">Context Switches, Shared Address Spaces, and Global Mappings</a></li><li><a href="#large-pages-contiguous-regions-and-fragmentation-costs">Large Pages, Contiguous Regions, and Fragmentation Costs</a></li><li><a href="#page-crossing-accesses-and-partial-translation">Page-Crossing Accesses and Partial Translation</a></li><li><a href="#virtual-indexing-and-physically-tagged-cache-access">Virtual Indexing and Physically Tagged Cache Access</a></li><li><a href="#translation-traffic-competing-with-data-accesses">Translation Traffic Competing With Data Accesses</a></li><li><a href="#page-walk-concurrency-walk-latency-and-backpressure">Page-Walk Concurrency, Walk Latency, and Backpressure</a></li><li><a href="#virtualization-and-two-stage-address-translation">Virtualization and Two-Stage Address Translation</a></li><li><a href="#iommus-and-device-translation-a-deliberate-boundary">IOMMUs and Device Translation: A Deliberate Boundary</a></li><li><a href="#translation-performance-models-and-the-limits-of-cpi-arithmetic">Translation Performance Models and the Limits of CPI Arithmetic</a></li><li><a href="#translation-locality-working-sets-and-access-patterns">Translation Locality, Working Sets, and Access Patterns</a></li><li><a href="#translation-security-isolation-and-side-channel-boundaries">Translation Security, Isolation, and Side-Channel Boundaries</a></li><li><a href="#profiling-translation-bottlenecks-and-attribution">Profiling Translation Bottlenecks and Attribution</a></li><li><a href="#architecture-and-implementation-comparison">Architecture and Implementation Comparison</a></li><li><a href="#worked-example-1-effective-address-arithmetic">Worked Example 1: Effective-Address Arithmetic</a></li><li><a href="#worked-example-2-sv39-address-field-extraction">Worked Example 2: Sv39 Address-Field Extraction</a></li><li><a href="#worked-example-3-comparing-tlb-reach-and-working-set">Worked Example 3: Comparing TLB Reach and Working Set</a></li><li><a href="#worked-example-4-a-tlb-hit-a-walk-and-a-true-page-fault">Worked Example 4: A TLB Hit, a Walk, and a True Page Fault</a></li><li><a href="#worked-example-5-translation-miss-traffic-under-contention">Worked Example 5: Translation Miss Traffic Under Contention</a></li><li><a href="#worked-example-6-a-page-spanning-16-byte-load">Worked Example 6: A Page-Spanning 16-Byte Load</a></li><li><a href="#worked-example-7-simplified-translation-cpi-estimate">Worked Example 7: Simplified Translation CPI Estimate</a></li><li><a href="#worked-example-8-two-stage-translation-and-recovery">Worked Example 8: Two-Stage Translation and Recovery</a></li><li><a href="#design-and-diagnostic-decision-framework">Design and Diagnostic Decision Framework</a></li><li><a href="#specialist-glossary">Specialist Glossary</a></li><li><a href="#primary-references-and-further-reading">Primary References and Further Reading</a></li><li><a href="#related-encyclopedia-topics-and-study-pathways">Related Encyclopedia Topics and Study Pathways</a></li><li><a href="#editorial-scope-publication-status-and-file-convention">Editorial Scope, Publication Status, and File Convention</a></li>
+</ol>
+</section>
+<section id="scope-purpose-and-architectural-context" aria-labelledby="heading-scope-purpose-and-architectural-context">
+<h2 id="heading-scope-purpose-and-architectural-context">Scope, Purpose, and Architectural Context</h2>
+<p>A processor cannot load or store a value merely because a source-level pointer exists. The execution engine must first form the instruction's <strong>effective address</strong>, interpret that address within the architecture's address space, establish whether the access is permitted, and locate the relevant physical memory or device transaction. An <strong>address-generation unit (AGU)</strong> performs some or all of the arithmetic that forms an effective address. A <strong>translation lookaside buffer (TLB)</strong> caches recently used address translations. A <strong>page-table walker</strong> obtains translation information from page tables when an appropriate cached translation is unavailable. Together, these structures support the high rate of memory operations needed by a modern core.</p>
+<p>This specialist entry is <strong>Microarchitecture article 14 of 20</strong>, the fourth article in the <em>Prediction, Speculation, and Memory Execution</em> group. It focuses on how instructions become addressed memory transactions: address arithmetic, translation-cache lookup, page-walk control, permission checking, translation misses, resource competition, and performance attribution. It does not attempt to replace an operating-system account of virtual-memory policy, a full ISA description of address-space semantics, or the separate <a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> overview of cache organization.</p>
+<p><strong>The governing distinction is between a translation miss and an architectural memory fault.</strong> A TLB miss can be an ordinary, invisible hardware event that is satisfied by a walk and refill. A page fault or access fault represents an architecturally defined condition, potentially requiring operating-system handling or terminating an access. A missing data-cache line is yet another event: translation may succeed while the data access misses in cache. None of these conditions is interchangeable. Processor implementations vary in the number, arrangement, and timing of translation structures; diagrams and examples here describe models, not an undocumented universal design.</p>
+
+</section>
+<section id="the-end-to-end-memory-operation-path" aria-labelledby="heading-the-end-to-end-memory-operation-path">
+<h2 id="heading-the-end-to-end-memory-operation-path">The End-to-End Memory-Operation Path</h2>
+<p>A typical load begins with operands becoming available to the scheduler. The AGU then computes a candidate effective address. Translation logic looks for a matching virtual-page translation and checks, or coordinates checking of, the access rights. Once the required address and permissions are available, the load-store pipeline can access the data cache, compare against older stores, or initiate a request deeper in the memory hierarchy. This path may be pipelined and partly parallelized, so it is not always a rigid sequence of single-cycle stages.</p>
+<p>Consider the deliberately simplified flow: <strong>source operands → effective-address generation → address translation/permission validation → data-cache or forwarding decision → data return → retirement</strong>. On a TLB hit and cache hit, many steps can complete without any page-table memory requests. On a TLB miss, a walker must recover the mapping. On an unmapped or prohibited access, the execution engine must associate the appropriate fault with the instruction. On a cache miss, an independent physical data request must be satisfied even if translation was fast.</p>
+<table>
+<thead>
+<tr>
+  <th>Milestone</th>
+  <th>Input required</th>
+  <th>Output or decision</th>
+  <th>Possible delay</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Operand readiness</td>
+  <td>Base, index, displacement, privilege context</td>
+  <td>Operation becomes eligible for AGU</td>
+  <td>Register dependence or issue contention</td>
+</tr>
+<tr>
+  <td>Effective-address calculation</td>
+  <td>Addressing expression</td>
+  <td>Candidate linear/virtual address</td>
+  <td>AGU port or complex addressing path</td>
+</tr>
+<tr>
+  <td>Translation lookup</td>
+  <td>Virtual page, address-space identity, access type</td>
+  <td>Mapping or translation miss</td>
+  <td>TLB conflict or capacity miss</td>
+</tr>
+<tr>
+  <td>Page walk, when needed</td>
+  <td>Page-table root and translation rules</td>
+  <td>Translation, fault, or retry</td>
+  <td>Page-table memory accesses</td>
+</tr>
+<tr>
+  <td>Memory access</td>
+  <td>Permitted translated address and ordering state</td>
+  <td>Forwarded data, cache hit, or request</td>
+  <td>Queue pressure, cache miss, bus contention</td>
+</tr>
+<tr>
+  <td>Retirement</td>
+  <td>Completion, exception status, program-order eligibility</td>
+  <td>Committed architectural result</td>
+  <td>Older instructions or unresolved fault</td>
+</tr>
+</tbody>
+</table>
+<p>This table is a logical dependency map. Some cores perform translation lookup in parallel with virtual-indexed cache access, and some do early partial-address checks before a full translation. The observable architectural contract remains separate from these optimization choices.</p>
+
+</section>
+<section id="effective-linear-virtual-and-physical-addresses" aria-labelledby="heading-effective-linear-virtual-and-physical-addresses">
+<h2 id="heading-effective-linear-virtual-and-physical-addresses">Effective, Linear, Virtual, and Physical Addresses</h2>
+<p>An <strong>effective address</strong> is the result of an instruction's address-calculation expression. On common flat-address machines, this becomes a <strong>virtual address</strong> supplied to the memory-management unit. The term <strong>linear address</strong> is particularly useful in x86 terminology, where segmentation, when applicable, contributes to the linear address before paging. Other instruction sets describe virtual addresses without using the same segmentation model. A <strong>physical address</strong> is the address after the applicable translation stages, used to access memory or other hardware targets. Virtual address and physical address are not simply alternate formats of the same number: their mappings can differ by process, privilege mode, and time.</p>
+<p>The effective address ordinarily incorporates a base register, an optional index register with scale, an immediate displacement, or an instruction-specific update rule. For example, a generic addressing expression can be written <code>EA = base + index × scale + displacement</code>, subject to the ISA's actual allowed scales, arithmetic width, extension rules, and exception behavior. The resulting address can name a byte in a process's address space even if that page is not present in physical memory. Hardware translation determines whether and how it reaches a mapped physical location.</p>
+<p>A physical address may be used internally for cache tags, coherence, or memory-system routing, but this does not imply that all caches must wait until translation is finished before beginning work. Implementation choices such as virtually indexed, physically tagged caches use the page-offset relationship to overlap steps safely. Likewise, physical address does not automatically mean DRAM; a memory map can route some physical ranges to devices. These distinctions explain why a load's address calculation, translation, and actual data-return latency must be measured separately.</p>
+
+</section>
+<section id="address-generation-units-and-execution-ports" aria-labelledby="heading-address-generation-units-and-execution-ports">
+<h2 id="heading-address-generation-units-and-execution-ports">Address-Generation Units and Execution Ports</h2>
+<p>An AGU is often a specialized arithmetic pipeline or subunit that forms the address for a load or store while more general arithmetic units perform other operations. The base and index values typically come from the register rename/operand-delivery subsystem, and the computed address is sent toward translation and load-store control. When a core advertises multiple memory-operation pipelines, the relevant capacity may include separate load-address and store-address paths, shared ports, or restrictions on which instructions can use each unit. AGU count alone therefore cannot establish sustainable memory throughput.</p>
+<p>A two-load-per-cycle design, for example, must also have enough operand-read bandwidth, load-queue capacity, translation throughput, cache-bank bandwidth, and result/writeback capacity to exploit that rate. If one AGU is reserved for particular addressing forms or operations, the aggregate issue limit depends on the instruction mix. Multi-cycle calculation of unusual addressing forms can also create a local bottleneck without changing the size of the data cache. These are microarchitectural properties, not promises made by the ISA.</p>
+<table>
+<thead>
+<tr>
+  <th>AGU design pattern</th>
+  <th>Advantage</th>
+  <th>Constraint to examine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Shared load/store address pipeline</td>
+  <td>Lower duplicated arithmetic and control area</td>
+  <td>Loads and stores may contend for the same port</td>
+</tr>
+<tr>
+  <td>Dedicated load and store AGUs</td>
+  <td>More concurrent address preparation</td>
+  <td>Additional area, wiring, scheduler and operand demand</td>
+</tr>
+<tr>
+  <td>Multiple load AGUs</td>
+  <td>Higher candidate load address throughput</td>
+  <td>TLB and cache ports may become the next limiter</td>
+</tr>
+<tr>
+  <td>Simple versus complex address paths</td>
+  <td>Simplifies common low-latency cases</td>
+  <td>Instruction mix may encounter path-specific limits</td>
+</tr>
+<tr>
+  <td>Address-generation fusion with another operation</td>
+  <td>Can reduce instruction/operation overhead</td>
+  <td>ISA- and implementation-dependent pairing rules</td>
+</tr>
+</tbody>
+</table>
+<p>When identifying an apparent AGU bottleneck, first check whether the tested instructions truly compete for the same address-generation resources. An execution-unit histogram, scheduler queue occupancy, and controlled changes to the addressing expression are more informative than general claims that a processor is “short of AGUs.”</p>
+
+</section>
+<section id="addressing-modes-arithmetic-and-dependency-chains" aria-labelledby="heading-addressing-modes-arithmetic-and-dependency-chains">
+<h2 id="heading-addressing-modes-arithmetic-and-dependency-chains">Addressing Modes, Arithmetic, and Dependency Chains</h2>
+<p>An addressing mode specifies how instruction operands identify a memory location. <strong>Base-plus-offset</strong> addressing is common across many ISAs. Some ISAs provide <strong>base-plus-index</strong> or scaled-index addressing; others require extra arithmetic instructions to construct an equivalent address. Some load/store forms update their base register as part of the operation. A compiler may choose different instruction sequences for the same array, struct, or pointer computation, changing the instruction count and pressure on execution resources.</p>
+<p>For an array of eight-byte elements, a conceptual reference <code>A[i]</code> can be represented as <code>base + 8×i</code>. If the ISA has a suitable scaled-index form, the AGU may incorporate the multiplication-by-eight as a shift or wiring choice within the address expression. If the ISA requires the index offset in a register, an earlier shift/add may produce the address operand. Both can produce the same architectural address but demand different scheduler and execution resources.</p>
+<p>A <strong>pointer-chasing</strong> loop introduces a more restrictive dependency: the next load's address is the value returned by the previous load. Even with many AGUs and a wide issue engine, these dependent addresses cannot be generated concurrently unless an independent source of future addresses exists. This is why memory-level parallelism must be analyzed separately from address-generation throughput. Address arithmetic can be pipelined at high rate, while one serial dependency chain still limits useful forward progress to approximately one iteration per dependent-load latency under the assumptions of the workload.</p>
+
+</section>
+<section id="address-width-canonicality-alignment-and-crossings" aria-labelledby="heading-address-width-canonicality-alignment-and-crossings">
+<h2 id="heading-address-width-canonicality-alignment-and-crossings">Address Width, Canonicality, Alignment, and Crossings</h2>
+<p>Before accepting a memory access, the processor may need to validate address width, canonical address forms, permitted arithmetic transformations, and alignment rules. For instance, some virtual-memory modes define fewer implemented virtual-address bits than the nominal register width and prescribe canonical sign-extension of the higher bits. The resulting fault rule is specific to the ISA and mode. Arithmetic wrapping, pointer-size truncation, and canonical-address validation are related issues but should not be conflated.</p>
+<p><strong>Alignment</strong> means whether an address is suitably divisible by the access size or an architecture-required boundary. A misaligned scalar load may be legal but slower, supported through multiple internal accesses, or prohibited with a trap depending on ISA, memory type, and implementation. An access can also cross a cache-line or page boundary even when the starting byte is in a valid page. For a page-spanning access the processor may require two translations, and a fault on the second page must be handled with the architecture's precise-state requirements.</p>
+<p>Imagine a 16-byte load starting at byte offset <code>4090</code> within a 4 KiB page. Its last byte lies at offset <code>4105</code> relative to the first page's base, so the request covers bytes <code>4090..4095</code> in one page and <code>0..9</code> in the next. The address-generator arithmetic is straightforward; the difficulty lies in verifying both pages' permissions, assembling data without incorrect side effects, and meeting memory-ordering semantics. Page crossing therefore differs from a cache-line split and from a mere nonnatural alignment, although a particular access can exhibit all three properties.</p>
+
+</section>
+<section id="virtual-page-numbers-offsets-and-translation-mapping" aria-labelledby="heading-virtual-page-numbers-offsets-and-translation-mapping">
+<h2 id="heading-virtual-page-numbers-offsets-and-translation-mapping">Virtual Page Numbers, Offsets, and Translation Mapping</h2>
+<p>Paging partitions a virtual address into a <strong>virtual page number (VPN)</strong> and an <strong>offset within a page</strong>. A translation maps the virtual page to a physical page frame, normally preserving the offset within the mapped page. Under an ordinary 4 KiB page scheme, the offset is 12 bits because <code>4096 = 2^12</code>. For a virtual address <code>VA</code>, <code>VPN = floor(VA / 4096)</code> and <code>offset = VA mod 4096</code>. If the translation selects physical frame number <code>PFN</code>, then <code>PA = PFN × 4096 + offset</code>, subject to applicable architectural address-width and translation rules.</p>
+<p>This model is the foundation for understanding the TLB. The hardware need not store a separate translation for every byte: a single TLB entry can represent the mapping for an entire page or larger block. A pointer's lower offset bits often pass directly to the data-cache index calculation, which is important for overlapping translation and cache lookup. Actual page sizes, physical-address fields, and address-space tags vary by system; a toy 4 KiB example cannot describe every mapping format.</p>
+<table>
+<thead>
+<tr>
+  <th>Quantity</th>
+  <th>Example value</th>
+  <th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Base page size</td>
+  <td>4 KiB = 4096 bytes</td>
+  <td>12 page-offset bits</td>
+</tr>
+<tr>
+  <td>Virtual page number</td>
+  <td><code>VA &gt;&gt; 12</code></td>
+  <td>Identifies the virtual page</td>
+</tr>
+<tr>
+  <td>Page offset</td>
+  <td><code>VA &amp; 0xFFF</code></td>
+  <td>Selects a byte within that page</td>
+</tr>
+<tr>
+  <td>Physical page base</td>
+  <td><code>PFN &lt;&lt; 12</code></td>
+  <td>Start of the mapped physical frame</td>
+</tr>
+<tr>
+  <td>Physical byte address</td>
+  <td>Physical page base + offset</td>
+  <td>Result of successful translation</td>
+</tr>
+</tbody>
+</table>
+<p>The right-shift equations are illustrative of a power-of-two base-page model. They do not substitute for privilege, reserved-bit, tagging, or multi-stage translation checks.</p>
+
+</section>
+<section id="translation-lookaside-buffers-function-and-contents" aria-labelledby="heading-translation-lookaside-buffers-function-and-contents">
+<h2 id="heading-translation-lookaside-buffers-function-and-contents">Translation Lookaside Buffers: Function and Contents</h2>
+<p>A <strong>TLB</strong> is a small, fast cache of translation information. A hit can avoid traversing page tables for every instruction fetch and data access. The entry may carry the virtual page identifier, translated physical frame, page or block size, address-space identity, global-versus-local status, access permissions, memory attributes, and replacement or validity state. Designs may also cache information needed for privilege-stage distinctions. Hardware may store translation information in separate structures rather than placing every field in one physical SRAM entry.</p>
+<p>The TLB is <strong>not a cache of application data</strong>. A DTLB hit means the processor already has a suitable mapping; the corresponding data line might still miss in every cache. Conversely, a cache can contain a line that is not immediately accessible because its virtual mapping is absent or permissions need revalidation. Translation caching and data caching improve different portions of the access path, although their latencies and port use can interact.</p>
+<p>Translation information has a lifetime governed by operating-system page-table modifications, address-space changes, invalidation instructions, privilege transitions, and implementation rules. A stale translation can be a serious correctness or isolation problem. That is why the TLB must be treated as part of a coherent translation-control system rather than as an ordinary read-only performance hint. A successful lookup requires a match on all relevant identity and permission conditions, not just the low virtual-address bits.</p>
+
+</section>
+<section id="instruction-tlbs-data-tlbs-and-shared-translation-levels" aria-labelledby="heading-instruction-tlbs-data-tlbs-and-shared-translation-levels">
+<h2 id="heading-instruction-tlbs-data-tlbs-and-shared-translation-levels">Instruction TLBs, Data TLBs, and Shared Translation Levels</h2>
+<p>Many processors use separate <strong>instruction-side TLBs (iTLB)</strong> and <strong>data-side TLBs (dTLB)</strong> near their respective front-end and load-store pipelines. They may also provide a larger shared or second-level translation cache. The goal is to satisfy frequent fetch and data translations quickly while reducing the cost and frequency of page walks. Specific names such as L1 TLB, second-level TLB, or STLB depend on the vendor and microarchitecture; not every CPU implements the same hierarchy.</p>
+<p>An iTLB miss can limit instruction fetch even when the instruction bytes are present in the instruction cache. A dTLB miss can prevent a data load from reaching the data-cache pipeline or delay its completion. A hit in a shared lower TLB typically avoids a full page walk, but it is not necessarily as fast as a first-level hit. Multiple translation paths can operate simultaneously or compete for shared resources, and instruction versus data walk engines may have separate or shared capacities.</p>
+<p>Intel's profiling documentation explicitly distinguishes iTLB-related overhead from dTLB overhead and includes second-level translation-cache and page-walk effects in relevant metrics. That is a useful measurement taxonomy, not a claim that a metric has the same event definition on every Intel generation. In any profiling report, inspect the model-specific counter description, which may differ from the diagram in a textbook.</p>
+
+</section>
+<section id="tlb-lookup-organization-associativity-and-replacement" aria-labelledby="heading-tlb-lookup-organization-associativity-and-replacement">
+<h2 id="heading-tlb-lookup-organization-associativity-and-replacement">TLB Lookup Organization, Associativity, and Replacement</h2>
+<p>Like data caches, TLBs trade hit latency, capacity, energy, and conflict behavior. An <strong>associative</strong> lookup compares the requesting virtual page and context against one or more candidate entries. A fully associative small TLB can reduce placement conflicts, but matching many entries costs energy and delay. Set-associative designs limit the candidate entries within a selected set and may be practical at larger capacities. Translation page size and context tags can complicate indexing and the exact match function.</p>
+<p>Capacity misses occur when the active set of mappings exceeds an effective TLB capacity. Conflict misses occur when distinct mappings contend for limited positions even if total occupancy would fit elsewhere. Compulsory or cold misses occur on translations that have not recently been cached. A replacement policy may approximate least-recently-used behavior or use a hardware-efficient alternative. Page-walk caches and second-level TLBs can substantially change the downstream cost of a first-level miss.</p>
+<p>Design choices are linked: making a first-level dTLB much larger may improve hit rate but worsen access latency or power; adding another TLB level can preserve a fast first lookup while absorbing capacity misses. Multiple load pipelines may require replicated lookup resources or wider translation-port access. The correct objective is not “maximum entries” in isolation; it is low total translation stall cost under representative instruction and data working sets.</p>
+
+</section>
+<section id="asids-pcids-and-translation-context-identity" aria-labelledby="heading-asids-pcids-and-translation-context-identity">
+<h2 id="heading-asids-pcids-and-translation-context-identity">ASIDs, PCIDs, and Translation Context Identity</h2>
+<p>Different processes can use the same virtual address for different physical frames. Therefore a TLB entry's identity must reflect its applicable <strong>address space</strong> as well as its virtual page. Architectures may use address-space identifiers (<strong>ASIDs</strong>), process-context identifiers (<strong>PCIDs</strong>), global entries, or other context fields. The exact mechanism varies: PCID is an x86 term; ASID is used across several other architectures. A global mapping can remain valid across certain context switches under architecture-defined rules; it does not bypass permission checks.</p>
+<p>Tags can allow entries from multiple processes to coexist, reducing the need for a wholesale TLB flush on every context switch. However, finite tag spaces may be reused, and translation changes still require appropriate invalidation and synchronization. The kernel's management of page-table roots and identity allocation cooperates with the processor's implementation of match and invalidation rules. Two processes choosing the same virtual address does not establish an alias in physical memory, and a matching VPN without a compatible address-space tag is not a valid hit.</p>
+<p>For virtualized systems, further identifiers can distinguish a guest context from the host translation context. Context isolation is a correctness and security requirement. An entry must not be reused under a context to which its mapping or permissions do not apply merely because doing so would avoid a page walk. Good performance engineering preserves those guarantees while minimizing unnecessary invalidation.</p>
+
+</section>
+<section id="tlb-reach-and-page-size-trade-offs" aria-labelledby="heading-tlb-reach-and-page-size-trade-offs">
+<h2 id="heading-tlb-reach-and-page-size-trade-offs">TLB Reach and Page-Size Trade-Offs</h2>
+<p><strong>TLB reach</strong> is the amount of virtual memory that a collection of TLB entries can map at once, ignoring complications such as separate page-size partitions and mapping overlap. With 64 entries of 4 KiB pages, a simple full-occupancy reach is <code>64 × 4096 = 262144 bytes = 256 KiB</code>. If 64 entries instead represent 2 MiB pages, the nominal coverage is <code>128 MiB</code>. Larger pages can therefore reduce mapping churn for large working sets, although they can increase memory-fragmentation costs, page-management complexity, and wasted space.</p>
+<p>Real processors may use different entry counts and structures for different page sizes. It is unsafe to multiply the published count for 4 KiB mappings by the size of a huge page unless the product documentation says those entries can cover that page size. Mixed sizes also complicate replacement, overlap and lookup priority. Page sizes are an ISA/OS mapping property, while TLB entry arrangement is a microarchitectural implementation choice.</p>
+<table>
+<thead>
+<tr>
+  <th>Model configuration</th>
+  <th style="text-align:right">Simple reachable bytes</th>
+  <th>Important qualification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>32 entries × 4 KiB</td>
+  <td style="text-align:right">128 KiB</td>
+  <td>Ignores conflicts and other page sizes</td>
+</tr>
+<tr>
+  <td>64 entries × 4 KiB</td>
+  <td style="text-align:right">256 KiB</td>
+  <td>Capacity alone does not predict hit rate</td>
+</tr>
+<tr>
+  <td>128 entries × 4 KiB</td>
+  <td style="text-align:right">512 KiB</td>
+  <td>Effective reach depends on locality</td>
+</tr>
+<tr>
+  <td>64 entries × 2 MiB</td>
+  <td style="text-align:right">128 MiB</td>
+  <td>Assumes all entries support this page size</td>
+</tr>
+<tr>
+  <td>32 entries × 1 GiB</td>
+  <td style="text-align:right">32 GiB</td>
+  <td>Sparse mappings and OS policy may limit usefulness</td>
+</tr>
+</tbody>
+</table>
+<p>Reach is a useful planning measure, not a throughput claim. A sequential scan might have a predictable TLB miss rhythm even when its working set exceeds reach, while irregular pointer access can suffer much higher translation pressure and poor locality.</p>
+
+</section>
+<section id="page-tables-and-multi-level-translation-structures" aria-labelledby="heading-page-tables-and-multi-level-translation-structures">
+<h2 id="heading-page-tables-and-multi-level-translation-structures">Page Tables and Multi-Level Translation Structures</h2>
+<p>A <strong>page table</strong> records mapping and access-control information in a memory-resident structure governed by the ISA and operating system. A simple flat array indexed by every possible virtual page would be unwieldy for large sparse address spaces. Modern paged systems commonly use <strong>multiple page-table levels</strong>, allowing high-level entries to point to lower-level tables and leaving large unmapped regions without allocating lower-level tables. Intermediate entries describe traversal; leaf entries determine a mapped page or larger block and its associated attributes.</p>
+<p>A page-table walk begins from an architecturally defined root or translation base. The walker extracts successive portions of the virtual page number, reads the entry at each level, validates entry format and access conditions, and either continues to a lower-level table or reaches a suitable leaf. A failed walk can indicate an unmapped page, prohibited access, invalid descriptor, or another architecture-defined exception. In many implementations, page-table entries are ordinary memory data fetched through the processor's cache/memory system, so the walk may profit from cached page-table lines.</p>
+<p>The number of levels is not an intrinsic consequence of “64-bit CPU.” It depends on the active translation mode and page size. A larger mapped page may terminate the walk at a higher level, bypassing some lower-level lookups. Page-table organizations, bitfields, fault conditions, and root registers differ among x86, Arm, and RISC-V; the article uses RISC-V Sv39 as an explicit example rather than presenting its bit layout as universal.</p>
+
+</section>
+<section id="risc-v-sv39-as-a-concrete-page-walk-example" aria-labelledby="heading-risc-v-sv39-as-a-concrete-page-walk-example">
+<h2 id="heading-risc-v-sv39-as-a-concrete-page-walk-example">RISC-V Sv39 as a Concrete Page-Walk Example</h2>
+<p>In the standard RISC-V <strong>Sv39</strong> translation scheme, a supported virtual address uses a 39-bit virtual-address form with a canonical sign-extension rule for higher bits of the nominal 64-bit address. With 4 KiB pages, the address contains a <strong>12-bit page offset</strong> and three <strong>9-bit virtual page number fields</strong> often labeled <code>VPN[2]</code>, <code>VPN[1]</code>, and <code>VPN[0]</code>. A typical three-level walk uses the top VPN field at the root, then the middle field, then the lowest field. The relevant page-table entries are 8 bytes under this scheme. These structural facts come from the RISC-V privileged architecture specification.</p>
+<p>RISC-V page-table entries include validity and read/write/execute/privilege fields, along with state used for accessed/dirty tracking and physical page numbering. A nonleaf entry directs the walk to another table; an eligible leaf provides the final mapping. Depending on the level where a leaf is encountered, Sv39 can map a <strong>4 KiB page, 2 MiB megapage, or 1 GiB gigapage</strong>, subject to alignment and validity requirements. A misaligned superpage mapping is not a legal shortcut; the specification defines the corresponding fault behavior.</p>
+<table>
+<thead>
+<tr>
+  <th>Sv39 field</th>
+  <th style="text-align:right">Size</th>
+  <th>Role in a 4 KiB mapping</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>VPN[2]</code></td>
+  <td style="text-align:right">9 bits</td>
+  <td>Selects root-level PTE</td>
+</tr>
+<tr>
+  <td><code>VPN[1]</code></td>
+  <td style="text-align:right">9 bits</td>
+  <td>Selects middle-level PTE</td>
+</tr>
+<tr>
+  <td><code>VPN[0]</code></td>
+  <td style="text-align:right">9 bits</td>
+  <td>Selects lowest-level PTE</td>
+</tr>
+<tr>
+  <td>Page offset</td>
+  <td style="text-align:right">12 bits</td>
+  <td>Selects byte inside mapped page</td>
+</tr>
+<tr>
+  <td>PTE size</td>
+  <td style="text-align:right">8 bytes</td>
+  <td>Determines index stride within page table</td>
+</tr>
+<tr>
+  <td>Entries per 4 KiB table</td>
+  <td style="text-align:right">512</td>
+  <td><code>4096 / 8</code></td>
+</tr>
+</tbody>
+</table>
+<p>Sv39 is particularly valuable for teaching because the arithmetic is transparent: <code>9+9+9+12=39</code>. The general concept carries over to other paged systems, but the numerical field sizes and leaf rules must be rederived from their own ISA references.</p>
+
+</section>
+<section id="page-walk-engines-and-the-translation-miss-path" aria-labelledby="heading-page-walk-engines-and-the-translation-miss-path">
+<h2 id="heading-page-walk-engines-and-the-translation-miss-path">Page-Walk Engines and the Translation Miss Path</h2>
+<p>A <strong>hardware page-table walker</strong> is a microarchitectural engine that carries out the ISA's translation algorithm when a relevant translation cache cannot satisfy an access. It receives the virtual address and access context, identifies the appropriate root and translation stage, and issues requests for successive page-table entries. Some CPUs use dedicated walker engines; some architectures or configurations can use software-managed TLB refill or software-mediated translation. “TLB miss” therefore names a lookup failure, not one immutable recovery mechanism.</p>
+<p>A walk can become dependent on its own earlier reads: the physical address of the next-level table is encoded in the previous-level entry. This produces a chain of pointer-dependent memory requests. However, if intermediate page-table descriptors are cached in specialized walk caches or ordinary data caches, some steps may complete quickly without reaching DRAM. Multiple independent walks can also be outstanding, subject to walker and memory-system resources. A diagram showing four sequential levels is a dependency description, not a guarantee of four full DRAM round trips.</p>
+<p>A walker must cope with a mapping that changes while translation is in progress. Hardware and operating-system invalidation rules determine what is allowed, which values may be cached, and how synchronization is achieved. On success, the translation may populate a TLB or related structure; on failure, the access must carry an appropriate exception or retry outcome. A walk for a speculative instruction may be discarded after a wrong-path flush, but the implementation must still obey rules governing speculative translation side effects and page-table state.</p>
+
+</section>
+<section id="walk-caches-pte-locality-and-translation-refill" aria-labelledby="heading-walk-caches-pte-locality-and-translation-refill">
+<h2 id="heading-walk-caches-pte-locality-and-translation-refill">Walk Caches, PTE Locality, and Translation Refill</h2>
+<p>Page-table memory references exhibit locality of their own. Many nearby virtual pages share one or more higher-level table entries. A <strong>page-walk cache</strong> or related intermediate-translation cache can retain those nonleaf lookup results so subsequent walks avoid fetching the same upper-level entries repeatedly. Ordinary L1/L2/L3 caches can also hold the cache lines containing page-table entries. These optimizations do not change the virtual-to-physical mapping; they reduce the number and latency of memory requests needed to rediscover it.</p>
+<p>Imagine a process scans 4 KiB pages within a contiguous 2 MiB virtual region. Under the illustrative Sv39 arrangement, the same higher-level entries can be used for many of those pages, although the lowest-level leaf entry changes. The walker might obtain the needed upper-level information from a walk cache and fetch only the leaf entry from a data-cache-resident page-table line. In a less favorable pattern that visits unrelated regions, upper levels may miss too. The cost of one TLB miss is therefore highly dependent on page-table locality, not just nominal depth.</p>
+<p>Translation-refill behavior must be measured rather than inferred from the count of memory levels in a diagram. A lower-level TLB hit, walker-cache hit, or cached PTE can sharply reduce latency; concurrent activity may hide some of the remaining cost. Conversely, saturated memory bandwidth or a queue full of outstanding walk requests can make a seemingly modest translation-miss count expensive. The upcoming article on cache-access overlap owns detailed memory-response mechanisms, while this one owns the distinct traffic generated by translation.</p>
+
+</section>
+<section id="permissions-access-attributes-and-protection-checks" aria-labelledby="heading-permissions-access-attributes-and-protection-checks">
+<h2 id="heading-permissions-access-attributes-and-protection-checks">Permissions, Access Attributes, and Protection Checks</h2>
+<p>A translation does more than convert one address number into another. It supplies attributes needed to judge whether the requesting instruction may perform a read, write, or instruction fetch in its current privilege and translation context. Common categories include readable/writable/executable mappings, user versus supervisor accessibility, memory type and cacheability, and sometimes additional protections or keys. Exactly which fields exist and where they are checked depends on the ISA, hardware stage, and privileged operating-system configuration.</p>
+<p>The processor must enforce access permissions even on fast TLB hits. A cached frame number without valid permission metadata cannot authorize an access. Similarly, the instruction-fetch pipeline needs execute permission rather than assuming that any readable page contains executable instructions. A write may require a dirty-bit transition or other hardware/OS coordination before it is allowed. The result of a failed check is an ISA-defined fault; it is not just a slower translation.</p>
+<p>Some memory types have strict ordering or side-effect constraints. A device-register load must not be treated like a harmless cacheable RAM read solely because its address was translated successfully. Translation resolves routing and attributes, but the load-store subsystem, memory-ordering logic, and device interface still decide how the transaction may execute. This is the central reason the AGU, TLB, and page walker are integrated with exception, privilege, and memory-type logic rather than isolated arithmetic accelerators.</p>
+
+</section>
+<section id="accessed-and-dirty-state-in-page-table-entries" aria-labelledby="heading-accessed-and-dirty-state-in-page-table-entries">
+<h2 id="heading-accessed-and-dirty-state-in-page-table-entries">Accessed and Dirty State in Page-Table Entries</h2>
+<p>Some paging architectures record whether a page has been <strong>accessed</strong> and whether it has been <strong>written</strong>. These bits help operating systems make paging decisions, but the mechanism used to set them varies. An implementation may perform hardware-assisted updates, raise an exception for software handling, or use architecture-specific alternatives. It is incorrect to assert that every translation walk always writes an accessed bit, or that no translation lookup can update memory state.</p>
+<p>In RISC-V, the privileged specification defines accessed/dirty semantics and permitted behavior under relevant extensions and configurations. Implementations can differ in when an A-bit update becomes visible relative to speculative work, and the architecture distinguishes that from the permitted behavior for dirty-bit updates. Those details matter for precise exceptions and for software relying on the state, so advanced readers must consult the versioned privileged specification before implementing operating-system page-table management.</p>
+<p>Page-table metadata is shared between software and hardware and can involve synchronization. Updating a descriptor while another core is translating the same page risks stale or conflicting observations unless the ISA's ordering and invalidation sequence is followed. Atomicity requirements for descriptor accesses may also matter. The hardware page walker is consequently part of a contract for privileged state, not just a performance optimization that may ignore descriptor validity.</p>
+
+</section>
+<section id="tlb-misses-page-faults-and-cache-misses-compared" aria-labelledby="heading-tlb-misses-page-faults-and-cache-misses-compared">
+<h2 id="heading-tlb-misses-page-faults-and-cache-misses-compared">TLB Misses, Page Faults, and Cache Misses Compared</h2>
+<p>The terminology matters in incident diagnosis. A <strong>TLB miss</strong> means no suitable entry was found in a particular translation cache; it can be repaired by a lower-level TLB or page walk without the application noticing. A <strong>page fault</strong> generally means the architecture's translation/protection procedure could not authorize the access under the current mapping; the operating system may install a missing page, correct permissions under its rules, or report the failure. A <strong>data-cache miss</strong> means the requested cache line was not present in the queried cache; it can happen after a successful translation. An <strong>access fault</strong> may describe another class of rejected access, for example because of physical memory protection or memory-system errors, as defined by the relevant ISA.</p>
+<table>
+<thead>
+<tr>
+  <th>Event</th>
+  <th>Where discovered</th>
+  <th>Usual consequence</th>
+  <th>Necessarily traps to OS?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>L1 dTLB miss, lower TLB hit</td>
+  <td>Translation-cache hierarchy</td>
+  <td>Fill/use mapping with added latency</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>Full translation miss, valid PTEs</td>
+  <td>Hardware walker or refill handler</td>
+  <td>Page-table lookup and mapping refill</td>
+  <td>Not on hardware-refill designs</td>
+</tr>
+<tr>
+  <td>Missing mapping or denied permission</td>
+  <td>Translation/protection logic</td>
+  <td>Architecturally defined fault</td>
+  <td>May invoke privileged handler</td>
+</tr>
+<tr>
+  <td>Data-cache miss</td>
+  <td>Data-cache hierarchy</td>
+  <td>Fetch relevant line from lower level or memory</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>Cache-line split</td>
+  <td>Data access pipeline</td>
+  <td>Possibly multiple subaccesses</td>
+  <td>No, absent separate fault condition</td>
+</tr>
+<tr>
+  <td>Memory-order violation</td>
+  <td>Load/store control</td>
+  <td>Replay or squash</td>
+  <td>Generally internal recovery</td>
+</tr>
+</tbody>
+</table>
+<p>A user observing a high OS page-fault count should not assume the same count of TLB misses, and vice versa. Likewise, a page walk can read page-table data from ordinary cache without causing a physical DRAM access. Measurements must identify which event or derived metric they represent, whether it counts occurrences or cycles, and how simultaneous memory requests are attributed.</p>
+
+</section>
+<section id="precise-exceptions-speculative-translations-and-recovery" aria-labelledby="heading-precise-exceptions-speculative-translations-and-recovery">
+<h2 id="heading-precise-exceptions-speculative-translations-and-recovery">Precise Exceptions, Speculative Translations, and Recovery</h2>
+<p>Modern out-of-order cores may begin translation before an instruction is certain to retire. They must still produce the correct <strong>architectural exception sequence</strong>. A younger speculative load can discover a missing mapping, but if an older branch resolves differently, that load may be squashed and must not deliver an architectural page fault. Typically, the load's fault status travels with the in-flight instruction until it becomes eligible for precise retirement. Specific implementations may delay, cancel, or replay parts of translation to maintain the ISA contract.</p>
+<p>Wrong-path translation can create transient microarchitectural activity: TLB accesses, page-table cache reads, or cache effects from walker memory requests. Those effects are not necessarily undone by branch recovery. This distinction has security significance, but the architectural rule remains that discarded instructions cannot commit invalid program-visible results or unintended device side effects. Mitigations, barriers, privilege boundaries, and implementation-specific restrictions are treated in the separate side-channel specialist article.</p>
+<p>When a translation fault is genuine and reaches the proper retirement point, the processor must present the faulting instruction and fault metadata according to its ISA. The OS may then update page tables, provision a page, or reject the access. On restart, the instruction may be reexecuted after the mapping is repaired. A one-cycle TLB miss, a several-cache-access page walk, and a kernel page-fault handler therefore differ by orders of conceptual complexity even if an end-user program ultimately observes only a slower load.</p>
+
+</section>
+<section id="translation-invalidation-shootdowns-and-coherence" aria-labelledby="heading-translation-invalidation-shootdowns-and-coherence">
+<h2 id="heading-translation-invalidation-shootdowns-and-coherence">Translation Invalidation, Shootdowns, and Coherence</h2>
+<p>A page-table update in memory does not automatically guarantee that every processor will immediately discard a previously cached translation. The system must follow architecture-defined <strong>translation invalidation</strong> and synchronization rules. Typical examples include targeted address-space invalidations, page-specific operations, or broader flushes, with precise semantics differing among x86, Arm, and RISC-V. A <strong>TLB shootdown</strong> is the operating-system coordination often needed when one core's mapping change requires other cores to invalidate relevant translations.</p>
+<p>A shootdown can require interprocessor communication, remote invalidation, ordering, and acknowledgement before a page or physical frame can safely be repurposed. The costs may be much larger than a local lookup. Systems that modify mappings very frequently can incur substantial coherence-management overhead even when the actual application load/store working set is small. Tags such as ASIDs can reduce unnecessary flushes, but they do not eliminate the obligation to invalidate genuinely stale entries.</p>
+<p>For RISC-V systems, <code>SFENCE.VMA</code> provides a defined local synchronization/invalidation mechanism for address-translation state, with software protocols needed to coordinate remote harts as appropriate. Its details depend on operands, translation state, and privilege support. Arm and x86 provide different named instructions and ordering sequences. An educational microarchitecture account should present these as examples of the same systems problem, not as interchangeable instruction mnemonics.</p>
+
+</section>
+<section id="context-switches-shared-address-spaces-and-global-mappings" aria-labelledby="heading-context-switches-shared-address-spaces-and-global-mappings">
+<h2 id="heading-context-switches-shared-address-spaces-and-global-mappings">Context Switches, Shared Address Spaces, and Global Mappings</h2>
+<p>When software switches between execution contexts, the translation context may change as well. If the new context uses a different page-table root, existing TLB entries may need to be discriminated by context tag or invalidated. Tagged translation entries can remain resident and be reused when the scheduler returns to an earlier address space, helping workloads that alternate frequently between processes. The benefit depends on tag capacity, TLB capacity, replacement behavior, and whether kernel or runtime activity causes additional mapping changes.</p>
+<p>Thread switches within one process often retain the same user-space mapping, but privileged transitions and per-thread attributes can still matter. Shared-memory regions may appear at different virtual addresses in different processes while referring to the same physical pages. Conversely, identical virtual addresses in two processes may map to unrelated frames. The TLB must follow the architecture's address-space identity and permission rules rather than rely on virtual address alone.</p>
+<p>Some kernel mappings are architecturally eligible for global treatment, allowing them to survive specified context changes. The OS must ensure that such mappings really have the scope claimed by their tags. Aggressive mapping retention can help instruction-fetch and data translation, but stale entries undermine isolation. The performance-versus-correctness trade-off is resolved by the ISA's invalidation protocol, not by omitting shootdowns for convenience.</p>
+
+</section>
+<section id="large-pages-contiguous-regions-and-fragmentation-costs" aria-labelledby="heading-large-pages-contiguous-regions-and-fragmentation-costs">
+<h2 id="heading-large-pages-contiguous-regions-and-fragmentation-costs">Large Pages, Contiguous Regions, and Fragmentation Costs</h2>
+<p>Large pages reduce the number of TLB entries needed to represent a given memory range and may shorten page-table walks by terminating at higher levels. For example, covering 64 MiB with 4 KiB mappings requires <code>64 MiB / 4 KiB = 16,384</code> page mappings, while 2 MiB mappings need only 32 page mappings, assuming the address region and allocations satisfy all alignment and mapping requirements. The smaller translation footprint can be valuable for databases, large in-memory arrays, virtualization, and certain code layouts.</p>
+<p>However, physical memory must be available in appropriately aligned extents, and an oversized page may tie together objects that should have different permissions or lifetimes. Internal fragmentation, memory compaction, copy-on-write behavior, demand paging, protection granularity, and migration costs can offset translation savings. Page promotion and demotion also have operating-system overhead. Large pages are therefore not universally superior to base pages.</p>
+<p>The amount of effective performance gain depends on how often a workload misses in translation caches and how costly those misses are. If the active virtual pages already fit in the TLB hierarchy, larger pages may bring little direct benefit. In cases dominated by serial pointer chasing or long-latency data-cache misses, translation improvements can still matter, but the end-to-end speedup will be bounded by the fraction of time actually lost to translation.</p>
+
+</section>
+<section id="page-crossing-accesses-and-partial-translation" aria-labelledby="heading-page-crossing-accesses-and-partial-translation">
+<h2 id="heading-page-crossing-accesses-and-partial-translation">Page-Crossing Accesses and Partial Translation</h2>
+<p>A single architectural load or store can span two pages. A 16-byte load starting six bytes before a 4 KiB page boundary requires bytes from both mappings. The processor may break the operation into subaccesses, look up both translations, check permissions independently, and merge the returned bytes into one logical result. If the second page is unmapped, the architectural outcome must follow the ISA's fault rules even if the first page is present and its data is already in cache.</p>
+<p>Partial execution can be especially sensitive for stores, atomic operations, and strongly ordered device memory, because a partial external effect might not be recoverable. Architectures impose specific atomicity, alignment, and memory-type constraints; one should not assume that all split stores are automatically atomic across pages or cache lines. The hardware may implement extra checking or a slower fallback path to avoid incorrect partial results.</p>
+<p>The engineering point is that <strong>one memory instruction is not always one translation or one cache access</strong>. A high average TLB hit rate does not prove that every wide vector or misaligned scalar reference is easy. Page boundaries, cache-line boundaries, instruction access size, and ISA rules jointly determine the necessary work. Effective-address generation computes the request start; the rest of the memory pipeline ensures that the complete requested byte range is legal and correctly served.</p>
+
+</section>
+<section id="virtual-indexing-and-physically-tagged-cache-access" aria-labelledby="heading-virtual-indexing-and-physically-tagged-cache-access">
+<h2 id="heading-virtual-indexing-and-physically-tagged-cache-access">Virtual Indexing and Physically Tagged Cache Access</h2>
+<p>Some data-cache designs use <strong>virtually indexed, physically tagged (VIPT)</strong> access: page-offset bits can select a cache set while translation supplies physical tag information needed for an authoritative hit check. When the index derives entirely from bits that remain unchanged by translation, the processor can begin cache lookup before the TLB's translated physical frame is fully known. This can shorten the combined hit path. The technique is an implementation option, not a requirement for a correct cache.</p>
+<p>For a simple 4 KiB-page, 64-byte-line cache, the six lowest address bits select the byte position within a line. The other six low page-offset bits can supply up to 64 straightforward set indices without depending on the translated physical page. A four-way cache using 64 sets and 64-byte lines would have <code>64 × 4 × 64 = 16 KiB</code> of data storage in this illustrative geometry. Larger VIPT designs may use additional strategies, page coloring, or handle synonyms in other ways. The cache is physically tagged, so virtual synonyms cannot simply be treated as distinct physical data copies without coherence implications.</p>
+<p>The word <strong>VIPT</strong> refers to indexing and tag design, not to the location of the page tables or the physical page size by itself. It is also distinct from VIVT (virtually indexed, virtually tagged) and PIPT (physically indexed, physically tagged). Each design has trade-offs involving TLB timing, homonyms, synonyms, context tags, and invalidation. For this unit the important issue is how translation and core-facing cache work can overlap safely.</p>
+
+</section>
+<section id="translation-traffic-competing-with-data-accesses" aria-labelledby="heading-translation-traffic-competing-with-data-accesses">
+<h2 id="heading-translation-traffic-competing-with-data-accesses">Translation Traffic Competing With Data Accesses</h2>
+<p>A page walk reads translation metadata through the memory subsystem. Those reads can consume cache capacity, memory-request queues, interconnect bandwidth, page-walker slots, and ultimately DRAM bandwidth when page-table lines are not cached. Consequently, frequent TLB misses can degrade the performance of ordinary loads and stores even before the direct translation delay is counted. The translation metadata and the application's data may contend for the same physical memory resources.</p>
+<p>Suppose two workloads issue an equal number of cacheable data loads. Workload A repeatedly touches a compact set of virtual pages and obtains nearly all translations from its dTLB. Workload B visits many unrelated pages, forcing frequent walks whose leaf and intermediate table entries are poorly cached. B generates more physical memory traffic for <strong>metadata</strong> as well as for the requested data. On a shared server, those extra reads may also slow unrelated threads competing for memory-system capacity.</p>
+<table>
+<thead>
+<tr>
+  <th>Shared resource</th>
+  <th>How walks can consume it</th>
+  <th>Symptom to investigate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Page-walker engines</td>
+  <td>Multiple outstanding translation misses occupy slots</td>
+  <td>Long pending-walk queues</td>
+</tr>
+<tr>
+  <td>Last-level or lower caches</td>
+  <td>Page-table lines compete for capacity and bandwidth</td>
+  <td>Data hit-rate changes under TLB-heavy load</td>
+</tr>
+<tr>
+  <td>Miss/fill queues</td>
+  <td>PTE fetches use request-tracking capacity</td>
+  <td>Additional delay for independent loads</td>
+</tr>
+<tr>
+  <td>Interconnect or memory controller</td>
+  <td>Page-table fetches consume bandwidth</td>
+  <td>Latency increase with simultaneous demand traffic</td>
+</tr>
+<tr>
+  <td>Reorder/load queues</td>
+  <td>Loads blocked on translation remain in flight</td>
+  <td>Head-of-line retirement stalls</td>
+</tr>
+</tbody>
+</table>
+<p>This effect can be hidden when page walks overlap with independent useful work. It can become dominant when all outstanding loads depend on missing translations or when demand traffic and translation traffic saturate the same interface. Diagnosing it requires event attribution, not the assumption that every walk equals a fixed number of uncontested DRAM reads.</p>
+
+</section>
+<section id="page-walk-concurrency-walk-latency-and-backpressure" aria-labelledby="heading-page-walk-concurrency-walk-latency-and-backpressure">
+<h2 id="heading-page-walk-concurrency-walk-latency-and-backpressure">Page-Walk Concurrency, Walk Latency, and Backpressure</h2>
+<p>A single page-table walk has a dependency chain from one page-table level to the next. A processor may nevertheless support several different translations in flight. If multiple loads miss in the dTLB to unrelated virtual pages, independent walkers or walker slots can overlap their memory requests. The effective throughput depends on outstanding-walk limits, cache hit rates for PTEs, port bandwidth, scheduler policy, and the number of page-table levels actually traversed.</p>
+<p>A machine might encounter a burst of TLB misses faster than its page-walk engines can process them. Pending requests then accumulate, and issue or translation pipelines may apply <strong>backpressure</strong>. Some architectures use shared walk machinery for instruction and data translation; others partition capacity. Additional walkers consume area and power, and they may increase contention in the cache or memory hierarchy rather than reducing total delay under bandwidth saturation.</p>
+<p>It is therefore essential to distinguish <strong>walk latency</strong> (time for one walk), <strong>walk throughput</strong> (rate of completed translations), <strong>outstanding walk count</strong>, and <strong>translation stall cycles</strong> (time during which the workload cannot make needed progress). A design with four simultaneous walkers does not make one dependent three-level walk four times faster. It can, however, overlap several independent misses, subject to resource limits. This mirrors the distinction between instruction latency and throughput discussed elsewhere in the Microarchitecture unit.</p>
+
+</section>
+<section id="virtualization-and-two-stage-address-translation" aria-labelledby="heading-virtualization-and-two-stage-address-translation">
+<h2 id="heading-virtualization-and-two-stage-address-translation">Virtualization and Two-Stage Address Translation</h2>
+<p>Virtual machines often require more than one address-translation stage. One stage maps a guest virtual address to a guest physical or intermediate physical address; another stage maps that intermediate address to a host physical address. Arm describes stage-1 and stage-2 translations in its architecture, while RISC-V virtualization and x86 virtualization provide corresponding mechanisms with different terminology. The hypervisor manages the host mapping context and may cooperate with the guest OS's page tables.</p>
+<p><strong>Nested translation</strong> can increase the cost of a miss because reading a guest page-table entry may itself require a second-stage translation of the address at which that page table resides. Naïvely multiplying the two page-table depths is an upper-bound style mental model for some reference paths, not a universal count of full memory accesses: translation caches, intermediate-state caching, shared upper levels, and specialized walkers often avoid repeated work. Some implementations cache combined guest-to-host mappings to make subsequent accesses fast.</p>
+<p>Two-stage faults must also be distinguished. A guest page fault may be handled according to the guest OS's own mapping obligations, while a second-stage fault can require hypervisor handling. Their meaning and reporting depend on the ISA virtualization architecture. Hardware may support context identifiers associated with both stages and targeted invalidation operations. These mechanisms reinforce that “virtual address to physical address” can be a sequence of guarded translations, not always one lookup.</p>
+
+</section>
+<section id="iommus-and-device-translation-a-deliberate-boundary" aria-labelledby="heading-iommus-and-device-translation-a-deliberate-boundary">
+<h2 id="heading-iommus-and-device-translation-a-deliberate-boundary">IOMMUs and Device Translation: A Deliberate Boundary</h2>
+<p>An <strong>input/output memory-management unit (IOMMU)</strong> applies translation and isolation rules to requests made by devices, commonly including direct memory access. Its purpose overlaps with CPU address translation at the conceptual level, but the initiator, address spaces, caching structures, and fault-reporting paths can differ. A device might use an I/O virtual address mapped by the IOMMU rather than directly supplying the physical address of a buffer. This helps enforce isolation even when the device can initiate memory transactions independently.</p>
+<p>This Microarchitecture article primarily covers translations inside a <strong>CPU execution path</strong>, not a full treatment of device page tables, address-translation services, or IOMMU queue operations. The related Bus Systems article on device security addresses DMA permissions and bus-level trust boundaries. A reader should not assume that a CPU's L1 dTLB protects against arbitrary DMA: device accesses need their own enforced translation or isolation boundary.</p>
+<p>Nonetheless, device translations may compete indirectly for system resources, because page-table reads and DMA data transfers share caches, memory channels, or interconnects on some platforms. System-level measurements must identify the request origin before attributing translation stalls to the CPU's AGU or TLB. This becomes important in heterogeneous systems containing CPUs, GPUs, accelerators, and multiple address-translation agents.</p>
+
+</section>
+<section id="translation-performance-models-and-the-limits-of-cpi-arithmetic" aria-labelledby="heading-translation-performance-models-and-the-limits-of-cpi-arithmetic">
+<h2 id="heading-translation-performance-models-and-the-limits-of-cpi-arithmetic">Translation Performance Models and the Limits of CPI Arithmetic</h2>
+<p>A simple analytical model separates translation lookup probability from miss cost. For a workload with <code>m</code> <strong>demand data accesses per retired instruction</strong>, a TLB miss rate <code>q</code> <strong>per demand data access</strong>, and an average additional uncovered miss penalty <code>p</code> cycles, a first approximation is <code>translation CPI ≈ m × q × p</code>. This assumes the misses contribute independent, fully exposed delays. In a real out-of-order machine, simultaneous walks and other cache stalls overlap; adding independent CPI penalties can double-count the same cycles.</p>
+<p>For illustration, suppose a program retires one instruction per cycle in a baseline simplified model, performs <code>0.35</code> demand data accesses per instruction, incurs a 2% dTLB miss rate, and loses an average of 18 non-overlapped cycles for each miss. Then the added translation CPI estimate is <code>0.35 × 0.02 × 18 = 0.126</code>. An alternative machine with 0.5% misses at the same uncovered cost yields <code>0.0315</code>. These results are hypothetical and should not be taken as measured processor specifications.</p>
+<table>
+<thead>
+<tr>
+  <th>Input</th>
+  <th style="text-align:right">Example A</th>
+  <th style="text-align:right">Example B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Demand data accesses/instruction</td>
+  <td style="text-align:right">0.35</td>
+  <td style="text-align:right">0.35</td>
+</tr>
+<tr>
+  <td>TLB miss rate/access</td>
+  <td style="text-align:right">0.020</td>
+  <td style="text-align:right">0.005</td>
+</tr>
+<tr>
+  <td>Uncovered cycles per miss</td>
+  <td style="text-align:right">18</td>
+  <td style="text-align:right">18</td>
+</tr>
+<tr>
+  <td>Simplified translation CPI cost</td>
+  <td style="text-align:right">0.126</td>
+  <td style="text-align:right">0.0315</td>
+</tr>
+</tbody>
+</table>
+<p>What matters for performance is the fraction of execution that was actually delayed by translation. Even an enormous increase in nominal TLB reach produces limited speedup if useful computation, register dependencies, or data-miss latency dominates. Record miss <em>events</em> and delayed <em>cycles</em> separately. For a real machine, use validated counter semantics and controlled experiments rather than presenting the approximation as an exact additive decomposition.</p>
+
+</section>
+<section id="translation-locality-working-sets-and-access-patterns" aria-labelledby="heading-translation-locality-working-sets-and-access-patterns">
+<h2 id="heading-translation-locality-working-sets-and-access-patterns">Translation Locality, Working Sets, and Access Patterns</h2>
+<p>A <strong>translation working set</strong> is the collection of virtual pages repeatedly accessed during an interval. Its size, access frequency, and locality influence TLB behavior. A loop over a compact array often revisits the same pages, creating strong reuse even if the individual bytes change. A loop chasing pointers through many randomly selected pages may access each page rarely and suffer frequent TLB misses. A large program can have a small active translation footprint, while a smaller data structure can behave badly if each lookup jumps to a new page.</p>
+<p>Suppose 100,000 records are densely packed into 4 KiB pages, with roughly 40 records per page. A full sequential pass visits about 2,500 pages. A different layout dedicating one page to each record visits 100,000 mappings and may consume much more page-table/cache capacity. The actual comparison depends on record size, alignment, software allocation, and processor caching. <strong>Reducing the number of touched pages</strong> can improve translation behavior independently of reducing the number of bytes read, but it may have trade-offs in allocation complexity or concurrent access patterns.</p>
+<p>Page placement, array-of-structures versus structure-of-arrays layouts, large page eligibility, and scheduling across NUMA nodes can affect observed performance, but not solely through the TLB. Cache-line locality, memory bandwidth, and remote memory access costs may change at the same time. A rigorous experiment isolates page size or layout as much as possible and checks that the measured improvement is actually associated with reduced translation stalls rather than an unrelated change in data-cache behavior.</p>
+
+</section>
+<section id="translation-security-isolation-and-side-channel-boundaries" aria-labelledby="heading-translation-security-isolation-and-side-channel-boundaries">
+<h2 id="heading-translation-security-isolation-and-side-channel-boundaries">Translation Security, Isolation, and Side-Channel Boundaries</h2>
+<p>Address translation underpins process isolation: the processor must not interpret a privileged page as accessible simply because a stale or mismatched TLB entry is present. Validity and permission checks, context identifiers, shootdowns, and privilege-state transitions are part of the trusted boundary. Separately, modern processors may have speculative execution paths that leave measurable microarchitectural effects without committing architectural data. Translation and cache timing can be part of such phenomena.</p>
+<p>The security lesson is not that a TLB hit is inherently unsafe. It is that caching <strong>protected metadata</strong> requires correct tags, invalidation, permission enforcement, and a defensible interaction with speculative work. Hardware and software mitigations depend on the specific vulnerability, ISA, and processor generation; no one barrier or invalidation instruction solves every transient-execution scenario. A precise discussion separates architectural permission violations from timing leakage and refuses to infer a security property merely from advertised page-size or TLB capacity.</p>
+<p>For defensive investigation, review whether page-table updates use the architecture-prescribed synchronization sequence, whether address-space identifiers are recycled correctly, whether device DMA has a separate isolation policy, and whether performance counters suggest excessive translation activity. Security assertions should be grounded in vendor advisories and tested configurations, not assumptions about anonymous microarchitectural internals. The dedicated <a href="%7BUNIT%7D/microarchitectural-side-channels-and-mitigations">Microarchitectural Side Channels and Mitigations</a> article owns the broader threat landscape.</p>
+
+</section>
+<section id="profiling-translation-bottlenecks-and-attribution" aria-labelledby="heading-profiling-translation-bottlenecks-and-attribution">
+<h2 id="heading-profiling-translation-bottlenecks-and-attribution">Profiling Translation Bottlenecks and Attribution</h2>
+<p>A useful profiling investigation starts with a workload symptom: unexpectedly high cycles per instruction, low memory-operation throughput, instruction-fetch stalls, or a sensitive response to page size. Inspect the available architecture-specific performance counters to separate first-level TLB misses, lower-level translation-cache hits, completed page walks, cycles with walks pending, and the actual fraction of execution stalled. Counters may be sampled, aggregated, approximate, or multiplexed; their definitions need to be read for the tested processor.</p>
+<p>Intel VTune's CPU Metrics Reference, for example, distinguishes <strong>ITLB Overhead</strong>, <strong>DTLB Overhead</strong>, and broader <strong>Page Walk</strong> metrics. Its language cautions that first-level TLB-miss effects can include hits in a second-level TLB as well as walks. The existence of a “DTLB miss” is therefore not proof that a full page-table walk occurred. Arm platform monitors and RISC-V implementations expose different event sets and often different counter names, so a profiler must map measured events to the actual design.</p>
+<p>A strong experiment collects instruction counts, demand access counts if available, TLB miss and walk statistics, page-fault counts, page sizes, data-cache misses, bandwidth, and elapsed cycles. Then vary one feature—such as data layout, page size, or working-set scale—and rerun under comparable conditions. The goal is to determine if a reduction in translation events corresponded to a meaningful reduction in <strong>critical-path delay</strong> rather than merely reducing background walker work that was already hidden by other execution.</p>
+
+</section>
+<section id="architecture-and-implementation-comparison" aria-labelledby="heading-architecture-and-implementation-comparison">
+<h2 id="heading-architecture-and-implementation-comparison">Architecture and Implementation Comparison</h2>
+<p>Different ISAs establish different translation contracts, and processors implementing the same ISA can still use different microarchitectural TLBs and walkers. The following table is deliberately conceptual and avoids attributing a particular cache size or walker count to an entire ISA family.</p>
+<table>
+<thead>
+<tr>
+  <th>Topic</th>
+  <th>x86-64 (representative paged systems)</th>
+  <th>AArch64 (representative Arm systems)</th>
+  <th>RISC-V Sv39 example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Architectural translation context</td>
+  <td>Paging structures, optional PCID context</td>
+  <td>Translation table bases, ASID and privilege context</td>
+  <td><code>satp</code> root/mode and ASID in applicable configurations</td>
+</tr>
+<tr>
+  <td>Representative page sizes</td>
+  <td>Multiple page sizes, configuration-dependent</td>
+  <td>Granules and block/page mappings are configurable</td>
+  <td>4 KiB, 2 MiB, 1 GiB in Sv39</td>
+</tr>
+<tr>
+  <td>Translation caching</td>
+  <td>Implementation-specific iTLB/dTLB and possible shared levels</td>
+  <td>Implementation-specific TLB hierarchy</td>
+  <td>Implementation-specific TLB hierarchy; no universal size</td>
+</tr>
+<tr>
+  <td>Walk implementation</td>
+  <td>Commonly hardware page walk</td>
+  <td>Commonly hardware table walk on application cores</td>
+  <td>Hardware or implementation-defined refill approach following ISA requirements</td>
+</tr>
+<tr>
+  <td>Invalidation terminology</td>
+  <td>INVLPG/related invalidation and paging controls</td>
+  <td>TLBI operations and associated ordering rules</td>
+  <td><code>SFENCE.VMA</code> and relevant extensions for other stages</td>
+</tr>
+<tr>
+  <td>Virtualization</td>
+  <td>Extended/nested translation mechanisms</td>
+  <td>Stage-1 and stage-2 translation</td>
+  <td>Guest-stage translation where relevant hypervisor support exists</td>
+</tr>
+</tbody>
+</table>
+<p>This comparison is a navigation aid rather than a substitute for the architecture reference manuals. Page-table levels, entry formats, physical-address widths, security extensions, and supported modes evolve by version. Microarchitectural implementation counts are vendor- and model-specific. A researcher should identify the exact ISA revision, processor, firmware, OS configuration, and active page size before making numerical claims.</p>
+
+</section>
+<section id="worked-example-1-effective-address-arithmetic" aria-labelledby="heading-worked-example-1-effective-address-arithmetic">
+<h2 id="heading-worked-example-1-effective-address-arithmetic">Worked Example 1: Effective-Address Arithmetic</h2>
+<p>Assume an illustrative ISA instruction computes <code>EA = base + index × 8 − 16</code>. Let <code>base = 0x10004000</code>, <code>index = 7</code>, and the final displacement be <code>−16</code> bytes. The index contribution is <code>7 × 8 = 56 = 0x38</code>. Subtracting 16 bytes gives an offset of <code>40 = 0x28</code>, so the effective address is <strong><code>0x10004028</code></strong>. The calculation answers <em>which virtual byte the instruction names</em>. It does not provide a physical address or prove that the reference is permitted.</p>
+<p>Suppose the referenced array resides in a writable user mapping. An AGU can form the effective address after its base/index operands arrive; the dTLB must then identify the virtual page. If the mapping is in the TLB and the data line is in cache, the load may complete quickly. If translation misses, a page walk is required. If the mapping has no read permission, translation/protection logic must report the appropriate fault rather than sending a valid data value to the instruction.</p>
+<p><strong>Lesson:</strong> count the addressing expression, translation step, and data access separately. Two ISAs can express the same element address using different instruction sequences, and two CPUs implementing the same ISA can overlap their operations differently. Address arithmetic alone does not determine memory-access latency.</p>
+
+</section>
+<section id="worked-example-2-sv39-address-field-extraction" aria-labelledby="heading-worked-example-2-sv39-address-field-extraction">
+<h2 id="heading-worked-example-2-sv39-address-field-extraction">Worked Example 2: Sv39 Address-Field Extraction</h2>
+<p>Consider the illustrative positive Sv39 virtual address <strong><code>0x0000000123456789</code></strong>. For a 4 KiB mapping, the page offset is the low 12 bits: <strong><code>0x789</code></strong>. The three nine-bit indices are obtained from <code>VPN[0] = (VA &gt;&gt; 12) &amp; 0x1FF</code>, <code>VPN[1] = (VA &gt;&gt; 21) &amp; 0x1FF</code>, and <code>VPN[2] = (VA &gt;&gt; 30) &amp; 0x1FF</code>. Evaluation gives <strong><code>VPN[2] = 0x004</code></strong>, <strong><code>VPN[1] = 0x11A</code></strong>, and <strong><code>VPN[0] = 0x056</code></strong>.</p>
+<p>Each Sv39 page-table entry has eight bytes, so the corresponding offsets <em>within each 4 KiB page-table page</em> are <code>0x004 × 8 = 0x020</code>, <code>0x11A × 8 = 0x8D0</code>, and <code>0x056 × 8 = 0x2B0</code>. The root table base comes from the relevant translation state; a valid root entry identifies the next table, and the next valid nonleaf entry identifies the third table. These offsets are not physical PTE addresses until each table base has been obtained and the required translation rules are applied.</p>
+<p>Finally, suppose the walk ends in a valid 4 KiB leaf mapping to physical page frame <code>0x23456</code>, with suitable permissions and attributes. The resulting physical address is <strong><code>(0x23456 &lt;&lt; 12) + 0x789 = 0x23456789</code></strong>. This mapping is constructed for instruction; it does not represent an actual process, page table, or machine memory layout. An invalid or misaligned leaf would change the outcome from a successful translation to the architecture-defined fault.</p>
+
+</section>
+<section id="worked-example-3-comparing-tlb-reach-and-working-set" aria-labelledby="heading-worked-example-3-comparing-tlb-reach-and-working-set">
+<h2 id="heading-worked-example-3-comparing-tlb-reach-and-working-set">Worked Example 3: Comparing TLB Reach and Working Set</h2>
+<p>Assume a toy first-level dTLB can hold 64 entries for 4 KiB pages, with no other effective translation caching. Its nominal reach is <code>64 × 4096 = 262,144 bytes</code>, or <strong>256 KiB</strong>. A program repeatedly touches one byte in each of 256 distinct 4 KiB pages: that is an active footprint of <strong>1 MiB of mapped pages</strong>. If accesses rotate evenly through all 256 pages and the TLB can retain only 64 of them, many references may require a refill; exact misses depend on associativity, replacement, order, and lower levels.</p>
+<p>Now imagine a hypothetical mapping option in which those same 1 MiB of addresses are included within one eligible 2 MiB page. A TLB structure capable of caching that mapping might cover the region with one entry rather than 256. The reduction in translation-entry demand can be large even if the actual byte traffic remains unchanged. But the system must satisfy large-page alignment and allocation rules, and the 2 MiB mapping may use more physical backing or coarser protection than desirable.</p>
+<p><strong>Lesson:</strong> page size changes how many translations describe a working set, not necessarily how many cache lines or bytes the program reads. More TLB reach can reduce translation misses, but data-cache locality and memory bandwidth must still be evaluated independently.</p>
+
+</section>
+<section id="worked-example-4-a-tlb-hit-a-walk-and-a-true-page-fault" aria-labelledby="heading-worked-example-4-a-tlb-hit-a-walk-and-a-true-page-fault">
+<h2 id="heading-worked-example-4-a-tlb-hit-a-walk-and-a-true-page-fault">Worked Example 4: A TLB Hit, a Walk, and a True Page Fault</h2>
+<p>Consider three consecutive loads from different pages in a hypothetical core. For <strong>load A</strong>, the dTLB has a correct mapping and permissions, and the data cache hits. No page-table walk is needed. For <strong>load B</strong>, both first-level and shared translation caches miss, but the page-table hierarchy contains a valid readable mapping. A walker issues one or more PTE fetches, fills a translation entry according to implementation policy, and then B may obtain the data. For <strong>load C</strong>, the mapped page is not present or fails a required permission check. C must ultimately be reported as an architecturally defined fault if it reaches the appropriate retirement point.</p>
+<table>
+<thead>
+<tr>
+  <th>Load</th>
+  <th>TLB lookup</th>
+  <th>Page-table result</th>
+  <th>Architectural outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>A</td>
+  <td>Hit</td>
+  <td>No walk required</td>
+  <td>Access may complete</td>
+</tr>
+<tr>
+  <td>B</td>
+  <td>Miss</td>
+  <td>Valid mapping/permission</td>
+  <td>Walk/refill, then access</td>
+</tr>
+<tr>
+  <td>C</td>
+  <td>Miss or permission mismatch</td>
+  <td>Missing or prohibited mapping</td>
+  <td>Fault if not squashed</td>
+</tr>
+</tbody>
+</table>
+<p>If C belongs to a branch path that is later discarded, a modern speculative core may cancel it without exposing an architectural fault. If C is on the correct path and reaches the designated precise exception point, software can receive the fault and attempt a repair. A cache miss might also occur for A or B; that would be separate from the translation result. <strong>Lesson:</strong> “the address is not in the TLB” does not mean “the address is unmapped,” and “the mapping is valid” does not guarantee that the data is cache-resident.</p>
+
+</section>
+<section id="worked-example-5-translation-miss-traffic-under-contention" aria-labelledby="heading-worked-example-5-translation-miss-traffic-under-contention">
+<h2 id="heading-worked-example-5-translation-miss-traffic-under-contention">Worked Example 5: Translation Miss Traffic Under Contention</h2>
+<p>A synthetic workload performs <strong>100,000 demand data accesses</strong>. Suppose 1% of them require a full page-table walk: <code>100,000 × 0.01 = 1,000 walks</code>. Assume a simplified three-level scheme in which each such walk requires three <strong>logical</strong> PTE lookups. That implies <strong>3,000 logical PTE reads</strong>. At eight bytes per PTE, the total metadata represented by the accessed entries is <code>3,000 × 8 = 24,000 bytes</code>, or about 23.4 KiB. This is not a measurement of memory-bus traffic: real caches move larger lines, repeatedly used entries may already be cached, and read-for-ownership or memory-attribute behavior can change the transactions.</p>
+<p>Suppose the program also performs many independent cache misses and approaches the memory controller's bandwidth limit. Walks may contend for fill-buffer entries, cache bandwidth, and memory-controller service with demand data. The resulting stall cycles can exceed what a model assuming uncontested cache-resident PTEs would suggest. Alternatively, if walker requests mostly hit in cache and overlap with independent execution, their exposed effect may be small even though the event counter records all 1,000 walks.</p>
+<p><strong>Lesson:</strong> derive walk <em>counts</em> from miss rates, then separately measure resource demands and <strong>uncovered performance cost</strong>. Do not estimate memory traffic by multiplying PTE bytes and calling it DRAM traffic; count actual line transactions if the platform exposes them. This example illustrates why a workload with stable data-cache behavior can nevertheless slow down after a change in translation locality.</p>
+
+</section>
+<section id="worked-example-6-a-page-spanning-16-byte-load" aria-labelledby="heading-worked-example-6-a-page-spanning-16-byte-load">
+<h2 id="heading-worked-example-6-a-page-spanning-16-byte-load">Worked Example 6: A Page-Spanning 16-Byte Load</h2>
+<p>A load requests 16 bytes beginning at virtual address <code>0x...0FFA</code>, six bytes before the end of a 4 KiB page. Its first segment includes page offsets <code>0xFFA</code> through <code>0xFFF</code>, exactly <strong>six bytes</strong>. Its remaining <strong>ten bytes</strong> begin at the next virtual page's offset <code>0x000</code> and end at <code>0x009</code>. The request therefore needs the mappings and permission checks appropriate to <strong>both pages</strong>. This arithmetic is independent of whether the data happens to span one or two cache lines.</p>
+<p>If both translations exist and both mappings allow the load, the microarchitecture can combine the results as required by the ISA. If the second translation fails, the instruction cannot simply return the six valid bytes as though that were the complete sixteen-byte load. A fault or architecture-defined handling path must account for the full operation. The rules can be still more restrictive for atomic operations or memory-mapped I/O.</p>
+<p><strong>Lesson:</strong> separate instruction width, cache-line crossing, page crossing, alignment, and atomicity. A diagram of one AGU producing one starting address is only the first step toward executing the complete memory operation correctly.</p>
+
+</section>
+<section id="worked-example-7-simplified-translation-cpi-estimate" aria-labelledby="heading-worked-example-7-simplified-translation-cpi-estimate">
+<h2 id="heading-worked-example-7-simplified-translation-cpi-estimate">Worked Example 7: Simplified Translation CPI Estimate</h2>
+<p>A made-up program retires 10 million instructions and performs 3.5 million demand data accesses. The measured or hypothetical demand-access density is <code>3.5M / 10M = 0.35 loads or stores per instruction</code>. Assume for the exercise that 2% of those accesses miss in the relevant translation hierarchy and that the <strong>average uncovered incremental delay</strong> is 18 cycles per miss. The resulting simplified added cost is <code>0.35 × 0.02 × 18 = 0.126 cycles per retired instruction</code>.</p>
+<p>Suppose a page-size change reduces the miss rate to 0.5%, with all other input assumptions held fixed. The modeled cost falls to <code>0.35 × 0.005 × 18 = 0.0315</code>, a difference of <strong>0.0945 CPI</strong>. That is a model of <em>uncovered</em> delay, not the raw latency of every walk and not a guarantee that the real CPI improves by exactly 0.0945. Walk overlaps, branch mispredictions, data-cache misses, and stalls in other execution resources may interact.</p>
+<p>To test the claim in practice, record elapsed cycles and retired instructions, count relevant walk events, and verify that reduced walk activity coincides with less actual stall time. <strong>Lesson:</strong> an event-rate reduction is a hypothesis about performance improvement until a controlled end-to-end measurement supports it.</p>
+
+</section>
+<section id="worked-example-8-two-stage-translation-and-recovery" aria-labelledby="heading-worked-example-8-two-stage-translation-and-recovery">
+<h2 id="heading-worked-example-8-two-stage-translation-and-recovery">Worked Example 8: Two-Stage Translation and Recovery</h2>
+<p>Imagine a virtual machine with a guest virtual address mapped by a guest page table to a guest physical address, which is then mapped by the hypervisor's second-stage table to a host physical address. A CPU demand load hits in a combined translation cache and proceeds without a fresh nested walk. Later, a different guest address misses in that cache. The walker must obtain enough guest and host translation information to compute the final address, perhaps translating addresses of guest page-table entries as it goes.</p>
+<p>Now suppose the guest mapping is valid, but the host mapping denies the needed access. That is not the same as an ordinary first-stage guest page fault; the hypervisor-side rules determine the second-stage fault handling and reporting. If the load were speculative and later squashed due to an older branch, the implementation must preserve the applicable precise-exception rules. If software modifies the host mapping, stale combined translation state must be invalidated using the proper stage-specific mechanisms.</p>
+<p><strong>Lesson:</strong> “more than one translation stage” creates additional address contexts and fault boundaries. Caches may hide much of the performance cost, but the hardware must never substitute a cached final address from the wrong guest/host context. This example is schematic and not a timing prediction for any particular hypervisor, Arm core, x86 CPU, or RISC-V implementation.</p>
+
+</section>
+<section id="design-and-diagnostic-decision-framework" aria-labelledby="heading-design-and-diagnostic-decision-framework">
+<h2 id="heading-design-and-diagnostic-decision-framework">Design and Diagnostic Decision Framework</h2>
+<p>Effective architecture work begins with the <em>source</em> of the observed delay. If an instruction cannot issue because its address operands are unavailable, the problem is probably a dependency or scheduling limitation. If the AGU is saturated, adding a larger TLB does not directly create more address calculations per cycle. If a first-level TLB misses but a larger translation cache hits, page-table-walk optimizations are not addressing the primary miss path. If full walks become frequent and compete with cache traffic, reducing the translation working set or using an eligible larger page size may help.</p>
+<table>
+<thead>
+<tr>
+  <th>Question</th>
+  <th>Evidence or distinction</th>
+  <th>First specialist reading</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Are address arithmetic resources saturated?</td>
+  <td>AGU port/issue use and address-form mix</td>
+  <td>Processor Datapaths and Execution Units</td>
+</tr>
+<tr>
+  <td>Are loads delayed before address computation?</td>
+  <td>Base/index operand readiness and dependent loads</td>
+  <td>Register Files and Operand Delivery</td>
+</tr>
+<tr>
+  <td>Is the first-level TLB missing?</td>
+  <td>First-level misses versus lower TLB hits</td>
+  <td>This article: TLB hierarchy</td>
+</tr>
+<tr>
+  <td>Are page walks consuming memory traffic?</td>
+  <td>Walk counts, queue occupancy, cache-line requests</td>
+  <td>This article: walker contention</td>
+</tr>
+<tr>
+  <td>Does the page fault reach software?</td>
+  <td>Trap and permission outcome versus invisible walk</td>
+  <td>This article: fault distinction</td>
+</tr>
+<tr>
+  <td>Would large pages reduce mapping churn?</td>
+  <td>Active page count, eligible page size, fragmentation</td>
+  <td>This article: reach and page-size trade-offs</td>
+</tr>
+<tr>
+  <td>Is the cache miss rather than translation the limiter?</td>
+  <td>Cache misses, outstanding requests, measured stalls</td>
+  <td>Cache Access, Prefetching, and Memory-Level Parallelism</td>
+</tr>
+<tr>
+  <td>Does guest translation add another stage?</td>
+  <td>Stage-specific translation and fault context</td>
+  <td>This article: nested translations</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Decision discipline:</strong> specify architecture and processor generation; identify effective page size and privilege context; separate translation hit, walk, and fault events; check memory traffic and other stalls; then draw a narrowly supported conclusion. An advertised number of AGUs, TLB entries, or page-table levels is not sufficient evidence of workload performance.</p>
+
+</section>
+<section id="specialist-glossary" aria-labelledby="heading-specialist-glossary">
+<h2 id="heading-specialist-glossary">Specialist Glossary</h2>
+<p>The following terms distinguish address-generation responsibilities, translation-cache state, operating-system mapping actions, and the wider memory path. In the literature, nearby terms sometimes have vendor-specific meanings; consult the named reference for exact implementation semantics.</p>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Access fault</strong></td>
+  <td>Architecture-defined failure involving the attempted access, distinct from an ordinary cache miss.</td>
+</tr>
+<tr>
+  <td><strong>Accessed bit</strong></td>
+  <td>Page-table state reporting access under architecture-specific tracking rules.</td>
+</tr>
+<tr>
+  <td><strong>Address-generation unit (AGU)</strong></td>
+  <td>Execution resource that calculates effective addresses for memory operations.</td>
+</tr>
+<tr>
+  <td><strong>Address-space identifier (ASID)</strong></td>
+  <td>Tag distinguishing translation contexts where supported by the ISA.</td>
+</tr>
+<tr>
+  <td><strong>Alignment</strong></td>
+  <td>Relationship between an address and the required or preferred access boundary.</td>
+</tr>
+<tr>
+  <td><strong>Base register</strong></td>
+  <td>Register supplying the primary address operand in an addressing expression.</td>
+</tr>
+<tr>
+  <td><strong>Cache-line split</strong></td>
+  <td>One data reference extending across two cache-line boundaries.</td>
+</tr>
+<tr>
+  <td><strong>Canonical address</strong></td>
+  <td>Virtual-address encoding satisfying architecture-specific upper-bit rules.</td>
+</tr>
+<tr>
+  <td><strong>Combined translation</strong></td>
+  <td>Cached or computed mapping spanning more than one translation stage.</td>
+</tr>
+<tr>
+  <td><strong>Context tag</strong></td>
+  <td>Identifier qualifying which address space a TLB translation belongs to.</td>
+</tr>
+<tr>
+  <td><strong>Data TLB (dTLB)</strong></td>
+  <td>Translation cache serving load and store address requests.</td>
+</tr>
+<tr>
+  <td><strong>Dirty bit</strong></td>
+  <td>Page-table state tracking a write under defined ISA/OS rules.</td>
+</tr>
+<tr>
+  <td><strong>Effective address</strong></td>
+  <td>Address produced by instruction-specific addressing arithmetic.</td>
+</tr>
+<tr>
+  <td><strong>First-level TLB</strong></td>
+  <td>Translation cache near the immediate fetch or data-access pipeline.</td>
+</tr>
+<tr>
+  <td><strong>Global mapping</strong></td>
+  <td>Translation marked reusable across specified context changes under ISA rules.</td>
+</tr>
+<tr>
+  <td><strong>Guest physical address</strong></td>
+  <td>Intermediate address exposed to a guest before host stage mapping.</td>
+</tr>
+<tr>
+  <td><strong>Hardware page walker</strong></td>
+  <td>Engine that reads page tables to resolve an applicable translation miss.</td>
+</tr>
+<tr>
+  <td><strong>Huge page</strong></td>
+  <td>Mapping larger than the architecture’s ordinary base page.</td>
+</tr>
+<tr>
+  <td><strong>Instruction TLB (iTLB)</strong></td>
+  <td>Translation cache serving instruction-fetch addresses.</td>
+</tr>
+<tr>
+  <td><strong>Intermediate physical address</strong></td>
+  <td>Address between translation stages, especially in virtualization.</td>
+</tr>
+<tr>
+  <td><strong>IOMMU</strong></td>
+  <td>Translation and isolation unit for device-originated memory requests.</td>
+</tr>
+<tr>
+  <td><strong>Leaf page-table entry</strong></td>
+  <td>Entry selecting a final mapped page or block rather than a lower table.</td>
+</tr>
+<tr>
+  <td><strong>Linear address</strong></td>
+  <td>Address after applicable segmentation and before paging in x86 terminology.</td>
+</tr>
+<tr>
+  <td><strong>Memory disambiguation</strong></td>
+  <td>Determination of whether memory operations may refer to overlapping bytes.</td>
+</tr>
+<tr>
+  <td><strong>Memory-level parallelism</strong></td>
+  <td>Overlap among multiple outstanding memory operations.</td>
+</tr>
+<tr>
+  <td><strong>Miss-status holding register</strong></td>
+  <td>Or equivalent tracking state for outstanding cache misses.</td>
+</tr>
+<tr>
+  <td><strong>Nested translation</strong></td>
+  <td>Translation requiring more than one address-translation stage.</td>
+</tr>
+<tr>
+  <td><strong>Nonleaf page-table entry</strong></td>
+  <td>Entry describing the next table in a multi-level walk.</td>
+</tr>
+<tr>
+  <td><strong>Page fault</strong></td>
+  <td>Defined translation/protection failure that can lead to software exception handling.</td>
+</tr>
+<tr>
+  <td><strong>Page offset</strong></td>
+  <td>Low-order within-page address bits preserved by an ordinary page mapping.</td>
+</tr>
+<tr>
+  <td><strong>Page walk</strong></td>
+  <td>Traversal of page-table structures to resolve an address mapping.</td>
+</tr>
+<tr>
+  <td><strong>Page-table entry (PTE)</strong></td>
+  <td>Mapping or traversal descriptor stored in a page table.</td>
+</tr>
+<tr>
+  <td><strong>Page-table root</strong></td>
+  <td>Architecturally designated starting table for an address-space translation.</td>
+</tr>
+<tr>
+  <td><strong>Page-table walker cache</strong></td>
+  <td>Microarchitectural cache of intermediate page-walk metadata.</td>
+</tr>
+<tr>
+  <td><strong>PCID</strong></td>
+  <td>x86 process-context identifier feature for translation-context tagging.</td>
+</tr>
+<tr>
+  <td><strong>Permission check</strong></td>
+  <td>Validation that requested access type is allowed for the context and mapping.</td>
+</tr>
+<tr>
+  <td><strong>Physical address</strong></td>
+  <td>Address after the applicable required translation stages.</td>
+</tr>
+<tr>
+  <td><strong>Physical frame number (PFN)</strong></td>
+  <td>Identifier of the translated physical page frame.</td>
+</tr>
+<tr>
+  <td><strong>Precise exception</strong></td>
+  <td>Fault delivery preserving the architecturally required instruction order.</td>
+</tr>
+<tr>
+  <td><strong>Prefetch</strong></td>
+  <td>Advance request for likely-needed code, data, or translation metadata.</td>
+</tr>
+<tr>
+  <td><strong>Second-level TLB</strong></td>
+  <td>Lower/typically larger translation cache behind a first-level TLB.</td>
+</tr>
+<tr>
+  <td><strong>Shootdown</strong></td>
+  <td>System coordination to invalidate stale translations on other processors.</td>
+</tr>
+<tr>
+  <td><strong>Speculative translation</strong></td>
+  <td>Translation attempted before the instruction is guaranteed to retire.</td>
+</tr>
+<tr>
+  <td><strong>Stage-1 translation</strong></td>
+  <td>First virtual-to-intermediate or virtual-to-physical translation stage.</td>
+</tr>
+<tr>
+  <td><strong>Stage-2 translation</strong></td>
+  <td>Subsequent mapping of an intermediate address to a host physical address.</td>
+</tr>
+<tr>
+  <td><strong>Store-to-load forwarding</strong></td>
+  <td>Supply of relevant bytes from an older pending store to a load.</td>
+</tr>
+<tr>
+  <td><strong>Superpage</strong></td>
+  <td>Large page mapped by a higher-level leaf under a supported translation mode.</td>
+</tr>
+<tr>
+  <td><strong>TLB associativity</strong></td>
+  <td>Number of translation entries that may match within a candidate set.</td>
+</tr>
+<tr>
+  <td><strong>TLB hit</strong></td>
+  <td>Lookup satisfied by a valid entry matching virtual page and full context.</td>
+</tr>
+<tr>
+  <td><strong>TLB miss</strong></td>
+  <td>Lookup fails to find an applicable cached mapping at that level.</td>
+</tr>
+<tr>
+  <td><strong>TLB reach</strong></td>
+  <td>Total nominal virtual-byte coverage represented by cached mappings.</td>
+</tr>
+<tr>
+  <td><strong>TLB replacement</strong></td>
+  <td>Policy selecting an entry to evict when translation-cache space is required.</td>
+</tr>
+<tr>
+  <td><strong>Translation metadata</strong></td>
+  <td>Mapping, permissions, attributes, and context state needed for address translation.</td>
+</tr>
+<tr>
+  <td><strong>Translation working set</strong></td>
+  <td>Collection of pages actively translated over a relevant interval.</td>
+</tr>
+<tr>
+  <td><strong>VIPT cache</strong></td>
+  <td>Virtually indexed, physically tagged cache design.</td>
+</tr>
+<tr>
+  <td><strong>Virtual address (VA)</strong></td>
+  <td>Program- or architecture-visible address prior to applicable translation.</td>
+</tr>
+<tr>
+  <td><strong>Virtual page number (VPN)</strong></td>
+  <td>Virtual-address portion identifying the page rather than an offset.</td>
+</tr>
+<tr>
+  <td><strong>Walk cache</strong></td>
+  <td>Storage retaining page-table traversal information to accelerate subsequent walks.</td>
+</tr>
+<tr>
+  <td><strong>Walker backpressure</strong></td>
+  <td>Delay caused by finite capacity in page-walk processing or request resources.</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="primary-references-and-further-reading" aria-labelledby="heading-primary-references-and-further-reading">
+<h2 id="heading-primary-references-and-further-reading">Primary References and Further Reading</h2>
+<p>The references below combine architecture specifications, vendor profiling documentation, and implementation-level educational resources. Page-size details and privileged instructions should be taken from the applicable ISA version; pipeline and TLB capacity claims require processor-specific documentation. These sources support the general mechanisms presented here, not the invented parameter values in the worked examples.</p>
+<ol>
+<li><strong>RISC-V International, <em>The RISC-V Instruction Set Manual, Volume II: Privileged Architecture</em>, Supervisor-Level ISA.</strong> Normative source for <code>satp</code>, Sv39 virtual-address fields, page-table entries, page-fault behavior, page sizes, and <code>SFENCE.VMA</code>. <a href="https://docs.riscv.org/reference/isa/priv/supervisor.html">RISC-V privileged specification</a>.</li>
+<li><strong>Intel, <em>VTune Profiler CPU Metrics Reference</em> (2026).</strong> Vendor documentation defining ITLB overhead, DTLB overhead, page-walk-related metric interpretations, and limitations of first-level miss attribution. <a href="https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2026-1/cpu-metrics-reference.html">Intel CPU Metrics Reference</a>.</li>
+<li><strong>Arm, <em>Cortex-A78C Core Technical Reference Manual</em>, “Translation table walks.”</strong> An implementation-specific example of translation-cache lookup and table walks in an Arm application processor. <a href="https://support.arm.com/documentation/102226/0001/Functional-description/Memory-Management-Unit/Translation-table-walks?lang=en">Arm technical reference</a>.</li>
+<li><strong>Arm, <em>Arm Architecture Reference Manual for A-profile architecture</em>, address translation examples.</strong> Reference material for stage-1 translation, descriptor levels, blocks/pages, and translation flow. <a href="https://support.arm.com/documentation/ddi0487/maa/-Part-K-Appendixes/-Appendix-K8-Address-Translation-Examples/-K8-1-AArch64-Address-translation-examples/-K8-1-2-Full-translation-flows-for-VMSAv8-64-address-translation">Arm architecture examples</a>.</li>
+<li><strong>gem5, <em>RISC-V Page Table Walker source and API</em>.</strong> A concrete simulation implementation showing walk-state handling, memory requests, retries, and translation-level control. <a href="https://doxygen.gem5.org/develop/riscv_2pagetable__walker_8cc_source.html">gem5 RISC-V page-table walker</a>.</li>
+<li><strong>Arm Research, “How about a short walk?”</strong> Discussion of page-walk behavior, large pages, translation caching, and practical design opportunities. <a href="https://developer.arm.com/community/arm-research/b/articles/posts/how-about-a-short-walk">Arm research article</a>.</li>
+<li><strong>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em>.</strong> General scholarly context for memory-hierarchy performance, address translation, and the cost of memory stalls. Consult the relevant edition for exact tables and processor examples.</li>
+</ol>
+<p><strong>Source and example policy:</strong> all numerical worked examples in this article are original hypothetical teaching models. They should not be misread as measured parameters for an Intel, AMD, Arm, RISC-V, or gem5 processor. The specifications are authoritative for architectural requirements; the vendor and implementation documents illustrate particular designs and their documented limitations.</p>
+
+</section>
+<section id="related-encyclopedia-topics-and-study-pathways" aria-labelledby="heading-related-encyclopedia-topics-and-study-pathways">
+<h2 id="heading-related-encyclopedia-topics-and-study-pathways">Related Encyclopedia Topics and Study Pathways</h2>
+<p>The active links below are intentional MGU encyclopedia destinations. A planned sibling link need not have been published yet. Related topics are conceptual neighbors; the Microarchitecture unit index governs the exact twenty-title production sequence.</p>
+<ul>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture parent overview</a></strong> — The core's internal organization and execution mechanisms.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/">Microarchitecture specialist index</a></strong> — The complete Level 4 directory for this unit.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/processor-datapaths-and-execution-units">Processor Datapaths and Execution Units</a></strong> — AGUs in the context of the core's functional resources.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/register-files-and-operand-delivery">Register Files and Operand Delivery</a></strong> — Preparation of base and index address operands.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/data-hazards-forwarding-and-interlocks">Data Hazards, Forwarding, and Interlocks</a></strong> — Dependent-address latency and pipeline scheduling.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/out-of-order-execution-and-reorder-buffers">Out-of-Order Execution and Reorder Buffers</a></strong> — Precise exceptions and in-order retirement.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/speculative-execution-checkpointing-and-recovery">Speculative Execution, Checkpointing, and Recovery</a></strong> — Squashing speculative instructions and preserving precise state.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/load-store-queues-and-memory-disambiguation">Load-Store Queues and Memory Disambiguation</a></strong> — Dependency and forwarding checks around translated addresses.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/cache-access-prefetching-and-memory-level-parallelism">Cache Access, Prefetching, and Memory-Level Parallelism</a></strong> — The next specialist article, covering demand misses and latency overlap.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/performance-counters-and-cpi-analysis">Performance Counters and CPI Analysis</a></strong> — Event attribution and quantitative bottleneck investigation.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/microarchitectural-side-channels-and-mitigations">Microarchitectural Side Channels and Mitigations</a></strong> — Security of transient execution and timing behavior.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a></strong> — Caches, locality, backing memory, and general hierarchy organization.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a></strong> — Programmer-visible memory and protection semantics.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems</a></strong> — System interconnect and hardware boundary traffic.</li>
+</ul>
+<p><strong>Beginner sequence:</strong> effective addresses → virtual page number and offset → TLB lookup → valid page-table walk → page fault distinction. <strong>Computer architect sequence:</strong> AGU throughput → translation hierarchy → walker caches and outstanding walks → cache-access overlap → event-level bottleneck analysis. <strong>Systems and virtualization sequence:</strong> context tagging → page-table updates → invalidations → second-stage translation → device translation and isolation. These pathways intentionally cross neighboring articles rather than duplicating their full subject matter here.</p>
+
+</section>
+<section id="editorial-scope-publication-status-and-file-convention" aria-labelledby="heading-editorial-scope-publication-status-and-file-convention">
+<h2 id="heading-editorial-scope-publication-status-and-file-convention">Editorial Scope, Publication Status, and File Convention</h2>
+<p><strong>Taxonomy:</strong> Computer Science → Computer Architecture → Microarchitecture → Address Generation, TLBs, and Page Walks. This is <strong>specialist article 14 of 20</strong> in the Microarchitecture unit and the fourth article in its <em>Prediction, Speculation, and Memory Execution</em> group.</p>
+<p><strong>Scope retained:</strong> address-generation unit arithmetic and throughput, translation-cache lookup and reach, page-table-walk mechanisms, permissions and translation faults, invalidation, virtualization stages, walker contention, and translation performance diagnosis. <strong>Scope delegated:</strong> paging replacement algorithms, operating-system virtual-memory policy, exhaustive architecture-specific descriptor programming, full cache organization, and processor-wide side-channel mitigation catalogs. Neighboring articles are linked instead of being duplicated.</p>
+<p><strong>Publication status:</strong> this individual Level 5 HTML article is completed as a standalone deliverable. Sibling destinations remain active by editorial design; that does not independently verify their deployment. All numerical parameters in the worked exercises are schematic unless explicitly attributed to a reference. Actual processor designs and versioned ISA implementations may behave differently.</p>
+<p><strong>Physical destination:</strong> <code>computer-architecture/microarchitecture-articles/address-generation-tlbs-and-page-walks.html</code>. <strong>Canonical public URL:</strong> <code>/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/address-generation-tlbs-and-page-walks</code>. The physical filename retains <code>.html</code> while the public canonical and internal article links omit the extension. Shared MGU site components are loaded using the standard page infrastructure.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Binary Serialization and Schema Contracts | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="A specialist guide to binary serialization contracts, wire formats, field widths, optional values, schema evolution, and safe interoperable decoding, with a byte-exact worked format.">
+<meta name="keywords" content="binary serialization, schema contract, deserialization, wire format, binary message, field identifiers, protocol buffers, Apache Avro, CBOR, FlatBuffers, schema evolution, compatibility, safe parsing">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Binary Serialization and Schema Contracts | MGU Encyclopedia">
+<meta property="og:description" content="Mapping structured records to portable byte layouts, with a complete two-record contract and code for safe decoding.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== SHARED HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Binary Serialization and Schema Contracts</h1>
+<p class="subtitle">How logical records become portable bytes under a declared contract—and how independent implementations preserve meaning through validation, exchange, and change.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#definition-and-scope">Definition and Scope</a></li>
+<li><a href="#why-a-schema-contract-is-necessary">Why a Schema Contract Is Necessary</a></li>
+<li><a href="#serialization-deserialization-and-the-round-trip">Serialization, Deserialization, and the Round Trip</a></li>
+<li><a href="#contract-layers-framing-wire-encoding-and-semantics">Contract Layers: Framing, Wire Encoding, and Semantics</a></li>
+<li><a href="#fixed-layouts-tagged-fields-and-self-describing-data">Fixed Layouts, Tagged Fields, and Self-Describing Data</a></li>
+<li><a href="#field-identity-ordering-and-reserved-space">Field Identity, Ordering, and Reserved Space</a></li>
+<li><a href="#numeric-width-signedness-and-byte-order">Numeric Width, Signedness, and Byte Order</a></li>
+<li><a href="#text-fields-and-unicode-boundaries">Text Fields and Unicode Boundaries</a></li>
+<li><a href="#null-missing-default-and-optional-values">Null, Missing, Default, and Optional Values</a></li>
+<li><a href="#a-complete-fictional-contract-mgu-sr-version-1">A Complete Fictional Contract: MGU-SR Version 1</a></li>
+<li><a href="#worked-message-two-records-one-optional-timestamp">Worked Message: Two Records, One Optional Timestamp</a></li>
+<li><a href="#byte-exact-python-encoder">Byte-Exact Python Encoder</a></li>
+<li><a href="#a-bounded-python-decoder">A Bounded Python Decoder</a></li>
+<li><a href="#reading-the-same-contract-in-windows-powershell-51">Reading the Same Contract in Windows PowerShell 5.1</a></li>
+<li><a href="#golden-vectors-and-cross-language-interoperability">Golden Vectors and Cross-Language Interoperability</a></li>
+<li><a href="#evolution-as-a-matrix-not-a-single-label">Evolution as a Matrix, Not a Single Label</a></li>
+<li><a href="#safe-and-unsafe-change-patterns">Safe and Unsafe Change Patterns</a></li>
+<li><a href="#protocol-buffers-tags-wire-types-and-compatibility">Protocol Buffers: Tags, Wire Types, and Compatibility</a></li>
+<li><a href="#apache-avro-writer-and-reader-schemas">Apache Avro: Writer and Reader Schemas</a></li>
+<li><a href="#cbor-and-flatbuffers-different-design-trade-offs">CBOR and FlatBuffers: Different Design Trade-offs</a></li>
+<li><a href="#schema-registries-fingerprints-and-provenance">Schema Registries, Fingerprints, and Provenance</a></li>
+<li><a href="#data-integrity-authenticity-and-confidentiality">Data Integrity, Authenticity, and Confidentiality</a></li>
+<li><a href="#bounds-resource-limits-and-defensive-deserialization">Bounds, Resource Limits, and Defensive Deserialization</a></li>
+<li><a href="#common-implementation-failures">Common Implementation Failures</a></li>
+<li><a href="#a-practical-contract-design-checklist">A Practical Contract Design Checklist</a></li>
+<li><a href="#worked-design-scenarios">Worked Design Scenarios</a></li>
+<li><a href="#study-questions">Study Questions</a></li>
+<li><a href="#answers-and-explanations">Answers and Explanations</a></li>
+<li><a href="#study-pathway-and-connections">Study Pathway and Connections</a></li>
+<li><a href="#sub-articles">Sub-Articles</a></li>
+<li><a href="#related-topics">Related Topics</a></li>
+<li><a href="#technical-references-and-further-reading">Technical References and Further Reading</a></li>
+<li><a href="#editorial-scope-and-publication-status">Editorial Scope and Publication Status</a></li>
+</ol>
+</section>
+<section aria-labelledby="heading-definition-and-scope" id="definition-and-scope"><h2 id="heading-definition-and-scope">Definition and Scope</h2>
+<p><strong>Binary serialization</strong> converts an abstract value or structured record into bytes according to a specified representation. <strong>Deserialization</strong> interprets those bytes to reconstruct a value. The intervening <strong>schema contract</strong> defines what the bytes mean: field identities, types, widths, lengths, endianness, text encodings, optionality, ordering, version rules, and permissible values. A serializer may be correct for its own language runtime yet unsuitable for persistent storage or communication if the receiver cannot reproduce the interpretation. The discipline is not simply to “turn an object into bytes,” but to establish a portable, testable agreement between independently implemented producers and consumers.</p>
+<p>The contract can be embedded in an established format such as Protocol Buffers, Apache Avro, or CBOR; negotiated or registered externally; or written as the specification of a deliberately simple file or packet structure. All three arrangements need definite rules for message boundaries, field meaning, validation, and change management. A stream of bytes without these rules is only a sequence of octets. This article focuses on the <strong>Level 5 Binary Data</strong> question: how logical records become interoperable binary representations. Domain modeling, relational schema design, and the operational management of databases belong to their respective units.</p>
+<p>A key principle is that <strong>representation and meaning are distinct</strong>. The four bytes <code>00 00 00 2A</code> can denote the unsigned integer 42 in big-endian order; another format could treat them as a fixed four-byte token, part of a floating-point bit pattern, or four independent flags. A schema decides which interpretation is authorized. A parser must enforce that schema rather than infer meaning from whatever values appear plausible.</p>
+</section><section aria-labelledby="heading-why-a-schema-contract-is-necessary" id="why-a-schema-contract-is-necessary"><h2 id="heading-why-a-schema-contract-is-necessary">Why a Schema Contract Is Necessary</h2>
+<p>A program may maintain an object with an integer identifier, a person's display name, and an optional event time. In memory, those values may involve pointers, object headers, runtime-specific strings, tagged integers, alignment gaps, or garbage collector metadata. Copying the memory image is not a general serialization strategy: addresses cannot be reused as valid pointers by another process, padding may contain unspecified bytes, and language/ABI conventions can change the layout. Even within one programming language, compiler options, platform architecture, or a library update may affect representation.</p>
+<p>A portable message replaces accidental layout with explicit rules. An identifier can be a 32-bit unsigned integer, encoded big-endian. A name can be UTF-8 preceded by a byte count. An optional timestamp can be signaled by a presence flag and stored as a 64-bit count of whole seconds from a defined epoch. A reader needs no insight into the sender's object model; it needs only the agreed contract and the bytes it receives. The contract also establishes when a value is invalid, such as a length beyond an allowed maximum or a timestamp field present without enough bytes.</p>
+<p>This is an <strong>interoperability</strong> and an <strong>operational governance</strong> problem. Once messages are archived or passed between independently deployed services, a schema is a public interface. Field-number reuse, unspecified defaults, inconsistent normalization, or silent truncation can cause data loss even when neither side crashes. Documenting and testing contracts prevents semantic drift from masquerading as successful decoding.</p>
+</section><section aria-labelledby="heading-serialization-deserialization-and-the-round-trip" id="serialization-deserialization-and-the-round-trip"><h2 id="heading-serialization-deserialization-and-the-round-trip">Serialization, Deserialization, and the Round Trip</h2>
+<p>Formally, let <code>E_S(v)</code> be the encoder for schema <code>S</code> and value <code>v</code>; let <code>D_S(b)</code> be the corresponding decoder for a valid byte string <code>b</code>. A basic correctness goal is <code>D_S(E_S(v)) = v</code> for values within the schema's defined domain. This property is a <strong>same-schema round trip</strong>, and it requires care about equivalence: for example, two Unicode spellings may appear identical but be distinct code-point sequences, while some floating-point NaN payloads do not survive conversion through all programming languages. A serializer that loses these distinctions must document the intended equivalence relation.</p>
+<p>The reverse statement, <code>E_S(D_S(b)) = b</code>, is <em>not</em> generally required. A format might permit several encodings of a single value, unordered map keys, explicit default fields, alternative variable-length integer encodings, or unknown extension fields. A reader may accept several valid spellings and a writer may emit one canonical form. It is therefore useful to distinguish <strong>semantic round-trip fidelity</strong>, <strong>byte-for-byte reproducibility</strong>, and <strong>preservation of unknown information</strong> as separate design goals.</p>
+<p>Even a flawless same-schema round trip does not demonstrate compatibility between software versions. Suppose version 2 reassigns field <code>1</code> from <code>account_id</code> to <code>status_code</code>. The new encoder and decoder can round-trip their own messages perfectly while an older consumer decodes the wrong business meaning. Cross-version testing must specifically examine old-writer/new-reader and new-writer/old-reader combinations, not merely the new implementation's self-tests.</p>
+</section><section aria-labelledby="heading-contract-layers-framing-wire-encoding-and-semantics" id="contract-layers-framing-wire-encoding-and-semantics"><h2 id="heading-contract-layers-framing-wire-encoding-and-semantics">Contract Layers: Framing, Wire Encoding, and Semantics</h2>
+<p>A useful design separates at least three layers. <strong>Framing</strong> says where one message begins and ends: a fixed record size, a length prefix, a sentinel delimiter with escaping, or a transport-level boundary that is preserved by the application protocol. <strong>Wire encoding</strong> says how fields are represented: their order, tags, numeric formats, string byte counts, and byte order. <strong>Semantics</strong> says what values mean: whether timestamp zero is valid, which identifiers are reserved, whether names are nonempty, and how missing fields differ from zero values.</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Contract question</th>
+<th>Failure when unspecified</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framing</td>
+<td>Where does the current message stop?</td>
+<td>A reader consumes bytes from the next record or waits forever.</td>
+</tr>
+<tr>
+<td>Field encoding</td>
+<td>How is an integer or string represented?</td>
+<td>The same bytes decode to different values on different platforms.</td>
+</tr>
+<tr>
+<td>Presence</td>
+<td>Is a field missing, null, or explicitly zero?</td>
+<td>A real value is silently replaced by a default.</td>
+</tr>
+<tr>
+<td>Schema evolution</td>
+<td>What may new and old readers ignore or reject?</td>
+<td>A new field causes ambiguous or destructive interpretation.</td>
+</tr>
+<tr>
+<td>Validation</td>
+<td>What ranges and combinations are legal?</td>
+<td>A structurally parseable message violates the application's rules.</td>
+</tr>
+<tr>
+<td>Security and resources</td>
+<td>How much input, memory, and recursion are allowed?</td>
+<td>An untrusted message consumes excessive resources or bypasses checks.</td>
+</tr>
+</tbody>
+</table>
+<p>These layers may appear in the same specification, but they must not be conflated. A TCP connection transports an ordered stream of bytes, <strong>not</strong> independently framed application records; a <code>recv</code> call may return half a record or several records. A file-system read similarly obtains available bytes, not a promise that a declared header length is true. This article uses a complete bounded message for its worked example; the next article develops stream framing in depth.</p>
+</section><section aria-labelledby="heading-fixed-layouts-tagged-fields-and-self-describing-data" id="fixed-layouts-tagged-fields-and-self-describing-data"><h2 id="heading-fixed-layouts-tagged-fields-and-self-describing-data">Fixed Layouts, Tagged Fields, and Self-Describing Data</h2>
+<p><strong>Fixed-layout formats</strong> place fields at known positions or in a defined sequence. Their attractions include low metadata overhead, simple bounds calculations, and predictable decoding. Their costs arise when optional fields or later revisions force offsets to move. A field introduced in the middle may break an older reader that assumes following fields start at fixed positions. Version-aware decoders can accommodate change, but not by pretending every historical layout was identical.</p>
+<p><strong>Tagged formats</strong> associate encoded fields with identifiers or keys. A reader can locate recognized fields and often skip unknown ones when the wire grammar makes skipping possible. Protocol Buffers, for example, encodes field numbers and wire types in tags; it does not transmit human-readable field names for ordinary binary messages. Tags support extensibility, but only under restrictions: field identifiers must retain their established meanings, and incompatible changes may remain breaking despite the presence of tags.</p>
+<p><strong>Self-describing</strong> is a matter of degree. CBOR identifies core data types within the stream, including a distinction between byte strings and UTF-8 text strings, but knowing that a value is a map does not by itself tell the application which key names are required or what an account identifier means. Avro binary data generally relies on a writer schema to interpret fields, and its object container file format can carry a schema in the file's metadata. Compactness, random access, schema evolution, streaming convenience, and validation must be evaluated against actual workloads; none follows automatically from the label “binary.”</p>
+</section><section aria-labelledby="heading-field-identity-ordering-and-reserved-space" id="field-identity-ordering-and-reserved-space"><h2 id="heading-field-identity-ordering-and-reserved-space">Field Identity, Ordering, and Reserved Space</h2>
+<p>A contract needs a stable way to identify fields. In a positional format, identity follows order and position: the first 32-bit field is <code>id</code>, the next byte is <code>flags</code>, and so forth. In a tagged format, identity follows an explicitly assigned number or key. A field's <em>name</em> may be a documentation convenience while its number is the permanent wire identity. Changing labels without changing wire meaning may be harmless in one format but breaking for name-based reflection, JSON projections, or tooling.</p>
+<p>Ordering also has distinct meanings. A fixed-layout structure may require a particular sequence of fields. A tagged decoder may accept fields in multiple orders, even if the serializer generally emits one preferred ordering. A map data type may have no intrinsic application-level order. Software should not assume serialized field ordering is stable unless its format expressly guarantees it; this affects hashing, signatures, bytewise diffs, test snapshots, and caching.</p>
+<p>Leave no ambiguous “reserved for future use” spaces. Define whether reserved bits must be zero, whether unknown tags are to be skipped or retained, and whether removed field numbers are forbidden from reuse. In Protocol Buffers, reserving retired field numbers is an important defense against later assigning a new meaning to old stored data. In a fixed-layout scheme, an explicit version gate or typed extension section can make later additions safer than adding undeclared bytes to the end of an old record.</p>
+</section><section aria-labelledby="heading-numeric-width-signedness-and-byte-order" id="numeric-width-signedness-and-byte-order"><h2 id="heading-numeric-width-signedness-and-byte-order">Numeric Width, Signedness, and Byte Order</h2>
+<p>The same numeric value has many binary encodings. Decimal 42 can be <code>2A</code> as one byte; <code>00 2A</code> as a 16-bit big-endian integer; or <code>2A 00 00 00</code> as a 32-bit little-endian integer. A contract must identify the width, signedness, and byte order for every multibyte numeric field. For signed values, it should identify the representation, ordinarily two's complement in modern interchange specifications. For floating-point values, it must establish the exact format and any handling of NaNs, infinities, subnormals, and negative zero that matters to the application.</p>
+<p>Variable-length integer encodings trade fixed-size predictability for compact values. A base-128 varint may use one byte for small numbers and several bytes for large numbers; formats differ in how they handle signed values (for example, ZigZag mapping versus ordinary two's-complement-style varints). Do not treat all “varint” encodings as interchangeable. Also distinguish length <em>in bytes on the wire</em> from a decoded integer count: a three-byte varint header may represent a much larger payload that must still be bounded before allocation.</p>
+<table>
+<thead>
+<tr>
+<th>Representation</th>
+<th>Value or field</th>
+<th>Illustrative bytes</th>
+<th>Key interpretation rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unsigned 16-bit, big-endian</td>
+<td>42</td>
+<td><code>00 2A</code></td>
+<td>Most-significant byte first.</td>
+</tr>
+<tr>
+<td>Unsigned 16-bit, little-endian</td>
+<td>42</td>
+<td><code>2A 00</code></td>
+<td>Least-significant byte first.</td>
+</tr>
+<tr>
+<td>Unsigned 32-bit, big-endian</td>
+<td>42</td>
+<td><code>00 00 00 2A</code></td>
+<td>Four bytes regardless of magnitude.</td>
+</tr>
+<tr>
+<td>Unsigned base-128 varint</td>
+<td>42</td>
+<td><code>2A</code></td>
+<td>Small integer occupies one byte.</td>
+</tr>
+<tr>
+<td>Signed 8-bit, two's complement</td>
+<td>−1</td>
+<td><code>FF</code></td>
+<td>Same bits denote 255 if interpreted unsigned.</td>
+</tr>
+<tr>
+<td>UTF-8 text</td>
+<td><code>Bé</code></td>
+<td><code>42 C3 A9</code></td>
+<td>Two Unicode characters occupy three bytes.</td>
+</tr>
+</tbody>
+</table>
+<p>The table is deliberately limited to individual fields. The enclosing record must also specify whether there is a length prefix, tag, type marker, checksum, or other information surrounding these bytes.</p>
+</section><section aria-labelledby="heading-text-fields-and-unicode-boundaries" id="text-fields-and-unicode-boundaries"><h2 id="heading-text-fields-and-unicode-boundaries">Text Fields and Unicode Boundaries</h2>
+<p>Strings require more than a declared byte count. A schema needs to state the character encoding, commonly UTF-8, plus validation and length semantics. For UTF-8, the number of bytes can differ from the number of Unicode code points, and neither directly equals the number of visible grapheme clusters. A byte-length prefix belongs to the encoded sequence, not to a character count. A string that contains two letters can occupy three or more bytes.</p>
+<p>A receiver should reject malformed UTF-8 if the contract requires strict UTF-8; silent replacement with a substitute character changes the data and may cause identifiers to compare differently. Unicode normalization, case-folding, allowed characters, forbidden NUL bytes, and maximum length are <em>semantic</em> constraints that should be specified separately. A lossless binary protocol can preserve UTF-8 bytes exactly without normalizing them, which is often preferable when canonicalization is not explicitly required.</p>
+<p>In the worked contract below, a display name is a strictly decoded UTF-8 byte sequence of one to 64 bytes, without U+0000. It has no mandated Unicode normalization form; consequently, visually equivalent but byte-distinct names remain distinct. An application that needs equality rules must impose them independently rather than assuming a serializer has already solved identity matching.</p>
+</section><section aria-labelledby="heading-null-missing-default-and-optional-values" id="null-missing-default-and-optional-values"><h2 id="heading-null-missing-default-and-optional-values">Null, Missing, Default, and Optional Values</h2>
+<p><strong>Missing</strong> means a field was not encoded; <strong>null</strong> means an explicit marker for the absence of a value when the format supports one; <strong>default</strong> is a value supplied by a schema or application when a field is omitted; and <strong>zero</strong> is an ordinary numeric value. These states are not synonymous. If timestamp zero means the Unix epoch, treating zero as “not present” destroys legitimate information. A bit mask, tagged presence indicator, or union discriminant can preserve this distinction.</p>
+<p>Defaults also interact with evolution. Adding a new field with a default may permit an old writer's record to be read under a new schema in some formats. The reverse direction is not guaranteed: an old reader may reject unknown fields, ignore them, or interpret a changed field under an obsolete rule. Even where parsers succeed, a newly introduced field can become <strong>semantically required</strong>, making old records inadequate for a new business process.</p>
+<p>Presence should be tested explicitly. In Python, the expression <code>if timestamp:</code> treats zero as absent; a correct optional-integer encoder uses <code>timestamp is not None</code>. In JavaScript, checking a numeric value for truthiness has a similar issue. These are easy mistakes because the in-memory language type system can obscure an exact byte-contract distinction.</p>
+</section><section aria-labelledby="heading-a-complete-fictional-contract-mgu-sr-version-1" id="a-complete-fictional-contract-mgu-sr-version-1"><h2 id="heading-a-complete-fictional-contract-mgu-sr-version-1">A Complete Fictional Contract: MGU-SR Version 1</h2>
+<p>The following format, called <strong>MGU-SR</strong>, is <strong>fictional instructional material</strong>, not an industry standard. It represents a complete message containing <strong>exactly two records</strong> in the worked example. The contract itself permits one through 100 records. Each record has a 32-bit unsigned identifier, a UTF-8 display name, and an optional timestamp. The timestamp is an unsigned 64-bit count of whole seconds since 1970-01-01 00:00:00 UTC, with zero as a valid present value. This schema uses big-endian numeric fields and no implicit padding or machine-language pointers.</p>
+<p>The complete message begins with an eight-byte fixed header: four ASCII signature bytes <code>MGSR</code>, one one-byte version set to <code>01</code>, one reserved flags byte set to <code>00</code>, and a two-byte unsigned big-endian record count. It is followed immediately by that number of records and <strong>no trailing bytes</strong>. A record has a two-byte unsigned big-endian <em>body length</em>, followed by the exact body bytes described below. The body length excludes the two length bytes themselves. File/stream framing outside the complete message is an independent responsibility; this format is intended for an already bounded message body.</p>
+<h3>MGU-SR message header</h3>
+<table>
+<thead>
+<tr>
+<th>Offset from message start</th>
+<th style="text-align:right">Width</th>
+<th>Field</th>
+<th>Valid value or rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">4 bytes</td>
+<td>Signature</td>
+<td>ASCII <code>MGSR</code>, bytes <code>4D 47 53 52</code>.</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:right">1 byte</td>
+<td>Version</td>
+<td>Exactly <code>01</code> for this specification.</td>
+</tr>
+<tr>
+<td>5</td>
+<td style="text-align:right">1 byte</td>
+<td>Header flags</td>
+<td>Exactly <code>00</code>; nonzero is invalid.</td>
+</tr>
+<tr>
+<td>6</td>
+<td style="text-align:right">2 bytes</td>
+<td>Record count</td>
+<td>Big-endian integer from 1 to 100 inclusive.</td>
+</tr>
+<tr>
+<td>8</td>
+<td style="text-align:right">Variable</td>
+<td>Repeated records</td>
+<td>Exactly the declared number, sequentially.</td>
+</tr>
+</tbody>
+</table>
+<h3>MGU-SR record body</h3>
+<table>
+<thead>
+<tr>
+<th>Offset within body</th>
+<th style="text-align:right">Width</th>
+<th>Field</th>
+<th>Valid value or rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">4 bytes</td>
+<td><code>record_id</code></td>
+<td>Unsigned 32-bit big-endian integer; range 1–4,294,967,295.</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:right">1 byte</td>
+<td>Presence flags</td>
+<td>Bit 0 indicates timestamp; all bits 1–7 must be zero.</td>
+</tr>
+<tr>
+<td>5</td>
+<td style="text-align:right">1 byte</td>
+<td>Name byte length, <code>N</code></td>
+<td>Integer 1–64 inclusive.</td>
+</tr>
+<tr>
+<td>6</td>
+<td style="text-align:right"><code>N</code> bytes</td>
+<td>Name</td>
+<td>Strict UTF-8; decoded text must not contain U+0000.</td>
+</tr>
+<tr>
+<td><code>6+N</code></td>
+<td style="text-align:right">8 bytes iff flag bit 0 set</td>
+<td><code>event_time</code></td>
+<td>Unsigned 64-bit big-endian Unix seconds.</td>
+</tr>
+<tr>
+<td>End of body</td>
+<td style="text-align:right">0 bytes</td>
+<td>End</td>
+<td>No unconsumed bytes permitted.</td>
+</tr>
+</tbody>
+</table>
+<p>Because the minimum valid name occupies one byte, the smallest record body is <code>4 + 1 + 1 + 1 = 7</code> bytes. The largest is <code>4 + 1 + 1 + 64 + 8 = 78</code> bytes. These bounds are useful early validation gates but do <strong>not</strong> replace parsing the internal fields. The largest possible complete message with 100 records is <code>8 + 100 × (2 + 78) = 8,008</code> bytes; this pedagogical format therefore sets a fixed <strong>maximum complete message size of 8,008 bytes</strong>. The reader rejects a larger input before attempting record decoding.</p>
+<p>Record identifiers must be nonzero; this specification deliberately permits duplicate IDs because it models a sequence of events rather than a key-unique table. A consuming application that requires unique IDs must validate that additional invariant. Record order is significant: encoding the records in the opposite order produces a different message. A receiver rejects wrong signatures, unsupported versions, nonzero reserved bits, counts outside range, malformed UTF-8, impossible lengths, unsupported presence bits, and extraneous trailing bytes.</p>
+</section><section aria-labelledby="heading-worked-message-two-records-one-optional-timestamp" id="worked-message-two-records-one-optional-timestamp"><h2 id="heading-worked-message-two-records-one-optional-timestamp">Worked Message: Two Records, One Optional Timestamp</h2>
+<p>We will serialize two records in order. Record A has <code>record_id = 42</code>, name <code>Ada</code>, and timestamp <code>1,700,000,000</code>; record B has <code>record_id = 43</code>, name <code>Bé</code>, and <strong>no timestamp</strong>. Note that the name <code>Bé</code> contains two characters but is three UTF-8 bytes: <code>42 C3 A9</code>. The timestamp <code>1,700,000,000</code> is <code>0x6553F100</code>, so as an eight-byte big-endian integer it is <code>00 00 00 00 65 53 F1 00</code>.</p>
+<pre><code class="language-text">Offset  Bytes                                             Meaning
+------  ------------------------------------------------  ----------------------------------
+0000    4D 47 53 52 01 00 00 02                           Signature, version, flags, count 2
+0008    00 11                                             Record A body length = 17
+000A    00 00 00 2A                                       Record A ID = 42
+000E    01                                                Timestamp present
+000F    03                                                Name length = 3 bytes
+0010    41 64 61                                          UTF-8 "Ada"
+0013    00 00 00 00 65 53 F1 00                           Timestamp = 1,700,000,000
+001B    00 09                                             Record B body length = 9
+001D    00 00 00 2B                                       Record B ID = 43
+0021    00                                                Timestamp absent
+0022    03                                                Name length = 3 bytes
+0023    42 C3 A9                                          UTF-8 "Bé"
+------
+End at offset 0x26 = 38 bytes total. No trailing data.
+</code></pre>
+<p>The accounting is explicit: the header occupies 8 bytes; record A occupies 2 length bytes plus 17 body bytes; record B occupies 2 length bytes plus 9 body bytes. Thus the total is <code>8 + (2 + 17) + (2 + 9) = 38</code> bytes. The first record's body begins at decimal offset 10 and ends just before offset 27 (<code>0x1B</code>). Record B's body starts at decimal offset 29 and finishes immediately before decimal offset 38. A byte-exact example is valuable because it permits independent implementations to produce and consume the same message without relying on the original author's source code.</p>
+<p>The distinction between <strong>presence</strong> and <strong>value</strong> is testable here. For record B, the bit is zero and no eight-byte timestamp follows. A third record with presence bit one and eight timestamp bytes of <code>00</code> would mean an <em>explicit</em> event time of zero, not an absent timestamp. Conflating those cases would violate the contract despite leaving an apparently valid integer value.</p>
+</section><section aria-labelledby="heading-byte-exact-python-encoder" id="byte-exact-python-encoder"><h2 id="heading-byte-exact-python-encoder">Byte-Exact Python Encoder</h2>
+<p>Python's standard-library <code>struct</code> module provides controlled-width integer encoding. The encoder below follows the MGU-SR specification: it validates each value, measures UTF-8 <strong>bytes</strong>, writes big-endian numeric fields, and represents timestamp presence independently of its numeric value. It does not serialize Python object memory.</p>
+<pre><code class="language-python">import struct
+
+MAGIC = b"MGSR"
+MAX_RECORDS = 100
+MAX_MESSAGE = 8008
+
+
+def encode_mgusr(records):
+    if not 1 &lt;= len(records) &lt;= MAX_RECORDS:
+        raise ValueError("Record count must be 1..100")
+    output = bytearray(MAGIC + bytes([1, 0]))
+    output += struct.pack("&gt;H", len(records))
+
+    for record in records:
+        rid = record["id"]
+        name = record["name"]
+        timestamp = record.get("timestamp", None)
+
+        if type(rid) is not int or not 1 &lt;= rid &lt;= 0xFFFFFFFF:
+            raise ValueError("ID must be uint32 and nonzero")
+        if type(name) is not str or not name or "\x00" in name:
+            raise ValueError("Name must be nonempty text without NUL")
+        name_bytes = name.encode("utf-8", errors="strict")
+        if not 1 &lt;= len(name_bytes) &lt;= 64:
+            raise ValueError("Name must encode to 1..64 UTF-8 bytes")
+        if timestamp is not None and (
+            type(timestamp) is not int or not 0 &lt;= timestamp &lt;= 0xFFFFFFFFFFFFFFFF
+        ):
+            raise ValueError("Timestamp must be uint64 or absent")
+
+        flags = 1 if timestamp is not None else 0
+        body = bytearray(struct.pack("&gt;I", rid))
+        body.extend((flags, len(name_bytes)))
+        body.extend(name_bytes)
+        if flags:
+            body += struct.pack("&gt;Q", timestamp)
+        assert 7 &lt;= len(body) &lt;= 78
+        output += struct.pack("&gt;H", len(body)) + body
+
+    if len(output) &gt; MAX_MESSAGE:
+        raise ValueError("Message exceeds bounded format limit")
+    return bytes(output)
+
+
+example = encode_mgusr([
+    {"id": 42, "name": "Ada", "timestamp": 1_700_000_000},
+    {"id": 43, "name": "Bé", "timestamp": None},
+])
+print(len(example))       # 38
+print(example.hex(" "))  # Full worked hex dump, in transmission order
+</code></pre>
+<p>The example intentionally avoids implicit object introspection and sets every length explicitly. The exception handling represents <strong>validation</strong>, not a guarantee that the network or storage layer preserves the bytes. The caller still has to arrange for a complete bounded message; it must not treat arbitrary <code>recv</code> fragments as independent MGU-SR messages.</p>
+</section><section aria-labelledby="heading-a-bounded-python-decoder" id="a-bounded-python-decoder"><h2 id="heading-a-bounded-python-decoder">A Bounded Python Decoder</h2>
+<p>A decoder should trust neither the declared count nor the length prefix until checking available data. The implementation below enforces the exact header and per-record rules. Importantly, it first verifies <code>body_length &lt;= remaining_input</code> before looking inside a record, and it rejects unused bytes rather than silently accepting a potentially ambiguous suffix.</p>
+<pre><code class="language-python">import struct
+
+
+def decode_mgusr(blob):
+    if type(blob) is not bytes or not 8 &lt;= len(blob) &lt;= 8008:
+        raise ValueError("Input must be a bounded bytes message")
+    if blob[:4] != b"MGSR" or blob[4] != 1 or blob[5] != 0:
+        raise ValueError("Unsupported signature, version, or header flags")
+    count = struct.unpack_from("&gt;H", blob, 6)[0]
+    if not 1 &lt;= count &lt;= 100:
+        raise ValueError("Invalid record count")
+
+    offset = 8
+    result = []
+    for _ in range(count):
+        if len(blob) - offset &lt; 2:
+            raise ValueError("Missing record-length field")
+        body_len = struct.unpack_from("&gt;H", blob, offset)[0]
+        offset += 2
+        if not 7 &lt;= body_len &lt;= 78 or body_len &gt; len(blob) - offset:
+            raise ValueError("Invalid or truncated record body")
+        end = offset + body_len
+        rid = struct.unpack_from("&gt;I", blob, offset)[0]
+        flags = blob[offset + 4]
+        name_len = blob[offset + 5]
+        if rid == 0 or flags &amp; 0xFE or not 1 &lt;= name_len &lt;= 64:
+            raise ValueError("Invalid record metadata")
+
+        name_end = offset + 6 + name_len
+        if name_end &gt; end:
+            raise ValueError("Name exceeds record boundary")
+        name = blob[offset + 6:name_end].decode("utf-8", errors="strict")
+        if "\x00" in name:
+            raise ValueError("Name contains forbidden NUL")
+
+        if flags &amp; 1:
+            if end - name_end != 8:
+                raise ValueError("Wrong timestamp field length")
+            timestamp = struct.unpack_from("&gt;Q", blob, name_end)[0]
+        else:
+            if end != name_end:
+                raise ValueError("Unexpected bytes after name")
+            timestamp = None
+
+        result.append({"id": rid, "name": name, "timestamp": timestamp})
+        offset = end
+
+    if offset != len(blob):
+        raise ValueError("Trailing bytes after last record")
+    return result
+
+# Run after defining encode_mgusr and its example from the previous section.
+assert decode_mgusr(example) == [
+    {"id": 42, "name": "Ada", "timestamp": 1_700_000_000},
+    {"id": 43, "name": "Bé", "timestamp": None},
+]
+</code></pre>
+<p>This example emphasizes correctness over speed. A production parser would additionally establish a threat model, distinguish I/O failure from malformed content, test each failure branch, and bound CPU and memory usage before large allocations or deeply nested structures. Most notably, the implementation does <strong>not</strong> identify malformed text by lossy decoding with replacement characters; it rejects a violation of the declared UTF-8 contract.</p>
+</section><section aria-labelledby="heading-reading-the-same-contract-in-windows-powershell-51" id="reading-the-same-contract-in-windows-powershell-51"><h2 id="heading-reading-the-same-contract-in-windows-powershell-51">Reading the Same Contract in Windows PowerShell 5.1</h2>
+<p>PowerShell 5.1 can inspect MGU-SR bytes through .NET without relying on machine-native integer endianness. The short routine below verifies the header and reads the count and first record's 16-bit length using explicit shifts. It is an <strong>inspection example</strong>, not a substitute for the full decoder's name, timestamp, body-boundary, and record-count checks.</p>
+<pre><code class="language-powershell">[byte[]]$bytes = [System.IO.File]::ReadAllBytes("C:\temp\mgusr.bin")
+if ($bytes.Length -lt 8) { throw "Message too short" }
+if ([System.Text.Encoding]::ASCII.GetString($bytes, 0, 4) -ne "MGSR") {
+    throw "Wrong signature"
+}
+if ($bytes[4] -ne 1 -or $bytes[5] -ne 0) {
+    throw "Unsupported version or flags"
+}
+$count = (([int]$bytes[6] -shl 8) -bor [int]$bytes[7])
+if ($count -lt 1 -or $count -gt 100) { throw "Invalid record count" }
+if ($bytes.Length -lt 10) { throw "No first record prefix" }
+$length = (([int]$bytes[8] -shl 8) -bor [int]$bytes[9])
+if ($length -lt 7 -or $length -gt 78 -or $length -gt ($bytes.Length - 10)) {
+    throw "Invalid first record length"
+}
+"Records: $count; first record body bytes: $length"
+</code></pre>
+<p>In this example, <code>-shl</code> and <code>-bor</code> reconstruct big-endian unsigned 16-bit values explicitly. The approach does not depend on how <code>BitConverter</code> behaves on a particular host. A complete PowerShell implementation should walk the bounded records, decode UTF-8 using a <strong>throw-on-invalid-bytes</strong> decoder if strict conformance is required, and check that it consumes exactly the stated count with no trailing data. The Python decoder above provides the complete behavioral reference.</p>
+</section><section aria-labelledby="heading-golden-vectors-and-cross-language-interoperability" id="golden-vectors-and-cross-language-interoperability"><h2 id="heading-golden-vectors-and-cross-language-interoperability">Golden Vectors and Cross-Language Interoperability</h2>
+<p>A <strong>golden vector</strong> is a contract test consisting of an input value, an expected byte sequence, and the decoded result. The 38-byte MGU-SR example serves as one vector: independently written programs must agree on the exact hex sequence, not just on a high-level object. Additional vectors should include timestamp zero, the maximum permitted UTF-8 name length, a non-ASCII name, a one-record message, and the maximum allowed record count. Tests with malformed bytes should verify <strong>rejection</strong>, not an invented decoded value.</p>
+<table>
+<thead>
+<tr>
+<th>Test vector</th>
+<th>Expected result</th>
+<th>Contract feature exercised</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Two worked records (38 bytes)</td>
+<td>Accept; two exact records</td>
+<td>Big-endian counts, optional field, UTF-8 byte length.</td>
+</tr>
+<tr>
+<td>Timestamp present with eight zero bytes</td>
+<td>Accept; timestamp is integer zero</td>
+<td>Presence is separate from value.</td>
+</tr>
+<tr>
+<td>Name <code>Bé</code> encoded as <code>42 C3 A9</code></td>
+<td>Accept; name length is 3</td>
+<td>UTF-8 bytes, not character count.</td>
+</tr>
+<tr>
+<td>Record length says 18 but only 17 body bytes remain</td>
+<td>Reject</td>
+<td>Input bounds checked before parsing.</td>
+</tr>
+<tr>
+<td>Version byte <code>02</code></td>
+<td>Reject under version 1 reader</td>
+<td>No guessed cross-version behavior.</td>
+</tr>
+<tr>
+<td>Reserved flag <code>80</code></td>
+<td>Reject</td>
+<td>Unknown critical/forbidden bits.</td>
+</tr>
+<tr>
+<td>Name bytes <code>C3 28</code></td>
+<td>Reject</td>
+<td>Strict UTF-8 validation.</td>
+</tr>
+<tr>
+<td>One extra byte after the declared records</td>
+<td>Reject</td>
+<td>Exact message consumption.</td>
+</tr>
+</tbody>
+</table>
+<p>A reliable interoperability test suite includes at least two truly independent implementations. If both encoder and decoder share the same mistaken assumption, their round trip can pass; an independent golden-hex oracle exposes more errors. Differential testing across implementations and schema versions is especially useful for boundary conditions such as maximum varint widths, zero-length collections, UTF-8 errors, and integer overflow.</p>
+</section><section aria-labelledby="heading-evolution-as-a-matrix-not-a-single-label" id="evolution-as-a-matrix-not-a-single-label"><h2 id="heading-evolution-as-a-matrix-not-a-single-label">Evolution as a Matrix, Not a Single Label</h2>
+<p>Schema compatibility is directional. A <strong>new reader with old data</strong> is a different scenario from an <strong>old reader with new data</strong>. It is also possible for a parse to succeed while meaning changes. Rather than saying simply that a format is “backward compatible,” teams should name the exact writer and reader versions, delivery paths, and semantic expectations involved.</p>
+<table>
+<thead>
+<tr>
+<th>Writer → Reader</th>
+<th>Primary question</th>
+<th>Example hazard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V1 writer → V1 reader</td>
+<td>Does the original contract round-trip?</td>
+<td>Byte-order or length mismatch.</td>
+</tr>
+<tr>
+<td>V1 writer → V2 reader</td>
+<td>Can new software read archived data?</td>
+<td>New application requires an absent field.</td>
+</tr>
+<tr>
+<td>V2 writer → V1 reader</td>
+<td>Can an old deployment consume new messages?</td>
+<td>Old parser rejects an unknown feature.</td>
+</tr>
+<tr>
+<td>V2 writer → V2 reader</td>
+<td>Does the new contract implement itself?</td>
+<td>The implementation omits a newly required field.</td>
+</tr>
+</tbody>
+</table>
+<p>For MGU-SR, the <strong>version 1 decoder explicitly rejects version 2</strong>. That is correct behavior under this particular contract. It does not mean the format can never evolve; it means that the new specification must define version-2 behavior and decide whether a version-2 reader accepts version-1 messages. A future extension might define separate tagged records or a different signature. It would be incorrect to append extra bytes to a version-1 record and proclaim compatibility, because the version-1 decoder requires each body to end at precisely the position implied by its fields.</p>
+<p>Evolution policy should also govern schema identifiers, archived schema copies, version negotiation, rollback, release sequencing, and migration of stored messages. Without knowing which schema wrote old bytes, a future reader may have no reliable way to recover their semantics.</p>
+</section><section aria-labelledby="heading-safe-and-unsafe-change-patterns" id="safe-and-unsafe-change-patterns"><h2 id="heading-safe-and-unsafe-change-patterns">Safe and Unsafe Change Patterns</h2>
+<p>Some changes are often manageable, depending on the serialization technology: introducing an optional tagged field with a new identifier; changing a human-readable description; or changing an application default when all consumers agree. Other changes are often unsafe: reusing a numeric tag for a new meaning, changing an established byte order, narrowing numeric widths without range analysis, changing an enum value's meaning, or changing units from milliseconds to seconds without altering the schema identity.</p>
+<table>
+<thead>
+<tr>
+<th>Proposed change</th>
+<th>Potential binary effect</th>
+<th>Decision requirement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Add a new tagged optional field</td>
+<td>Older readers may skip it</td>
+<td>Confirm format behavior, defaults, and semantic necessity.</td>
+</tr>
+<tr>
+<td>Reassign a field number</td>
+<td>Same bytes acquire another meaning</td>
+<td>Treat as breaking; prohibit reuse of retired IDs.</td>
+</tr>
+<tr>
+<td>Narrow <code>uint64</code> to <code>uint32</code></td>
+<td>Values may overflow or be truncated</td>
+<td>Audit historical range and readers; usually breaking.</td>
+</tr>
+<tr>
+<td>Reorder positional fields</td>
+<td>Existing offsets change</td>
+<td>Introduce a new layout/version or explicit migration.</td>
+</tr>
+<tr>
+<td>Change timestamp units</td>
+<td>Bytes may parse but represent different times</td>
+<td>Treat as semantic breaking change.</td>
+</tr>
+<tr>
+<td>Add a new enum symbol</td>
+<td>Older code may not recognize it</td>
+<td>Define unknown-symbol and fallback policy.</td>
+</tr>
+<tr>
+<td>Remove a field</td>
+<td>Old readers may need it</td>
+<td>Assess both reading directions and application invariants.</td>
+</tr>
+<tr>
+<td>Change UTF-8 normalization policy</td>
+<td>Equal-looking strings may compare differently</td>
+<td>Define semantic migration and identity rules.</td>
+</tr>
+</tbody>
+</table>
+<p>The word “optional” is not a complete compatibility guarantee. A new optional field might carry a security-critical access control decision. If an old consumer ignores it, the old consumer's behavior may be unsafe despite successfully parsing the rest. The schema registry and change-review process must therefore address <strong>semantic compatibility</strong>, not merely syntactic parseability.</p>
+</section><section aria-labelledby="heading-protocol-buffers-tags-wire-types-and-compatibility" id="protocol-buffers-tags-wire-types-and-compatibility"><h2 id="heading-protocol-buffers-tags-wire-types-and-compatibility">Protocol Buffers: Tags, Wire Types, and Compatibility</h2>
+<p>Protocol Buffers illustrates schema-led tagged encoding. Each field in a <code>.proto</code> message has a numeric identifier; on the binary wire, a key combines that number with a wire type. The low three bits identify the wire type and the remaining bits identify the field number. For example, in a simple message with <code>uint32 id = 1</code> and <code>string name = 2</code>, the value <code>id = 42</code> and name <code>Ada</code> can produce bytes <code>08 2A 12 03 41 64 61</code> (field 1 varint, field 2 length-delimited UTF-8). This is a <strong>field-level illustration</strong>, not an MGU-SR record.</p>
+<pre><code class="language-protobuf">syntax = "proto3";
+message PersonSample {
+  uint32 id = 1;
+  string name = 2;
+}
+// id=42, name="Ada": 08 2A 12 03 41 64 61
+</code></pre>
+<p>A reader can skip or preserve unknown fields in supported binary APIs because the wire encoding supplies enough structure to advance past them. However, exact unknown-field retention depends on the API and transformations performed; copying recognized values into a new message may discard unknown data. Schema evolution therefore requires stable field numbers, awareness of wire types, reserved numbers/names for retired fields, and testing of language and JSON representations separately. Official guidance also distinguishes <em>wire-safe</em> changes from application-level compatibility. See the <a href="https://protobuf.dev/programming-guides/encoding/">Protocol Buffers encoding guide</a> and <a href="https://protobuf.dev/programming-guides/proto3/">language guide</a>.</p>
+<p>Importantly, <strong>deterministic</strong> serialization in Protocol Buffers should not be interpreted as a universal canonical byte representation suitable for cryptographic signatures across all versions and environments. Field ordering, unknown fields, maps, and implementation changes can affect byte output. When signing or hashing messages, applications need a specifically defined canonicalization strategy or a signed, transmitted byte sequence.</p>
+</section><section aria-labelledby="heading-apache-avro-writer-and-reader-schemas" id="apache-avro-writer-and-reader-schemas"><h2 id="heading-apache-avro-writer-and-reader-schemas">Apache Avro: Writer and Reader Schemas</h2>
+<p>Apache Avro emphasizes schema resolution between the schema used by a <strong>writer</strong> and the one expected by a <strong>reader</strong>. Binary data is compact partly because values need not repeat field names or types inside every record; the writer schema tells the decoder how to interpret the stored sequence. Avro object container files may include the writer schema in file metadata. In other uses, the schema must be delivered or discovered through an external agreement, such as an ID plus a registry.</p>
+<p>During resolution, the reader schema determines which fields are desired and whether defaults can fill fields missing from writer data. An extra writer field not recognized by the reader can be ignored as defined by resolution rules; a reader field absent from the writer schema generally needs an applicable default or resolution fails. Union branches, enum symbols, record names, and type promotions have particular rules and should not be generalized from a single example. Consult the <a href="https://avro.apache.org/docs/1.12.0/specification/">Apache Avro specification</a> for precise matching and resolution semantics.</p>
+<p>Avro demonstrates that a byte stream may carry <strong>very little self-description</strong>, yet still be interoperable when the writer schema is preserved and made available. Losing the writer schema can be as damaging as losing the data, especially for long-lived archives and data pipelines.</p>
+</section><section aria-labelledby="heading-cbor-and-flatbuffers-different-design-trade-offs" id="cbor-and-flatbuffers-different-design-trade-offs"><h2 id="heading-cbor-and-flatbuffers-different-design-trade-offs">CBOR and FlatBuffers: Different Design Trade-offs</h2>
+<p>CBOR, defined by <a href="https://www.rfc-editor.org/rfc/rfc8949.html">RFC 8949</a>, encodes data items using major types and additional information. It distinguishes byte strings from text strings and supports arrays, maps, tags, integers, floating-point values, and indefinite-length structures. A generic decoder can often reconstruct the <em>shape</em> of a value without an external schema. That does not make its application meaning self-evident, nor does it guarantee that there is only one byte sequence per value. The RFC defines deterministic encoding requirements for use cases that need stable serialized bytes, with details such as preferred numeric widths and map-key ordering.</p>
+<p>FlatBuffers takes another approach, designed for efficient access to structured serialized data without fully rebuilding a separate object graph in many common use cases. Its schema evolution documentation explains restrictions for adding fields and preserving compatibility. Its performance depends on data shape, access pattern, runtime, and the costs of validation and indirection; “zero-copy” does not mean unlimited portability or zero parsing overhead. See the official <a href="https://flatbuffers.dev/evolution/">FlatBuffers evolution documentation</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Format family</th>
+<th>Where field interpretation lives</th>
+<th>Principal design consideration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fixed positional layout (MGU-SR example)</td>
+<td>Separate written contract plus version byte</td>
+<td>Compact and easy to inspect; strict version gates needed.</td>
+</tr>
+<tr>
+<td>Protocol Buffers</td>
+<td>Compiled/registered <code>.proto</code> schema and field tags</td>
+<td>Field-number governance and evolution policies.</td>
+</tr>
+<tr>
+<td>Apache Avro binary</td>
+<td>Writer schema plus reader schema resolution</td>
+<td>Retain writer schemas for archives and exchanges.</td>
+</tr>
+<tr>
+<td>CBOR</td>
+<td>In-band item types plus application profile</td>
+<td>Application constraints and canonicalization still matter.</td>
+</tr>
+<tr>
+<td>FlatBuffers</td>
+<td>Schema-defined tables and accessors</td>
+<td>Access efficiency and carefully constrained evolution.</td>
+</tr>
+</tbody>
+</table>
+<p>Comparisons should be made using measured message sizes, encoded/decoded CPU time, allocation counts, partial-access requirements, schema tooling, and upgrade behavior. A small benchmark with synthetic records cannot establish that one format is universally best.</p>
+</section><section aria-labelledby="heading-schema-registries-fingerprints-and-provenance" id="schema-registries-fingerprints-and-provenance"><h2 id="heading-schema-registries-fingerprints-and-provenance">Schema Registries, Fingerprints, and Provenance</h2>
+<p>Many deployed systems separate schema definitions from individual messages. A message might include a compact identifier that refers to an immutable registry entry; a consumer resolves the identifier to the exact schema needed for decoding. This reduces repeated metadata but creates dependencies on registry availability, retention, and access controls. A registry identifier is meaningful only inside its defined namespace and lifecycle. Two organizations that both use ID <code>17</code> have not necessarily agreed on the same schema.</p>
+<p><strong>Fingerprints</strong> or cryptographic hashes can help detect mismatches, but the input being hashed must be specified: raw schema text, normalized/canonical schema form, or a compiled representation can produce different hashes. A hash detects identity according to the selected algorithm and normalization procedure; it does not certify that the schema is safe, semantically correct, or authorized. Signing a schema or its provenance may be appropriate when trust across organizations matters, but the associated key and verification policies must be documented.</p>
+<p>Archive records should retain sufficient context to identify producer, schema version or fingerprint, encoding format, framing version, and sometimes the application-level semantics in force when they were written. Without that information, forensic reconstruction becomes an exercise in guessing the meaning of bits.</p>
+</section><section aria-labelledby="heading-data-integrity-authenticity-and-confidentiality" id="data-integrity-authenticity-and-confidentiality"><h2 id="heading-data-integrity-authenticity-and-confidentiality">Data Integrity, Authenticity, and Confidentiality</h2>
+<p>Serialization does not by itself protect a message against accidental corruption or deliberate tampering. <strong>Length checks</strong> ensure bounded parsing; <strong>checksums</strong> help detect ordinary errors; <strong>cryptographic authentication</strong> establishes integrity and authenticity under a key and threat model; and <strong>encryption</strong> provides confidentiality when correctly designed and deployed. None of those properties follows from using a binary format rather than text.</p>
+<p>A checksum is not a substitute for a message authentication code. A signed data structure may require deterministic bytes or an explicit policy of signing the original transmitted byte sequence. If independently serialized equivalent records can differ in field order or omitted defaults, signing each side's independently produced bytes may fail despite semantic agreement. These choices belong in the protocol contract and its security architecture, not in ad hoc encoder behavior.</p>
+<p>Avoid trusting parser output before validating application permissions. A record with a syntactically valid <code>role = admin</code> field is not proof that the sender is entitled to assign that role. Serialization ensures the interpretation of claimed data; authorization controls whether to act on the claims.</p>
+</section><section aria-labelledby="heading-bounds-resource-limits-and-defensive-deserialization" id="bounds-resource-limits-and-defensive-deserialization"><h2 id="heading-bounds-resource-limits-and-defensive-deserialization">Bounds, Resource Limits, and Defensive Deserialization</h2>
+<p>Untrusted input must be considered adversarial even when it bears a familiar signature. A declared length may be far larger than the available bytes, a nested array may demand unbounded recursion, or a compressed embedded payload may expand enormously. Robust parsers impose limits on <strong>total message bytes</strong>, <strong>record count</strong>, <strong>per-field length</strong>, <strong>nesting depth</strong>, <strong>total allocation</strong>, and <strong>work done</strong>. They validate lengths before slicing, allocating, or advancing pointers.</p>
+<p>Prefer subtraction-based range checks when fixed-width integer overflow is possible. If <code>remaining = input_size - current_position</code> has been shown nonnegative, require <code>field_length &lt;= remaining</code> instead of computing <code>current_position + field_length</code> unchecked and comparing the result against total size. Verify the length of a header before reading any of its fields. Do not assume that a checksum makes lengths trustworthy or that a schema generated by a trusted compiler implies the incoming message itself is trustworthy.</p>
+<p>An object deserializer that invokes arbitrary class constructors or other dynamic behavior may introduce additional security risks independent of the byte format. Treat untrusted input as <em>data</em>, decode into constrained models, and avoid mechanisms that execute code based solely on serialized type names. Finally, fuzz testing and parser differential testing can uncover edge cases that ordinary happy-path examples overlook.</p>
+</section><section aria-labelledby="heading-common-implementation-failures" id="common-implementation-failures"><h2 id="heading-common-implementation-failures">Common Implementation Failures</h2>
+<p>One frequent error is writing a native C or C++ structure directly to disk or a socket. Its layout may include padding, implementation-defined alignment, and native byte order, while its pointer fields are meaningless outside the process. Explicit serializers should write each standardized field in turn, including precisely specified representation and bounds. Another mistake is storing a character count where the decoder expects a UTF-8 byte count; non-ASCII input then shifts the remaining record fields.</p>
+<p>Other failures include assuming one transport read equals one message; interpreting an absent timestamp as zero; treating numeric conversion overflow as an acceptable narrowing conversion; silently replacing malformed text; changing field units without changing schema identity; assuming the latest schema can always interpret old data; and treating an unknown field as harmless even when it changes a security decision. These failures often appear only during mixed-version deployments or adversarial inputs rather than simple local testing.</p>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely contract defect</th>
+<th>Corrective control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Records decode correctly on one CPU but not another</td>
+<td>Native endianness leaked into wire format</td>
+<td>Define and implement explicit byte order.</td>
+</tr>
+<tr>
+<td>String reads past its boundary</td>
+<td>Character count confused with byte count</td>
+<td>Prefix actual encoded byte count.</td>
+</tr>
+<tr>
+<td>Timestamp zero disappears</td>
+<td>Truthiness confused with presence</td>
+<td>Use explicit optional-field indicator.</td>
+</tr>
+<tr>
+<td>Old client accepts but misuses new fields</td>
+<td>Syntax compatible but semantics changed</td>
+<td>Cross-version semantic tests and feature gates.</td>
+</tr>
+<tr>
+<td>Parser allocates enormous buffer</td>
+<td>Untrusted length used before bounds checks</td>
+<td>Enforce size ceilings and remaining-input checks.</td>
+</tr>
+<tr>
+<td>Signature or hash changes unexpectedly</td>
+<td>Serialization not deterministic/canonical</td>
+<td>Define canonical form or sign original bytes.</td>
+</tr>
+<tr>
+<td>Archived data cannot be decoded</td>
+<td>Writer schema lost</td>
+<td>Retain immutable schema identities and definitions.</td>
+</tr>
+</tbody>
+</table>
+</section><section aria-labelledby="heading-a-practical-contract-design-checklist" id="a-practical-contract-design-checklist"><h2 id="heading-a-practical-contract-design-checklist">A Practical Contract Design Checklist</h2>
+<p>Before publishing a binary interface, define a <strong>message boundary</strong> and maximum permitted size. Assign stable field identities or positions. For each field document integer widths, signedness, byte order, encoding, valid values, optionality, and absence semantics. State whether duplicate fields or repeated entries are permitted, whether record ordering matters, and whether trailing data is legal. Specify the accepted version set and the behavior for unknown fields, flags, enum symbols, and future extensions. Do not leave error recovery behavior to the implementer’s discretion when different readers must interoperate.</p>
+<p>Next, publish at least one byte-exact example and a collection of malformed-input vectors. Test independent encoders and decoders across languages and platforms, including older versions. Define who approves schema changes and how schemas are preserved for archives. Document transport framing, authentication, confidentiality, and availability requirements separately. Finally, keep the distinction between <strong>valid encoding</strong> and <strong>valid business action</strong> explicit in the system design.</p>
+<p>For an encyclopedia production pipeline, a good record contract also clarifies provenance: a document identifier, content version, language, and modification time should not change meaning between export, indexing, replication, and archival restoration. A trustworthy format makes the same evidence interpretable years later even after the software implementation changes.</p>
+</section><section aria-labelledby="heading-worked-design-scenarios" id="worked-design-scenarios"><h2 id="heading-worked-design-scenarios">Worked Design Scenarios</h2>
+<p><strong>Scenario 1: Two language runtimes exchange a binary record.</strong> A Python producer and a C# consumer agree on unsigned big-endian field widths, UTF-8 length prefixes, and explicit timestamp presence. The consumer can read a record without reconstructing the producer's memory layout. The agreed contract, not the shared programming language, creates interoperability.</p>
+<p><strong>Scenario 2: A record adds a priority field.</strong> A fixed-layout version-1 parser has no definition for appended bytes and demands exact consumption. Therefore the producer must not silently extend a version-1 record. A version-2 protocol can add a field and specify whether version-1 records remain readable under a version-2 decoder.</p>
+<p><strong>Scenario 3: An archive loses its writer schema.</strong> Bytes in an Avro binary record can be structurally intact while their field boundaries and types cannot be reconstructed reliably without the writer schema. Registry retention and archived schema identifiers become an availability requirement, not optional administrative metadata.</p>
+<p><strong>Scenario 4: A message passes a round-trip test but fails a security review.</strong> A new optional <code>allowed</code> field is ignored by an older reader that defaults to permitting access. The wire encoding is parseable, yet the semantic change is dangerous. A feature/version gate or an incompatible-protocol rejection policy is required.</p>
+<p><strong>Scenario 5: A reader processes a huge declared record.</strong> A two-byte length claims a very large body while the available input is short. A safe reader checks the declared length against remaining bounded data and the format's maximum allowed record size <em>before</em> allocating or copying. The invalid message is rejected, not partially reconstructed.</p>
+<p><strong>Scenario 6: A team needs stable signatures.</strong> Two libraries serialize a tagged message with a different field order. Their decoded values are equivalent but signatures over independently regenerated bytes differ. The team must select a defined canonical representation or authenticate the exact transmitted bytes, rather than assume semantic equivalence implies byte identity.</p>
+</section><section aria-labelledby="heading-study-questions" id="study-questions"><h2 id="heading-study-questions">Study Questions</h2>
+<ol>
+<li>What makes a schema contract different from a memory layout captured from a running program?</li>
+<li>Explain why <code>D(E(v)) = v</code> does not imply <code>E(D(b)) = b</code> for every valid encoding.</li>
+<li>Which three layers distinguish message boundaries, field representation, and application meaning?</li>
+<li>Why does the two-character name <code>Bé</code> occupy three bytes in the MGU-SR example?</li>
+<li>Why is an explicitly present timestamp of zero different from an absent timestamp?</li>
+<li>Derive the MGU-SR two-record message's total size of 38 bytes.</li>
+<li>Why must the version-1 decoder reject appended, unspecified bytes in a record body?</li>
+<li>Compare Protocol Buffers field numbers with Avro's writer/reader schema resolution.</li>
+<li>What does a CBOR type marker reveal, and what application meaning does it not reveal?</li>
+<li>Why can a semantically compatible record still produce a different cryptographic signature when independently reserialized?</li>
+<li>What protections are needed before trusting a length prefix supplied by an untrusted sender?</li>
+<li>Give an example where a wire-compatible schema change is semantically breaking.</li>
+</ol>
+</section><section aria-labelledby="heading-answers-and-explanations" id="answers-and-explanations"><h2 id="heading-answers-and-explanations">Answers and Explanations</h2>
+<ol>
+<li>A schema contract explicitly defines portable encoded fields and validation rules; a memory layout includes platform-specific representation artifacts such as padding, pointers, and runtime metadata.</li>
+<li>The decoded value may have multiple valid wire encodings or carry unknown data; the writer may emit a preferred encoding instead of reproducing the original bytes.</li>
+<li>Framing identifies message boundaries, wire encoding maps fields to bytes, and semantics defines allowed and meaningful values.</li>
+<li><code>B</code> uses UTF-8 byte <code>42</code>, while <code>é</code> uses bytes <code>C3 A9</code>; total length is three bytes.</li>
+<li>The presence bit explicitly distinguishes “no timestamp supplied” from “timestamp value zero.”</li>
+<li>Eight bytes of message header, 19 bytes for record A (two-byte length plus 17-byte body), and eleven bytes for record B (two-byte length plus nine-byte body) equal 38.</li>
+<li>The specified body has an exact end; unknown suffix bytes would make the input ambiguous and could conceal an incompatible change.</li>
+<li>Protocol Buffers transmits field-number/wire-type tags; Avro relies on writer schema plus reader schema resolution to identify stored field values.</li>
+<li>CBOR identifies core data item types, but an application profile or schema is still needed to interpret field names, valid value ranges, and business meaning.</li>
+<li>Field ordering, encoding variants, or omission of defaults can change bytes while preserving decoded values, and cryptographic signatures operate over actual bytes.</li>
+<li>Check available bytes and format maximums, use safe range arithmetic, and enforce resource limits before allocation and nested decoding.</li>
+<li>Adding a new optional security-restriction field that an old reader ignores may preserve parseability but violate the intended authorization policy.</li>
+</ol>
+</section><section aria-labelledby="heading-study-pathway-and-connections" id="study-pathway-and-connections"><h2 id="heading-study-pathway-and-connections">Study Pathway and Connections</h2>
+<p>Begin with <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-file-headers-and-magic-numbers">Binary File Headers and Magic Numbers</a>, then review <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/endianness-and-byte-order">Endianness and Byte Order</a>, <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/numeric-field-width-alignment-and-padding">Numeric Field Width, Alignment, and Padding</a>, and <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/raw-bytes-text-and-character-encoding-boundaries">Raw Bytes, Text, and Character-Encoding Boundaries</a>. Those subjects establish the byte-level foundation needed to reason about a complete schema.</p>
+<p>Continue with the planned <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/length-prefixes-delimiters-and-record-framing">Length Prefixes, Delimiters, and Record Framing</a> for streamed records, <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-format-versioning-and-compatibility">Binary Format Versioning and Compatibility</a> for migration policies, and <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-input-validation-and-safe-parsing">Binary Input Validation and Safe Parsing</a> for adversarial boundaries. These links are active in accordance with the MGU child-article policy; they are not evidence that every linked child is already published.</p>
+</section><section aria-labelledby="heading-sub-articles" id="sub-articles"><h2 id="heading-sub-articles">Sub-Articles</h2>
+<p>This page is a <strong>Level 5 subarticle</strong> beneath the <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/">Binary Data unit index</a>. Its sections constitute one coherent treatment of serialization contracts. No additional Level 6 companion directory is established here; specialized future companions should be commissioned only for a distinct subject that warrants a separate article, rather than duplicating topics covered by this page or its sibling units.</p>
+</section><section aria-labelledby="heading-related-topics" id="related-topics"><h2 id="heading-related-topics">Related Topics</h2>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data</a> — parent overview of encoded bits and bytes.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-modeling">Data Modeling</a> — conceptual and logical modeling distinct from wire layout.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a> — movement and transformation of records across processing systems.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-storage-methods">Data Storage Methods</a> — persistence mechanisms that store serialized content.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/character-encoding">Character Encoding</a> — interpretation of text bytes within a binary record.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-encryption">Data Encryption</a> — confidentiality protections distinct from field interpretation.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/databases">Databases</a> — storage and query infrastructure that may use structured binary records.</li>
+</ul>
+</section><section aria-labelledby="heading-technical-references-and-further-reading" id="technical-references-and-further-reading"><h2 id="heading-technical-references-and-further-reading">Technical References and Further Reading</h2>
+<ol>
+<li>Google. <a href="https://protobuf.dev/programming-guides/encoding/"><em>Protocol Buffers Encoding</em></a>. Official description of field keys, wire types, variable-length integers, and encoding semantics.</li>
+<li>Google. <a href="https://protobuf.dev/programming-guides/proto3/"><em>Protocol Buffers Language Guide (proto3)</em></a>. Field numbering, evolution, types, and compatibility considerations.</li>
+<li>Apache Software Foundation. <a href="https://avro.apache.org/docs/1.12.0/specification/"><em>Apache Avro Specification</em></a>. Binary encoding, schema matching, and writer/reader schema resolution.</li>
+<li>IETF. <a href="https://www.rfc-editor.org/rfc/rfc8949.html">RFC 8949, <em>Concise Binary Object Representation (CBOR)</em></a>, 2020. Data item types, tags, and deterministic encoding requirements.</li>
+<li>Google. <a href="https://flatbuffers.dev/evolution/"><em>FlatBuffers Schema Evolution</em></a>. Schema-change constraints and compatibility rules.</li>
+<li>Python Software Foundation. <a href="https://docs.python.org/3/library/struct.html"><em>struct — Interpret Bytes as Packed Binary Data</em></a>. Portable numeric packing and unpacking.</li>
+<li>Unicode Consortium. <a href="https://www.unicode.org/versions/latest/"><em>The Unicode Standard</em></a>. Character model, encodings, and interpretation boundaries.</li>
+<li>OWASP. <a href="https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html"><em>Deserialization Cheat Sheet</em></a>. Guidance on risks in processing untrusted serialized input.</li>
+</ol>
+</section><section aria-labelledby="heading-editorial-scope-and-publication-status" id="editorial-scope-and-publication-status"><h2 id="heading-editorial-scope-and-publication-status">Editorial Scope and Publication Status</h2>
+<p><strong>Hierarchy:</strong> MGU Encyclopedia → Computer Science → Data Systems → Binary Data → Binary Serialization and Schema Contracts. <strong>Physical file:</strong> <code>data-systems/binary-data-articles/binary-serialization-and-schema-contracts.html</code>. <strong>Canonical public route:</strong> <code>/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts</code>. The MGU-SR example, including its header, field constraints, timestamp, and 38-byte vector, is fictional educational material designed to demonstrate complete contract specification; it should not be mistaken for an established interchange format.</p>
+<p><strong>Scope boundary:</strong> this article addresses the mapping from logical structured values to bytes, schema contracts, bidirectional decoding, version concerns, and validation. It does not replace the separate units for domain data modeling, databases, general information retrieval, encryption, character encoding, or complete application security. <strong>Publication status:</strong> this HTML article is prepared for local integration; actual public deployment and linked-page availability are managed separately by the publisher.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== EXACT SHARED LOADERS ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>
