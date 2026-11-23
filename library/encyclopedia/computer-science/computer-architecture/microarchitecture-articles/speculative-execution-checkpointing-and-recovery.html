@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speculative Execution, Checkpointing, and Recovery | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Technical MGU Encyclopedia article on processor speculative execution, rename checkpoints, squash and replay, precise exceptions, memory ordering recovery, and transient side effects.">
+<meta name="keywords" content="speculative execution, checkpointing, branch recovery, reorder buffer, rename map, free list, rollback, squashing, selective replay, precise exceptions, memory disambiguation, transient execution, microarchitecture">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/speculative-execution-checkpointing-and-recovery">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Speculative Execution, Checkpointing, and Recovery | MGU Encyclopedia">
+<meta property="og:description" content="Technical MGU Encyclopedia article on processor speculative execution, rename checkpoints, squash and replay, precise exceptions, memory ordering recovery, and transient side effects.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/speculative-execution-checkpointing-and-recovery">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Speculative Execution, Checkpointing, and Recovery</h1>
+<p class="subtitle">A specialist examination of tentative execution, register-map checkpoints, wrong-path invalidation, precise retirement, memory replay, and architectural recovery.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#overview">Definition and Place in Computer Architecture</a></li>
+<li><a href="#execution-is-not-retirement">Execution, Completion, Retirement, and Visibility Are Different Events</a></li>
+<li><a href="#types-of-speculation">Classes of Speculation and Their Validation Events</a></li>
+<li><a href="#speculation-matrix">Speculation, Check, and Recovery Matrix</a></li>
+<li><a href="#speculative-state-inventory">Where Tentative State Resides</a></li>
+<li><a href="#speculation-window">Speculation Windows and Unresolved Boundaries</a></li>
+<li><a href="#branch-boundaries">Branch Resolution and the Correct-Path Boundary</a></li>
+<li><a href="#checkpoint-concept">What a Checkpoint Saves—and What It Need Not Save</a></li>
+<li><a href="#rename-map-checkpoints">Rename Map Snapshots and Source-Register Correctness</a></li>
+<li><a href="#allocation-lists">Free Lists, Allocation Lists, and Safe Reclamation</a></li>
+<li><a href="#checkpoint-lifetime">Checkpoint Allocation, Exhaustion, and Release</a></li>
+<li><a href="#nested-checkpoints">Nested Mispredictions, Age Priority, and Wrong-Path Branches</a></li>
+<li><a href="#rob-based-recovery">Reorder Buffers as a Recovery Backbone</a></li>
+<li><a href="#unwind-vs-snapshot">Rollback Strategies: Snapshot, ROB Unwind, and Committed Map</a></li>
+<li><a href="#squash-and-kill">Squash, Kill, Flush, and Their Scope</a></li>
+<li><a href="#selective-replay">Selective Replay Compared with Full Pipeline Recovery</a></li>
+<li><a href="#precise-exception-contract">Precise Exceptions and the Committed Instruction Prefix</a></li>
+<li><a href="#fault-recording">Exception Detection, Deferred Trap Delivery, and Restart</a></li>
+<li><a href="#memory-speculation">Memory Dependence Speculation and Validation</a></li>
+<li><a href="#memory-replay-boundary">Identifying the Earliest Memory-Replay Boundary</a></li>
+<li><a href="#stores-and-devices">Stores, I/O, and Irreversible Side Effects</a></li>
+<li><a href="#cache-translation-effects">Cache, Translation, and Predictor Effects of Canceled Work</a></li>
+<li><a href="#synchronization-and-serial">Fences, Serialization, and the Limits of Speculation</a></li>
+<li><a href="#interrupts-and-context">Interrupts, Context Changes, and Recovery Boundaries</a></li>
+<li><a href="#smt-and-shared-capacity">Simultaneous Multithreading and Shared Recovery Resources</a></li>
+<li><a href="#checkpoint-pressure">Resource Pressure, Backpressure, and Recovery Cost</a></li>
+<li><a href="#security-overview">Transient Execution and the Architectural Security Boundary</a></li>
+<li><a href="#security-design-options">Security-Oriented Speculation Constraints and Trade-offs</a></li>
+<li><a href="#recovery-comparison">Recovery Strategy Comparison</a></li>
+<li><a href="#methodical-design">A Recovery-Mechanism Design Checklist</a></li>
+<li><a href="#worked-branch">Worked Example I — Mispredicted Branch and Younger Work</a></li>
+<li><a href="#worked-nested">Worked Example II — Younger Branch Correction Followed by Older Correction</a></li>
+<li><a href="#worked-rename">Worked Example III — Rename Map Restoration Across a Branch</a></li>
+<li><a href="#worked-freelist">Worked Example IV — Why a Free-List Snapshot Alone Can Leak Registers</a></li>
+<li><a href="#worked-memory">Worked Example V — A Load Passes an Older Unresolved Store</a></li>
+<li><a href="#worked-fault">Worked Example VI — A Wrong-Path Load Reports a Page Fault</a></li>
+<li><a href="#worked-cpi">Worked Example VII — Estimating Recovery Overhead and IPC</a></li>
+<li><a href="#verification-invariants">Architectural Invariants for Recovery Verification</a></li>
+<li><a href="#test-matrix">Verification Test Matrix</a></li>
+<li><a href="#measurement-framework">Measuring Speculation Quality Without Confusing Counters</a></li>
+<li><a href="#diagnostic-path">Practical Investigation Framework</a></li>
+<li><a href="#misconceptions">Common Misconceptions and Corrections</a></li>
+<li><a href="#glossary">Specialist Glossary</a></li>
+<li><a href="#references">References and Further Reading</a></li>
+<li><a href="#related-topics">Related Encyclopedia Topics and Reading Sequence</a></li>
+<li><a href="#editorial-scope">Editorial Scope and Publication Status</a></li>
+</ol>
+</section>
+<section id="overview" aria-labelledby="heading-overview">
+<h2 id="heading-overview">Definition and Place in Computer Architecture</h2>
+<p><strong>Speculative execution</strong> is the performance technique of beginning or completing work before the processor has established every condition that makes the work part of the correct architectural execution. A processor might predict a branch, assume a load does not conflict with an older store, or initiate an operation while an older instruction could still fault. Such activity may use execution units, register storage, queues, caches, and other resources. It is <em>tentative</em> until the applicable conditions are validated and the operation can become architecturally committed.</p>
+<p>The central engineering challenge is to obtain useful overlap without changing the outcome prescribed by the <a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">instruction set architecture (ISA)</a>. When a forecast proves false or an older instruction traps, younger work that should not be in the committed stream must be invalidated. A successful recovery restores the correct mapping of program-visible state and restarts the appropriate instruction stream. It does not imply that every electronic event caused by the tentative work has been reversed.</p>
+<p>This is Level 5 Microarchitecture article <strong>12 of 20</strong>, following <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/branch-prediction-and-fetch-redirection">Branch Prediction and Fetch Redirection</a>. The present article owns <strong>speculative state management, checkpointing, squashing, replay, and precise recovery</strong>. Its companion articles treat branch predictor mechanisms, register renaming, reorder-buffer fundamentals, load/store hardware, and transient-execution security in greater independent depth.</p>
+</section>
+<section id="execution-is-not-retirement" aria-labelledby="heading-execution-is-not-retirement">
+<h2 id="heading-execution-is-not-retirement">Execution, Completion, Retirement, and Visibility Are Different Events</h2>
+<p>An instruction may be <strong>fetched</strong>, <strong>decoded</strong>, <strong>renamed</strong>, <strong>dispatched</strong>, <strong>issued</strong>, <strong>executed</strong>, <strong>completed</strong>, and <strong>retired</strong> at different times. Implementations combine or rename stages, but the logical distinctions matter. Execution may produce a value in a speculative physical register. Completion means the relevant operation has finished and reported its result or status. Retirement (also called architectural commit in many descriptions) accepts the instruction into the ordered architectural stream.</p>
+<p>In an out-of-order design, younger independent instructions may execute before older dependent instructions complete. A reorder buffer (ROB) records the program-order relationship so that retirement can remain orderly. An older long-latency load can therefore block retirement while newer arithmetic has already produced provisional results. This is not automatically an exception or a correctness failure; it is a normal use of speculative capacity.</p>
+<p>For stores, a further distinction is essential: <strong>retirement is not necessarily the moment a write becomes globally visible</strong>. A committed store can reside in a store buffer pending later propagation under the memory model. Conversely, an uncommitted, wrong-path store must not become an ordinary globally visible program write. The architectural memory ordering and device semantics determine the precise contract; a textbook timing diagram must not assume that all stores behave like simple register writes.</p>
+</section>
+<section id="types-of-speculation" aria-labelledby="heading-types-of-speculation">
+<h2 id="heading-types-of-speculation">Classes of Speculation and Their Validation Events</h2>
+<p><strong>Control-flow speculation</strong> selects a likely successor instruction address before a branch resolves. <strong>Memory-dependence speculation</strong> allows a younger load to execute before an older store address or conflict relationship is fully known, subject to a subsequent check. Other forms include speculative scheduling of consumers against an anticipated load-hit latency, optimistic assumptions about translation or exceptions, and speculation that an instruction can proceed without a serializing event.</p>
+<p>These forms do not all need the same recovery machinery. A branch misprediction identifies a wrong-path set of younger instructions and a correct target. A memory ordering violation may require replay from a particular load even when the branch path is correct. A true program exception requires establishment of the architecturally correct trap point and state. A local load-use timing miss might be repaired by reissuing only dependent operations in an implementation with selective replay.</p>
+<p>Speculation also differs from ordinary parallel execution. Two independent instructions whose legality is already known can overlap without a wrong-path assumption; out-of-order execution frequently includes both validated and speculative work. “Speculative” describes an unconfirmed precondition, not simply the presence of several instructions in flight.</p>
+</section>
+<section id="speculation-matrix" aria-labelledby="heading-speculation-matrix">
+<h2 id="heading-speculation-matrix">Speculation, Check, and Recovery Matrix</h2>
+<p>The following matrix is an orientation tool. Policies are microarchitecture-specific rather than universal ISA requirements.</p><table><thead><tr><th scope="col">Speculative assumption</th><th scope="col">Typical detection or validation event</th><th scope="col">Potential correction</th><th scope="col">Architectural rule</th></tr></thead><tbody>
+<tr><td>Predicted branch direction or target is correct</td><td>Branch executes or its destination is resolved</td><td>Discard younger wrong-path work; restore rename and fetch state</td><td>Committed control flow follows the executed branch</td></tr>
+<tr><td>Younger load does not violate an older store</td><td>Older store address/data and required ordering checks become known</td><td>Replay offending load and affected younger work, or broader pipeline squash</td><td>Loads observe values allowed by the memory model</td></tr>
+<tr><td>An older instruction will not trap</td><td>Fault status becomes known and instruction reaches an appropriate trap point</td><td>Stop younger retirement; restore precise trap context</td><td>Trap reports the correct architectural instruction/state</td></tr>
+<tr><td>A consumer can use a predicted-result timing</td><td>Result misses the assumed availability window</td><td>Wakeup correction, selective issue replay, or reissue</td><td>No committed instruction uses an invalid result</td></tr>
+<tr><td>A pending operation can be overlapped with later work</td><td>Serialization, barrier, or special device rule requires order</td><td>Hold issue/retirement or cancel tentative operations</td><td>Architecturally ordered side effects remain ordered</td></tr></tbody></table>
+</section>
+<section id="speculative-state-inventory" aria-labelledby="heading-speculative-state-inventory">
+<h2 id="heading-speculative-state-inventory">Where Tentative State Resides</h2>
+<p>The speculative state of a high-performance core is not one array labeled “speculation.” It is distributed among a <strong>speculative rename map</strong>, physical-register values and readiness bits, ROB entries, issue queues, load and store queues, in-flight cache requests, branch masks or age tags, fetch metadata, prediction-history state, and structures that track faults or pending operations. Some entries belong exclusively to a speculative path; others are shared with committed activity.</p>
+<p>An instruction identifier or sequence number provides an ordering relation for many cancellation decisions. A branch checkpoint identifies a <em>boundary</em>: instructions older than the boundary must generally be preserved, while invalid younger instructions must not retire. Other mechanisms use per-instruction branch masks, ROB positions, epochs, or a combination. Such tracking must account for wraparound in circular queues and must not simply compare unqualified numeric slots as if they were permanent ages.</p>
+<p>Each structure must either be restored, invalidated, or shown harmless after a recovery. Killing a ROB entry but overlooking its queued memory request, pending wakeup, or physical-register allocation could corrupt state, leak a resource, or allow a canceled instruction to wake its dependents. The architectural recovery protocol is therefore a <strong>coordinated system-wide operation</strong>, not just a change to the program counter.</p>
+</section>
+<section id="speculation-window" aria-labelledby="heading-speculation-window">
+<h2 id="heading-speculation-window">Speculation Windows and Unresolved Boundaries</h2>
+<p>The <strong>speculation window</strong> is the set or interval of work that has executed or entered the machine while one or more correctness conditions remain unresolved. The window can be limited by ROB entries, physical registers, issue capacity, load/store queue slots, branch checkpoint entries, cache misses, and the amount of instruction-level parallelism in the program. A larger ROB does not guarantee a larger useful speculation window if another resource fills first.</p>
+<p>Unresolved branches often divide the window into nested regions. If branch B1 is unresolved and a younger branch B2 is also unresolved, work after B2 depends on both guesses. If B2 is found wrong first, the machine can discard work younger than B2 while preserving older speculative work under B1. If B1 is found wrong, the younger B2 and its entire path become irrelevant regardless of whether B2 had previously appeared correct.</p>
+<p>The useful window is workload-dependent. A long-latency load gives the machine time to execute independent younger instructions, but limited physical registers or a dependency chain can prevent that opportunity. Window occupancy measures how much work is retained; it does not directly measure productive execution or retired performance.</p>
+</section>
+<section id="branch-boundaries" aria-labelledby="heading-branch-boundaries">
+<h2 id="heading-branch-boundaries">Branch Resolution and the Correct-Path Boundary</h2>
+<p>A front end predicts a branch and fetches its guessed successor. The branch itself usually remains in the machine until its condition and actual target can be established. When the computed successor differs from the predicted successor, the machine identifies a <strong>misprediction boundary</strong> and sends a redirect to the fetch unit. It must also invalidate the relevant wrong-path entries in decode, rename, issue, ROB, and memory-related machinery.</p>
+<p>The resolved branch is not necessarily discarded. It belongs to the correct program sequence; its younger wrong-path instructions do not. The machine may keep older instructions that preceded the branch, including still-unretired older work. Its new fetch stream begins at the actual successor. Additional corrections may be needed if the branch predictor speculatively changed global history or a return-address stack along the canceled path.</p>
+<p>Certain designs detect wrong targets before execution, for example when a backing predictor overrides an early prediction. The pipeline stage and recovery metadata differ from those for an execution-stage misprediction. The common invariant is that <em>instructions not in the valid resolved sequence cannot gain architectural effect</em>.</p>
+</section>
+<section id="checkpoint-concept" aria-labelledby="heading-checkpoint-concept">
+<h2 id="heading-checkpoint-concept">What a Checkpoint Saves—and What It Need Not Save</h2>
+<p>A <strong>checkpoint</strong> preserves enough information to resume from a validated point without reconstructing the whole history of speculative operations. The contents depend on the recovery mechanism. A branch checkpoint may capture architectural-to-physical register mappings, a pointer or age boundary, predictor history, and metadata for reclaiming speculative allocations. It normally does <em>not</em> mean copying all physical register values or every cache line.</p>
+<p>Register values already held in physical registers for older instructions can remain where they are. Restoring a map table changes <em>which physical versions</em> future instructions will reference. Older outstanding results may continue to arrive, provided they cannot be misidentified as results of canceled younger work. This reduces checkpoint size but increases the importance of correct tags, lifetimes, and resource ownership.</p>
+<p>Checkpoints may be stored as full snapshots, differences from a previous state, or information sufficient to unwind. Full copies can make restoration fast but consume area and wiring; logs and ROB-based undo may save snapshot space at the cost of multiple recovery cycles. “Checkpointing” therefore describes a family of strategies, not one required hardware implementation.</p>
+</section>
+<section id="rename-map-checkpoints" aria-labelledby="heading-rename-map-checkpoints">
+<h2 id="heading-rename-map-checkpoints">Rename Map Snapshots and Source-Register Correctness</h2>
+<p>Consider an architectural register <code>r1</code> whose latest accepted version is physical register <code>P4</code>. An older in-flight instruction may allocate <code>P8</code> as its new destination; after renaming that older instruction the speculative map is <code>r1 → P8</code>. If a branch checkpoint is taken at this point, the snapshot records the <code>P8</code> mapping. A wrong-path instruction after the branch might overwrite <code>r1</code> again by allocating <code>P13</code>. Restoring the branch checkpoint makes future reads of <code>r1</code> refer to <code>P8</code>, rather than <code>P13</code>.</p>
+<p>This example illustrates why physical-register values need not be rolled backward in place. Wrong-path writes can remain in an unreferenced physical register until that resource is safely recycled. The rename map is the authority for which versions are current along the retained path. Dependent issue and ROB entries must also be purged so that no canceled instruction consumes a freed identifier or commits an invalid version.</p>
+<p>An exact checkpoint boundary matters in a multiple-instruction rename group. If a branch and younger instructions are renamed in the same cycle, a checkpoint must represent the map <em>as of the branch</em>, not a map polluted by later instructions from the same group. Implementations can accomplish this with intra-group bypassing, additional metadata, or restrictions on checkpoint formation.</p>
+</section>
+<section id="allocation-lists" aria-labelledby="heading-allocation-lists">
+<h2 id="heading-allocation-lists">Free Lists, Allocation Lists, and Safe Reclamation</h2>
+<p>Physical registers are a finite resource. A branch snapshot can preserve rename mappings yet leave the processor unable to resume if wrong-path destination registers are never returned to the free list. The machine must track which registers were allocated by invalidated instructions and ensure that those registers have no remaining legitimate readers or committed mappings.</p>
+<p>One illustrative approach uses a <strong>branch-specific allocation list</strong>: every new physical destination allocated after a branch is recorded as belonging to that speculative region. If the branch is wrong, the list helps return its still-reclaimable allocations to the pool. BOOM documentation describes this approach and explains why naively taking a snapshot of the free-list bitmap can lose track of registers that are freed and subsequently reallocated between snapshot and recovery. The bitmap alone does not encode allocation history.</p>
+<p>Reclamation must avoid both <strong>leaks</strong> (resources never becoming free) and <strong>double allocation</strong> (one physical identifier granted to two live incompatible destinations). Nested branch recovery, the retirement of older instructions, and multithreaded resource sharing make the rules more complicated. Correct map restoration and correct free-list restoration are distinct invariants.</p>
+</section>
+<section id="checkpoint-lifetime" aria-labelledby="heading-checkpoint-lifetime">
+<h2 id="heading-checkpoint-lifetime">Checkpoint Allocation, Exhaustion, and Release</h2>
+<p>When a branch or another designated speculation boundary enters the machine, a checkpoint slot may be allocated. If no slot is available, a core might stall further speculative rename, delay checkpoint creation under specific restrictions, or use a slower fallback recovery scheme. An unresolved branch checkpoint cannot simply be reused because the branch is old; younger operations may still depend on that exact boundary.</p>
+<p>Once a branch has resolved correctly, its checkpoint can often be released, even if the branch itself has not yet retired; the processor-specific algorithm must preserve anything still needed by other pending operations. A false branch prediction triggers restoration before release, with any younger checkpoint entries also invalidated. Predictor-history snapshots and rename-map snapshots may have different lifetimes because the predictor needs information at different training or commit events.</p>
+<p>The maximum number of checkpoints is one limit on speculation depth. Enlarging it can increase the number of outstanding branches but consumes storage, decoder ports, routing capacity, and recovery validation effort. It is not meaningful to compare “eight checkpoints” and “sixteen checkpoints” without also considering how many branches occur in a workload and how quickly they resolve.</p>
+</section>
+<section id="nested-checkpoints" aria-labelledby="heading-nested-checkpoints">
+<h2 id="heading-nested-checkpoints">Nested Mispredictions, Age Priority, and Wrong-Path Branches</h2>
+<p>Imagine two unresolved branches, <code>B1</code> followed by <code>B2</code>, and then an arithmetic instruction <code>X</code>. Both branches have been predicted; <code>B2</code> and <code>X</code> are younger than <code>B1</code>. If <code>B2</code> resolves incorrectly while <code>B1</code> is still unresolved, a core can restore the <code>B2</code> boundary while keeping <code>B1</code> and the valid instructions between them. However, if <code>B1</code> later resolves incorrectly, any speculative work downstream of <code>B1</code> must be discarded, including the corrected path created after the earlier <code>B2</code> recovery.</p>
+<p>This is an age-ordering requirement, not an instruction about which prediction is “more accurate.” When recovery notifications arrive simultaneously, the pipeline must select the oldest relevant redirect or otherwise impose a consistent recovery precedence. A younger recovery cannot overrule an older one whose actual control flow excludes the younger instruction entirely.</p>
+<p>Branch masks or age tags make this classification efficient, but the masks must be updated when older branches resolve. Hardware must test cases involving simultaneous resolution, queue wraparound, branch tags reused after retirement, and a wrong-path branch that detects a misprediction after it has already been killed.</p>
+</section>
+<section id="rob-based-recovery" aria-labelledby="heading-rob-based-recovery">
+<h2 id="heading-rob-based-recovery">Reorder Buffers as a Recovery Backbone</h2>
+<p>The <strong>reorder buffer</strong> is useful for recovery because it retains program-order metadata about unretired operations. On a squash boundary, entries younger than the offending instruction can be invalidated. For those entries, the processor can cancel pending issue and memory actions, release reserved resources, and restore or reconstruct relevant register mappings. Older entries can continue toward in-order retirement as their dependencies complete.</p>
+<p>The ROB also supports <strong>precise exceptions</strong>: it can withhold a fault from becoming an architectural trap until the faulting instruction is the oldest eligible instruction. This prevents an exception from a younger, soon-to-be-squashed instruction from incorrectly interrupting an older valid path. A machine may store exception cause information in the ROB or another dedicated structure, with additional metadata sufficient to reconstruct the trap PC and state.</p>
+<p>Not every processor stores speculative result values in the ROB. In an explicit physical-register design, the ROB often contains identifiers and status while the values reside in a physical register file. In a data-in-ROB design, value placement and the commit transfer differ. The recovery guarantee is about <em>ordered state</em>, not the physical location of every byte.</p>
+</section>
+<section id="unwind-vs-snapshot" aria-labelledby="heading-unwind-vs-snapshot">
+<h2 id="heading-unwind-vs-snapshot">Rollback Strategies: Snapshot, ROB Unwind, and Committed Map</h2>
+<p><strong>Checkpoint restore</strong> can reset the speculative map to a known boundary in a short control operation. <strong>ROB unwind</strong> walks canceled entries in reverse program order and restores each overwritten mapping to its previous physical destination; that can take several cycles when many entries are canceled. <strong>Committed-map restore</strong> resets speculative mappings to the latest retired state and then, if necessary, refetches valid younger instructions that were discarded. Hybrids are possible.</p>
+<p>These approaches trade checkpoint area, allocation tracking, restart latency, implementation complexity, and ability to preserve useful work. A branch checkpoint can be especially attractive for frequent branch misses. A complete committed-map restore can simplify certain exception or broad flush paths. Repeatedly replaying instructions may be acceptable for rare cases but can impose substantial cost when events are frequent.</p>
+<p>“Single-cycle restore” is usually a statement about a map-table reset path under certain design assumptions, <em>not</em> a claim that the entire processor has resumed full-rate useful execution one cycle after a misprediction. Redirect delivery, queue flushing, front-end access, operand reformation, and refilling still take time.</p>
+</section>
+<section id="squash-and-kill" aria-labelledby="heading-squash-and-kill">
+<h2 id="heading-squash-and-kill">Squash, Kill, Flush, and Their Scope</h2>
+<p>The words <strong>squash</strong>, <strong>kill</strong>, and <strong>flush</strong> are often used broadly and are not standardized across every processor. A selective squash can mark a subset of ROB and queue entries invalid because they are younger than an offending instruction. A complete pipeline flush can also clear or restart fetch and rename machinery, often after a trap or serialization event. A local kill may cancel an individual outstanding operation, if its result can be safely discarded.</p>
+<p>Cancellation is more involved when a request has already left the execution pipeline. A memory access may be outstanding in a cache hierarchy, an arithmetic unit may have a long pipeline, and a predictor may already have been trained. The implementation can sometimes cancel a request; in other cases, it can allow completion while marking the response as belonging to an invalid epoch, ensuring it cannot write an architectural result.</p>
+<p>The recovery protocol must define <strong>which side effects are reversible, which must be delayed until non-speculative, and which may remain microarchitecturally observable</strong>. It is incorrect to model every squash as restoring the entire physical machine to its former state.</p>
+</section>
+<section id="selective-replay" aria-labelledby="heading-selective-replay">
+<h2 id="heading-selective-replay">Selective Replay Compared with Full Pipeline Recovery</h2>
+<p>Sometimes the guessed control-flow path remains correct but an execution assumption proves false. For example, an instruction might issue assuming a load result will be ready in one cycle, yet the load takes longer. A design that tracks affected consumers can <strong>replay</strong> them when data is genuinely ready. A more conservative design may prevent speculative dependent issue or squash a larger part of the machine.</p>
+<p>For replay to be safe, every descendant that consumed an invalid result must be repaired. A replayed producer is insufficient if a younger consumer already used its old provisional output and is allowed to commit. Tag-based dependencies, replay queues, poison bits, or other tracking may be used. Some execution units and operations cannot be reissued freely because they involve architectural or external side effects.</p>
+<p>A memory ordering violation can similarly cause a targeted replay or a refetch from the offending load depending on the processor. This article treats the recovery envelope; the detailed address comparisons, store-to-load forwarding, and memory-model constraints belong to <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/load-store-queues-and-memory-disambiguation">Load-Store Queues and Memory Disambiguation</a>.</p>
+</section>
+<section id="precise-exception-contract" aria-labelledby="heading-precise-exception-contract">
+<h2 id="heading-precise-exception-contract">Precise Exceptions and the Committed Instruction Prefix</h2>
+<p>A <strong>precise exception</strong> presents a program-visible state consistent with having executed all instructions older than the faulting instruction in program order and no younger instructions. The faulting instruction itself has not successfully retired as a completed normal instruction. The exception report identifies the appropriate faulting instruction and cause according to the ISA, and the trap handler observes a coherent architectural context. There are ISA-specific details for instructions with partial side effects, delayed exceptions, and special instructions, so the broad rule must be interpreted with the actual ISA contract.</p>
+<p>Out-of-order hardware may discover a younger translation fault long before an older cache miss completes. Recording that fault immediately is often appropriate; delivering the architectural trap immediately is not. If an older branch later redirects around the faulting load, the load was wrong-path and must not produce a program-visible page-fault exception. If the older instructions eventually retire and the load reaches the head of the retirement sequence on the correct path, the machine can take its precise trap.</p>
+<p>This model explains why precise exceptions and speculation reinforce each other. Delaying trap delivery is not postponing correctness; it is the mechanism that determines whether the trapped instruction belongs to the valid program prefix.</p>
+</section>
+<section id="fault-recording" aria-labelledby="heading-fault-recording">
+<h2 id="heading-fault-recording">Exception Detection, Deferred Trap Delivery, and Restart</h2>
+<p>Execution hardware may report divide conditions, invalid instruction encodings, address alignment faults, page faults, or other architecturally defined events. An implementation commonly carries an <strong>exception-valid flag</strong>, cause information, and a faulting PC or recovery metadata with the instruction until the retirement machinery can determine the correct trap order. A faulting younger instruction cannot retire normally, and neither can younger instructions pass it into committed state.</p>
+<p>At the precise trap point, the machine stops normal retirement, discards younger speculative work, records the architecturally defined exception context, and redirects fetch to the handler entry. On a return from an exception, software and the ISA determine whether to retry the faulting instruction, continue at a successor, or take another action. The hardware recovery policy must preserve these semantics despite the earlier speculative execution.</p>
+<p>Some instructions and events have complicated completion semantics; asynchronous interrupts may be recognized at an architecturally permitted boundary rather than at the exact cycle an external signal arrives. A modeled fault from a speculative load should also be distinguished from a <em>memory dependence violation</em>, which is a microarchitectural prediction failure normally corrected without exposing a new ISA exception.</p>
+</section>
+<section id="memory-speculation" aria-labelledby="heading-memory-speculation">
+<h2 id="heading-memory-speculation">Memory Dependence Speculation and Validation</h2>
+<p>A younger load often has a known address before an older store has computed its address. Waiting for every older store to become fully known can waste cycles. Some out-of-order processors optimistically permit the load to request memory, tracking which older stores it bypasses. Later, the processor compares addresses and the applicable ordering relations. If an older store should have supplied the value or otherwise constrained the load, the optimistic execution can be invalid.</p>
+<p>The load/store unit uses load queues, store queues, age ordering, store masks, address comparisons, and forwarding logic. A younger load that reads from a matching older store through valid forwarding is not equivalent to a load that incorrectly bypassed that store. Nor is every early load a violation: different-address accesses may be safely overlapped within the ISA memory model.</p>
+<p>When a violation is detected, the machine can replay the load and instructions that depend on its value, or flush and refetch a larger suffix of instructions. It may also train a dependence predictor to delay similar loads in the future. The trigger, visibility rule, and permitted bypass behavior differ across architectures, so no universal “load always passes store” rule is defensible.</p>
+</section>
+<section id="memory-replay-boundary" aria-labelledby="heading-memory-replay-boundary">
+<h2 id="heading-memory-replay-boundary">Identifying the Earliest Memory-Replay Boundary</h2>
+<p>Suppose program-order instructions are <code>S1</code> (an older store), <code>L2</code> (a younger load), <code>A3</code> (an arithmetic consumer of the load), and <code>U4</code> (a later unrelated arithmetic operation). If the load used stale memory because <code>S1</code> actually targets the same address, the value of <code>L2</code> and its dependent <code>A3</code> is invalid. Whether <code>U4</code> can be retained depends on replay granularity, control speculation, resource tagging, and any other dependencies.</p>
+<p>A broad recovery design could invalidate <code>L2</code> and every younger instruction, then refetch from <code>L2</code>. A selective design might retain unaffected operations but must rigorously prove they cannot commit results that depended directly or indirectly on the wrong load. The hardware also has to ensure that reexecuted loads see a value allowed by the memory model and that outstanding old load responses cannot overwrite new results.</p>
+<p>The replay PC and instruction age are central. Retrying from the offending store would repeat more work than necessary in many cases, while retrying only a dependent consumer without correcting the load source would preserve the wrong result. A useful test checks that exactly the expected architectural memory value eventually reaches retirement.</p>
+</section>
+<section id="stores-and-devices" aria-labelledby="heading-stores-and-devices">
+<h2 id="heading-stores-and-devices">Stores, I/O, and Irreversible Side Effects</h2>
+<p>To preserve speculative correctness, conventional stores should not become program-visible wrong-path writes. In many implementations, store addresses and data can be computed speculatively, but propagation to coherent memory is gated by retirement or an equivalent non-speculative authorization. A committed store can then remain buffered until later visibility. This decoupling allows the core to make progress while preserving the committed write stream.</p>
+<p>Memory-mapped device operations, control/status registers, atomic operations, and other externally visible actions may impose stronger restrictions. A read from a device register can have a side effect, and issuing it on a wrong path may be unsafe even if the resulting register value is eventually squashed. A processor or system therefore needs memory-type rules, serialization, non-speculative issue modes, or other architectural protections for such accesses.</p>
+<p>This is why “all speculative effects are undone at retirement” is false. Hardware must <strong>prevent irreversible wrong-path effects</strong>, not assume they can all be reversed afterward. The boundary between cacheable normal memory and device/strongly ordered memory is particularly important when evaluating a proposed speculative mechanism.</p>
+</section>
+<section id="cache-translation-effects" aria-labelledby="heading-cache-translation-effects">
+<h2 id="heading-cache-translation-effects">Cache, Translation, and Predictor Effects of Canceled Work</h2>
+<p>Speculatively executed loads can initiate cache lookups or fills, affect replacement state, occupy miss-status resources, and interact with translation caches. Branches can alter predictor history or train structures; front-end fetches can change instruction-cache behavior. A wrong-path operation may therefore change which later request experiences a cache hit or miss even though the operation never retires.</p>
+<p>Some designs try to restrict speculative updates or recover selected predictor structures; others tolerate these effects as performance phenomena. Hardware does not generally provide an automatic rollback of the entire cache and translation hierarchy as part of ordinary branch recovery. A cache line fetched by a wrong-path operation may remain cached, subject to implementation details and security policy.</p>
+<p>The distinction has two consequences. First, performance is affected by wasted bandwidth, cache pollution, and cross-path interference. Second, shared microarchitectural state can create observable timing differences relevant to security. The correct security treatment requires explicit threat models and mitigations, not the assumption that precise architectural retirement also guarantees information-flow isolation.</p>
+</section>
+<section id="synchronization-and-serial" aria-labelledby="heading-synchronization-and-serial">
+<h2 id="heading-synchronization-and-serial">Fences, Serialization, and the Limits of Speculation</h2>
+<p>Memory barriers, atomic operations, privilege transitions, and other serializing or ordered events constrain the set of operations that may be initiated, completed, or made visible around them. Their meaning is established by the ISA and platform memory model. A core may still perform internal optimizations that do not violate the required observable ordering; a fence is not always an instruction to stop every piece of internal hardware activity.</p>
+<p>An implementation might wait for older writes to reach an appropriate point, block younger memory issue, drain selected queues, or defer a privileged operation until all earlier instructions are safe. In some BOOM descriptions, special instructions for interfaces that cannot tolerate speculative side effects are held until they pass a <em>point of no return</em>. This is an implementation pattern rather than a universal named ISA state.</p>
+<p>Operating systems and compilers rely on these architectural ordering contracts. A microarchitecture article should therefore state which event is gated—issue, execution, retirement, visibility, or device access—rather than saying vaguely that a “barrier prevents speculation.”</p>
+</section>
+<section id="interrupts-and-context" aria-labelledby="heading-interrupts-and-context">
+<h2 id="heading-interrupts-and-context">Interrupts, Context Changes, and Recovery Boundaries</h2>
+<p>An interrupt can arrive while a processor has many unretired instructions, outstanding loads, and unresolved branches. A precise implementation must establish a permitted architectural interrupt boundary, preserve the program-visible state at that boundary, and prevent excluded younger work from committing. The interrupt source is asynchronous; the architectural recognition and state capture are deliberately ordered.</p>
+<p>Context switches add a different challenge: predictor, cache, and translation state may be shared or tagged across software contexts, while physical register maps and in-flight queues belong to particular hardware threads. A core must not return a physical register to another thread while it remains legitimately referenced, nor allow an old pending response to be mistaken for a new context’s request.</p>
+<p>Some designs flush much of the in-flight state on a privilege or context change; others have tagging and partitioning that preserve more microarchitectural contents. The correctness requirement remains that no stale speculative work can write a new context’s architectural state. Isolation against timing channels is an additional security requirement, not automatically implied by context-correct retirement.</p>
+</section>
+<section id="smt-and-shared-capacity" aria-labelledby="heading-smt-and-shared-capacity">
+<h2 id="heading-smt-and-shared-capacity">Simultaneous Multithreading and Shared Recovery Resources</h2>
+<p>In a simultaneous multithreading (SMT) core, each hardware thread normally maintains its own architectural state and logically ordered instruction stream, even though multiple threads share fetch, issue, execution, cache, or queue resources. A branch miss in one thread should not cause unrelated instructions of another thread to be incorrectly squashed merely because they occupied neighboring hardware slots.</p>
+<p>Recovery identifiers must include sufficient thread identity and age or epoch information. Depending on the design, branch checkpoints, ROB capacity, rename registers, and load/store entries may be statically partitioned, dynamically shared, or managed with per-thread quotas. The choice affects starvation, responsiveness, and the amount of useful speculation available to each thread.</p>
+<p>Security-sensitive shared structures can also transmit timing information between contexts. Separating correctness from interference is important: preserving the exact committed results of two threads does not prove that their execution times are independent of the other thread’s speculative requests.</p>
+</section>
+<section id="checkpoint-pressure" aria-labelledby="heading-checkpoint-pressure">
+<h2 id="heading-checkpoint-pressure">Resource Pressure, Backpressure, and Recovery Cost</h2>
+<p>Speculation consumes finite capacity before it has delivered committed work. More in-flight instructions require ROB entries, physical registers, issue queue slots, pending load entries, and often branch checkpoints. Even an accurate predictor can cause front-end throttling if unresolved operations occupy resources faster than they retire. Backpressure from a full queue can stop rename or dispatch while execution units remain intermittently idle.</p>
+<p>A misprediction adds another cost: already issued wrong-path operations may have consumed energy, cache bandwidth, and scarce memory-system capacity. A wider core can perform more wrong-path work per cycle; it may also recover performance faster when accurately predicted work is abundant. The net outcome depends on prediction quality, recovery latency, window sizes, workload locality, and clock timing.</p>
+<p>A robust design study evaluates sustained retired IPC and energy per useful instruction rather than equating “more speculative issue” with better performance. Speculative operations that are frequently squashed can increase internal execution counts without increasing architectural throughput.</p>
+</section>
+<section id="security-overview" aria-labelledby="heading-security-overview">
+<h2 id="heading-security-overview">Transient Execution and the Architectural Security Boundary</h2>
+<p><strong>Transient execution</strong> describes instructions that execute provisionally but do not ultimately belong to the retired architectural stream. A Spectre-class attack can, under vulnerable conditions, cause transient work to influence shared timing-sensitive structures and then infer information from the resulting behavior. This does not require the wrong-path instruction to commit a forbidden program-visible register or memory value.</p>
+<p>Precise rollback is consequently necessary for functional correctness but insufficient as a complete confidentiality guarantee. The microarchitectural impact may include cache occupancy, predictor state, buffer usage, or contention, depending on the design. The exact exploitability depends on the processor, security domain, attack preconditions, and mitigations; not every speculative operation is an exploitable vulnerability.</p>
+<p>This article establishes the correctness-versus-observability distinction. Threat taxonomies, exploitation mechanisms, and mitigation engineering belong primarily to <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/microarchitectural-side-channels-and-mitigations">Microarchitectural Side Channels and Mitigations</a>. The design lesson is that speculative permission to <em>compute</em> a value and permission to <em>reveal</em> effects derived from that value are separate questions.</p>
+</section>
+<section id="security-design-options" aria-labelledby="heading-security-design-options">
+<h2 id="heading-security-design-options">Security-Oriented Speculation Constraints and Trade-offs</h2>
+<p>Design choices may restrict the circumstances under which sensitive values are forwarded, delay selected effects until validation, partition predictor or cache resources, isolate domains, or impose software-controlled speculation barriers. These controls vary widely and can impose costs in area, energy, latency, or peak throughput. Some ISA and vendor mechanisms target particular categories of speculative behavior rather than disabling speculation across the whole core.</p>
+<p>A proposed mitigation should specify which information flow it blocks, which stage enforces the rule, which state is still shared, and what assumptions a system integrator must satisfy. For example, making a register-map checkpoint more accurate does not by itself eliminate cache-timing leakage, while flushing a predictor on a context transition does not necessarily address all cache-based channels.</p>
+<p>Validation must consider attacks and correctness together. A speculative restriction that fixes a leak but mishandles interrupts, atomics, or memory ordering is not an acceptable processor design. Equally, a processor that passes architectural instruction tests can still require separate microarchitectural information-flow analysis.</p>
+</section>
+<section id="recovery-comparison" aria-labelledby="heading-recovery-comparison">
+<h2 id="heading-recovery-comparison">Recovery Strategy Comparison</h2>
+<p>Recovery mechanisms can be combined. The table compares general design patterns, not a ranking of particular commercial processors.</p><table><thead><tr><th scope="col">Recovery pattern</th><th scope="col">Saved or reconstructed information</th><th scope="col">Primary advantage</th><th scope="col">Primary limitation</th></tr></thead><tbody>
+<tr><td>Per-branch map checkpoint</td><td>Rename mapping and associated allocation/history metadata</td><td>Fast restore to a branch-specific boundary</td><td>Snapshot storage, checkpoint count, bookkeeping</td></tr>
+<tr><td>ROB-based reverse unwind</td><td>Old physical mappings and ordering metadata for younger entries</td><td>Avoids copies for every branch</td><td>Latency increases with number of entries unwound</td></tr>
+<tr><td>Committed-map restore</td><td>Most recently retired architectural-to-physical mapping</td><td>Clear precise state for global flush/trap</td><td>May discard useful younger work and require refetch</td></tr>
+<tr><td>Selective issue replay</td><td>Tracked producer-consumer dependencies, readiness/replay status</td><td>May preserve independent work</td><td>Complex tracking of all invalid result consumers</td></tr>
+<tr><td>Load-triggered pipeline retry</td><td>Replay PC or load age, validated store/load relationships</td><td>Conservative correction of ordering failures</td><td>Lost work and cache/pipeline refill cost</td></tr>
+<tr><td>Delayed non-speculative issue</td><td>Recognition of side-effecting or ordered operation</td><td>Prevents some irrecoverable wrong-path effects</td><td>Reduces overlap or introduces serialization</td></tr></tbody></table>
+</section>
+<section id="methodical-design" aria-labelledby="heading-methodical-design">
+<h2 id="heading-methodical-design">A Recovery-Mechanism Design Checklist</h2>
+<p>An engineer should begin with the <strong>observable contract</strong>: which architectural registers, memory effects, exception causes, program counters, and synchronization events may become visible? Next, enumerate every source of speculation and the event that validates it. Then list the structures that can hold an instruction or one of its effects after the instruction has been killed. A checkpoint scheme that covers register maps but forgets outstanding memory responses is incomplete.</p>
+<p>For each recoverable boundary, define an unambiguous instruction age, the correct restart PC, and a policy for preserving older instructions. Specify how free lists, ROB and load/store queue entries, prediction-history metadata, and in-flight execution results are invalidated or restored. The design must distinguish wrong-path cancellation from a normal branch resolution and from a program-visible exception.</p>
+<p>Finally, quantify useful performance. Record how often each recovery cause occurs, how many cycles it consumes, which queue becomes the limiting capacity, how many tentative operations were wasted, and whether security requirements add constraints. Rare-corner verification matters because a checkpoint leak or double allocation may only appear after millions of otherwise successful branches.</p>
+</section>
+<section id="worked-branch" aria-labelledby="heading-worked-branch">
+<h2 id="heading-worked-branch">Worked Example I — Mispredicted Branch and Younger Work</h2>
+<p>Consider this fictional out-of-order core, where all registers and addresses are illustrative. Program order is <code>I1: ADD r1,r2,r3</code>, <code>I2: BNE r1,r0,T</code>, <code>I3: ADD r4,r5,r6</code> on the predicted fall-through path, and <code>I4: LD r7,[A]</code> also on that predicted path. The branch is actually taken to <code>T</code>. The machine has already renamed and issued <code>I3</code> and launched the load <code>I4</code> when <code>I2</code> resolves.</p>
+<table><thead><tr><th scope="col">Relative event</th><th scope="col">ROB / execution observation</th><th scope="col">Recovery consequence</th></tr></thead><tbody>
+<tr><td>E0</td><td>I1 and I2 are in flight; a checkpoint exists at I2</td><td>Valid older I1 and branch I2 remain</td></tr>
+<tr><td>E1</td><td>I3 computes a provisional r4 result</td><td>The value is not yet architecturally committed</td></tr>
+<tr><td>E2</td><td>I4 launches a speculative load from A</td><td>The memory request may need cancellation or invalid tagging</td></tr>
+<tr><td>E3</td><td>I2 resolves taken although fall-through was predicted</td><td>Declare younger I3 and I4 wrong-path</td></tr>
+<tr><td>E4</td><td>Restore I2 mapping boundary, invalidate I3/I4 ROB and queue entries</td><td>Free appropriate speculative destinations; do not retire I3/I4</td></tr>
+<tr><td>E5</td><td>Fetch restarts at T; older I1 and I2 continue toward commit</td><td>Correct-path instructions may execute and retire in order</td></tr></tbody></table><p><strong>Explanation:</strong> the branch itself belongs to the correct execution. Its younger fall-through instructions are squashed because their path is invalid. If <code>I4</code> filled a cache line, this example does <em>not</em> assume the fill is erased. If an older instruction has not completed, a real design may stall at the retirement head even after fetch has redirected.</p>
+<p><strong>Important timing qualification:</strong> E0–E5 are ordered teaching events, not one event per cycle. Actual signal propagation, queues, cache responses, and refill latency can make several events span multiple cycles or overlap.</p>
+</section>
+<section id="worked-nested" aria-labelledby="heading-worked-nested">
+<h2 id="heading-worked-nested">Worked Example II — Younger Branch Correction Followed by Older Correction</h2>
+<p>The program contains unresolved <code>B1</code>, then two instructions, then unresolved <code>B2</code>, then <code>Y</code>. Assume the core predicts both branches and has corresponding checkpoints <code>C1</code> and <code>C2</code>. The recovery policy can preserve a correctly predicted outer path while repairing the inner path, but the older unresolved branch still defines the larger validity boundary.</p>
+<table><thead><tr><th scope="col">Event</th><th scope="col">B1 region</th><th scope="col">B2 region</th><th scope="col">Required action</th></tr></thead><tbody>
+<tr><td>Both predicted</td><td>B1 unresolved</td><td>B2 unresolved; Y fetched</td><td>Retain C1 and C2 and associate younger work with the correct boundary</td></tr>
+<tr><td>B2 resolves wrong</td><td>B1 still unresolved</td><td>Y is invalid</td><td>Restore B2 boundary and redirect; C1 stays live</td></tr>
+<tr><td>New work N fetched after B2 repair</td><td>B1 still unresolved</td><td>N belongs to B1 speculative region</td><td>N remains tentative despite corrected B2</td></tr>
+<tr><td>B1 resolves wrong</td><td>Everything younger than B1 excluded</td><td>B2 path and N excluded</td><td>Restore C1; invalidate all younger branch checkpoints and work</td></tr>
+<tr><td>Fetch resumes from B1 actual target</td><td>B1 now resolved</td><td>Old B2 no longer relevant</td><td>Restart correct architectural path</td></tr></tbody></table><p>The ordering hazard is straightforward: a younger redirect from B2 cannot win over a newly resolved wrong B1. Practical machines use instruction ages, branch tags, or redirect priorities to resolve simultaneous or closely spaced corrections. The <em>oldest still-relevant recovery boundary</em> determines the valid retained prefix.</p>
+</section>
+<section id="worked-rename" aria-labelledby="heading-worked-rename">
+<h2 id="heading-worked-rename">Worked Example III — Rename Map Restoration Across a Branch</h2>
+<p>Suppose only the mapping for architectural register <code>r3</code> matters. Before the branch, its latest valid physical version is <code>P9</code>. The branch checkpoint records <code>r3 → P9</code>. A wrong-path instruction allocates <code>P14</code> to write <code>r3</code>, then a later wrong-path instruction allocates <code>P18</code> to write <code>r3</code> again.</p>
+<table><thead><tr><th scope="col">Point</th><th scope="col">Speculative mapping for r3</th><th scope="col">Live logical meaning</th></tr></thead><tbody>
+<tr><td>Just before branch</td><td>r3 → P9</td><td>P9 is current along valid prefix</td></tr>
+<tr><td>Checkpoint C at branch</td><td>C[r3] = P9</td><td>Save mapping; do not copy all physical values</td></tr>
+<tr><td>First wrong-path write renamed</td><td>r3 → P14</td><td>P14 is tentative version</td></tr>
+<tr><td>Second wrong-path write renamed</td><td>r3 → P18</td><td>P18 supersedes P14 only on wrong path</td></tr>
+<tr><td>Branch found incorrect</td><td>restore r3 → P9</td><td>P14/P18 no longer represent current r3</td></tr>
+<tr><td>Recovery cleanup</td><td>release P14/P18 when safe</td><td>Old P9 remains protected for valid users</td></tr></tbody></table><p>Restoring <code>r3 → P9</code> changes the logical-to-physical mapping without overwriting P14 or P18. The processor must still ensure that no canceled consumer uses P14/P18, and that their resources are not reassigned prematurely while an old completion may still refer to them. All other architectural register mappings require analogous treatment, even though the table shows only one.</p>
+</section>
+<section id="worked-freelist" aria-labelledby="heading-worked-freelist">
+<h2 id="heading-worked-freelist">Worked Example IV — Why a Free-List Snapshot Alone Can Leak Registers</h2>
+<p>Consider a physical-register identifier <code>P20</code>. At the moment a branch checkpoint is taken, P20 is <strong>allocated</strong>, so it is absent from the saved free-list bitmap. After the checkpoint, an older valid instruction retires and frees P20. Later, a younger wrong-path instruction allocates P20 again. The branch then mispredicts. This sequence illustrates the hazard described in the BOOM rename documentation.</p>
+<table><thead><tr><th scope="col">Time</th><th scope="col">P20 status</th><th scope="col">Naive saved free-list state</th><th scope="col">Information needed</th></tr></thead><tbody>
+<tr><td>T0 checkpoint</td><td>Allocated to older mapping</td><td>Not marked free</td><td>Remember future allocation events</td></tr>
+<tr><td>T1 older instruction retires</td><td>Becomes free</td><td>Saved bitmap still says not free</td><td>Current free list records availability</td></tr>
+<tr><td>T2 wrong-path allocation</td><td>Assigned to speculative destination</td><td>Saved bitmap says not free; current bitmap also says not free</td><td>Allocation history identifies speculative grant</td></tr>
+<tr><td>T3 branch miss</td><td>Wrong-path grant must be canceled</td><td>Copying saved bitmap leaves P20 unavailable</td><td>Allocation list returns P20 when safe</td></tr></tbody></table><p>The underlying issue is that a bitmap snapshot tells whether P20 was free at T0, not whether it was <em>freed and later reallocated</em>. In this constructed trace, simply restoring the old bitmap would lose a legitimately reclaimable register. A correctly maintained allocation list or equivalent ownership log prevents the leak. The exact reconciliation must also protect other live older mappings; blindly OR-ing arbitrary identifiers without verifying ownership would be unsafe.</p>
+</section>
+<section id="worked-memory" aria-labelledby="heading-worked-memory">
+<h2 id="heading-worked-memory">Worked Example V — A Load Passes an Older Unresolved Store</h2>
+<p>Consider the following program-order sequence: <code>S: STORE [a], 7</code>, <code>L: LOAD r1, [b]</code>, <code>A: ADD r2, r1, 1</code>. At dispatch, the store's effective address is not yet known, although its data is ready. The load computes <code>b = 0x1000</code> and speculatively reads memory location <code>0x1000</code>, obtaining 3. Later the store computes <code>a = 0x1000</code>, so L should have obtained the value 7 from the older store under this example's ordinary single-thread ordering assumptions.</p>
+<table><thead><tr><th scope="col">Event</th><th scope="col">Tentative value</th><th scope="col">Recovery action</th></tr></thead><tbody>
+<tr><td>L issues before S address is known</td><td>L reads memory value 3</td><td>Track older store dependence and load age</td></tr>
+<tr><td>A executes based on L</td><td>r2 provisionally becomes 4</td><td>A is a dependent consumer</td></tr>
+<tr><td>S address resolves to 0x1000</td><td>Store/load addresses match</td><td>Detect violated store-to-load relation</td></tr>
+<tr><td>Replay begins</td><td>L and affected consumers marked invalid</td><td>Refetch or selectively reissue according to design</td></tr>
+<tr><td>Corrected L obtains 7</td><td>A recomputes r2 as 8</td><td>Only validated results may retire</td></tr></tbody></table><p>This is a <strong>memory-order speculation failure</strong>, not an ISA page fault. Some machines respond with a broad pipeline retry, while others use finer-grained replay. The scenario assumes the same architectural thread, a normal cacheable location, and no additional concurrent writes. Real load/store behavior also depends on byte overlap, forwarding rules, coherence and the memory model.</p>
+</section>
+<section id="worked-fault" aria-labelledby="heading-worked-fault">
+<h2 id="heading-worked-fault">Worked Example VI — A Wrong-Path Load Reports a Page Fault</h2>
+<p>Assume instruction <code>B</code> is an unresolved older branch predicted not taken. On the predicted path, a younger load <code>L</code> accesses an unmapped virtual page; the translation machinery detects a page fault and attaches a fault indication to L. The branch later resolves <em>taken</em> to a path that contains no such load.</p>
+<table><thead><tr><th scope="col">Stage</th><th scope="col">Correct treatment</th><th scope="col">Incorrect treatment to avoid</th></tr></thead><tbody>
+<tr><td>L detects invalid translation</td><td>Record a pending fault associated with L</td><td>Immediately deliver a user-visible fault regardless of older branches</td></tr>
+<tr><td>B resolves taken</td><td>Mark L wrong-path and invalidate its pending exception record</td><td>Allow L to reach trap handling after its path is excluded</td></tr>
+<tr><td>Correct-target fetch resumes</td><td>Execute valid instructions from target</td><td>Assume a wrong-path fault must be retried</td></tr>
+<tr><td>If B had resolved not taken instead</td><td>Allow L to reach retirement head and take its precise fault</td><td>Permit younger valid instructions to retire past L</td></tr></tbody></table><p>Under precise exception semantics, a fault must be <em>architecturally attributable</em> to an instruction that belongs to the valid committed prefix. A translation failure discovered in speculative machinery is not by itself proof that software should observe an exception. External device exceptions and some asynchronous conditions require additional platform-specific treatment.</p>
+</section>
+<section id="worked-cpi" aria-labelledby="heading-worked-cpi">
+<h2 id="heading-worked-cpi">Worked Example VII — Estimating Recovery Overhead and IPC</h2>
+<p>Assume a fictional workload and a deliberately simplified <strong>non-overlapping event model</strong>: base CPI is <code>0.65</code>, 12% of retired instructions are branches, 4% of those branches mispredict, and each misprediction adds an average of 15 non-overlapped cycles. Separately, 0.2% of retired instructions trigger a memory-dependence replay, each adding 20 cycles beyond other stalls.</p>
+<table><thead><tr><th scope="col">Quantity</th><th scope="col">Calculation</th><th scope="col">Result</th></tr></thead><tbody>
+<tr><td>Branch recovery ΔCPI</td><td>0.12 × 0.04 × 15</td><td>0.072 cycles/instruction</td></tr>
+<tr><td>Memory replay ΔCPI</td><td>0.002 × 20</td><td>0.040 cycles/instruction</td></tr>
+<tr><td>Simplified total CPI</td><td>0.65 + 0.072 + 0.040</td><td>0.762 cycles/instruction</td></tr>
+<tr><td>Simplified retired IPC</td><td>1 / 0.762</td><td>About 1.312 instructions/cycle</td></tr>
+<tr><td>Recovery share of modeled CPI</td><td>(0.072 + 0.040) / 0.762</td><td>About 14.7%</td></tr></tbody></table><p>These numbers are <strong>constructed instructional assumptions</strong>, not hardware measurements. In a real processor, memory delays and recovery events can overlap with other stalls, a recovery penalty can vary with pipeline occupancy, and hardware event counters may not match these precise definitions. Consequently it is not valid to add every measured stall-counter value as though categories were mutually exclusive.</p>
+<p>For a separate thought experiment, a four-wide core that discards eight cycles of wrong-path fetch has up to <code>4 × 8 = 32</code> nominal fetch slots lost in that period, not necessarily 32 actually executed or retired instructions. The realized lost work depends on fetch occupancy and the point at which the miss was detected.</p>
+</section>
+<section id="verification-invariants" aria-labelledby="heading-verification-invariants">
+<h2 id="heading-verification-invariants">Architectural Invariants for Recovery Verification</h2>
+<p>A correct recovery design should preserve the following fundamental properties: <strong>(1)</strong> retired instructions form a valid program-order prefix; <strong>(2)</strong> each committed register mapping names a live, correct physical version; <strong>(3)</strong> no squashed instruction can retire or cause an impermissible external side effect; <strong>(4)</strong> each live resource has one consistent owner; and <strong>(5)</strong> the recovered fetch address is the ISA-correct restart address. These are stronger than merely producing the right arithmetic result in a short benchmark.</p>
+<p>For precise exceptions, add an invariant that an architectural trap reflects the oldest eligible faulting instruction and that the trap context matches the committed prefix. For memory-order speculation, add checks that a replayed load eventually reads a permitted value and that dependent consumers of wrong data cannot commit. For branch recovery, verify that younger branch checkpoints, speculative history, and free-list allocations are cleaned up.</p>
+<p>Implementation-specific assertions can track instruction sequence identifiers through all queues, reject late completions from invalid epochs, and monitor the invariants of branch masks and free lists. Reference models should compare the architectural outcome, while separate microarchitectural checks validate resource and performance behavior.</p>
+</section>
+<section id="test-matrix" aria-labelledby="heading-test-matrix">
+<h2 id="heading-test-matrix">Verification Test Matrix</h2>
+<table><thead><tr><th scope="col">Test family</th><th scope="col">Constructed stress case</th><th scope="col">Property to establish</th></tr></thead><tbody>
+<tr><td>Nested branches</td><td>Older and younger branches both mispredict in different resolution orders</td><td>Only the oldest relevant redirect controls the retained prefix</td></tr>
+<tr><td>Rename restore</td><td>Multiple wrong-path writes to one architectural register</td><td>Mapping after squash equals correct checkpoint mapping</td></tr>
+<tr><td>Physical register reuse</td><td>Free, allocate, mispredict, reallocate with queue wraparound</td><td>No resource leaks or double allocations</td></tr>
+<tr><td>Late execution response</td><td>Long-latency wrong-path load returns after squash</td><td>Response cannot update a new instruction’s state</td></tr>
+<tr><td>Exception priority</td><td>Younger load faults before older branch resolves</td><td>Wrong-path fault is suppressed; true-path fault is precise</td></tr>
+<tr><td>Memory dependence</td><td>Younger load bypasses unknown-address older store</td><td>Conflicting value never retires</td></tr>
+<tr><td>Issue replay</td><td>Consumer executes on an anticipated result that arrives late</td><td>All affected consumers are replayed or killed</td></tr>
+<tr><td>Device and atomic I/O</td><td>Wrong-path access targets side-effecting register</td><td>No forbidden external action occurs</td></tr>
+<tr><td>SMT isolation</td><td>One thread squashes while another makes progress</td><td>Other thread state is not spuriously invalidated</td></tr>
+<tr><td>Interrupt during recovery</td><td>External interrupt arrives during unresolved branches</td><td>Architectural interrupt boundary is valid and restartable</td></tr>
+<tr><td>Checkpoint pressure</td><td>Checkpoint pool exhausted under dense branches</td><td>Correct stall/fallback without lost metadata</td></tr>
+<tr><td>Performance regression</td><td>Frequent branch misses with realistic queue pressure</td><td>Measured overhead is explained and bounded for model</td></tr></tbody></table>
+</section>
+<section id="measurement-framework" aria-labelledby="heading-measurement-framework">
+<h2 id="heading-measurement-framework">Measuring Speculation Quality Without Confusing Counters</h2>
+<p>A useful performance investigation distinguishes <strong>retired work</strong> from <strong>executed work</strong>. Many systems expose events related to branch mispredictions, bad speculation, machine clears, issued micro-ops, retired micro-ops, pipeline stalls, or memory-order retries. Their exact definitions and availability are processor-specific. A high issued-uop rate can coexist with poor retired IPC when large quantities of work are squashed.</p>
+<p>Use a controlled workload, stable clock and power conditions, representative inputs, and explicit measurement intervals. Separate branch miss <em>frequency</em> from branch miss <em>penalty</em>; a low miss count can still hurt if each miss is expensive, and a high wrong-path activity count may reflect several recoveries or hardware replay conventions. Address speculation-related cache traffic separately from foreground useful loads.</p>
+<p>An analytical model may estimate <code>ΔCPI ≈ event frequency per retired instruction × incremental non-overlapped cost per event</code>. It is a teaching abstraction, not an identity for overlapping pipelines. Detailed cycle accounting or simulation is required when different bottlenecks overlap and when one missed branch masks a later load stall.</p>
+</section>
+<section id="diagnostic-path" aria-labelledby="heading-diagnostic-path">
+<h2 id="heading-diagnostic-path">Practical Investigation Framework</h2>
+<p>When a suspected speculation bottleneck appears, first identify the <strong>symptom</strong>: low retired IPC, excess memory traffic, high branch misses, long recovery, or resource-full stalls. Then classify the likely invalidation source: branch target/direction error, memory dependence failure, exception, serialization, or late data readiness. A general squash counter may not tell you which cause dominates.</p>
+<p>Next, correlate event frequency with pipeline capacity, workload phase, data dependence, and the number of instructions discarded per recovery. Compare baseline and altered configurations while holding architectural program behavior constant. For a simulator, observe rename-map checkpoints, issue-queue occupancy, ROB head progress, free-list counts, and replay requests. For commercial processors, rely on published performance-monitoring documentation rather than applying one vendor’s event names to another.</p>
+<p>Finally, distinguish a <em>functional</em> failure (wrong committed value, wrong trap context, lost register) from a <em>performance</em> failure (excessive squashes, slow refill, checkpoint exhaustion). Both matter, but their evidence and engineering remedies are different.</p>
+</section>
+<section id="misconceptions" aria-labelledby="heading-misconceptions">
+<h2 id="heading-misconceptions">Common Misconceptions and Corrections</h2>
+<table><thead><tr><th scope="col">Misconception</th><th scope="col">Correction</th></tr></thead><tbody>
+<tr><td>Speculation and out-of-order execution are identical</td><td>Out-of-order describes scheduling; speculation describes unresolved correctness assumptions</td></tr>
+<tr><td>A wrong-path instruction cannot execute</td><td>It may execute transiently, but cannot retire as a valid wrong-path instruction</td></tr>
+<tr><td>Restoring the register map restores all hardware state</td><td>Caches, predictors, request queues, and timing effects can persist</td></tr>
+<tr><td>ROB retirement makes a store immediately global</td><td>Committed stores may await later buffer propagation and coherence visibility</td></tr>
+<tr><td>All faults should be reported when detected</td><td>Younger speculative faults are normally deferred until a precise trap point</td></tr>
+<tr><td>Every branch requires copying every physical register</td><td>Most checkpoints preserve mappings and metadata, not full value arrays</td></tr>
+<tr><td>A free-list bitmap snapshot always suffices</td><td>Freed-and-reallocated registers require correct allocation history or equivalent tracking</td></tr>
+<tr><td>Every replay is a full pipeline flush</td><td>Some designs selectively replay consumers or local operations</td></tr>
+<tr><td>Branch checkpoints alone handle every exception</td><td>Different recovery mechanisms may handle branches, memory order, and traps</td></tr>
+<tr><td>Single-cycle rename restore means one-cycle complete recovery</td><td>Redirect, cleanup, refetch, and refilling consume additional time</td></tr>
+<tr><td>A canceled load cannot affect caches</td><td>Speculative requests may alter microarchitectural cache or contention state</td></tr>
+<tr><td>Speculation security is solved by correct retirement</td><td>Confidentiality requires separate side-channel threat analysis</td></tr>
+<tr><td>A memory dependence violation is always an ISA fault</td><td>Usually it is a microarchitectural event handled by retry/replay</td></tr>
+<tr><td>More checkpoints guarantee more IPC</td><td>Other resources, workload dependencies, and energy limits can dominate</td></tr></tbody></table>
+</section>
+<section id="glossary" aria-labelledby="heading-glossary">
+<h2 id="heading-glossary">Specialist Glossary</h2>
+<p>Definitions reflect this article’s conceptual models. Vendor documentation may use some terms more narrowly.</p><table><thead><tr><th scope="col">Term</th><th scope="col">Definition</th></tr></thead><tbody>
+<tr><td>Speculative execution</td><td>Execution performed before all conditions authorizing normal architectural completion are resolved.</td></tr>
+<tr><td>Transient execution</td><td>Tentative execution whose instruction does not ultimately join the retired program stream.</td></tr>
+<tr><td>Architectural state</td><td>Program-visible registers, memory effects, control state, and exception context defined by an ISA.</td></tr>
+<tr><td>Microarchitectural state</td><td>Implementation-level queues, cache state, prediction structures, register versions, and control metadata.</td></tr>
+<tr><td>Commit</td><td>Acceptance of an operation into the architecturally ordered result stream.</td></tr>
+<tr><td>Retirement</td><td>Common synonym for in-order architectural commitment of an instruction.</td></tr>
+<tr><td>Completion</td><td>Execution milestone at which an operation reports an outcome; not necessarily retirement.</td></tr>
+<tr><td>In-flight instruction</td><td>Fetched or admitted instruction that has not yet retired or been discarded.</td></tr>
+<tr><td>Speculation window</td><td>Set or interval of in-flight work awaiting one or more unresolved correctness conditions.</td></tr>
+<tr><td>Unresolved branch</td><td>Branch whose actual successor has not been conclusively established.</td></tr>
+<tr><td>Wrong path</td><td>Instruction stream fetched under a prediction inconsistent with resolved control flow.</td></tr>
+<tr><td>Misprediction boundary</td><td>Instruction-age boundary used to invalidate incorrect younger work.</td></tr>
+<tr><td>Checkpoint</td><td>Saved state or metadata sufficient to restore a prior valid execution boundary.</td></tr>
+<tr><td>Rename map</td><td>Mapping from architectural register names to currently selected physical registers.</td></tr>
+<tr><td>Physical register</td><td>Microarchitectural storage location for a particular version of an architectural value.</td></tr>
+<tr><td>Rename snapshot</td><td>Copy or equivalent representation of the register map at a speculation boundary.</td></tr>
+<tr><td>Committed map</td><td>Register mapping corresponding to the latest architecturally retired state.</td></tr>
+<tr><td>Old mapping</td><td>Previous physical destination overwritten by a newly allocated register version.</td></tr>
+<tr><td>Free list</td><td>Resource tracker for available physical registers or analogous entries.</td></tr>
+<tr><td>Allocation list</td><td>Record of resources allocated within a speculative region.</td></tr>
+<tr><td>Resource leak</td><td>Allocated resource that is no longer needed but cannot be reclaimed.</td></tr>
+<tr><td>Double allocation</td><td>Unsafe assignment of one live resource identifier to incompatible users.</td></tr>
+<tr><td>Branch tag</td><td>Identifier linking instructions or state to a speculative branch region.</td></tr>
+<tr><td>Branch mask</td><td>Metadata describing branch speculation dependencies of an in-flight operation.</td></tr>
+<tr><td>Instruction age</td><td>Logical ordering of instructions relative to other in-flight operations.</td></tr>
+<tr><td>Epoch</td><td>Generation identifier used to reject stale results from invalid work.</td></tr>
+<tr><td>Reorder buffer (ROB)</td><td>Ordered tracking structure supporting program-order retirement and recovery.</td></tr>
+<tr><td>ROB head</td><td>Oldest unretired instruction or group currently eligible for commit assessment.</td></tr>
+<tr><td>Squash</td><td>Invalidate tentative work excluded by a corrected prediction or event.</td></tr>
+<tr><td>Kill</td><td>Cancel or suppress a micro-operation, request, or response based on validity.</td></tr>
+<tr><td>Flush</td><td>Broad clearing or restart of pipeline work under a recovery policy.</td></tr>
+<tr><td>Rollback</td><td>Restoration of earlier execution metadata or architectural state boundary.</td></tr>
+<tr><td>Unwind</td><td>Stepwise reversal of rename or resource changes using recorded history.</td></tr>
+<tr><td>Redirect</td><td>Change of instruction-fetch successor to a corrected program address.</td></tr>
+<tr><td>Replay</td><td>Re-execution or reissue of work whose tentative result or timing was invalid.</td></tr>
+<tr><td>Selective replay</td><td>Reissue targeted dependent work while preserving other eligible instructions.</td></tr>
+<tr><td>Full pipeline retry</td><td>Broad invalidation and refetch of an instruction suffix or pipeline.</td></tr>
+<tr><td>Precise exception</td><td>Trap with architectural state matching the prescribed program-order boundary.</td></tr>
+<tr><td>Faulting instruction</td><td>Instruction whose execution condition triggers an ISA-defined exception.</td></tr>
+<tr><td>Deferred exception</td><td>Exception detected early but withheld until the correct architectural trap point.</td></tr>
+<tr><td>Trap context</td><td>Architectural information recorded for exception or interrupt handling.</td></tr>
+<tr><td>Load/store queue</td><td>Tracking structures for memory-operation addresses, ages, and ordering.</td></tr>
+<tr><td>Memory disambiguation</td><td>Determination or prediction of overlap and ordering between loads and stores.</td></tr>
+<tr><td>Memory ordering violation</td><td>Invalid speculative load/store order under the applicable memory model.</td></tr>
+<tr><td>Store-to-load forwarding</td><td>Provision of a younger load’s value from a matching older buffered store.</td></tr>
+<tr><td>Store buffer</td><td>Structure that can hold committed writes pending memory-system propagation.</td></tr>
+<tr><td>Global visibility</td><td>Stage at which other observers can see a memory effect under an ISA memory model.</td></tr>
+<tr><td>Serialization</td><td>Ordering restriction that constrains younger or older operations around an event.</td></tr>
+<tr><td>Point of no return</td><td>Implementation-defined boundary after which selected operations are safe to issue non-speculatively.</td></tr>
+<tr><td>Misprediction penalty</td><td>Effective lost time or throughput due to recovering from incorrect prediction.</td></tr>
+<tr><td>Backpressure</td><td>Throttling caused by insufficient downstream capacity.</td></tr>
+<tr><td>Instruction-level parallelism</td><td>Independent operations potentially executable concurrently.</td></tr>
+<tr><td>Retired IPC</td><td>Program-visible retired instructions divided by elapsed clock cycles.</td></tr>
+<tr><td>CPI</td><td>Elapsed clock cycles divided by retired instructions.</td></tr>
+<tr><td>Physical-register pressure</td><td>Capacity constraint caused by too many live physical destination versions.</td></tr>
+<tr><td>Cache pollution</td><td>Less useful cache contents or replacement state caused by competing accesses.</td></tr>
+<tr><td>Side channel</td><td>Indirect observation through timing, contention, or other physical behavior.</td></tr>
+<tr><td>Spectre-class attack</td><td>Class of vulnerabilities exploiting transient effects of mis-speculated work.</td></tr>
+<tr><td>Simultaneous multithreading</td><td>Multiple architectural instruction streams sharing execution resources of one core.</td></tr>
+<tr><td>Wrong-path memory request</td><td>Access initiated by an instruction later excluded from the committed stream.</td></tr>
+<tr><td>Architectural invariant</td><td>Correctness condition that must hold independently of internal scheduling.</td></tr>
+<tr><td>Restart PC</td><td>Architecturally correct instruction address from which execution resumes after recovery.</td></tr></tbody></table>
+</section>
+<section id="references" aria-labelledby="heading-references">
+<h2 id="heading-references">References and Further Reading</h2>
+<p>Implementation-specific references illustrate representative mechanisms; they do not imply that every processor implements them identically. The worked addresses, traces, event rates, and estimated cycles above are original instructional constructions rather than measured results.</p><ol>
+<li><a href="https://docs.boom-core.org/en/latest/sections/rename-stage.html" rel="noopener noreferrer"><strong>RISCV-BOOM, “The Rename Stage.”</strong></a> Speculative map checkpoints, committed map restoration, free lists, branch allocation lists, and the free-list snapshot caveat.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/reorder-buffer.html" rel="noopener noreferrer"><strong>RISCV-BOOM, “The Reorder Buffer (ROB) and the Dispatch Stage.”</strong></a> Retirement, exception handling, and memory-order retry terminology.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/load-store-unit.html" rel="noopener noreferrer"><strong>RISCV-BOOM, “The Load/Store Unit (LSU).”</strong></a> Speculative loads, store forwarding, and memory ordering failures.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/branch-prediction/backing-predictor.html" rel="noopener noreferrer"><strong>RISCV-BOOM, “The Backing Predictor (BPD).”</strong></a> Prediction checkpoints and history rollback.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/execution-stages.html" rel="noopener noreferrer"><strong>RISCV-BOOM, “The Execute Pipeline.”</strong></a> Branch resolution and interactions with execution resources.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/physical-realization.html" rel="noopener noreferrer"><strong>RISCV-BOOM, “Physical Realization.”</strong></a> Misprediction kill signaling and pipeline redirect paths.</li>
+<li><a href="https://www.gem5.org/documentation/general_docs/cpu_models/O3CPU" rel="noopener noreferrer"><strong>gem5 Project, “Out of Order CPU model.”</strong></a> Rename, issue, execute, commit, and squash organization in a research simulator.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/technical-documentation/hardware-behavior-related-to-speculative-execution.html" rel="noopener noreferrer"><strong>Intel, “Hardware Features and Behaviors Related to Speculative Execution.”</strong></a> Current vendor discussion of speculative execution and memory-disambiguation behavior.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/technical-documentation/speculative-execution-side-channel-mitigations.html" rel="noopener noreferrer"><strong>Intel, “Speculative Execution Side Channel Mitigations.”</strong></a> Selected barriers and software/hardware controls.</li>
+<li><a href="https://arxiv.org/abs/1801.01203" rel="noopener noreferrer"><strong>Kocher et al., “Spectre Attacks: Exploiting Speculative Execution.”</strong></a> Foundational research on microarchitectural side effects of speculative execution.</li>
+<li><strong>Hennessy and Patterson, Computer Architecture: A Quantitative Approach, 6th ed. (2019).</strong> Reference text for instruction-level parallelism, speculation, dynamic scheduling, and quantitative evaluation.</li>
+</ol>
+</section>
+<section id="related-topics" aria-labelledby="heading-related-topics">
+<h2 id="heading-related-topics">Related Encyclopedia Topics and Reading Sequence</h2>
+<p>This page is a specialist child of the Microarchitecture unit. Planned sibling subarticle URLs are intentionally active even when a destination has not yet been published.</p><ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture"><strong>Microarchitecture (parent overview)</strong></a> — Processor microarchitecture and the larger hierarchy.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/branch-prediction-and-fetch-redirection"><strong>Branch Prediction and Fetch Redirection</strong></a> — Direction and target forecasts, history state, and redirect timing.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/register-renaming-and-physical-register-mapping"><strong>Register Renaming and Physical Register Mapping</strong></a> — Physical destinations, speculative mapping, and register reclamation.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/instruction-scheduling-and-reservation-stations"><strong>Instruction Scheduling and Reservation Stations</strong></a> — Ready operands, issue selection, and replay dependencies.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/out-of-order-execution-and-reorder-buffers"><strong>Out-of-Order Execution and Reorder Buffers</strong></a> — Commit ordering, ROB organization, and precise retirement.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/load-store-queues-and-memory-disambiguation"><strong>Load-Store Queues and Memory Disambiguation</strong></a> — Deeper memory-dependence detection, forwarding, and replay.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/address-generation-tlbs-and-page-walks"><strong>Address Generation, TLBs, and Page Walks</strong></a> — Translation, fault detection, and address preparation.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/cache-access-prefetching-and-memory-level-parallelism"><strong>Cache Access, Prefetching, and Memory-Level Parallelism</strong></a> — Cache requests, independent misses, and speculative traffic.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/simultaneous-multithreading-and-core-resource-sharing"><strong>Simultaneous Multithreading and Core Resource Sharing</strong></a> — Per-thread recovery with shared execution resources.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/performance-counters-and-cpi-analysis"><strong>Performance Counters and CPI Analysis</strong></a> — Retired throughput, event counts, and stall accounting.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/microarchitectural-side-channels-and-mitigations"><strong>Microarchitectural Side Channels and Mitigations</strong></a> — Security implications of persistent transient effects.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing"><strong>Pipeline Processing</strong></a> — Pipeline hazards and broader flow-control models.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture"><strong>Instruction Set Architecture</strong></a> — Architectural correctness, exceptions, and memory-model obligations.</li>
+</ul><p><strong>Recommended sequence:</strong> read branch prediction, register renaming, and reorder buffers before this article; continue to the load/store queue and side-channel articles for deeper treatment of memory and security.</p>
+</section>
+<section id="editorial-scope" aria-labelledby="heading-editorial-scope">
+<h2 id="heading-editorial-scope">Editorial Scope and Publication Status</h2>
+<p><strong>Taxonomy:</strong> Computer Science → Computer Architecture → Microarchitecture → Speculative Execution, Checkpointing, and Recovery. This is the <strong>12th of 20</strong> planned Level 5 Microarchitecture specialist articles and the second entry in the group <em>Prediction, Speculation, and Memory Execution</em>.</p><p><strong>Scope boundary:</strong> this entry owns tentative-state handling, checkpoints, squash policies, precise trap recovery, and replay frameworks. Detailed predictor algorithms, memory disambiguation circuitry, microarchitectural side-channel exploitation, and full ISA exception specifications remain in their respective neighboring articles.</p><p><strong>Evidence status:</strong> engineering examples are labeled as constructed scenarios. Primary technical references support the design patterns; implementation-specific cycle counts and quantitative examples are assumptions, not validated measurements. The public deployment of linked future articles is not asserted.</p><p><strong>Physical file:</strong> <code>computer-architecture/microarchitecture-articles/speculative-execution-checkpointing-and-recovery.html</code>. <strong>Canonical public URL:</strong> <code>/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/speculative-execution-checkpointing-and-recovery</code>.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

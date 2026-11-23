@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recursive Descent Parsing | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Specialist MGU Encyclopedia treatment of grammar-driven recursive descent: predictive parsing, tokens, ASTs, precedence, left recursion, FIRST/FOLLOW, error recovery, parser complexity, and secure implementation.">
+<meta name="keywords" content="recursive descent parsing, predictive parser, LL(1), grammar, lexer, syntax tree, abstract syntax tree, left recursion, operator precedence, associativity, PEG, Pratt parsing, syntax error, compiler">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-descent-parsing">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Recursive Descent Parsing | MGU Encyclopedia">
+<meta property="og:description" content="How recursive grammar procedures recognize syntax, build ASTs, manage operator grouping, report errors, and remain correct and resource-aware.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-descent-parsing">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Recursive Descent Parsing</h1>
+<p class="subtitle">Turning grammar rules into cooperating procedures: lexical contracts, nested syntax, predictive lookahead, AST construction, diagnostics, and bounded computation.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#definition-purpose-and-specialist-scope">Definition, Purpose, and Specialist Scope</a></li>
+<li><a href="#the-processing-pipeline-characters-tokens-syntax-and-meaning">The Processing Pipeline: Characters, Tokens, Syntax, and Meaning</a></li>
+<li><a href="#grammar-vocabulary-terminals-nonterminals-productions-and-start-rules">Grammar Vocabulary: Terminals, Nonterminals, Productions, and Start Rules</a></li>
+<li><a href="#the-teaching-language-and-its-input-contract">The Teaching Language and Its Input Contract</a></li>
+<li><a href="#a-predictive-expression-grammar">A Predictive Expression Grammar</a></li>
+<li><a href="#call-structure-and-the-one-function-per-nonterminal-pattern">Call Structure and the One-Function-per-Nonterminal Pattern</a></li>
+<li><a href="#tokens-lexemes-positions-and-the-end-of-input-sentinel">Tokens, Lexemes, Positions, and the End-of-Input Sentinel</a></li>
+<li><a href="#a-complete-teaching-lexer-and-recursive-descent-parser">A Complete Teaching Lexer and Recursive-Descent Parser</a></li>
+<li><a href="#how-the-parser-cursor-moves">How the Parser Cursor Moves</a></li>
+<li><a href="#a-worked-trace-of-nested-parentheses">A Worked Trace of Nested Parentheses</a></li>
+<li><a href="#parse-trees-and-abstract-syntax-trees">Parse Trees and Abstract Syntax Trees</a></li>
+<li><a href="#building-a-syntax-tree-instead-of-computing-during-parsing">Building a Syntax Tree Instead of Computing During Parsing</a></li>
+<li><a href="#precedence-is-encoded-by-which-rule-calls-which">Precedence Is Encoded by Which Rule Calls Which</a></li>
+<li><a href="#associativity-why-loops-fold-left-and-right-recursion-folds-right">Associativity: Why Loops Fold Left and Right Recursion Folds Right</a></li>
+<li><a href="#unary-prefix-operators-and-a-non-obvious-grammar-cycle">Unary Prefix Operators and a Non-obvious Grammar Cycle</a></li>
+<li><a href="#direct-left-recursion-and-why-naive-recursive-descent-fails">Direct Left Recursion and Why Naive Recursive Descent Fails</a></li>
+<li><a href="#indirect-left-recursion-and-non-progressing-call-cycles">Indirect Left Recursion and Non-progressing Call Cycles</a></li>
+<li><a href="#left-factoring-and-lookahead-decisions">Left Factoring and Lookahead Decisions</a></li>
+<li><a href="#first-sets-follow-sets-and-predictive-selection">FIRST Sets, FOLLOW Sets, and Predictive Selection</a></li>
+<li><a href="#ll1-bounded-lookahead-and-the-scope-of-the-promise">LL(1), Bounded Lookahead, and the Scope of the Promise</a></li>
+<li><a href="#ambiguity-is-a-language-design-problem-not-just-a-parser-error">Ambiguity Is a Language-Design Problem, Not Just a Parser Error</a></li>
+<li><a href="#predictive-parsing-versus-backtracking">Predictive Parsing Versus Backtracking</a></li>
+<li><a href="#parsing-expression-grammars-and-ordered-choice">Parsing Expression Grammars and Ordered Choice</a></li>
+<li><a href="#pratt-parsing-and-precedence-climbing-as-adjacent-designs">Pratt Parsing and Precedence Climbing as Adjacent Designs</a></li>
+<li><a href="#syntax-errors-actual-token-expected-token-and-location">Syntax Errors: Actual Token, Expected Token, and Location</a></li>
+<li><a href="#rendering-a-diagnostic-caret">Rendering a Diagnostic Caret</a></li>
+<li><a href="#error-propagation-and-the-failure-contract">Error Propagation and the Failure Contract</a></li>
+<li><a href="#panic-mode-recovery-at-synchronization-points">Panic-Mode Recovery at Synchronization Points</a></li>
+<li><a href="#insertion-deletion-and-local-error-repair">Insertion, Deletion, and Local Error Repair</a></li>
+<li><a href="#end-of-input-validation-and-prefix-acceptance">End-of-Input Validation and Prefix Acceptance</a></li>
+<li><a href="#lexical-boundaries-negative-literals-whitespace-and-numbers">Lexical Boundaries: Negative Literals, Whitespace, and Numbers</a></li>
+<li><a href="#list-grammars-optional-elements-and-separated-repetition">List Grammars, Optional Elements, and Separated Repetition</a></li>
+<li><a href="#parsing-nested-statements-and-blocks">Parsing Nested Statements and Blocks</a></li>
+<li><a href="#a-small-independent-block-structure-recognizer">A Small Independent Block-Structure Recognizer</a></li>
+<li><a href="#the-dangling-else-problem-and-statement-ambiguity">The Dangling-Else Problem and Statement Ambiguity</a></li>
+<li><a href="#source-spans-trivia-and-faithful-tooling">Source Spans, Trivia, and Faithful Tooling</a></li>
+<li><a href="#ast-visitors-and-separation-of-subsequent-passes">AST Visitors and Separation of Subsequent Passes</a></li>
+<li><a href="#parsing-correctness-local-contracts-and-structural-induction">Parsing Correctness: Local Contracts and Structural Induction</a></li>
+<li><a href="#termination-and-the-decreasing-input-measure">Termination and the Decreasing Input Measure</a></li>
+<li><a href="#time-complexity-under-predictive-parsing">Time Complexity Under Predictive Parsing</a></li>
+<li><a href="#space-complexity-tokens-ast-and-the-parsing-stack">Space Complexity: Tokens, AST, and the Parsing Stack</a></li>
+<li><a href="#why-backtracking-can-change-complexity">Why Backtracking Can Change Complexity</a></li>
+<li><a href="#packrat-memoization-and-its-trade-offs">Packrat Memoization and Its Trade-offs</a></li>
+<li><a href="#stack-depth-recursion-limits-and-input-budgets">Stack Depth, Recursion Limits, and Input Budgets</a></li>
+<li><a href="#parsing-untrusted-inputs-without-executing-them">Parsing Untrusted Inputs Without Executing Them</a></li>
+<li><a href="#unit-tests-happy-paths-boundaries-and-failure-positions">Unit Tests: Happy Paths, Boundaries, and Failure Positions</a></li>
+<li><a href="#metamorphic-and-property-based-testing">Metamorphic and Property-Based Testing</a></li>
+<li><a href="#differential-testing-regression-tests-and-grammar-evolution">Differential Testing, Regression Tests, and Grammar Evolution</a></li>
+<li><a href="#applied-scenario-1-a-spreadsheet-formula-engine">Applied Scenario 1: A Spreadsheet Formula Engine</a></li>
+<li><a href="#applied-scenario-2-a-structured-configuration-language">Applied Scenario 2: A Structured Configuration Language</a></li>
+<li><a href="#applied-scenario-3-a-query-filter-or-search-dsl">Applied Scenario 3: A Query Filter or Search DSL</a></li>
+<li><a href="#applied-scenario-4-an-editor-with-partial-source-code">Applied Scenario 4: An Editor with Partial Source Code</a></li>
+<li><a href="#applied-scenario-5-a-lightweight-api-validation-grammar">Applied Scenario 5: A Lightweight API Validation Grammar</a></li>
+<li><a href="#applied-scenario-6-a-template-or-markup-interpreter">Applied Scenario 6: A Template or Markup Interpreter</a></li>
+<li><a href="#comparison-when-recursive-descent-fits-and-when-it-does-not">Comparison: When Recursive Descent Fits and When It Does Not</a></li>
+<li><a href="#ten-gate-parser-design-and-selection-framework">Ten-Gate Parser Design and Selection Framework</a></li>
+<li><a href="#common-misconceptions-and-failure-modes">Common Misconceptions and Failure Modes</a></li>
+<li><a href="#debugging-and-implementation-checklist">Debugging and Implementation Checklist</a></li>
+<li><a href="#glossary-of-essential-terms">Glossary of Essential Terms</a></li>
+<li><a href="#review-questions-and-practical-exercises">Review Questions and Practical Exercises</a></li>
+<li><a href="#sources-and-further-reading">Sources and Further Reading</a></li>
+<li><a href="#recursion-specialist-reading-directory">Recursion Specialist Reading Directory</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol>
+</section>
+<section id="definition-purpose-and-specialist-scope" aria-labelledby="heading-definition-purpose-and-specialist-scope">
+<h2 id="heading-definition-purpose-and-specialist-scope">Definition, Purpose, and Specialist Scope</h2>
+<p><strong>Recursive descent parsing</strong> is a top-down parsing technique in which procedures corresponding to grammatical categories recognize an input sequence, consume its tokens, and optionally construct a representation of its syntax. A procedure for an expression may call a procedure for a term, which calls one for a unary expression, which calls one for a parenthesized primary expression; the program's call structure mirrors the grammar's nested structure. Each successful call consumes the syntactic unit promised by its rule and returns control at the next token.</p>
+<p>In a <strong>predictive recursive-descent parser</strong>, the next token or a bounded amount of lookahead is sufficient to choose a grammatical alternative without arbitrarily retrying earlier decisions. Other hand-written recursive-descent parsers may backtrack, use semantic predicates, or memoize results. These are different engineering choices, not universal properties of recursion. The distinction matters: an approachable hand-written parser can be linear and deterministic, but a poor grammar or uncontrolled backtracking can cause wrong grouping, nontermination, or explosive search.</p>
+<p>This is a Level 5 specialist article of the <a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/">Recursion unit</a> in the MGU Computer Science Encyclopedia. Its focus is the relationship among grammar, recursive control flow, lookahead, syntax-tree construction, and failure handling. It introduces a complete teaching parser, then explains grammar refactoring, predictive decisions, limitations, and production boundaries. General lexing, compiler implementation, type checking, and formal language theory remain separate subjects; they appear here only insofar as a recursive parser needs them.</p>
+</section>
+<section id="the-processing-pipeline-characters-tokens-syntax-and-meaning" aria-labelledby="heading-the-processing-pipeline-characters-tokens-syntax-and-meaning">
+<h2 id="heading-the-processing-pipeline-characters-tokens-syntax-and-meaning">The Processing Pipeline: Characters, Tokens, Syntax, and Meaning</h2>
+<p>A small compiler or interpreter typically separates four activities: <strong>lexical analysis</strong> converts characters into tokens; <strong>parsing</strong> checks how those tokens fit a grammar; <strong>semantic analysis</strong> resolves meaning, names, types, or contextual constraints; and <strong>execution or code generation</strong> acts on the recognized structure. Not every product uses four independent passes: a small configuration reader might combine scanning and parsing, and a compiler can defer or interleave checks. Nevertheless, the distinctions prevent many diagnostic mistakes.</p>
+<p>For example, <code>7 + 4 * 2</code> becomes tokens representing a number, a plus, a number, a multiplication operator, and another number. The grammar determines that multiplication groups more tightly than addition. A parser can construct a binary addition node whose right child is a binary multiplication node. Evaluating that tree produces <code>15</code>, but the parser's responsibility ended when it constructed a legitimate tree; arithmetic execution is a separate operation.</p>
+<p>A tokenizer can reject an unsupported character such as <code>@</code> before parsing starts. A parser can reject a token sequence such as <code>7 + * 2</code> even when each character is individually valid. A later semantic phase may reject a syntactically well-formed operation on incompatible types. Calling every failure a &quot;syntax error&quot; obscures where a rule was actually broken and what correction the user needs.</p>
+</section>
+<section id="grammar-vocabulary-terminals-nonterminals-productions-and-start-rules" aria-labelledby="heading-grammar-vocabulary-terminals-nonterminals-productions-and-start-rules">
+<h2 id="heading-grammar-vocabulary-terminals-nonterminals-productions-and-start-rules">Grammar Vocabulary: Terminals, Nonterminals, Productions, and Start Rules</h2>
+<p>A <strong>terminal</strong> is an indivisible token category for the parser, such as <code>NUMBER</code>, <code>PLUS</code>, or <code>LPAREN</code>. A <strong>nonterminal</strong> is a grammatical category built from other categories, such as <code>expression</code> or <code>term</code>. A <strong>production</strong> describes permitted sequences or alternatives; the <strong>start rule</strong> describes what counts as a complete input. In notation, <code>A → B C</code> says that a structure named <code>A</code> consists of a <code>B</code> followed by a <code>C</code>. <code>A → X | Y</code> says that either alternative is permitted.</p>
+<p>The empty sequence is usually denoted <code>ε</code>. It matters in optional grammar parts, because a parser must decide whether an optional construct is absent or whether a required construct is malformed. <strong>EBNF</strong> adds notation such as <code>{ ... }</code> for zero or more repetitions, <code>[ ... ]</code> for optional material, and parentheses for grouping in grammar descriptions. A programmer often translates an EBNF repetition into a loop rather than a recursive call for every repeated operator.</p>
+<p>A grammar is a specification of possible <em>syntactic forms</em>, not an implementation by itself. A parser must choose concrete token categories, cursor updates, data structures, error behavior, and resource limits. Two different parsers may accept the same language but build different tree representations or produce different diagnostics. <strong>Grammar ownership</strong> therefore includes reviewing both accepted programs and the semantics of their grouping.</p>
+</section>
+<section id="the-teaching-language-and-its-input-contract" aria-labelledby="heading-the-teaching-language-and-its-input-contract">
+<h2 id="heading-the-teaching-language-and-its-input-contract">The Teaching Language and Its Input Contract</h2>
+<p>This article uses a deliberately small arithmetic-expression language. It recognizes ASCII integers and decimals, <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>^</code>, and parentheses. It accepts arbitrary whitespace between tokens. It does not recognize identifiers, functions, comments, scientific-notation literals, hexadecimal numerals, or implied multiplication. Its start rule is a complete expression followed by an end-of-input sentinel. Evaluation is demonstrated for illustration, with a simple <code>Decimal</code>-based arithmetic interpretation.</p>
+<p>The narrow scope is an advantage: it makes each parser decision inspectable. For example, <code>2(3)</code> must be rejected rather than silently treated as multiplication, because that feature is not part of the grammar. Likewise, <code>4 +</code> must report a missing expression after <code>+</code>, and <code>2 3</code> must be rejected as trailing input instead of returning the first number and ignoring the second. The parser is useful precisely because its contract is explicit rather than because it tries to guess the author's intent.</p>
+<p>The grammar also intentionally treats exponentiation as right-associative, gives exponentiation tighter binding than unary negation, and lets a signed expression appear to the right of <code>^</code>. These choices mean <code>2^3^2</code> groups as <code>2^(3^2)</code>, <code>-2^2</code> as <code>-(2^2)</code>, and <code>2^-3</code> as <code>2^(-3)</code>. Other programming languages make different precedence choices. A parser must implement its <em>specified</em> grammar, not a presumed universal arithmetic convention.</p>
+</section>
+<section id="a-predictive-expression-grammar" aria-labelledby="heading-a-predictive-expression-grammar">
+<h2 id="heading-a-predictive-expression-grammar">A Predictive Expression Grammar</h2>
+<p>We will write the grammar in EBNF with <code>EOF</code> as the required end-of-input marker. An iteration in braces can be compiled into a <code>while</code> loop. The precedence sequence runs from <code>expression</code> down through <code>term</code>, <code>unary</code>, <code>power</code>, and <code>primary</code>.</p>
+<pre><code class="language-text">input      → expression EOF
+expression → term { (PLUS | MINUS) term }
+term       → unary { (STAR | SLASH) unary }
+unary      → (PLUS | MINUS) unary | power
+power      → primary [ CARET unary ]
+primary    → NUMBER | LPAREN expression RPAREN
+</code></pre>
+<p>The rule for <code>power</code> is deliberately <em>not</em> <code>primary { CARET unary }</code>. A loop that folds to the left would produce <code>(2^3)^2</code>, which is <code>64</code>, rather than <code>2^(3^2)</code>, which is <code>512</code>. Instead, <code>power</code> permits one caret followed by <code>unary</code>; that recursive route can lead through another <code>power</code>, making the chain associate from the right. By contrast, addition, subtraction, multiplication, and division use loops and left folds.</p>
+<p>This grammar is predictive for the demonstrated token set. At <code>primary</code>, <code>NUMBER</code> and <code>LPAREN</code> identify different alternatives. At <code>unary</code>, <code>PLUS</code> or <code>MINUS</code> identifies the prefix alternative and a number or left parenthesis identifies <code>power</code>. At the repetition points, the parser continues only when the next token is in the declared operator set. The method does not need to speculate about alternative full parses.</p>
+</section>
+<section id="call-structure-and-the-one-function-per-nonterminal-pattern" aria-labelledby="heading-call-structure-and-the-one-function-per-nonterminal-pattern">
+<h2 id="heading-call-structure-and-the-one-function-per-nonterminal-pattern">Call Structure and the One-Function-per-Nonterminal Pattern</h2>
+<p>The most direct implementation has functions named <code>parse_expression</code>, <code>parse_term</code>, <code>parse_unary</code>, <code>parse_power</code>, and <code>parse_primary</code>. Each function has a local contract: it begins with the cursor at the first token of its construct and, if successful, returns a syntax node while leaving the cursor just after the construct. Subroutines can rely on the same contract. The start function adds the crucial assertion that no non-whitespace token remains unconsumed.</p>
+<p>A recursive call arises for <em>nesting</em>, not necessarily every syntactic repetition. To parse <code>(1 + (2 * 3))</code>, <code>parse_primary</code> encounters <code>(</code> and calls <code>parse_expression</code>, which eventually encounters another <code>(</code> and calls <code>parse_expression</code> again. To parse <code>1+2+3+4</code>, the repetition in <code>expression</code> uses a loop; it need not create a four-level chain of calls. This distinction keeps the implementation close to the grammar while reducing stack use for long, flat expressions.</p>
+<p><strong>Mutual recursion</strong> is natural here: <code>expression</code> reaches <code>term</code>, <code>term</code> reaches <code>unary</code>, <code>unary</code> reaches <code>power</code>, and <code>primary</code> can reach <code>expression</code> again when it sees parentheses. A well-formed nested expression eventually consumes tokens before making that full cycle again. Correctness depends on such progress, a property that must be reconsidered if the grammar is modified.</p>
+</section>
+<section id="tokens-lexemes-positions-and-the-end-of-input-sentinel" aria-labelledby="heading-tokens-lexemes-positions-and-the-end-of-input-sentinel">
+<h2 id="heading-tokens-lexemes-positions-and-the-end-of-input-sentinel">Tokens, Lexemes, Positions, and the End-of-Input Sentinel</h2>
+<p>A <strong>token kind</strong> is the syntactic category used by the grammar, while its <strong>lexeme</strong> is the actual source spelling. For example, a <code>NUMBER</code> token might carry lexeme <code>12.50</code>. Each token should also have a source location: at minimum a start offset and end offset, and often line and column. End offsets enable an error to point at the place where a token is <em>missing</em>, including the position immediately after the last character of an input.</p>
+<p>Using an explicit <code>EOF</code> token simplifies parser logic. Rather than asking whether the array index has run past its boundary on every access, the cursor can inspect a final stable token whose lexeme is empty. <code>EOF</code> is not a real character the user types. It is an implementation marker for the end of the token stream. The start rule must consume or require it, otherwise a parser may mistakenly accept a valid prefix and ignore malicious or accidentally appended material.</p>
+<p>For this educational implementation, offsets are Python string indices measured in Unicode code points, not UTF-8 byte offsets. Since the accepted numeric grammar uses ASCII digits, a Unicode numeric glyph is rejected rather than inconsistently interpreted by the numeric conversion routine. Production compilers may need richer position reporting, including file names, multi-line spans, tabs, surrogate handling, and editor-specific UTF-16 code-unit positions.</p>
+</section>
+<section id="a-complete-teaching-lexer-and-recursive-descent-parser" aria-labelledby="heading-a-complete-teaching-lexer-and-recursive-descent-parser">
+<h2 id="heading-a-complete-teaching-lexer-and-recursive-descent-parser">A Complete Teaching Lexer and Recursive-Descent Parser</h2>
+<p>The following self-contained Python example implements all six grammar rules, a simple tokenizer, immutable syntax nodes, and a separate evaluator. It intentionally avoids Python's <code>eval()</code>: parsing untrusted text is not permission to execute Python expressions. Run this listing before the smaller examples that refer to <code>parse</code>, <code>evaluate</code>, <code>ParseError</code>, and the node types.</p>
+<pre><code class="language-python"># Example 1: complete minimal recursive-descent expression parser.
+from dataclasses import dataclass
+from decimal import Decimal
+
+SINGLE = {
+    '+': 'PLUS', '-': 'MINUS', '*': 'STAR',
+    '/': 'SLASH', '^': 'CARET',
+    '(': 'LPAREN', ')': 'RPAREN',
+}
+
+@dataclass(frozen=True)
+class Token:
+    kind: str
+    lexeme: str
+    start: int
+    end: int
+
+@dataclass(frozen=True)
+class Number:
+    value: Decimal
+
+@dataclass(frozen=True)
+class Unary:
+    operator: str
+    operand: object
+
+@dataclass(frozen=True)
+class Binary:
+    operator: str
+    left: object
+    right: object
+
+class ParseError(ValueError):
+    def __init__(self, message, position):
+        super().__init__(f'{message} at offset {position}')
+        self.position = position
+
+def tokenize(source):
+    tokens = []
+    i = 0
+    while i &lt; len(source):
+        ch = source[i]
+        if ch.isspace():
+            i += 1
+        elif ch in SINGLE:
+            tokens.append(Token(SINGLE[ch], ch, i, i + 1))
+            i += 1
+        elif ch in '0123456789':
+            start = i
+            while i &lt; len(source) and source[i] in '0123456789':
+                i += 1
+            if i &lt; len(source) and source[i] == '.':
+                i += 1
+                if i == len(source) or source[i] not in '0123456789':
+                    raise ParseError('Digit required after decimal point', i)
+                while i &lt; len(source) and source[i] in '0123456789':
+                    i += 1
+            tokens.append(Token('NUMBER', source[start:i], start, i))
+        else:
+            raise ParseError(f'Unsupported character {ch!r}', i)
+    tokens.append(Token('EOF', '', len(source), len(source)))
+    return tokens
+
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.index = 0
+
+    def peek(self):
+        return self.tokens[self.index]
+
+    def take(self, kind):
+        token = self.peek()
+        if token.kind != kind:
+            raise ParseError(f'Expected {kind}, found {token.kind}',
+                             token.start)
+        self.index += 1
+        return token
+
+    def parse_input(self):
+        node = self.parse_expression()
+        self.take('EOF')
+        return node
+
+    def parse_expression(self):
+        node = self.parse_term()
+        while self.peek().kind in ('PLUS', 'MINUS'):
+            op = self.peek().kind
+            self.take(op)
+            node = Binary(op, node, self.parse_term())
+        return node
+
+    def parse_term(self):
+        node = self.parse_unary()
+        while self.peek().kind in ('STAR', 'SLASH'):
+            op = self.peek().kind
+            self.take(op)
+            node = Binary(op, node, self.parse_unary())
+        return node
+
+    def parse_unary(self):
+        if self.peek().kind in ('PLUS', 'MINUS'):
+            op = self.peek().kind
+            self.take(op)
+            return Unary(op, self.parse_unary())
+        return self.parse_power()
+
+    def parse_power(self):
+        node = self.parse_primary()
+        if self.peek().kind == 'CARET':
+            self.take('CARET')
+            node = Binary('CARET', node, self.parse_unary())
+        return node
+
+    def parse_primary(self):
+        current = self.peek()
+        if current.kind == 'NUMBER':
+            self.take('NUMBER')
+            return Number(Decimal(current.lexeme))
+        if current.kind == 'LPAREN':
+            self.take('LPAREN')
+            node = self.parse_expression()
+            self.take('RPAREN')
+            return node
+        raise ParseError('Expected a number or opening parenthesis',
+                         current.start)
+
+def parse(source):
+    return Parser(tokenize(source)).parse_input()
+
+def evaluate(node):
+    if isinstance(node, Number):
+        return node.value
+    if isinstance(node, Unary):
+        value = evaluate(node.operand)
+        return value if node.operator == 'PLUS' else -value
+    if isinstance(node, Binary):
+        left, right = evaluate(node.left), evaluate(node.right)
+        if node.operator == 'PLUS':
+            return left + right
+        if node.operator == 'MINUS':
+            return left - right
+        if node.operator == 'STAR':
+            return left * right
+        if node.operator == 'SLASH':
+            return left / right
+        if node.operator == 'CARET':
+            return left ** right
+    raise TypeError('Unknown syntax node')
+
+assert evaluate(parse('7 + 4 * 2')) == Decimal('15')
+assert evaluate(parse('2 ^ 3 ^ 2')) == Decimal('512')
+assert evaluate(parse('-2^2')) == Decimal('-4')
+assert evaluate(parse('2^-3')) == Decimal('0.125')
+assert evaluate(parse('(-2)^2')) == Decimal('4')
+</code></pre>
+<p>The code is intentionally small enough to study, not a hardened parser for arbitrary public inputs. Its grammar lacks identifiers, structured error recovery, error quotas, source-span AST nodes, memory quotas, and explicit nesting limits. <code>Decimal</code> arithmetic also has its own numerical context and exceptions. A real application should add bounds on input length, token count, nesting depth, arithmetic magnitude, and evaluation cost as its threat model requires.</p>
+</section>
+<section id="how-the-parser-cursor-moves" aria-labelledby="heading-how-the-parser-cursor-moves">
+<h2 id="heading-how-the-parser-cursor-moves">How the Parser Cursor Moves</h2>
+<p>The parser's only mutable syntax state is the integer <code>index</code> into its token array. <code>peek()</code> observes the next token without changing the index. <code>take(kind)</code> verifies the required kind and advances the cursor by one on success; on failure, it raises a located error without consuming an unexpected token. The higher-level grammar routines combine these two operations with local loops, branches, and calls.</p>
+<p>A well-defined cursor contract simplifies reasoning: if <code>parse_primary()</code> recognizes a <code>NUMBER</code>, it advances once and returns a <code>Number</code>; if it recognizes <code>(</code>, it advances past <code>(</code>, parses a full inner expression, requires <code>)</code>, and returns that inner node. It does not claim ownership of tokens belonging to an enclosing production. If it sees a <code>*</code> where a primary expression must begin, it does not silently skip it. The enclosing function receives a clear failure.</p>
+<p>For performance, indexing into a pre-tokenized list is constant time. Repeatedly making a new slice of the remaining token list in every recursive call can create avoidable allocations and change runtime behavior. A shared stream with a cursor is usually a better default for a small interpreter. Immutable tokens and immutable AST nodes also make the division between the advancing parser state and the resulting syntax representation easier to inspect.</p>
+</section>
+<section id="a-worked-trace-of-nested-parentheses" aria-labelledby="heading-a-worked-trace-of-nested-parentheses">
+<h2 id="heading-a-worked-trace-of-nested-parentheses">A Worked Trace of Nested Parentheses</h2>
+<p>Consider the input <code>2 * (3 + 4)</code>. The entry call <code>parse_input</code> calls <code>parse_expression</code>, which calls <code>parse_term</code>, <code>parse_unary</code>, <code>parse_power</code>, and <code>parse_primary</code> until the <code>NUMBER(2)</code> token is consumed. The <code>term</code> loop sees <code>STAR</code>, consumes it, and asks for another <code>unary</code>. That path reaches <code>primary</code> again, where <code>LPAREN</code> triggers a recursive call to <code>parse_expression</code>. Inside the parentheses, addition is recognized, and the nested call stops in front of <code>RPAREN</code>.</p>
+<p>The <code>primary</code> routine requires and consumes <code>RPAREN</code>, returning the syntax tree for <code>3 + 4</code>. The outer <code>term</code> routine builds a multiplication node from the left number <code>2</code> and the parenthesized addition tree. Finally <code>parse_input</code> requires <code>EOF</code>, confirming that every token was accounted for. The intermediate tree shape is <code>STAR(Number(2), PLUS(Number(3), Number(4)))</code>.</p>
+<table>
+<thead>
+<tr>
+  <th>Moment</th>
+  <th>Active responsibility</th>
+  <th>Next token</th>
+  <th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td><code>parse_input</code></td>
+  <td><code>NUMBER(2)</code></td>
+  <td>Begin <code>expression</code></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>First <code>parse_primary</code></td>
+  <td><code>NUMBER(2)</code></td>
+  <td>Consume <code>2</code></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Outer <code>parse_term</code></td>
+  <td><code>STAR</code></td>
+  <td>Consume multiplication operator</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Second <code>parse_primary</code></td>
+  <td><code>LPAREN</code></td>
+  <td>Enter nested <code>expression</code></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Nested <code>parse_expression</code></td>
+  <td><code>PLUS</code> after <code>3</code></td>
+  <td>Build addition after parsing <code>4</code></td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>Parenthesized <code>parse_primary</code></td>
+  <td><code>RPAREN</code></td>
+  <td>Require closing delimiter</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>Outer <code>parse_term</code></td>
+  <td><code>EOF</code></td>
+  <td>Build multiplication node</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>parse_input</code></td>
+  <td><code>EOF</code></td>
+  <td>Accept entire input</td>
+</tr>
+</tbody>
+</table>
+<p>The call stack is a record of suspended grammatical obligations. When the nested expression returns, the outer routine still knows it must close the parenthesis and then finish the containing multiplication. That is why recursion fits naturally with nested syntax; the stack preserves the local unfinished work.</p>
+</section>
+<section id="parse-trees-and-abstract-syntax-trees" aria-labelledby="heading-parse-trees-and-abstract-syntax-trees">
+<h2 id="heading-parse-trees-and-abstract-syntax-trees">Parse Trees and Abstract Syntax Trees</h2>
+<p>A <strong>concrete parse tree</strong> normally records the grammar's syntactic steps, possibly including terminals, grouping punctuation, and the nonterminal nodes that were expanded. An <strong>abstract syntax tree (AST)</strong> represents the meaningful structural relationships that later phases require. For the teaching expression language, the AST records numbers, unary operations, and binary operations but not separate nodes for <code>expression</code>, <code>term</code>, <code>LPAREN</code>, or <code>RPAREN</code>.</p>
+<p>Removing punctuation is safe only where the structural information has already been retained in the shape of the tree. The parentheses in <code>(2 + 3) * 4</code> need not survive as literal nodes because they already caused the addition to become the left child of the multiplication. If a formatter must reproduce the user's exact spelling, comments, whitespace, or quote style, an AST alone may be insufficient; concrete syntax trees, retained trivia, or attached source spans may be more appropriate.</p>
+<p><strong>AST design is an interface contract.</strong> A downstream evaluator may need a small expression tree, while an IDE needs stable source locations and recovery nodes. A compiler may need type annotations or symbol references added during a later pass. The right representation is the simplest one that preserves every distinction downstream consumers must observe.</p>
+</section>
+<section id="building-a-syntax-tree-instead-of-computing-during-parsing" aria-labelledby="heading-building-a-syntax-tree-instead-of-computing-during-parsing">
+<h2 id="heading-building-a-syntax-tree-instead-of-computing-during-parsing">Building a Syntax Tree Instead of Computing During Parsing</h2>
+<p>It may seem simpler to evaluate the expression inside each parser function and return numbers directly. That works for a tiny calculator, but it blends two responsibilities and makes it difficult to run later validation, produce better errors, optimize an expression, pretty-print it, or analyze it without executing it. Building an AST first establishes a clean trust boundary: <strong>recognition does not entail execution</strong>.</p>
+<p>The complete example constructs <code>Binary</code> and <code>Unary</code> nodes, then evaluates them in the independent <code>evaluate</code> function. This separation allows a tool to parse a malformed formula and identify exactly where its structure is wrong before touching any runtime values. It also supports multiple consumers of one AST: a pretty printer, an interpreter, a static checker, or a compiler backend may each walk the same tree differently.</p>
+<pre><code class="language-python"># Example 2: inspect syntax without executing arbitrary Python code.
+node = parse('2 * (3 + 4)')
+assert isinstance(node, Binary) and node.operator == 'STAR'
+assert isinstance(node.right, Binary)
+assert node.right.operator == 'PLUS'
+assert evaluate(node) == Decimal('14')
+assert parse('001.25') == Number(Decimal('1.25'))
+</code></pre>
+<p>The final assertion also illustrates a deliberate distinction between lexeme and interpreted numeric value. The literal spelling <code>001.25</code> is preserved in the token, but the simplified AST stores its numerical value, not the original formatting. If preservation matters, store both in the node or an associated source-span table.</p>
+</section>
+<section id="precedence-is-encoded-by-which-rule-calls-which" aria-labelledby="heading-precedence-is-encoded-by-which-rule-calls-which">
+<h2 id="heading-precedence-is-encoded-by-which-rule-calls-which">Precedence Is Encoded by Which Rule Calls Which</h2>
+<p>Operator <strong>precedence</strong> is about grouping. In this grammar <code>term</code> invokes <code>unary</code>, which invokes <code>power</code>, which invokes <code>primary</code>; therefore a multiplication cannot seize a plus expression on its right side without being separated by explicit parentheses. For <code>7 + 4 * 2</code>, the <code>expression</code> routine parses <code>7</code>, sees a plus, and calls <code>term</code> for the entire right operand. That term consumes <code>4 * 2</code> before returning, so the addition receives a multiplication node as its right child.</p>
+<p>This approach makes the precedence hierarchy visible in function calls, rather than hidden in later numerical evaluation. A wrong parse tree cannot be repaired simply by hoping the evaluator knows conventional arithmetic rules. The tree must already encode the intended grouping. Precedence is not the same as evaluation order: a runtime may choose how and when to evaluate children, but it should not change the language's parse structure.</p>
+<table>
+<thead>
+<tr>
+  <th>Grammar level</th>
+  <th>Operators handled</th>
+  <th>Grouping policy in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>expression</code></td>
+  <td>Binary <code>+</code>, <code>-</code></td>
+  <td>Left-associative</td>
+</tr>
+<tr>
+  <td><code>term</code></td>
+  <td>Binary <code>*</code>, <code>/</code></td>
+  <td>Left-associative</td>
+</tr>
+<tr>
+  <td><code>unary</code></td>
+  <td>Prefix <code>+</code>, <code>-</code></td>
+  <td>Nested prefixes; lower precedence than <code>^</code></td>
+</tr>
+<tr>
+  <td><code>power</code></td>
+  <td>Binary <code>^</code></td>
+  <td>Right-associative</td>
+</tr>
+<tr>
+  <td><code>primary</code></td>
+  <td>Numbers, parenthesized expressions</td>
+  <td>Parentheses explicitly select grouping</td>
+</tr>
+</tbody>
+</table>
+<p>A production grammar is not a universal precedence standard. For example, many languages differ about how exponentiation relates to unary minus, and some do not have a built-in exponentiation operator at all. Programmers should compare the grammar with the language's specification and write tests for every interaction that could surprise an ordinary reader.</p>
+</section>
+<section id="associativity-why-loops-fold-left-and-right-recursion-folds-right" aria-labelledby="heading-associativity-why-loops-fold-left-and-right-recursion-folds-right">
+<h2 id="heading-associativity-why-loops-fold-left-and-right-recursion-folds-right">Associativity: Why Loops Fold Left and Right Recursion Folds Right</h2>
+<p><strong>Associativity</strong> resolves chains of operators at the same precedence. A left-associative subtraction such as <code>10 - 3 - 2</code> means <code>(10 - 3) - 2</code>, producing <code>5</code>. The <code>expression</code> loop achieves this by replacing <code>node</code> with <code>Binary(MINUS, node, next_term)</code> each time it sees another minus. The previous complete expression becomes the new left child. This is called a <strong>left fold</strong>.</p>
+<p>Right-associative exponentiation is different: <code>2 ^ 3 ^ 2</code> means <code>2 ^ (3 ^ 2)</code>. In the <code>power</code> routine, parsing the operator's right operand by calling <code>unary</code> permits another <code>power</code> to be parsed before the first power node is formed. That places the second power operation in the right subtree. A naive loop using <code>node = Binary(CARET, node, next_operand)</code> would enforce the wrong grouping for this specification.</p>
+<pre><code class="language-python"># Example 3: associativity and precedence are properties of the tree.
+assert evaluate(parse('10 - 3 - 2')) == Decimal('5')
+assert evaluate(parse('16 / 4 / 2')) == Decimal('2')
+assert evaluate(parse('2 ^ 3 ^ 2')) == Decimal('512')
+assert evaluate(parse('(2 ^ 3) ^ 2')) == Decimal('64')
+assert evaluate(parse('-2 ^ 2')) == Decimal('-4')
+assert evaluate(parse('(-2) ^ 2')) == Decimal('4')
+</code></pre>
+<p>In arithmetic with operators that happen to be associative mathematically (ordinary exact addition, for example), a grouping bug may be hidden because both groupings give the same result. Subtraction, division, and exponentiation are stronger diagnostic tests. Floating-point arithmetic introduces additional caveats because finite precision can make even mathematical associativity fail operationally.</p>
+</section>
+<section id="unary-prefix-operators-and-a-non-obvious-grammar-cycle" aria-labelledby="heading-unary-prefix-operators-and-a-non-obvious-grammar-cycle">
+<h2 id="heading-unary-prefix-operators-and-a-non-obvious-grammar-cycle">Unary Prefix Operators and a Non-obvious Grammar Cycle</h2>
+<p>Unary prefix operators expose a subtle interaction among precedence and recursion. We chose <code>unary → ('+' | '-') unary | power</code> and <code>power → primary [ '^' unary ]</code>. On <code>-2 ^ 2</code>, the first unary call consumes <code>-</code>, then calls unary again. The nested unary reaches <code>power</code>, which builds <code>2 ^ 2</code>, so the outside minus applies to the entire power. On <code>2 ^ -3</code>, the power routine recognizes <code>^</code>, then directly calls unary, which consumes the minus and returns the negative exponent.</p>
+<p>This grammar contains mutual references but not a non-progressing left-recursive cycle. A cycle through <code>power</code> back to <code>unary</code> requires consuming a caret first; a cycle through <code>primary</code> back to <code>expression</code> requires consuming an opening parenthesis first. Each such cycle moves the input cursor forward on valid input. In contrast, a production that asks for an <code>expression</code> as its first action in order to parse an <code>expression</code> can call itself indefinitely without consuming anything.</p>
+<p>A long sequence of prefix operators, such as <code>------1</code>, can still create a long recursive chain. The grammar is terminating on valid finite input, but termination alone does not imply safe stack depth. A production parser can fold repeated prefix operators iteratively, impose a nesting budget, or use a different parsing strategy while preserving the same precedence semantics.</p>
+</section>
+<section id="direct-left-recursion-and-why-naive-recursive-descent-fails" aria-labelledby="heading-direct-left-recursion-and-why-naive-recursive-descent-fails">
+<h2 id="heading-direct-left-recursion-and-why-naive-recursive-descent-fails">Direct Left Recursion and Why Naive Recursive Descent Fails</h2>
+<p>The familiar arithmetic grammar <code>expression → expression PLUS term | term</code> is <strong>directly left-recursive</strong>. An implementation that literally starts <code>parse_expression()</code> by calling <code>parse_expression()</code> will call itself again without consuming any token, then do so again indefinitely until the runtime's recursion machinery fails. The grammar may correctly describe a language, yet it is unsuitable for that naive top-down implementation.</p>
+<pre><code class="language-text"># Incorrect literal translation of a left-recursive production:
+parse_expression():
+    left = parse_expression()   # No token consumed before this call.
+    if next_token_is(PLUS):
+        consume(PLUS)
+        return Add(left, parse_term())
+    return parse_term()
+</code></pre>
+<p>The solution is not to increase the recursion limit. The solution is to change the parser design or transform the grammar. For a chain of additions, <code>expression → term { PLUS term }</code> is the obvious EBNF alternative. In more general notation, a production <code>A → A α | β</code> can often be rewritten to <code>A → β A'</code> and <code>A' → α A' | ε</code>, subject to the grammar's alternatives and semantic actions. Preserving intended associativity while rewriting is part of the work; a mechanically equivalent token language does not always imply an identical AST construction policy.</p>
+<p>Some modern parser generators, including ANTLR 4, accept certain forms of direct left recursion and rewrite them internally. That capability is an implementation feature, not evidence that calling a hand-written left-recursive function without consuming tokens is safe. Do not generalize a generator's supported grammar syntax to every recursive-descent implementation.</p>
+</section>
+<section id="indirect-left-recursion-and-non-progressing-call-cycles" aria-labelledby="heading-indirect-left-recursion-and-non-progressing-call-cycles">
+<h2 id="heading-indirect-left-recursion-and-non-progressing-call-cycles">Indirect Left Recursion and Non-progressing Call Cycles</h2>
+<p><strong>Indirect left recursion</strong> occurs when a chain of productions returns to its starting nonterminal before consuming an input token. For example, <code>A → B x | y</code> and <code>B → A z | w</code> create the cycle <code>A → B → A</code> on the first alternative. A direct inspection of the <code>A</code> rule may miss the problem because its first symbol is <code>B</code>, not <code>A</code>. The operational symptom is nevertheless the same: a naive top-down parser may recurse indefinitely at a fixed cursor position.</p>
+<p>Indirect cycles become particularly subtle when nullable rules are involved. Suppose <code>A → B C</code> and <code>B → ε</code>, while <code>C</code> can lead back to <code>A</code> without consuming a terminal. Then a call chain can return to <code>A</code> without moving forward despite having passed through multiple grammar rules. A static grammar review should examine the <em>left-corner relation</em>: which nonterminal can begin a derivation before any terminal is consumed?</p>
+<p>The corresponding progress obligation is simple to state: every recursive cycle that a successful derivation can traverse must eventually consume an input token or be controlled by an algorithm capable of handling left recursion. For a predictive hand-written parser, left-recursion removal and nonterminal dependency analysis are normal preparation steps. Testing only successful expressions rarely exposes all such cycles; the grammar itself must be analyzed.</p>
+</section>
+<section id="left-factoring-and-lookahead-decisions" aria-labelledby="heading-left-factoring-and-lookahead-decisions">
+<h2 id="heading-left-factoring-and-lookahead-decisions">Left Factoring and Lookahead Decisions</h2>
+<p>A predictive parser must know which alternative to take before it has committed to an incompatible one. Consider <code>statement → IDENT ASSIGN expression | IDENT LPAREN arguments RPAREN</code>. Both alternatives begin with <code>IDENT</code>, so a single-token decision at the beginning cannot distinguish them. An easy refactoring is <code>statement → IDENT (ASSIGN expression | LPAREN arguments RPAREN)</code>. The parser consumes the common identifier once and branches on the next token.</p>
+<p>This transformation is <strong>left factoring</strong>. It avoids speculative backtracking by moving a common prefix outside the choice. It does not necessarily eliminate all grammar conflicts: if alternatives share an arbitrarily long prefix, a parser may need more lookahead, a stronger grammar restriction, or a different parsing strategy. The target lookahead model should be declared rather than implied.</p>
+<p>A grammar sometimes has optional branches that both seem plausible after a shared prefix. The parser must also ask what happens when an alternative begins with no token at all. The correct predictive decision may depend on what tokens are permitted to <strong>follow</strong> the optional construct. This is where FIRST and FOLLOW sets become valuable, especially as the language grows beyond simple arithmetic expressions.</p>
+</section>
+<section id="first-sets-follow-sets-and-predictive-selection" aria-labelledby="heading-first-sets-follow-sets-and-predictive-selection">
+<h2 id="heading-first-sets-follow-sets-and-predictive-selection">FIRST Sets, FOLLOW Sets, and Predictive Selection</h2>
+<p>For a grammar symbol or sequence, <strong>FIRST</strong> contains the terminal kinds that may appear first in strings derived from it; if it can derive the empty string, FIRST also contains <code>ε</code>. <strong>FOLLOW</strong> of a nonterminal contains terminals that can appear immediately after that nonterminal in a valid sentential form, including the end-of-input marker when appropriate. These sets help establish whether a one-token lookahead can choose grammar alternatives unambiguously.</p>
+<p>In the teaching grammar, <code>FIRST(primary) = { NUMBER, LPAREN }</code>. Because unary expressions may begin with prefix signs, <code>FIRST(unary) = { PLUS, MINUS, NUMBER, LPAREN }</code>. At <code>primary</code>, the alternatives are disjoint; at <code>unary</code>, a sign token identifies the prefix branch while a number or opening parenthesis identifies the power branch. For repetitions, an operator in the loop's continuation set authorizes another iteration; a token allowed after the nonterminal authorizes stopping.</p>
+<p>When a nonterminal has <code>A → α | β</code>, disjoint <code>FIRST(α)</code> and <code>FIRST(β)</code> are sufficient for the common nonnullable case. If <code>α</code> is nullable, a correct LL(1) decision also requires considering <code>FOLLOW(A)</code> so that choosing the empty alternative does not conflict with choosing <code>β</code>. These criteria are conditions for predictive parsing, not a proof that the entire grammar describes the intended language. An LL(1) grammar can be perfectly deterministic and still encode incorrect associativity or omit an important construct.</p>
+</section>
+<section id="ll1-bounded-lookahead-and-the-scope-of-the-promise" aria-labelledby="heading-ll1-bounded-lookahead-and-the-scope-of-the-promise">
+<h2 id="heading-ll1-bounded-lookahead-and-the-scope-of-the-promise">LL(1), Bounded Lookahead, and the Scope of the Promise</h2>
+<p>The notation <strong>LL(1)</strong> denotes parsing input from left to right, producing a leftmost derivation, with one token of lookahead used for production decisions. A hand-written predictive parser can implement LL(1) choices with ordinary <code>if</code> statements and loops. It is important not to equate the word &quot;recursive descent&quot; with LL(1): some recursive-descent parsers look ahead more than one token, use contextual information, rely on backtracking, or employ a parsing expression grammar (PEG).</p>
+<p>An LL(1) restriction is often a conscious design tradeoff. The grammar may be refactored to make its decisions easier to recognize, at the cost of being less close to the most natural mathematical description of the language. In a compiler or IDE, this is usually worthwhile if it improves maintenance, predictable performance, and diagnostic quality. For a complicated language with contextual syntax, a more flexible parser generator or specialized parsing algorithm may be a better choice than forcing every construct into one-token lookahead.</p>
+<p>A grammar's lookahead properties are checked over <strong>token kinds</strong>, not arbitrary characters. <code>IDENTIFIER</code> and <code>NUMBER</code> are already the result of lexical analysis. If the lexer incorrectly splits a two-character operator into unrelated tokens, a grammar proof about the intended token stream will not fix the bug. Parser and tokenizer contracts must agree.</p>
+</section>
+<section id="ambiguity-is-a-language-design-problem-not-just-a-parser-error" aria-labelledby="heading-ambiguity-is-a-language-design-problem-not-just-a-parser-error">
+<h2 id="heading-ambiguity-is-a-language-design-problem-not-just-a-parser-error">Ambiguity Is a Language-Design Problem, Not Just a Parser Error</h2>
+<p>A grammar is <strong>ambiguous</strong> when at least one valid token sequence has more than one parse tree under that grammar. The simplistic rule <code>expression → expression OP expression | NUMBER</code> can group <code>1 - 2 - 3</code> as <code>(1 - 2) - 3</code> or <code>1 - (2 - 3)</code>. It can also allow multiple parses of <code>1 + 2 * 3</code> because it does not encode precedence. A parser that chooses one tree by accident is not evidence that the grammar is unambiguous.</p>
+<p>Precedence levels, explicit associativity, or language-defined disambiguation rules resolve many expression ambiguities. Other ambiguities, such as which <code>if</code> an <code>else</code> belongs to in nested conditionals, require separate rules. A parser may also be deliberately deterministic on an ambiguous CFG through priority or ordered alternatives. In that case the implementation has supplied an additional policy that should be documented as part of the language definition.</p>
+<p>The production review should include <em>pairs of expressions that differ only in grouping</em> and <em>expressions that admit multiple interpretations under a naive grammar</em>. Successful syntax recognition is weaker than correct syntax recognition. Testing that <code>1 - 2 - 3</code> is accepted says little; testing its AST shape and evaluated result establishes whether the intended grouping was implemented.</p>
+</section>
+<section id="predictive-parsing-versus-backtracking" aria-labelledby="heading-predictive-parsing-versus-backtracking">
+<h2 id="heading-predictive-parsing-versus-backtracking">Predictive Parsing Versus Backtracking</h2>
+<p>A predictive parser decides which production to use from the current token context and proceeds without having to retract earlier successful consumption. A <strong>backtracking recursive-descent parser</strong> may tentatively parse one alternative, then reset the cursor and try a different alternative after failure. Backtracking can simplify some grammars, but it creates important questions: does the parser restore all state, not merely the token index; how are errors ranked; can alternatives perform side effects; and can many overlapping attempts cause excessive work?</p>
+<p>For example, if a parser tries <code>qualified_name → IDENT DOT IDENT</code> before <code>plain_name → IDENT</code>, it may have to rewind after consuming the first identifier when no dot appears. A predictive refactoring can parse the common identifier, then inspect whether a dot follows. This removes redundant work and makes expected-token diagnostics more precise. Backtracking can be legitimate when the grammar is inherently more flexible than the desired lookahead discipline, but it should not be the default remedy for a simple common-prefix problem.</p>
+<p>The term <strong>committed failure</strong> is helpful: once the parser has seen enough input to know which construct the author intended, it should usually report an error in that construct rather than reinterpret its prefix under an unrelated alternative. A carefully designed predictive parser expresses this in ordinary branching. A backtracking parser may need explicit commitment operators or error-selection rules to preserve the same user experience.</p>
+</section>
+<section id="parsing-expression-grammars-and-ordered-choice" aria-labelledby="heading-parsing-expression-grammars-and-ordered-choice">
+<h2 id="heading-parsing-expression-grammars-and-ordered-choice">Parsing Expression Grammars and Ordered Choice</h2>
+<p>A <strong>parsing expression grammar (PEG)</strong> uses <em>ordered choice</em>: <code>A / B</code> means try <code>A</code>, and only if it fails under the PEG's matching semantics try <code>B</code>. This is not the same as an unordered context-free grammar alternative <code>A | B</code>. Reordering PEG alternatives can change which strings are recognized and how they are grouped. A PEG parser is often implemented using recursive-descent procedures, and a packrat parser may memoize their results by rule and input position.</p>
+<p>PEG parsing offers useful expressive tools but does not automatically make any grammar performant or intuitive. Direct left recursion needs special handling; some implementations support it through additional algorithms while others prohibit it. Ordered choice can hide a later alternative when an earlier one matches a prefix successfully. Error reporting and recovery still require engineering beyond simply finding a match.</p>
+<p>Python's CPython implementation uses a PEG-based grammar and generated parsing machinery; it is a valuable production example of an approach with a different choice model from the hand-written LL(1)-style parser in this article. The official grammar also includes implementation-specific annotations and disambiguation operators. These details are evidence that parser technology is a family of related designs rather than one universal procedure called &quot;recursive descent.&quot;</p>
+</section>
+<section id="pratt-parsing-and-precedence-climbing-as-adjacent-designs" aria-labelledby="heading-pratt-parsing-and-precedence-climbing-as-adjacent-designs">
+<h2 id="heading-pratt-parsing-and-precedence-climbing-as-adjacent-designs">Pratt Parsing and Precedence Climbing as Adjacent Designs</h2>
+<p>A <strong>Pratt parser</strong> uses a dispatch table or functions for parsing an operator in prefix or infix position and interprets operator binding powers to decide how tightly expressions group. <strong>Precedence climbing</strong> similarly uses a minimum-precedence parameter to consume a chain of operators according to priority and associativity. Both approaches can replace a fixed ladder of expression, term, unary, and power functions when a language has numerous operators.</p>
+<p>These techniques are closely related to recursive descent, because they still descend into subexpressions through function calls. The distinction is organizational: a grammar-function ladder spells out each precedence level as a separate function, whereas Pratt or precedence-climbing logic encodes levels in operator metadata or a compact core routine. Neither automatically solves general statement parsing, name resolution, or every possible grammar ambiguity.</p>
+<table>
+<thead>
+<tr>
+  <th>Design</th>
+  <th>Primary decision mechanism</th>
+  <th>Typical advantage</th>
+  <th>Main caution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Predictive recursive descent</td>
+  <td>Lookahead chooses grammar alternatives</td>
+  <td>Explicit readable grammar procedures</td>
+  <td>Grammar must support clear decisions</td>
+</tr>
+<tr>
+  <td>Backtracking recursive descent</td>
+  <td>Try, fail, restore, retry</td>
+  <td>Flexible alternative handling</td>
+  <td>State restoration and worst-case work</td>
+</tr>
+<tr>
+  <td>PEG with packrat memoization</td>
+  <td>Ordered choice plus cached rule-position results</td>
+  <td>Expressive ordered recognition</td>
+  <td>Rule semantics and memory retention</td>
+</tr>
+<tr>
+  <td>Pratt parsing</td>
+  <td>Prefix/infix handlers and binding power</td>
+  <td>Compact extensible expression parser</td>
+  <td>Operator tables and associativity need care</td>
+</tr>
+<tr>
+  <td>Precedence climbing</td>
+  <td>Minimum accepted precedence</td>
+  <td>Small operator-expression core</td>
+  <td>Separate mechanism for other grammar forms</td>
+</tr>
+<tr>
+  <td>LR-family parser</td>
+  <td>Bottom-up stack/actions</td>
+  <td>Handles many grammars unsuitable for LL(1)</td>
+  <td>Tooling and conflict resolution are different</td>
+</tr>
+</tbody>
+</table>
+<p>This is a map of alternatives, not a ranking. A simple DSL may benefit more from five readable functions than from a sophisticated framework; a full programming language may justify a generator and dedicated grammar-analysis tools.</p>
+</section>
+<section id="syntax-errors-actual-token-expected-token-and-location" aria-labelledby="heading-syntax-errors-actual-token-expected-token-and-location">
+<h2 id="heading-syntax-errors-actual-token-expected-token-and-location">Syntax Errors: Actual Token, Expected Token, and Location</h2>
+<p>A useful syntax error answers at least three questions: <strong>where</strong> the parser was stopped, <strong>what</strong> token appeared, and <strong>what</strong> class of token was expected. In the teaching implementation, <code>take('RPAREN')</code> reports a missing closing parenthesis when the next token is <code>EOF</code> or another unexpected symbol. <code>parse_primary()</code> reports when no number or left parenthesis begins the required expression. Both use the token's starting offset.</p>
+<p>An error position is not an exact account of the human's mistake; it is the location where the parser can no longer continue under the grammar. In <code>2 * (3 + 4</code>, the missing closing parenthesis is diagnosed at the end, even though the human omission is conceptually earlier. In <code>7 + * 2</code>, the unexpected <code>*</code> is diagnosed where the parser expected an operand. A clear diagnostic should prefer a truthful local description over speculative language about what the author must have intended.</p>
+<p>Good production diagnostics can include a highlighted source span, a stable machine-readable error code, a list of a few expected categories, and contextual information such as &quot;while parsing a parenthesized expression.&quot; Care is needed not to overwhelm readers with an entire computed FOLLOW set. User-facing messages benefit from vocabulary that matches the source language: &quot;expected ')'&quot; is often better than &quot;expected RPAREN&quot;.</p>
+</section>
+<section id="rendering-a-diagnostic-caret" aria-labelledby="heading-rendering-a-diagnostic-caret">
+<h2 id="heading-rendering-a-diagnostic-caret">Rendering a Diagnostic Caret</h2>
+<p>Offsets can be turned into a small source excerpt. The helper below renders a one-line expression and a caret beneath the token position, including the location one character beyond the final token. It does not try to handle multi-line input, grapheme clusters, terminal display widths, or tabs. Those features require additional formatting rules in an editor or compiler diagnostic engine.</p>
+<pre><code class="language-python"># Example 4: expose the point at which the parser rejected the input.
+def diagnostic(source):
+    try:
+        parse(source)
+    except ParseError as error:
+        return f'{source}\n{&quot; &quot; * error.position}^\n{error}'
+    return 'input accepted'
+
+message = diagnostic('7 + * 2')
+assert 'Expected a number' in message
+assert message.splitlines()[1].index('^') == 4
+assert 'at offset 4' in message
+assert diagnostic('2 * (3 + 4').splitlines()[1].index('^') == 10
+</code></pre>
+<p>For an application accepting arbitrary Unicode text, offsets alone cannot always index visual display columns reliably. Combining marks, East Asian wide characters, emoji sequences, and tab expansion can all affect the displayed caret. Source-position storage and presentation should be separate layers so that a stable internal offset can be mapped to an appropriate user-facing location.</p>
+</section>
+<section id="error-propagation-and-the-failure-contract" aria-labelledby="heading-error-propagation-and-the-failure-contract">
+<h2 id="heading-error-propagation-and-the-failure-contract">Error Propagation and the Failure Contract</h2>
+<p>In a strict teaching parser, a grammar routine either returns a complete node and a cursor at the next token, or raises a syntax exception. Because Python exceptions unwind the call stack, all pending grammar routines stop together and the caller receives a single failure. That is a reasonable fail-fast contract for an expression evaluator or a configuration loader that cannot proceed after an invalid expression.</p>
+<p>A larger compiler or IDE may instead need several errors from one source file. That requires the parser to distinguish errors it can recover from and errors that make further recognition unreliable. A parser may return a special error node, collect diagnostics, or use a recovery exception that is caught at a known grammar boundary. Without a clear ownership rule for cursor movement during recovery, it is easy to report a cascade of misleading errors or enter an infinite loop on one unexpected token.</p>
+<p><strong>Error handling is not a cosmetic add-on.</strong> It is part of the grammar implementation's progress and termination contract. When a failed parse is retried, the cursor and any side effects must be restored as intended; when a malformed token is discarded during recovery, the parser must eventually consume input or end the current production. A plausible error message is not sufficient evidence of sound recovery.</p>
+</section>
+<section id="panic-mode-recovery-at-synchronization-points" aria-labelledby="heading-panic-mode-recovery-at-synchronization-points">
+<h2 id="heading-panic-mode-recovery-at-synchronization-points">Panic-Mode Recovery at Synchronization Points</h2>
+<p>A common strategy for statement-oriented languages is <strong>panic-mode recovery</strong>: after a syntax error, discard tokens until a syntactic boundary such as a semicolon, closing brace, or a recognizable statement starter. Then resume at the next independent construct. The synchronization set is derived from language structure, not chosen at random; a semicolon inside a string or parentheses should not automatically be treated as an outer statement boundary.</p>
+<p>The following independent example models a tiny stream of names separated by semicolons. It is deliberately not the expression parser; its purpose is to show how a recovery loop guarantees progress and returns independent results and errors. It treats each nonempty segment as one identifier and resumes after the next semicolon.</p>
+<pre><code class="language-python"># Example 5: independent, bounded recovery for a simple list language.
+def parse_name_list(source):
+    names, errors = [], []
+    for index, segment in enumerate(source.split(';')):
+        item = segment.strip()
+        if not item:
+            if index != len(source.split(';')) - 1:
+                errors.append((index, 'empty item'))
+            continue
+        if item.isascii() and item.isidentifier():
+            names.append(item)
+        else:
+            errors.append((index, 'expected ASCII identifier'))
+    return names, errors
+
+names, errors = parse_name_list('alpha; 123; beta; ; gamma')
+assert names == ['alpha', 'beta', 'gamma']
+assert errors == [(1, 'expected ASCII identifier'), (3, 'empty item')]
+</code></pre>
+<p>A real parser should not use raw string splitting to recover across nested syntax: it should operate on tokens, account for delimiter depth, limit error cascades, and preserve source locations. Recovery results must also be marked as incomplete or uncertain so that later compiler passes do not mistake placeholder nodes for verified source constructs.</p>
+</section>
+<section id="insertion-deletion-and-local-error-repair" aria-labelledby="heading-insertion-deletion-and-local-error-repair">
+<h2 id="heading-insertion-deletion-and-local-error-repair">Insertion, Deletion, and Local Error Repair</h2>
+<p>A parser can sometimes recover from a specific common typo by <strong>inserting</strong> an expected token in its internal stream or by <strong>deleting</strong> a clearly extraneous token. For instance, when a closing parenthesis is missing at the end of a line, a diagnostic might suggest inserting <code>)</code>. When two commas appear consecutively in a list, a parser may recover by discarding one. These techniques are useful for interactive tooling, but they should not silently modify the accepted meaning of an input without communicating the repair.</p>
+<p>A recovery policy must answer whether the repaired tree is safe for downstream evaluation, code generation, or persistence. A code editor may display an AST containing an explicit missing-token node, while a financial formula evaluator should usually refuse execution until the user corrects it. The cost of a false &quot;successful&quot; parse depends on the application domain. Recovery intended to generate more editor diagnostics is not equivalent to validating input for a security-sensitive operation.</p>
+<p>Repair also interacts with <strong>ambiguity</strong>. A local insertion that makes one branch parseable may hide a different intended construct. For this reason, sophisticated parsers often separate <em>diagnostic reconstruction</em> from <em>language acceptance</em>. The acceptance contract should remain clear: the original input was invalid even if the tool can build a best-effort tree to continue analysis.</p>
+</section>
+<section id="end-of-input-validation-and-prefix-acceptance" aria-labelledby="heading-end-of-input-validation-and-prefix-acceptance">
+<h2 id="heading-end-of-input-validation-and-prefix-acceptance">End-of-Input Validation and Prefix Acceptance</h2>
+<p>A parser entry point that simply returns <code>parse_expression()</code> may accept the valid prefix <code>2 + 3</code> from a larger string <code>2 + 3 garbage</code>, leaving extra tokens unread. In a tokenizer that recognizes identifiers, this could be dangerous: validation might appear to succeed even though a later consumer sees additional text. The <code>parse_input()</code> function therefore calls <code>take('EOF')</code> after parsing its expression.</p>
+<p>For embedded grammars, consuming the entire <em>global</em> token stream may be inappropriate. A function argument parser might need to stop before a comma or right parenthesis because the enclosing grammar owns that token. The distinction is between an <strong>entry point</strong> (whose contract normally specifies exactly the accepted source extent) and a <strong>subparser</strong> (which recognizes one syntactic unit and stops at an expected boundary).</p>
+<pre><code class="language-python"># Example 6: a complete parse is stronger than recognizing a prefix.
+for invalid in ('2 3', '2 + 3)', '3 +', '(1+2', '2**3', '1 @ 2'):
+    try:
+        parse(invalid)
+    except ParseError:
+        pass
+    else:
+        raise AssertionError(f'must reject {invalid!r}')
+
+for valid in ('0', '1+2', '(1+2)*3', '4.5 / 1.5', '2^-3'):
+    assert evaluate(parse(valid)) is not None
+</code></pre>
+<p>The <code>2**3</code> example uses recognized individual star tokens, but not a recognized grammar production for exponentiation; the parser rejects the second <code>STAR</code> when an operand is required. The <code>1 @ 2</code> example fails earlier, in lexical analysis. Both are invalid, but for different reasons.</p>
+</section>
+<section id="lexical-boundaries-negative-literals-whitespace-and-numbers" aria-labelledby="heading-lexical-boundaries-negative-literals-whitespace-and-numbers">
+<h2 id="heading-lexical-boundaries-negative-literals-whitespace-and-numbers">Lexical Boundaries: Negative Literals, Whitespace, and Numbers</h2>
+<p>For this grammar, the minus sign is always a separate <code>MINUS</code> token. The source <code>-12</code> becomes <code>MINUS NUMBER(12)</code>, allowing unary negation to be handled consistently with subtraction and exponentiation. If a lexer instead emits a single signed-number token in all contexts, it may be unable to distinguish <code>5-2</code> from <code>5</code> followed by a negative-number literal without additional rules. Keeping sign interpretation in the grammar is often simpler for arithmetic expressions.</p>
+<p>Whitespace is ignored between tokens, but it must not be discarded from the original source if accurate diagnostics or faithful reformatting matter. The tiny lexer permits <code>12.5</code>, rejects <code>12.</code> and <code>.5</code>, and accepts leading zeroes. Those are <strong>design decisions</strong>, not inherent limits of recursive descent. A language with exponent notation such as <code>1e-3</code> needs a different numeric lexical rule; a language with identifiers needs keyword recognition and possibly contextual tokenization.</p>
+<pre><code class="language-python"># Example 7: lexing distinguishes sign, numeric form, and token position.
+tokens = tokenize(' -12.5 + 3 ')
+assert [t.kind for t in tokens] == ['MINUS','NUMBER','PLUS','NUMBER','EOF']
+assert tokens[1].lexeme == '12.5'
+assert tokens[1].start == 2 and tokens[1].end == 6
+assert evaluate(parse('-12.5+3')) == Decimal('-9.5')
+for source in ('12.', '.5', '1e3', '½'):
+    try:
+        tokenize(source)
+    except ParseError:
+        continue
+    raise AssertionError(f'unexpectedly tokenized {source!r}')
+</code></pre>
+<p>The simplicity of this lexer is especially helpful pedagogically: parser failures can be traced to either the tokenization contract or the grammatical rules. Production tokenizers need explicit rules for maximal munch, competing token patterns, Unicode normalization, comments, newlines, and long input. Those topics merit dedicated treatment beyond this specialist Recursion article.</p>
+</section>
+<section id="list-grammars-optional-elements-and-separated-repetition" aria-labelledby="heading-list-grammars-optional-elements-and-separated-repetition">
+<h2 id="heading-list-grammars-optional-elements-and-separated-repetition">List Grammars, Optional Elements, and Separated Repetition</h2>
+<p>Delimited lists appear throughout real-world grammars: function arguments, array literals, CSV-like fields, configuration parameters, and type arguments. A common production is <code>arguments → expression { COMMA expression }</code>, with an optional wrapper <code>argument_list → [ arguments ]</code>. The optional wrapper allows an empty list; the nonempty list rule requires at least one expression. A parser should state whether trailing commas, empty elements, and consecutive commas are permitted.</p>
+<p>For a function call <code>f(1, 2 + 3)</code>, the parser might consume <code>IDENT LPAREN</code>, then parse an optional first expression, then repeat <code>COMMA expression</code> while commas appear, and finally require <code>RPAREN</code>. If the parser consumes a comma and then sees a closing parenthesis, whether that is an error depends on the language's trailing-comma policy. The decision should live in the grammar and tests rather than in ad hoc recovery code.</p>
+<p>A key implementation invariant is that a repetition must <strong>make progress</strong>. A loop around a nullable parser routine can run forever if each iteration succeeds without consuming any token. Before writing <code>while can_parse_item(): parse_item()</code>, verify that each successful iteration advances the cursor or that the loop has an independent decreasing measure. This is the iterative counterpart of the no-left-recursion progress rule.</p>
+</section>
+<section id="parsing-nested-statements-and-blocks" aria-labelledby="heading-parsing-nested-statements-and-blocks">
+<h2 id="heading-parsing-nested-statements-and-blocks">Parsing Nested Statements and Blocks</h2>
+<p>A simple expression parser contains nested structure but not a complete statement language. To extend it, define categories such as <code>statement</code>, <code>block</code>, and <code>program</code>. For example, <code>program → { statement } EOF</code>, <code>statement → LET IDENT ASSIGN expression SEMICOLON | block</code>, and <code>block → LBRACE { statement } RBRACE</code>. The block rule naturally calls statement parsing; a nested block is handled by another call to the same <code>block</code> routine, with the current block's closing brace still awaiting consumption.</p>
+<p>A parser must decide who owns delimiter tokens. The <code>block</code> routine should consume its opening and closing braces; the containing statement parser should not consume a brace twice. Similarly, the expression routine in an assignment should stop before <code>SEMICOLON</code>, allowing the assignment statement to require that delimiter. This protocol is a compositional form of grammar correctness: each routine consumes exactly the symbols in its rule and no more.</p>
+<p>Language features such as scoped declarations, name binding, variable lifetimes, and type rules are <em>semantic</em> policies rather than consequences of the braces alone. The parser can construct a <code>Block</code> node even if a later semantic pass rejects duplicate names or illegal statements. Tree structure supports analysis but does not substitute for it.</p>
+</section>
+<section id="a-small-independent-block-structure-recognizer" aria-labelledby="heading-a-small-independent-block-structure-recognizer">
+<h2 id="heading-a-small-independent-block-structure-recognizer">A Small Independent Block-Structure Recognizer</h2>
+<p>The next self-contained example accepts balanced curly-brace blocks containing lowercase single-letter statements followed by semicolons. It is deliberately minimal and rejects unmatched braces, missing separators, and stray characters. Its only recursive call occurs when a nested block is encountered. It demonstrates how mutual grammatical obligations work without bringing in the larger arithmetic tokenizer.</p>
+<pre><code class="language-python"># Example 8: independent recursive parser for nested block structure.
+def recognize_blocks(source):
+    chars = ''.join(ch for ch in source if not ch.isspace())
+    index = 0
+    def block():
+        nonlocal index
+        if index &gt;= len(chars) or chars[index] != '{':
+            raise ValueError('expected opening brace')
+        index += 1
+        count = 0
+        while index &lt; len(chars) and chars[index] != '}':
+            if chars[index] == '{':
+                count += block()
+            elif chars[index] in 'abcdefghijklmnopqrstuvwxyz':
+                index += 1
+                if index &gt;= len(chars) or chars[index] != ';':
+                    raise ValueError('missing semicolon')
+                index += 1
+                count += 1
+            else:
+                raise ValueError('invalid statement')
+        if index &gt;= len(chars):
+            raise ValueError('missing closing brace')
+        index += 1
+        return count
+    result = block()
+    if index != len(chars):
+        raise ValueError('trailing source text')
+    return result
+
+assert recognize_blocks('{a;{b;c;}d;}') == 4
+assert recognize_blocks('{}') == 0
+for invalid in ('{a;', '{a}', '{a;;}', '{}{}', '{@;}'):
+    try:
+        recognize_blocks(invalid)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(f'accepted {invalid!r}')
+</code></pre>
+<p>This recognizer counts statements but does not produce a tree, attach locations, or impose a nesting budget. It also recognizes only an intentionally tiny character language. Its purpose is to make <strong>nested block scope as recursive control flow</strong> transparent, not to present a general-purpose source-code parser.</p>
+</section>
+<section id="the-dangling-else-problem-and-statement-ambiguity" aria-labelledby="heading-the-dangling-else-problem-and-statement-ambiguity">
+<h2 id="heading-the-dangling-else-problem-and-statement-ambiguity">The Dangling-Else Problem and Statement Ambiguity</h2>
+<p>Consider nested conditionals written without braces: <code>if A then if B then X else Y</code>. Does the <code>else</code> pair with the inner <code>if</code> or the outer <code>if</code>? Many languages define that an <code>else</code> belongs to the nearest unmatched <code>if</code>, but that is a <strong>language rule</strong>, not an automatic property of the English word &quot;else&quot;. A straightforward context-free grammar may be ambiguous unless it distinguishes matched from unmatched statements or explicitly specifies parser binding behavior.</p>
+<p>A recursive-descent implementation often handles the nearest-<code>if</code> policy naturally because the inner statement parser consumes an available <code>else</code> before returning to the outer parser. That operational behavior should be deliberate and verified by AST tests. Reordering productions or adding error recovery could change which rule claims the <code>else</code>. An equivalent-looking grammar rewrite can therefore alter user-visible meaning even if it accepts the same keywords.</p>
+<p>This example illustrates why large grammar changes demand <strong>semantic regression tests</strong>. A test suite should compare parse-tree structure, not only acceptance status. Where ambiguity is resolved by policy rather than grammar unambiguity, the language documentation should state that policy explicitly.</p>
+</section>
+<section id="source-spans-trivia-and-faithful-tooling" aria-labelledby="heading-source-spans-trivia-and-faithful-tooling">
+<h2 id="heading-source-spans-trivia-and-faithful-tooling">Source Spans, Trivia, and Faithful Tooling</h2>
+<p>The teaching AST does not retain source spans. A production AST can add <code>start</code> and <code>end</code> positions to every node, using the first token's start and the final token's end. A binary node can span from its left child's start to its right child's end; a parenthesized node may need a span extending through the parentheses even if the abstract expression node does not preserve them as children. These decisions affect error messages, refactoring tools, code navigation, and editor selections.</p>
+<p><strong>Trivia</strong> means source content that often does not change the syntactic meaning of a program, such as whitespace and comments. A formatter or code transformation tool may need to preserve trivia even when the interpreter ignores it. A syntax tree that records semantic grouping but drops all spelling and comments is an appropriate input for evaluation, but a weaker input for round-trip source rewriting.</p>
+<p>Source spans also enable precise security and governance controls: an application can report where an invalid expression originated without executing it. However, byte offsets, code-point offsets, and editor character indices can differ. Persisted spans should be described in one defined coordinate system, and any conversion should be tested on multi-line and Unicode inputs.</p>
+</section>
+<section id="ast-visitors-and-separation-of-subsequent-passes" aria-labelledby="heading-ast-visitors-and-separation-of-subsequent-passes">
+<h2 id="heading-ast-visitors-and-separation-of-subsequent-passes">AST Visitors and Separation of Subsequent Passes</h2>
+<p>Once a parser returns an AST, separate traversals can evaluate, pretty-print, type-check, collect dependencies, or compile the expression. An AST visitor chooses behavior by node kind and recursively processes children. The essential lesson is that the recursive syntax-recognition algorithm and the recursive syntax-tree-processing algorithm have <strong>different contracts</strong>: the first consumes tokens; the second consumes an already validated structure.</p>
+<pre><code class="language-python"># Example 9: a safe structural printer over the teaching AST.
+def prefix(node):
+    if isinstance(node, Number):
+        return str(node.value)
+    if isinstance(node, Unary):
+        return '(' + node.operator + ' ' + prefix(node.operand) + ')'
+    if isinstance(node, Binary):
+        return ('(' + node.operator + ' ' + prefix(node.left)
+                + ' ' + prefix(node.right) + ')')
+    raise TypeError('unknown node')
+
+assert prefix(parse('1 + 2 * 3')) == '(PLUS 1 (STAR 2 3))'
+assert prefix(parse('-2^2')) == '(MINUS (CARET 2 2))'
+</code></pre>
+<p>The printer's output is a structured diagnostic notation, not valid syntax in the original calculator language. To convert an AST back into source text, a pretty printer must reinsert parentheses wherever omission would change grouping, and it must follow the language's precedence table. That is another reason to separate the parser's AST contract from all later consumers.</p>
+</section>
+<section id="parsing-correctness-local-contracts-and-structural-induction" aria-labelledby="heading-parsing-correctness-local-contracts-and-structural-induction">
+<h2 id="heading-parsing-correctness-local-contracts-and-structural-induction">Parsing Correctness: Local Contracts and Structural Induction</h2>
+<p>A parser's correctness argument has two related halves: <strong>soundness</strong> (anything it accepts follows the grammar with the intended tree structure) and <strong>completeness relative to the implemented grammar</strong> (anything generated by the grammar can be recognized by the parser within its supported resource limits). For a predictive parser, the proof can be organized by grammatical structure and token consumption.</p>
+<p>For example, assume <code>parse_primary</code> correctly recognizes numbers and parenthesized expressions and consumes exactly the matching tokens. Then <code>parse_power</code> correctly recognizes a primary optionally followed by a caret and a unary expression. Next <code>parse_unary</code> handles any finite sequence of prefix signs before delegating to power. <code>parse_term</code> repeatedly combines complete unary expressions when multiplication or division operators appear; <code>parse_expression</code> similarly combines complete terms when addition or subtraction operators appear. Finally, <code>parse_input</code> requires EOF, establishing completeness of consumption for the start symbol.</p>
+<p>This induction-style reasoning depends on <em>termination and disjoint decisions</em>. The parser must not choose the wrong branch when an alternative's FIRST set overlaps another without a specified resolution strategy. It must not enter a cycle that consumes no input. A program that merely returns a node without crashing is not necessarily a correct parser; the returned tree must correspond to the grammar's required hierarchy.</p>
+</section>
+<section id="termination-and-the-decreasing-input-measure" aria-labelledby="heading-termination-and-the-decreasing-input-measure">
+<h2 id="heading-termination-and-the-decreasing-input-measure">Termination and the Decreasing Input Measure</h2>
+<p>For a finite token stream, a useful termination measure is the number of tokens remaining. Repetition loops terminate when they either consume an operator and a valid operand or stop because the next token is not in the continuation set. Recursive nesting is safe from nontermination when each cycle through the mutually recursive grammar functions requires a consumed delimiter or operator and eventually bottoms out at a number.</p>
+<p>The remaining-token measure does not need to decrease on every <em>function call</em>: <code>parse_expression</code> delegates to <code>parse_term</code> at the same cursor, and <code>parse_term</code> delegates to <code>parse_unary</code> at the same cursor. What matters is that no cycle of calls can repeat indefinitely at the same cursor without a genuine decrease. The function dependency graph can contain acyclic delegation edges that do not consume tokens, because they cannot be traversed forever without reaching a consuming production.</p>
+<p>Termination is weaker than resource safety. <code>((((1))))</code> is finite and valid, and its parse eventually returns; nonetheless, extremely deep nesting can exceed the runtime stack before the innermost number is reached. Resource budgets, iterative alternatives, or an explicit-stack parser may be required for external inputs.</p>
+</section>
+<section id="time-complexity-under-predictive-parsing" aria-labelledby="heading-time-complexity-under-predictive-parsing">
+<h2 id="heading-time-complexity-under-predictive-parsing">Time Complexity Under Predictive Parsing</h2>
+<p>For the demonstrated predictive parser, tokenization scans each source character a constant number of times, yielding <strong>O(c)</strong> time for source length <code>c</code>. Parsing visits each token through a bounded number of operations in a fixed-depth grammar-function ladder, yielding <strong>O(n)</strong> time for <code>n</code> tokens under the usual unit-cost model. AST construction also creates O(n) nodes. The total is O(c + n), which is O(c) when token count is bounded by the number of source characters and arithmetic computation costs are excluded.</p>
+<p>This claim relies on properties of the implementation: a constant number of lookahead tokens, no backtracking over already recognized regions, and constant-time cursor accesses. It also relies on treating numeric literal construction as reasonably bounded by the literal length; parsing a huge number and performing arbitrarily expensive arithmetic should not be conflated with the simple token-structure cost model. Decimal or arbitrary-precision arithmetic may have nonconstant costs based on operand sizes.</p>
+<p>Expression nesting depth is a separate variable. A parser may process <code>1+1+...+1</code> with a small call stack because its repetition is iterative, but <code>((((1))))</code> creates a recursive call for each parenthesis pair. The amount of work can remain linear while the maximum simultaneous call-stack depth grows linearly in nested syntax depth.</p>
+</section>
+<section id="space-complexity-tokens-ast-and-the-parsing-stack" aria-labelledby="heading-space-complexity-tokens-ast-and-the-parsing-stack">
+<h2 id="heading-space-complexity-tokens-ast-and-the-parsing-stack">Space Complexity: Tokens, AST, and the Parsing Stack</h2>
+<p>The tokenizer retains O(n) token objects in the illustrated design. The parser then constructs O(n) AST nodes for an expression with O(n) syntactic elements. Its call stack requires O(d) additional frames where <code>d</code> is the deepest recursive descent induced by nesting or right-associative/operator-prefix chains; constant factors include the fixed grammar-function delegation steps per syntactic nesting level.</p>
+<p>An implementation that streams tokens incrementally may reduce token storage in some languages, but it must retain enough lookahead for its grammar and enough source information for diagnostics. An implementation that evaluates directly without constructing an AST can avoid O(n) AST storage, though it may lose many desirable analysis capabilities. A generator-based parser still has to account for suspended interpreter frames and retained state; using generators is not an automatic stack-space guarantee.</p>
+<p>A safe complexity statement specifies the measured resource and input parameter: <strong>parse time O(n)</strong>, <strong>token+AST storage O(n)</strong>, <strong>parser stack O(d)</strong> under the idealized model for this grammar. These are upper bounds for the syntax-processing part of the implementation, not universal guarantees about user-supplied arithmetic expressions and downstream evaluation.</p>
+</section>
+<section id="why-backtracking-can-change-complexity" aria-labelledby="heading-why-backtracking-can-change-complexity">
+<h2 id="heading-why-backtracking-can-change-complexity">Why Backtracking Can Change Complexity</h2>
+<p>If a parser repeatedly attempts alternatives that share long prefixes, it may revisit the same token position many times. In an adversarial grammar with nested alternatives, naive backtracking can lead to exponential effort or at least large repeated scans. Whether such a worst case occurs depends on the particular grammar and implementation; <strong>recursive descent does not intrinsically have exponential complexity</strong>.</p>
+<p>Refactoring common prefixes, using predictive decisions, or memoizing rule-position results can avoid repeated exploration. However, memoization is sound only when the cache key captures everything that affects the parse decision: rule, cursor location, and any relevant contextual or lexical mode. A parser that depends on mutable semantic state but caches only <code>(rule, offset)</code> can return incorrect results after the state changes.</p>
+<p>This is closely related to the neighboring <a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/memoization-and-top-down-dynamic-programming">Memoization and Top-Down Dynamic Programming</a> article. Both domains replace repeated subproblem expansion with cached results; in parsing, the subproblem commonly asks whether a grammar rule matches at a particular input position and, if so, which resulting tree and endpoint it produces.</p>
+</section>
+<section id="packrat-memoization-and-its-trade-offs" aria-labelledby="heading-packrat-memoization-and-its-trade-offs">
+<h2 id="heading-packrat-memoization-and-its-trade-offs">Packrat Memoization and Its Trade-offs</h2>
+<p><strong>Packrat parsing</strong> commonly refers to memoizing parsing results for grammar expressions or rules at input positions, often in PEG implementations. With a fixed grammar, suitable memoization and assumptions, it can provide linear-time recognition in input length for grammars amenable to that model. The tradeoff is memory: storing results for many rules across many input positions can require O(n) retained entries with a potentially substantial constant factor.</p>
+<p>Not every recursive-descent parser is a packrat parser, and not every use of a cache establishes packrat's performance properties. Implementations vary in memoization granularity, streaming behavior, support for left recursion, garbage collection of old memo entries, and treatment of parse errors. Ordered choice also affects meaning independently from runtime complexity: caching a result for one ordered grammar is not a substitute for specifying which interpretation is intended.</p>
+<p>If input is streaming or extremely large, retaining the entire token sequence and memo table may exceed practical budgets. Performance evaluation should examine maximum input size, expected nesting, number of grammar rules, error-heavy inputs, and memory pressure, not simply report that the parser accepts valid examples quickly.</p>
+</section>
+<section id="stack-depth-recursion-limits-and-input-budgets" aria-labelledby="heading-stack-depth-recursion-limits-and-input-budgets">
+<h2 id="heading-stack-depth-recursion-limits-and-input-budgets">Stack Depth, Recursion Limits, and Input Budgets</h2>
+<p>An input of <code>((((...1...))))</code> with thousands of parentheses can make many nested calls to <code>parse_expression</code> and its helper functions. A similar stack problem can arise from a long run of prefix operators or a very long right-associative exponentiation chain. These shapes are valid under the grammar, so they should not be conflated with the <em>nontermination</em> caused by left recursion. The implementation can be mathematically correct and still fail operationally on deeply nested input.</p>
+<p>A production parser receiving arbitrary external text should define maximum source length, token count, grammar nesting depth, AST size, and computational work. A simple preflight may bound parentheses nesting; a stronger implementation also maintains an explicit rule-depth counter or uses an iterative parsing method that does not depend on the host call stack for unbounded nesting. A preflight check of parentheses <strong>alone is insufficient</strong> because unary chains and exponentiation chains can also recurse deeply.</p>
+<pre><code class="language-python"># Example 10: one preflight bound, not a complete recursion-depth defense.
+def parenthesis_budget(source, maximum=32):
+    current = deepest = 0
+    for ch in source:
+        if ch == '(':
+            current += 1
+            deepest = max(deepest, current)
+            if deepest &gt; maximum:
+                raise ValueError('nesting budget exceeded')
+        elif ch == ')':
+            current -= 1
+            if current &lt; 0:
+                raise ValueError('unmatched closing parenthesis')
+    if current:
+        raise ValueError('unclosed parenthesis')
+    return deepest
+
+assert parenthesis_budget('((1+2)*3)') == 2
+try:
+    parenthesis_budget('('*33 + '1' + ')'*33)
+except ValueError as error:
+    assert 'budget exceeded' in str(error)
+else:
+    raise AssertionError('deep nesting was not limited')
+</code></pre>
+<p>Increasing Python's process-wide recursion limit is not a general remedy; it may expose the process to native stack exhaustion and affects more than this parser. The companion <a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursion-limits-and-stack-safe-design">Recursion Limits and Stack-Safe Design</a> article examines the broader design alternatives.</p>
+</section>
+<section id="parsing-untrusted-inputs-without-executing-them" aria-labelledby="heading-parsing-untrusted-inputs-without-executing-them">
+<h2 id="heading-parsing-untrusted-inputs-without-executing-them">Parsing Untrusted Inputs Without Executing Them</h2>
+<p>A syntactically valid expression is not necessarily safe to <strong>evaluate</strong>. The source <code>2^1000000000</code> is short but requests an enormous power; a tiny expression grammar may accept it even though a naive evaluator would consume impractical resources. Parsing and evaluation therefore need separate budgets. The evaluator can restrict numeric magnitude, exponent range, operations permitted, time, memory, and whether division by zero or invalid operations should be reported as runtime errors.</p>
+<p>Never use a programming language's general <code>eval</code> facility merely to implement a restricted formula grammar. Such facilities expose constructs beyond the intended grammar and create security and correctness risks when used on attacker-controlled text. The teaching parser's explicit tokenizer and syntax-node evaluator illustrate a narrow alternative; they are not by themselves a complete sandbox. An attacker can still attempt to exhaust memory or CPU through syntactically valid inputs.</p>
+<p>A second risk is <strong>unexpected suffix acceptance</strong>. Any parser used for validation must enforce the intended input extent rather than parse a harmless-looking prefix. For application-specific parsing, successful completion should mean both grammar conformance and successful enforcement of all configured length, depth, and semantic constraints. Defensive validation must treat lexer, parser, evaluator, and downstream consumers as separate attack surfaces.</p>
+</section>
+<section id="unit-tests-happy-paths-boundaries-and-failure-positions" aria-labelledby="heading-unit-tests-happy-paths-boundaries-and-failure-positions">
+<h2 id="heading-unit-tests-happy-paths-boundaries-and-failure-positions">Unit Tests: Happy Paths, Boundaries, and Failure Positions</h2>
+<p>A useful parser test suite should cover every grammar production, every operator, each precedence interaction, and every failure mode. Valid examples establish recognition; AST-shape assertions establish grouping; evaluation comparisons provide an independent behavioral oracle where practical; and expected error offsets establish diagnostic stability. Key negative cases include missing operands, unmatched delimiters, adjacent primaries, unknown characters, trailing text, and inputs containing only whitespace.</p>
+<p>The following checks are executable after Example 1. They verify that invalid input fails, rather than asserting a brittle exact wording for every error message. Exact error strings can be tested separately if they form part of an editor or API contract.</p>
+<pre><code class="language-python"># Example 11: grammar acceptance, grouping, and invalid-input matrix.
+valid = {
+    '0': '0', '1.25+2.75': '4.00', '8/2*2': '8',
+    '2^3^2': '512', '2^-3': '0.125', '-2^2': '-4',
+    '(-2)^2': '4', '--5': '5', '1 + (2 * 3)': '7',
+}
+for expression, expected in valid.items():
+    assert evaluate(parse(expression)) == Decimal(expected)
+
+invalid = ('', ' ', '+', '*2', '1+', '1 2', '(1+2',
+           '1+2)', '2^^3', '2//3', '1..2', 'a+2')
+for expression in invalid:
+    try:
+        parse(expression)
+    except ParseError:
+        continue
+    raise AssertionError(f'accepted invalid input: {expression!r}')
+</code></pre>
+<p>Tests should also make clear what is deliberately unsupported. If a future grammar adds named variables, a test that <code>a+2</code> is rejected will need revision. That is a product-specification change, not necessarily a bug. Versioning a parser includes versioning its valid and invalid corpus.</p>
+</section>
+<section id="metamorphic-and-property-based-testing" aria-labelledby="heading-metamorphic-and-property-based-testing">
+<h2 id="heading-metamorphic-and-property-based-testing">Metamorphic and Property-Based Testing</h2>
+<p>When it is difficult to compute a separate exact answer for thousands of random source strings, <strong>metamorphic testing</strong> checks relations that must hold across transformations. For this language, surrounding an expression in parentheses should preserve its value; inserting permitted whitespace between tokens should not change its AST; and a correct printer or evaluator should be consistent with precedence-preserving transformations. These are relations, not complete correctness proofs.</p>
+<p>A property-based generator should construct <strong>valid syntax from the grammar</strong> rather than simply concatenate random characters. Otherwise, most generated examples may fail during tokenization and leave advanced productions untested. A separate malformed-input generator can mutate valid strings by deleting delimiters, duplicating operators, or inserting unsupported characters, then verify that the parser terminates with either a valid tree or a controlled error.</p>
+<pre><code class="language-python"># Example 12: bounded grammar-derived randomized metamorphic tests.
+import random
+rng = random.Random(20261123)
+def make_expression(depth):
+    if depth == 0:
+        return str(rng.randrange(1, 10))
+    left = make_expression(depth - 1)
+    right = make_expression(depth - 1)
+    operator = rng.choice(('+', '-', '*'))
+    return f'({left} {operator} {right})'
+
+for _ in range(50):
+    source = make_expression(3)
+    assert evaluate(parse(source)) == evaluate(parse('(' + source + ')'))
+    assert parse(source) == parse('  ' + source + '  ')
+</code></pre>
+<p>Tests should limit generator depth so that testing itself does not exhaust recursion. For a production parser, fuzzing should also measure runtime, peak memory, stack use, and the number of diagnostics per invalid source, because &quot;no wrong output&quot; is not enough if a carefully chosen input can hang the process.</p>
+</section>
+<section id="differential-testing-regression-tests-and-grammar-evolution" aria-labelledby="heading-differential-testing-regression-tests-and-grammar-evolution">
+<h2 id="heading-differential-testing-regression-tests-and-grammar-evolution">Differential Testing, Regression Tests, and Grammar Evolution</h2>
+<p><strong>Differential testing</strong> compares the same input across two independent implementations or against a trusted reference interpreter. It is especially valuable when migrating from hand-written recursive descent to a generated parser or when rewriting left-recursive grammar rules. Differences should be examined in acceptance, AST shape, error location, and evaluation behavior, rather than assuming that the reference is always correct.</p>
+<p>When the language gains new syntax, write explicit migration tests for existing constructs. Adding a factorial postfix operator, a function-call syntax, a comparison level, or exponentiation can change how token sequences group. A grammar transformation that is intended to preserve the language should keep a representative corpus of ASTs structurally equivalent, allowing for documented internal-node representation changes.</p>
+<p>For a long-lived parser, record the grammar version and make backward-compatibility commitments clear. Data formats and APIs may need to reject syntax introduced in later versions, while interactive editors may need to recognize incomplete new constructs. A parser used to read persistent configuration files is part of a compatibility surface, not just an isolated algorithm.</p>
+</section>
+<section id="applied-scenario-1-a-spreadsheet-formula-engine" aria-labelledby="heading-applied-scenario-1-a-spreadsheet-formula-engine">
+<h2 id="heading-applied-scenario-1-a-spreadsheet-formula-engine">Applied Scenario 1: A Spreadsheet Formula Engine</h2>
+<p>A spreadsheet-like application accepts formulas such as <code>12.5 * (3 + 4)</code> and computes a result. Predictive recursive descent is attractive because the language begins with clear precedence classes and nested parentheses. The parser builds an AST, after which a separate evaluator applies arithmetic rules and eventual cell-reference resolution. A formula should not be sent through an unrestricted general-language evaluator simply because its syntax resembles arithmetic.</p>
+<p>As features expand, references such as <code>A1</code>, named functions, ranges, and comparison operators require new token categories and grammar productions. Dependency-cycle detection between cells is not solved by the expression parser: it belongs to the formula-dependency graph and evaluation system. A complete architecture therefore separates lexical recognition, syntactic grouping, reference resolution, dependency management, and computation.</p>
+<p><strong>Acceptance criteria:</strong> existing formulas retain their grouping after grammar changes; invalid suffixes are rejected; error locations point to unsupported tokens or missing operands; and long or computationally expensive formulas are bounded before evaluation.</p>
+</section>
+<section id="applied-scenario-2-a-structured-configuration-language" aria-labelledby="heading-applied-scenario-2-a-structured-configuration-language">
+<h2 id="heading-applied-scenario-2-a-structured-configuration-language">Applied Scenario 2: A Structured Configuration Language</h2>
+<p>A service reads configuration text containing nested objects, lists, assignments, and scalar values. Recursive descent follows the nested braces and brackets naturally: an object parser may parse key-value pairs, a value parser may call the object parser for a nested object, and an array parser may repeatedly call the value parser for each element. Each routine owns its opening and closing delimiters and leaves the cursor at the next outer token.</p>
+<p>The configuration language must specify whether duplicate keys, trailing commas, comments, and unquoted identifiers are legal. Syntactic correctness is not a substitute for configuration validation: an object might parse successfully while missing a required business setting or specifying an out-of-range numeric threshold. These validations belong to a schema or semantic layer downstream of parsing.</p>
+<p><strong>Acceptance criteria:</strong> the parser consumes the whole file, rejects invalid trailing text, enforces nesting and size budgets, and reports line/column errors. Applications should not silently repair a malformed production configuration unless that behavior is explicitly specified.</p>
+</section>
+<section id="applied-scenario-3-a-query-filter-or-search-dsl" aria-labelledby="heading-applied-scenario-3-a-query-filter-or-search-dsl">
+<h2 id="heading-applied-scenario-3-a-query-filter-or-search-dsl">Applied Scenario 3: A Query Filter or Search DSL</h2>
+<p>An application offers a restricted query language such as <code>status = active AND (priority = high OR owner = team)</code>. Its parser needs comparison expressions, Boolean precedence, grouping, and perhaps quoted strings. A recursive-descent design can separate <code>or_expression</code>, <code>and_expression</code>, and <code>comparison</code>, making binding clear without exposing a general-purpose programming language.</p>
+<p>After parsing, the system translates the AST into a parameterized database query or another safe execution representation. Parsing alone does not guarantee that a query is authorized or inexpensive. Authorization, allowed fields, allowed operators, query planning, rate limits, and injection resistance must be enforced by the downstream system. A parser that accepts a restricted DSL is one defense layer, not the entire trust boundary.</p>
+<p><strong>Acceptance criteria:</strong> precedence is specified, user identifiers and string literals are tokenized correctly, AST nodes cannot escape the supported operation set, and translation does not concatenate user text into executable database statements.</p>
+</section>
+<section id="applied-scenario-4-an-editor-with-partial-source-code" aria-labelledby="heading-applied-scenario-4-an-editor-with-partial-source-code">
+<h2 id="heading-applied-scenario-4-an-editor-with-partial-source-code">Applied Scenario 4: An Editor with Partial Source Code</h2>
+<p>An interactive editor routinely sees incomplete code while the user types: <code>sum(1,</code>, <code>if (condition</code>, or an unmatched brace. A strict fail-fast parser would stop immediately and deprive the editor of syntax information for the remainder of the file. An editor-oriented parser may instead synthesize missing nodes, collect several diagnostics, and synchronize at statement boundaries to continue producing a partial tree.</p>
+<p>This requirement changes the design substantially. The parser needs resilient recovery, stable source spans, careful treatment of comments and whitespace, and often incremental updates. A full reparse may be acceptable for a small file, but a large IDE may need to reuse unchanged subtrees. Recursive descent can still form part of the architecture; the new complexities arise from <strong>partial-input tolerance and interactive performance</strong>, not from recursion itself.</p>
+<p><strong>Acceptance criteria:</strong> malformed input cannot hang the editor, recovery does not invent semantic certainty, diagnostics remain located, and tree updates preserve consistent source ranges as users insert or delete text.</p>
+</section>
+<section id="applied-scenario-5-a-lightweight-api-validation-grammar" aria-labelledby="heading-applied-scenario-5-a-lightweight-api-validation-grammar">
+<h2 id="heading-applied-scenario-5-a-lightweight-api-validation-grammar">Applied Scenario 5: A Lightweight API Validation Grammar</h2>
+<p>An API endpoint accepts a small human-authored rule, perhaps a sequence of field comparisons with parentheses. The server wants to verify the rule and store a normalized representation, not execute arbitrary code. A hand-written predictive parser may be the simplest auditable option when the grammar has few alternatives and well-specified precedence.</p>
+<p>Operational requirements become central because input comes from outside the trust boundary. The server should bound input length, token count, nesting, and any downstream evaluation cost. It should report parse failures in a controlled response format without exposing unrelated internal stack traces. Its versioned grammar should make it clear to clients which rule forms are accepted.</p>
+<p><strong>Acceptance criteria:</strong> accepted input has a complete AST with no unread suffix; unauthorized fields and unsupported operations fail later validation; denial-of-service cases are bounded; and the stored representation is not interpreted through a general programming-language evaluator.</p>
+</section>
+<section id="applied-scenario-6-a-template-or-markup-interpreter" aria-labelledby="heading-applied-scenario-6-a-template-or-markup-interpreter">
+<h2 id="heading-applied-scenario-6-a-template-or-markup-interpreter">Applied Scenario 6: A Template or Markup Interpreter</h2>
+<p>A template language may contain nested blocks, conditional sections, placeholders, filters, and text outside control delimiters. Its parser must manage context: ordinary text is not tokenized like an expression inside <code>{{ ... }}</code>, and an opening block directive must correspond to an appropriate ending directive. Recursive descent can recognize nested blocks through a block routine that calls itself or a statement routine for inner content.</p>
+<p>The lexer or scanner may need <strong>modes</strong> to distinguish literal text, template tags, quoted strings, and escaped delimiters. A parser must preserve source text or trivia when rendering accuracy matters. Semantic checks must decide which variables exist and what output escaping is required. Escaping HTML output, preventing template injection, and limiting recursive expansion are distinct from recognizing syntactically valid templates.</p>
+<p><strong>Acceptance criteria:</strong> mismatched block delimiters are reported; parser modes do not consume literal text incorrectly; nested blocks have bounded depth; and rendered output applies context-appropriate escaping regardless of the parser's syntactic success.</p>
+</section>
+<section id="comparison-when-recursive-descent-fits-and-when-it-does-not" aria-labelledby="heading-comparison-when-recursive-descent-fits-and-when-it-does-not">
+<h2 id="heading-comparison-when-recursive-descent-fits-and-when-it-does-not">Comparison: When Recursive Descent Fits and When It Does Not</h2>
+<table>
+<thead>
+<tr>
+  <th>Requirement</th>
+  <th>Recursive-descent fit</th>
+  <th>Important boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Small expression or configuration grammar</td>
+  <td>Often excellent</td>
+  <td>Precedence and error handling must be explicit</td>
+</tr>
+<tr>
+  <td>Nested delimiters and blocks</td>
+  <td>Natural recursive structure</td>
+  <td>Stack depth and recovery need budgets</td>
+</tr>
+<tr>
+  <td>One-token predictive decisions</td>
+  <td>Readable and efficient</td>
+  <td>May require left factoring/grammar transformation</td>
+</tr>
+<tr>
+  <td>Extensive ambiguous syntax</td>
+  <td>May need another approach</td>
+  <td>Ad hoc priority can hide ambiguous intent</td>
+</tr>
+<tr>
+  <td>Many extensible operators</td>
+  <td>Pratt or precedence climbing may be simpler</td>
+  <td>Operator semantics still require testing</td>
+</tr>
+<tr>
+  <td>Heavy backtracking</td>
+  <td>Possible with careful design</td>
+  <td>Repeated work and state restoration risks</td>
+</tr>
+<tr>
+  <td>Very deep untrusted nesting</td>
+  <td>Risky if tied to host call stack</td>
+  <td>Consider explicit stacks or bounded depth</td>
+</tr>
+<tr>
+  <td>Partial-input IDE parsing</td>
+  <td>Possible but more complex</td>
+  <td>Recovery, spans, incrementality become major concerns</td>
+</tr>
+<tr>
+  <td>Full production language</td>
+  <td>Depends on grammar and tooling</td>
+  <td>Parser generators may reduce maintenance costs</td>
+</tr>
+</tbody>
+</table>
+<p>The decisive issue is not whether a grammar &quot;contains recursion.&quot; Most programming languages contain nested syntax. The issue is whether the production rules, lookahead requirements, error expectations, and input budgets align with a maintainable top-down implementation. Choosing a parser style is an engineering decision constrained by the language contract.</p>
+</section>
+<section id="ten-gate-parser-design-and-selection-framework" aria-labelledby="heading-ten-gate-parser-design-and-selection-framework">
+<h2 id="heading-ten-gate-parser-design-and-selection-framework">Ten-Gate Parser Design and Selection Framework</h2>
+<ol>
+<li><strong>Define the accepted language.</strong> Specify tokens, reserved words, literal forms, complete-input rules, and explicit examples of rejected syntax.</li>
+<li><strong>Write grammar productions.</strong> Separate lexical rules, syntax productions, and later semantic constraints; decide how optional and repeated constructs are written.</li>
+<li><strong>Define grouping policy.</strong> Establish operator precedence, associativity, delimiter behavior, and any intentional disambiguation rules.</li>
+<li><strong>Analyze predictive choices.</strong> Compute or reason through FIRST/FOLLOW conditions, common prefixes, lookahead requirements, and nullable alternatives.</li>
+<li><strong>Eliminate unsafe recursion cycles.</strong> Identify direct and indirect left recursion or non-progressing nullable cycles; choose a supported parser strategy.</li>
+<li><strong>Specify cursor and AST contracts.</strong> Decide which function consumes each delimiter and what successful functions return, including source spans where needed.</li>
+<li><strong>Specify errors and recovery.</strong> Determine whether the product must fail fast or continue with bounded diagnostic recovery, and how uncertainty is marked.</li>
+<li><strong>Bound resource consumption.</strong> Define source size, token count, nesting depth, work budgets, and whether evaluation requires further restrictions.</li>
+<li><strong>Prove and test behavior.</strong> Trace grammar rules, test AST shape, compare against reference behavior, and test malformed inputs and adversarial depth.</li>
+<li><strong>Govern change.</strong> Version grammar behavior, preserve regression fixtures, and document downstream dependencies such as evaluators and code generators.</li>
+</ol>
+<p>A project should proceed to implementation only after its acceptance and grouping policies are sufficiently clear. A parser that is quick to write but difficult to explain and test creates long-term maintenance costs in every consumer of its syntax tree.</p>
+</section>
+<section id="common-misconceptions-and-failure-modes" aria-labelledby="heading-common-misconceptions-and-failure-modes">
+<h2 id="heading-common-misconceptions-and-failure-modes">Common Misconceptions and Failure Modes</h2>
+<p><strong>&quot;Recursive descent always backtracks.&quot;</strong> Predictive recursive descent does not require backtracking; alternatives can be selected by lookahead. <strong>&quot;Any context-free grammar can be translated directly into naive recursive procedures.&quot;</strong> Left-recursive and otherwise nondeterministic grammars may need transformation or a different parsing algorithm. <strong>&quot;Correct evaluation proves correct parsing.&quot;</strong> Several distinct trees can happen to produce the same numerical result on selected inputs; assert tree structure and test non-associative operations.</p>
+<p><strong>&quot;Memoization makes every parser linear and cheap.&quot;</strong> Memoization must have sound keys and a defined grammar model, and the retained state consumes memory. <strong>&quot;An AST preserves the original program.&quot;</strong> Many ASTs omit comments, spelling, and punctuation; lossless refactoring needs more information. <strong>&quot;A valid parse is safe to execute.&quot;</strong> Resource exhaustion and unauthorized operations can occur in syntactically valid inputs. <strong>&quot;RecursionError means the grammar is left-recursive.&quot;</strong> Deep valid nesting can also exhaust the host stack; diagnose the grammar cycle and input shape separately.</p>
+<p>A final misconception is that error recovery is a way to make invalid input valid. Recovery often exists to continue analysis and show multiple diagnostics. When an API, financial formula, or configuration file requires strict validation, recovered ASTs should remain explicitly marked or the application should reject execution until the input is corrected.</p>
+</section>
+<section id="debugging-and-implementation-checklist" aria-labelledby="heading-debugging-and-implementation-checklist">
+<h2 id="heading-debugging-and-implementation-checklist">Debugging and Implementation Checklist</h2>
+<p>When a parser accepts the wrong expression, inspect <strong>(a)</strong> token kinds and offsets, <strong>(b)</strong> which production was selected, <strong>(c)</strong> cursor movement at each call, <strong>(d)</strong> AST construction order, and <strong>(e)</strong> whether <code>EOF</code> was required. When a parser loops, look for a grammar cycle that consumes no token or a repetition whose body can match the empty sequence. When a parser fails on deep input, measure nested parentheses, prefix chains, and exponent chains independently of total source length.</p>
+<p>When diagnostics are confusing, identify the function that first observed the unexpected token and verify that it reports an expected <em>language construct</em>, not only a low-level enum name. When a grammar migration changes evaluation results, compare ASTs for subtraction, division, exponentiation, unary operators, mixed precedences, and nested conditionals. When a parser becomes unexpectedly slow, check whether token slicing, backtracking, repeated rescans, AST copying, or error recovery is revisiting the same input regions.</p>
+<p>Before deployment, confirm that public inputs have budgets and that downstream consumers treat ASTs as untrusted until authorization, type checks, and semantic validation have succeeded. The final test is not just whether the parser can read a valid example; it is whether it behaves predictably when given the limits and mistakes of real input.</p>
+</section>
+<section id="glossary-of-essential-terms" aria-labelledby="heading-glossary-of-essential-terms">
+<h2 id="heading-glossary-of-essential-terms">Glossary of Essential Terms</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Recursive descent</td>
+  <td>Top-down recognition using procedures that call one another to match grammar rules</td>
+</tr>
+<tr>
+  <td>Terminal</td>
+  <td>Token category treated as indivisible by the parser</td>
+</tr>
+<tr>
+  <td>Nonterminal</td>
+  <td>Syntactic category defined by grammar productions</td>
+</tr>
+<tr>
+  <td>Production</td>
+  <td>Rule specifying a permitted syntactic form or alternative</td>
+</tr>
+<tr>
+  <td>EBNF</td>
+  <td>Grammar notation with convenient repetition, option, and grouping constructs</td>
+</tr>
+<tr>
+  <td>Lookahead</td>
+  <td>Tokens examined before committing to a grammatical decision</td>
+</tr>
+<tr>
+  <td>LL(1)</td>
+  <td>Left-to-right, leftmost-derivation predictive parsing using one lookahead token</td>
+</tr>
+<tr>
+  <td>FIRST / FOLLOW</td>
+  <td>Sets used to reason about predictive alternative selection</td>
+</tr>
+<tr>
+  <td>Left recursion</td>
+  <td>Derivation that returns to the same nonterminal without consuming a terminal first</td>
+</tr>
+<tr>
+  <td>Left factoring</td>
+  <td>Extracting a shared prefix to make alternative selection easier</td>
+</tr>
+<tr>
+  <td>Ambiguity</td>
+  <td>Existence of more than one parse tree for a token sequence under a grammar</td>
+</tr>
+<tr>
+  <td>Precedence</td>
+  <td>Relative binding strength of different operators</td>
+</tr>
+<tr>
+  <td>Associativity</td>
+  <td>Grouping direction for operators at the same precedence level</td>
+</tr>
+<tr>
+  <td>Parse tree</td>
+  <td>Syntax structure that can preserve grammar categories and punctuation</td>
+</tr>
+<tr>
+  <td>AST</td>
+  <td>Abstract syntax tree focused on meaningful structure for later processing</td>
+</tr>
+<tr>
+  <td>Lexeme</td>
+  <td>Original source spelling associated with a token</td>
+</tr>
+<tr>
+  <td>EOF</td>
+  <td>Explicit end-of-input marker used to enforce complete recognition</td>
+</tr>
+<tr>
+  <td>Panic-mode recovery</td>
+  <td>Skipping to a synchronization boundary after a syntax error</td>
+</tr>
+<tr>
+  <td>PEG</td>
+  <td>Parsing expression grammar with ordered-choice semantics</td>
+</tr>
+<tr>
+  <td>Packrat parsing</td>
+  <td>Memoized parsing strategy often used to avoid repeated rule-position work</td>
+</tr>
+<tr>
+  <td>Pratt parser</td>
+  <td>Expression parser driven by prefix/infix handlers and binding powers</td>
+</tr>
+<tr>
+  <td>Source span</td>
+  <td>Start/end positions identifying the source text represented by a node</td>
+</tr>
+<tr>
+  <td>Nullable production</td>
+  <td>Rule or alternative capable of deriving the empty sequence</td>
+</tr>
+<tr>
+  <td>Metamorphic test</td>
+  <td>Test of required relationships among transformed inputs or outputs</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="review-questions-and-practical-exercises" aria-labelledby="heading-review-questions-and-practical-exercises">
+<h2 id="heading-review-questions-and-practical-exercises">Review Questions and Practical Exercises</h2>
+<ol>
+<li>Trace the sequence of function calls for <code>1 + 2 * (3 - 4)</code> and identify which routine consumes each parenthesis.</li>
+<li>Explain why <code>expression → expression PLUS term | term</code> is unsafe under a naive literal recursive-descent translation. Rewrite it into a loop-friendly form.</li>
+<li>Draw the ASTs for <code>2 ^ 3 ^ 2</code>, <code>(2 ^ 3) ^ 2</code>, <code>-2 ^ 2</code>, and <code>(-2) ^ 2</code>. Which pairs evaluate differently under this grammar?</li>
+<li>Compute FIRST sets for <code>primary</code> and <code>unary</code> in the teaching grammar. Identify one production that can be selected from a single lookahead token.</li>
+<li>State the difference between a concrete parse tree and an AST. Which representation is more useful for exact source formatting?</li>
+<li>Explain why accepting <code>1 + 2</code> as a prefix of <code>1 + 2 3</code> is a failure for a whole-input validator, even if the prefix parses correctly.</li>
+<li>Design a function-call production supporting empty arguments but rejecting a trailing comma. What would change if trailing commas were permitted?</li>
+<li>Give an example of an indirect left-recursion cycle and explain why the cursor may not advance along it.</li>
+<li>Compare a predictive parser, a backtracking parser, and packrat parsing in terms of choice behavior, work reuse, and memory.</li>
+<li>Distinguish parser stack usage for a long flat addition chain from deeply nested parentheses and a long right-associative exponent chain.</li>
+<li>Design three malformed inputs to test diagnostic offsets and one case where a recovered AST must not be executed.</li>
+<li>Outline separate limits for source length, syntax nesting, AST size, and arithmetic evaluation cost in an API formula engine.</li>
+<li>Write an AST pretty printer and show how it must reinsert parentheses to preserve operator grouping.</li>
+<li>Propose a regression suite that would protect a grammar migration from silently changing associativity or valid/invalid syntax policy.</li>
+<li>Explain why an application still needs semantic authorization, even after a query-filter DSL has parsed successfully.</li>
+</ol>
+<p>For a practical extension, add identifiers and function calls to the teaching language, then build a small evaluator with an explicitly provided read-only variable environment. Compare the parser's ASTs before and after each grammar change. Do not replace the restricted evaluator with a general language <code>eval</code> function.</p>
+</section>
+<section id="sources-and-further-reading" aria-labelledby="heading-sources-and-further-reading">
+<h2 id="heading-sources-and-further-reading">Sources and Further Reading</h2>
+<p>The following references support the conceptual treatment and provide deeper specifications or examples. They are reading resources rather than evidence that every feature of the teaching grammar matches a specific production programming language.</p>
+<ul>
+<li>Robert Nystrom, <a href="https://craftinginterpreters.com/parsing-expressions.html">“Parsing Expressions,” <em>Crafting Interpreters</em></a> — hand-written recursive descent, syntax trees, precedence, associativity, and grammar refactoring.</li>
+<li>CPython project, <a href="https://github.com/python/cpython/blob/main/InternalDocs/parser.md">“The Parser,” internal documentation</a> — PEG-based Python parser architecture and grammar-to-parser implementation concepts.</li>
+<li>Python Software Foundation, <a href="https://docs.python.org/3/reference/grammar.html">Full Grammar Specification</a> — example of a large production language grammar and PEG-specific notation.</li>
+<li>Python Software Foundation, <a href="https://docs.python.org/3/library/ast.html"><code>ast</code> — Abstract Syntax Trees</a> — Python's syntax-node model and source-related facilities; this article's toy AST is intentionally much smaller.</li>
+<li>ANTLR project, <a href="https://github.com/antlr/antlr4/blob/dev/doc/left-recursion.md">Left-Recursion Documentation</a> — demonstration of grammar-generator support and rewriting for forms of direct left recursion.</li>
+<li>Terence Parr, <em>The Definitive ANTLR 4 Reference</em>, 2nd ed., Pragmatic Bookshelf, 2013 — practical parser-generator design, precedence, ambiguity, and error handling.</li>
+<li>Alfred V. Aho, Monica S. Lam, Ravi Sethi, and Jeffrey D. Ullman, <em>Compilers: Principles, Techniques, and Tools</em>, 2nd ed., Pearson, 2006 — grammar transformation, LL parsing, parsing theory, syntax-directed translation, and compiler architecture.</li>
+<li>Bryan Ford, “Packrat Parsing: Simple, Powerful, Lazy, Linear Time,” <em>ACM SIGPLAN International Conference on Functional Programming</em>, 2002 — foundational treatment of memoized top-down parsing.</li>
+<li>Bryan Ford, “Parsing Expression Grammars: A Recognition-Based Syntactic Foundation,” <em>ACM SIGPLAN Symposium on Principles of Programming Languages</em>, 2004 — foundational ordered-choice grammar formalism.</li>
+</ul>
+<p>Readers studying syntax-theory proofs should consult dedicated formal-language and compiler literature for complete grammar analyses; the examples here emphasize the implementation contracts and conceptual distinctions most directly relevant to recursion.</p>
+</section>
+<section id="recursion-specialist-reading-directory" aria-labelledby="heading-recursion-specialist-reading-directory">
+<h2 id="heading-recursion-specialist-reading-directory">Recursion Specialist Reading Directory</h2>
+<p>The fifteen links below are the Recursion unit's governing specialist article destinations. Active hyperlinks include planned subjects; a valid link in this HTML does not imply that every child file has been installed or deployed.</p>
+<ol class="course-links">
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-definitions-and-base-cases"><strong>Recursive Definitions and Base Cases</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursion-and-mathematical-induction"><strong>Recursion and Mathematical Induction</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-call-stacks"><strong>Recursive Call Stacks</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/structural-and-generative-recursion"><strong>Structural and Generative Recursion</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/tail-recursion-and-accumulators"><strong>Tail Recursion and Accumulators</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursion-versus-iteration"><strong>Recursion Versus Iteration</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recurrence-relations-for-recursive-algorithms"><strong>Recurrence Relations for Recursive Algorithms</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursion-trees-and-divide-and-conquer"><strong>Recursion Trees and Divide and Conquer</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-binary-search"><strong>Recursive Binary Search</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-tree-traversal"><strong>Recursive Tree Traversal</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-depth-first-search"><strong>Recursive Depth-First Search</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/backtracking-and-recursive-search"><strong>Backtracking and Recursive Search</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/memoization-and-top-down-dynamic-programming"><strong>Memoization and Top-Down Dynamic Programming</strong></a> — Companion topic in the unit reading sequence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-descent-parsing"><strong>Recursive Descent Parsing</strong></a> — This specialist article.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursion-limits-and-stack-safe-design"><strong>Recursion Limits and Stack-Safe Design</strong></a> — Companion topic in the unit reading sequence.</li>
+</ol>
+
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope">
+<h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Document:</strong> <code>recursive-descent-parsing.html</code>. <strong>Windows destination:</strong> <code>C:\MGU\library\encyclopedia\computer-science\computational-foundations\recursion-articles\recursive-descent-parsing.html</code>. <strong>Canonical public route:</strong> <code>/library/encyclopedia/computer-science/computational-foundations/recursion-articles/recursive-descent-parsing</code>.</p>
+<p><strong>Delivered scope:</strong> tokenization, grammar vocabulary, predictive recursive descent, complete expression parser, AST construction, precedence and associativity, direct/indirect left recursion, FIRST/FOLLOW reasoning, left factoring, PEG and Pratt alternatives, located syntax errors, recovery, nested blocks, termination, complexity, resource budgets, tests, six applied scenarios, decision framework, review exercises, glossary, references, and the fifteen-item specialist directory.</p>
+<p><strong>Editorial scope:</strong> This Level 5 specialist article is prepared for local installation. The existing unit index and sibling files are unchanged. It uses MGU's active planned-child-link convention. The file is not claimed to be live on the public website merely because its canonical route and active links are included in its markup.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

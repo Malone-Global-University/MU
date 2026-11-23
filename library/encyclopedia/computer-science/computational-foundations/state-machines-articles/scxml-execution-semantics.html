@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCXML Execution Semantics | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="SCXML 1.0 execution semantics: internal and external event queues, macrosteps and microsteps, transition priority, actions, datamodels, invocation, and processor conformance.">
+<meta name="keywords" content="SCXML 1.0, W3C, event processing, microstep, macrostep, run to completion, datamodel, statechart">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/scxml-execution-semantics">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SCXML Execution Semantics | MGU Encyclopedia">
+<meta property="og:description" content="A specialist reference on the W3C SCXML 1.0 execution algorithm, event queues, transition selection, state actions, and conformance.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/scxml-execution-semantics">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>SCXML Execution Semantics</h1>
+<p class="subtitle">W3C SCXML 1.0 event semantics, transition selection, ordered effects, internal processing, and interpreter conformance.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#definition-and-scope">Definition and Scope</a></li>
+<li><a href="#development-standardization-and-conformance">Development, Standardization, and Conformance</a></li>
+<li><a href="#learning-objectives-and-analytical-questions">Learning Objectives and Analytical Questions</a></li>
+<li><a href="#relationship-to-the-state-machine-taxonomy">Relationship to the State-Machine Taxonomy</a></li>
+<li><a href="#core-terminology">Core Terminology</a></li>
+<li><a href="#state-configuration-invariants">State-Configuration Invariants</a></li>
+<li><a href="#the-scxml-document-skeleton">The SCXML Document Skeleton</a></li>
+<li><a href="#parsing-and-structural-validation">Parsing and Structural Validation</a></li>
+<li><a href="#a-running-example-request-review">A Running Example: Request Review</a></li>
+<li><a href="#baseline-request-review-scxml">Baseline Request-Review SCXML</a></li>
+<li><a href="#formal-operational-configuration">Formal Operational Configuration</a></li>
+<li><a href="#external-and-internal-event-queues">External and Internal Event Queues</a></li>
+<li><a href="#macrosteps-and-microsteps">Macrosteps and Microsteps</a></li>
+<li><a href="#eventless-transitions-take-priority">Eventless Transitions Take Priority</a></li>
+<li><a href="#a-pure-python-queue-order-demonstration">A Pure Python Queue-Order Demonstration</a></li>
+<li><a href="#event-names-descriptors-and-prefix-matching">Event Names, Descriptors, and Prefix Matching</a></li>
+<li><a href="#executable-event-descriptor-matcher">Executable Event-Descriptor Matcher</a></li>
+<li><a href="#transition-sources-and-ancestor-search">Transition Sources and Ancestor Search</a></li>
+<li><a href="#guards-and-observable-data-snapshots">Guards and Observable Data Snapshots</a></li>
+<li><a href="#document-order-and-transition-priority">Document Order and Transition Priority</a></li>
+<li><a href="#an-executable-priority-counterexample">An Executable Priority Counterexample</a></li>
+<li><a href="#selecting-a-compatible-transition-set">Selecting a Compatible Transition Set</a></li>
+<li><a href="#why-exit-set-intersections-matter">Why Exit-Set Intersections Matter</a></li>
+<li><a href="#a-simplified-parallel-conflict-filter">A Simplified Parallel Conflict Filter</a></li>
+<li><a href="#the-microstep-execution-contract">The Microstep Execution Contract</a></li>
+<li><a href="#entry-and-exit-effects-in-a-complete-xml-example">Entry and Exit Effects in a Complete XML Example</a></li>
+<li><a href="#an-executable-exitactionentry-recorder">An Executable Exit–Action–Entry Recorder</a></li>
+<li><a href="#transition-domains-and-least-common-compound-ancestors">Transition Domains and Least Common Compound Ancestors</a></li>
+<li><a href="#internal-versus-external-transition-types">Internal Versus External Transition Types</a></li>
+<li><a href="#targetless-transitions-and-self-transitions">Targetless Transitions and Self-Transitions</a></li>
+<li><a href="#executable-targetless-versus-re-entry-illustration">Executable Targetless Versus Re-Entry Illustration</a></li>
+<li><a href="#completion-and-final-state-events">Completion and Final-State Events</a></li>
+<li><a href="#completion-as-an-internal-event-xml-example">Completion as an Internal Event: XML Example</a></li>
+<li><a href="#history-default-entry-and-saved-configurations">History, Default Entry, and Saved Configurations</a></li>
+<li><a href="#a-complete-history-declaration">A Complete History Declaration</a></li>
+<li><a href="#datamodel-choices-and-expression-languages">Datamodel Choices and Expression Languages</a></li>
+<li><a href="#early-versus-late-data-binding">Early Versus Late Data Binding</a></li>
+<li><a href="#data-assignment-and-guard-evaluation">Data Assignment and Guard Evaluation</a></li>
+<li><a href="#assignment-and-automatic-routing-example">Assignment and Automatic Routing Example</a></li>
+<li><a href="#a-small-python-model-of-datamodel-updates">A Small Python Model of Datamodel Updates</a></li>
+<li><a href="#the-protected-event-structure">The Protected `_event` Structure</a></li>
+<li><a href="#error-events-and-exceptional-conditions">Error Events and Exceptional Conditions</a></li>
+<li><a href="#raise-versus-send">`&lt;raise&gt;` Versus `&lt;send&gt;`</a></li>
+<li><a href="#sending-internal-events-without-recursive-dispatch">Sending Internal Events Without Recursive Dispatch</a></li>
+<li><a href="#delayed-sends-and-cancellation">Delayed Sends and Cancellation</a></li>
+<li><a href="#invocation-lifecycle-and-stable-state-scheduling">Invocation Lifecycle and Stable-State Scheduling</a></li>
+<li><a href="#finalize-and-autoforward">`&lt;finalize&gt;` and `autoforward`</a></li>
+<li><a href="#a-conceptual-invocation-trace">A Conceptual Invocation Trace</a></li>
+<li><a href="#parallel-regions-and-multiple-enabled-transitions">Parallel Regions and Multiple Enabled Transitions</a></li>
+<li><a href="#a-parallel-scxml-configuration">A Parallel SCXML Configuration</a></li>
+<li><a href="#reachability-under-macrostep-closure">Reachability Under Macrostep Closure</a></li>
+<li><a href="#a-bounded-macrostep-explorer">A Bounded Macrostep Explorer</a></li>
+<li><a href="#nontermination-livelock-and-starvation">Nontermination, Livelock, and Starvation</a></li>
+<li><a href="#persistence-restart-and-versioned-sessions">Persistence, Restart, and Versioned Sessions</a></li>
+<li><a href="#event-correlation-and-idempotency">Event Correlation and Idempotency</a></li>
+<li><a href="#security-and-trust-boundaries">Security and Trust Boundaries</a></li>
+<li><a href="#trace-logging-and-observability">Trace Logging and Observability</a></li>
+<li><a href="#a-deterministic-trace-comparison-harness">A Deterministic Trace Comparison Harness</a></li>
+<li><a href="#conformance-testing-strategy">Conformance Testing Strategy</a></li>
+<li><a href="#test-matrix-for-critical-semantics">Test Matrix for Critical Semantics</a></li>
+<li><a href="#comparing-scxml-with-uml-and-framework-specific-machines">Comparing SCXML with UML and Framework-Specific Machines</a></li>
+<li><a href="#common-portability-and-integration-pitfalls">Common Portability and Integration Pitfalls</a></li>
+<li><a href="#worked-scenario-1-an-approval-workflow-with-internal-validation">Worked Scenario 1 — An Approval Workflow with Internal Validation</a></li>
+<li><a href="#worked-scenario-2-a-two-region-upload-manager">Worked Scenario 2 — A Two-Region Upload Manager</a></li>
+<li><a href="#worked-scenario-3-a-customer-support-conversation">Worked Scenario 3 — A Customer-Support Conversation</a></li>
+<li><a href="#worked-scenario-4-a-network-recovery-supervisor">Worked Scenario 4 — A Network Recovery Supervisor</a></li>
+<li><a href="#worked-scenario-5-a-payment-authorization-integration">Worked Scenario 5 — A Payment Authorization Integration</a></li>
+<li><a href="#worked-scenario-6-an-interactive-learning-assessment">Worked Scenario 6 — An Interactive Learning Assessment</a></li>
+<li><a href="#ten-gate-scxml-engineering-framework">Ten-Gate SCXML Engineering Framework</a></li>
+<li><a href="#common-misconceptions">Common Misconceptions</a></li>
+<li><a href="#review-questions">Review Questions</a></li>
+<li><a href="#guided-exercises">Guided Exercises</a></li>
+<li><a href="#glossary">Glossary</a></li>
+<li><a href="#suggested-study-pathway">Suggested Study Pathway</a></li>
+<li><a href="#specialist-sub-articles-and-neighboring-topics">Specialist Sub-Articles and Neighboring Topics</a></li>
+<li><a href="#sources-and-further-reading">Sources and Further Reading</a></li>
+<li><a href="#editorial-scope-and-publication-note">Editorial Scope and Publication Note</a></li>
+</ol>
+</section>
+<section id="definition-and-scope" aria-labelledby="heading-definition-and-scope">
+<h2 id="heading-definition-and-scope">Definition and Scope</h2>
+<p><strong>SCXML (State Chart XML)</strong> is the World Wide Web Consortium's XML-based language for describing the control behavior of event-driven state machines. Its principal contribution is not that it draws statecharts in a different notation: it defines what an interpreter must do when a configuration receives an event, when a guarded or eventless transition becomes enabled, when states exit and enter, and when executable actions raise further events. The <a href="https://www.w3.org/TR/2015/REC-scxml-20150901/">W3C SCXML 1.0 Recommendation</a> was published on <strong>1 September 2015</strong>; its <a href="https://www.w3.org/2015/08/scxml-errata.html">errata</a> should be consulted alongside the Recommendation. The dated Recommendation, rather than an earlier Working Draft, governs the semantics described here.</p>
+<p>An SCXML machine may combine nested states, concurrent <code>&lt;parallel&gt;</code> regions, extended variables, entry and exit actions, shallow or deep history, final states, internal event generation, external event dispatch, and invoked services. The core subject of this article is <strong>execution semantics</strong>: the observable consequences and ordering rules that convert a document into a running machine. Syntax matters because the specification makes some differences operationally significant, including an omitted <code>event</code> versus <code>event=&quot;*&quot;</code>, a targetless transition versus one that explicitly re-enters its source, and a synchronous <code>&lt;raise&gt;</code> action versus an event transported using <code>&lt;send&gt;</code>.</p>
+<p>This Level 5 specialist belongs to <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/">State Machines</a>. Read <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/hierarchical-statecharts">Hierarchical Statecharts</a> for modeling motivations, <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/extended-finite-state-machines">Extended Finite-State Machines</a> for guards and variables, and <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-machine-diagrams-and-tables">State Machine Diagrams and Tables</a> for documentation techniques. The present article supplies the <strong>specific W3C processing contract</strong>, not a generic description of all statechart runtimes.</p>
+</section>
+<section id="development-standardization-and-conformance" aria-labelledby="heading-development-standardization-and-conformance">
+<h2 id="heading-development-standardization-and-conformance">Development, Standardization, and Conformance</h2>
+<p>SCXML grew out of work on event-driven dialog systems and the broader statechart tradition, including David Harel's hierarchical and orthogonal statechart concepts. Interchangeability of a drawing is insufficient for interoperable execution: two processors may agree on state names but disagree about which transition wins, when an action runs, or which event is consumed next. SCXML addresses this through normative definitions of legal configurations, enabled transitions, ordered effects, datamodel operations, and required processor behavior.</p>
+<p>The Recommendation uses normative requirements and provides an <strong>informative</strong> interpreter algorithm in Appendix D. Calling Appendix D &quot;informative&quot; does not make the normative transition-selection and execution requirements optional; it means an implementation can use a different algorithm if its externally relevant behavior satisfies those requirements. Conversely, copying a few lines of pseudocode does not certify an interpreter. Profiles may support different datamodels, optional I/O processors, and documented platform extensions; interoperability assessment must state those supported capabilities explicitly.</p>
+<p>Standards work also distinguishes <strong>SCXML document conformance</strong> from <strong>processor conformance</strong>. A document with well-formed XML is not necessarily valid SCXML. An engine that renders a statechart diagram is not necessarily an SCXML processor, and an engine that handles simple <code>&lt;state&gt;</code> transitions may still lack correct internal-queue ordering, parallel conflicts, <code>&lt;invoke&gt;</code>, or datamodel semantics. The official Recommendation, its errata, and corresponding conformance cases form the appropriate authority for implementation claims.</p>
+</section>
+<section id="learning-objectives-and-analytical-questions" aria-labelledby="heading-learning-objectives-and-analytical-questions">
+<h2 id="heading-learning-objectives-and-analytical-questions">Learning Objectives and Analytical Questions</h2>
+<p>After studying this article, readers should be able to explain why SCXML has separate external and internal event queues, distinguish a microstep from a macrostep, identify the transition priority for a nested state, trace exit/action/entry ordering, and decide when a machine has reached a stable configuration. They should recognize when <code>type=&quot;internal&quot;</code> changes the exit domain, when an automatically generated <code>done.state.*</code> event enters the internal queue, and why a <code>&lt;send&gt;</code> dispatch is not the same as confirmation of an external business effect.</p>
+<p>The most useful practical question is: <strong>Given an initial configuration, datamodel valuation, and sequence of events, what precisely happens before the next external event may be examined?</strong> Answering it requires state hierarchy, XML document order, active regions, guards, the two queues, effects, and possibly invocation status. A flat transition table that omits these details cannot answer the question reliably.</p>
+</section>
+<section id="relationship-to-the-state-machine-taxonomy" aria-labelledby="heading-relationship-to-the-state-machine-taxonomy">
+<h2 id="heading-relationship-to-the-state-machine-taxonomy">Relationship to the State-Machine Taxonomy</h2>
+<p>A deterministic finite automaton recognizes words by advancing one state per input symbol. A Mealy or Moore machine associates outputs with transitions or states. An extended finite-state machine adds variables, predicates, and updates. A hierarchical statechart adds parent/child organization, shared behavior, and potentially concurrent regions. <strong>SCXML specifies a particular executable language and operational interpretation for such constructs.</strong> It therefore occupies a narrower editorial scope than formal transition systems or general statecharts, even while it uses their underlying ideas.</p>
+<p>Do not project SCXML's exact document-order priority, event descriptors, <code>&lt;invoke&gt;</code> lifecycle, or <code>done.state.*</code> naming onto UML state machines, XState, hardware-description-language controllers, or arbitrary workflow software. Their semantics may share a family resemblance without matching SCXML. Conversely, SCXML is not a workflow engine, database transaction manager, or durable message broker by itself. Persistence, authentication, and external-effect guarantees depend on the surrounding implementation.</p>
+</section>
+<section id="core-terminology" aria-labelledby="heading-core-terminology">
+<h2 id="heading-core-terminology">Core Terminology</h2>
+<table>
+<thead>
+<tr>
+  <th>Concept</th>
+  <th>SCXML meaning</th>
+  <th>Why it affects execution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Configuration</td>
+  <td>Set of active states, including required ancestors</td>
+  <td>Determines transition sources, available default handlers, and legal targets</td>
+</tr>
+<tr>
+  <td>Atomic state</td>
+  <td>State without nested child states, including a final state in the algorithm</td>
+  <td>An atomic active state starts transition search</td>
+</tr>
+<tr>
+  <td>Compound state</td>
+  <td>A <code>&lt;state&gt;</code> containing child states</td>
+  <td>Exactly one child branch is active, subject to nested parallel structure</td>
+</tr>
+<tr>
+  <td>Parallel state</td>
+  <td><code>&lt;parallel&gt;</code> with concurrent child regions</td>
+  <td>Each region has an active descendant and may select nonconflicting transitions</td>
+</tr>
+<tr>
+  <td>Eventless transition</td>
+  <td><code>&lt;transition&gt;</code> with no <code>event</code> attribute</td>
+  <td>Evaluated before queued events at stability checks</td>
+</tr>
+<tr>
+  <td>Targetless transition</td>
+  <td>Transition with no <code>target</code> attribute</td>
+  <td>Executes content without exiting or entering states</td>
+</tr>
+<tr>
+  <td>Internal event</td>
+  <td>Event waiting in the session's internal queue</td>
+  <td>Processes before any new external event</td>
+</tr>
+<tr>
+  <td>Microstep</td>
+  <td>Execution of an optimal compatible transition set</td>
+  <td>Applies exit, transition, and entry work together</td>
+</tr>
+<tr>
+  <td>Macrostep</td>
+  <td>A sequence of microsteps that reaches internal stability</td>
+  <td>Run-to-completion unit between external-event selections</td>
+</tr>
+<tr>
+  <td>History state</td>
+  <td><code>&lt;history&gt;</code> pseudo-state with saved or fallback configuration</td>
+  <td>Restores state descendants on re-entry</td>
+</tr>
+<tr>
+  <td>Datamodel</td>
+  <td>Values used by guards and actions</td>
+  <td>Determines transition eligibility and side effects</td>
+</tr>
+<tr>
+  <td>Invocation</td>
+  <td>External service started by <code>&lt;invoke&gt;</code></td>
+  <td>Requires lifecycle, completion, cancellation, and event-routing rules</td>
+</tr>
+</tbody>
+</table>
+<p>Some terms have subtly different meanings in other formalisms. An SCXML <code>&lt;final&gt;</code> is a defined completion state, not merely a label meaning “finished” in a diagram. A <code>transition</code> is an XML element with a source state determined by where it is nested; its source is not an arbitrarily supplied <code>from</code> attribute.</p>
+</section>
+<section id="state-configuration-invariants" aria-labelledby="heading-state-configuration-invariants">
+<h2 id="heading-state-configuration-invariants">State-Configuration Invariants</h2>
+<p>SCXML's legal configurations are constrained sets, not arbitrary collections of active IDs. Exactly one direct child of <code>&lt;scxml&gt;</code> is active. Every active atomic state carries its active <code>&lt;state&gt;</code> and <code>&lt;parallel&gt;</code> ancestors. A compound state has one active child, while an active parallel state includes <strong>all</strong> its child regions and appropriate descendants. These rules explain why simultaneous activity must be represented through <code>&lt;parallel&gt;</code> rather than by illegally activating two ordinary siblings.</p>
+<p>A configuration such as <code>{Workflow, Editing, Typing}</code> can be valid when <code>Workflow</code> is a compound state and <code>Editing</code> contains <code>Typing</code>. <code>{Workflow, Typing}</code> without the active <code>Editing</code> ancestor is not a complete legal configuration. For a parallel state <code>Operating</code> with two regions <code>Task</code> and <code>Network</code>, the configuration may contain <code>{Operating, Task, TaskBusy, Network, NetworkUp}</code>. The process must enter an initial descendant of <strong>each</strong> parallel child. Keeping the complete configuration, rather than only the leaf IDs, is important when entry/exit handlers, history and ancestor-sourced transitions are evaluated.</p>
+<p>The <code>initial</code> attribute and <code>&lt;initial&gt;</code> child provide default entry routes. A compound state's first child is the default when neither is given. Default entry descends until legal atomic configurations are formed. History targets can select remembered descendants; a first use of history follows its declared fallback transition. One should distinguish a target state name from the full configuration generated after ancestor and default-descendant completion.</p>
+</section>
+<section id="the-scxml-document-skeleton" aria-labelledby="heading-the-scxml-document-skeleton">
+<h2 id="heading-the-scxml-document-skeleton">The SCXML Document Skeleton</h2>
+<p>A basic SCXML document declares a standard namespace and a version. The following minimal example uses only core structural features; it is complete XML and illustrates initialization, named events, and a final top-level state.</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; initial=&quot;idle&quot;&gt;
+  &lt;state id=&quot;idle&quot;&gt;
+    &lt;transition event=&quot;begin&quot; target=&quot;running&quot;/&gt;
+  &lt;/state&gt;
+  &lt;state id=&quot;running&quot;&gt;
+    &lt;transition event=&quot;finish&quot; target=&quot;completed&quot;/&gt;
+  &lt;/state&gt;
+  &lt;final id=&quot;completed&quot;/&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p>At startup, <code>idle</code> is entered. The <code>begin</code> event enables the transition into <code>running</code>, and the later <code>finish</code> event reaches the top-level <code>&lt;final&gt;</code>, ending the SCXML session. A host must still specify how those external events arrive; XML itself supplies neither a transport nor a user interface. The namespace shown is the required SCXML namespace, even though the conventional W3C specification URL lives elsewhere.</p>
+</section>
+<section id="parsing-and-structural-validation" aria-labelledby="heading-parsing-and-structural-validation">
+<h2 id="heading-parsing-and-structural-validation">Parsing and Structural Validation</h2>
+<p>Parsing XML verifies a representation, not execution correctness. A loader should distinguish XML well-formedness, SCXML structural validity, references to existing state IDs, legal state specifications, supported datamodel languages, and runtime expression errors. Attribute combinations such as <code>event</code>/<code>eventexpr</code> or <code>initial</code> plus a child <code>&lt;initial&gt;</code> have their own rules. Unique IDs and legal state ancestry are not optional authoring niceties.</p>
+<p>The following standard-library example safely <strong>inspects structure only</strong>. It neither evaluates expressions nor executes statecharts. That explicit boundary is important when teaching the difference between XML syntax tooling and a conformant SCXML processor.</p>
+<pre><code class="language-python">from xml.etree import ElementTree as ET
+SCXML = &quot;http://www.w3.org/2005/07/scxml&quot;
+doc = '''&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+ version=&quot;1.0&quot; initial=&quot;idle&quot;&gt;&lt;state id=&quot;idle&quot;&gt;
+ &lt;transition event=&quot;begin&quot; target=&quot;running&quot;/&gt;&lt;/state&gt;
+ &lt;state id=&quot;running&quot;&gt;&lt;transition event=&quot;finish&quot; target=&quot;done&quot;/&gt;
+ &lt;/state&gt;&lt;final id=&quot;done&quot;/&gt;&lt;/scxml&gt;'''
+root = ET.fromstring(doc)
+assert root.tag == f&quot;{{{SCXML}}}scxml&quot;
+states = [e.attrib[&quot;id&quot;] for e in root.iter()
+          if e.tag in {f&quot;{{{SCXML}}}state&quot;, f&quot;{{{SCXML}}}final&quot;}]
+assert states == [&quot;idle&quot;, &quot;running&quot;, &quot;done&quot;]
+assert len(states) == len(set(states))
+transitions = root.findall(f&quot;.//{{{SCXML}}}transition&quot;)
+assert [t.get(&quot;event&quot;) for t in transitions] == [&quot;begin&quot;, &quot;finish&quot;]
+print(&quot;XML inspection passed; no SCXML execution was performed&quot;)
+</code></pre>
+</section>
+<section id="a-running-example-request-review" aria-labelledby="heading-a-running-example-request-review">
+<h2 id="heading-a-running-example-request-review">A Running Example: Request Review</h2>
+<p>We will model a request that begins in <code>Draft</code>, moves to <code>Reviewing</code>, and ends in either <code>Approved</code> or <code>Rejected</code>. A deliberately small version demonstrates event selection, while later extensions add nested review stages, an approval guard, completion, and notification. Suppose the application posts <code>submit</code>, <code>approve</code>, or <code>reject</code> events. The expected control behavior is: only a draft can be submitted; only a reviewing request can be approved or rejected; a terminal decision is not silently reversed by a stray event.</p>
+<p>The model should <strong>not</strong> treat entry into <code>Approved</code> as proof that money has been disbursed, a database transaction has committed, or an approval email has been delivered. Such effects require external acknowledgments and their own explicit states. The SCXML control model can record <em>decision intent</em> and react to a later response, but the host services own external side effects and their durability.</p>
+</section>
+<section id="baseline-request-review-scxml" aria-labelledby="heading-baseline-request-review-scxml">
+<h2 id="heading-baseline-request-review-scxml">Baseline Request-Review SCXML</h2>
+<p>This document uses <code>event=&quot;submit&quot;</code>, a guard on <code>approve</code>, and a datamodel value. The ECMAScript datamodel is named explicitly because the expressions are ECMAScript, not generic XML or Python. The <code>outcome</code> assignment and the target transition are part of the same SCXML microstep, but they do not constitute a database transaction.</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; datamodel=&quot;ecmascript&quot; initial=&quot;draft&quot;&gt;
+  &lt;datamodel&gt;
+    &lt;data id=&quot;authorized&quot; expr=&quot;false&quot;/&gt;
+    &lt;data id=&quot;outcome&quot; expr=&quot;'pending'&quot;/&gt;
+  &lt;/datamodel&gt;
+  &lt;state id=&quot;draft&quot;&gt;
+    &lt;transition event=&quot;submit&quot; target=&quot;reviewing&quot;/&gt;
+  &lt;/state&gt;
+  &lt;state id=&quot;reviewing&quot;&gt;
+    &lt;transition event=&quot;grant.authorization&quot;&gt;
+      &lt;assign location=&quot;authorized&quot; expr=&quot;true&quot;/&gt;
+    &lt;/transition&gt;
+    &lt;transition event=&quot;approve&quot; cond=&quot;authorized&quot; target=&quot;approved&quot;&gt;
+      &lt;assign location=&quot;outcome&quot; expr=&quot;'approved'&quot;/&gt;
+    &lt;/transition&gt;
+    &lt;transition event=&quot;reject&quot; target=&quot;rejected&quot;&gt;
+      &lt;assign location=&quot;outcome&quot; expr=&quot;'rejected'&quot;/&gt;
+    &lt;/transition&gt;
+  &lt;/state&gt;
+  &lt;final id=&quot;approved&quot;/&gt;
+  &lt;final id=&quot;rejected&quot;/&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p><code>grant.authorization</code> is a teaching event, not an authentication protocol. In a real service, trust must come from a verified authorization decision, not an untrusted caller's ability to send that event. Notice also that <code>&lt;final&gt;</code> beneath the root ends processing. If later events must be handled (appeals, reversals, archival), the approved/rejected modes would instead need nonfinal states or an enclosing compound workflow.</p>
+</section>
+<section id="formal-operational-configuration" aria-labelledby="heading-formal-operational-configuration">
+<h2 id="heading-formal-operational-configuration">Formal Operational Configuration</h2>
+<p>For analysis, represent an interpreter snapshot as <code>C = (A, D, H, Qᵢ, Qₑ, I, R)</code>, where <code>A</code> is the active-state set, <code>D</code> is datamodel state, <code>H</code> holds saved histories, <code>Qᵢ</code> and <code>Qₑ</code> are internal and external event queues, <code>I</code> tracks invocations, and <code>R</code> records whether the session is running. This is a <strong>teaching abstraction</strong>, not a claim that the Recommendation mandates an implementation's internal data structures. The official requirements specify observable behavior; an implementation can store the same information differently.</p>
+<p>A processing event binds the protected <code>_event</code> variable, giving guards and actions access to the current event's name, data, and selected metadata. During an eventless transition, <code>_event</code> need not denote a newly selected external event; a prior bound event may remain available. Therefore, eventless guards should not depend on the fiction that a fresh event has just arrived. The active configuration and datamodel together determine which transitions can fire.</p>
+</section>
+<section id="external-and-internal-event-queues" aria-labelledby="heading-external-and-internal-event-queues">
+<h2 id="heading-external-and-internal-event-queues">External and Internal Event Queues</h2>
+<p>SCXML separates externally delivered events from events generated for processing within the same session. An action <code>&lt;raise event=&quot;x&quot;/&gt;</code> places event <code>x</code> at the <strong>back of the internal queue</strong>; it does not recursively interrupt the action or immediately execute another transition. An external event is considered only when the processor has reached internal stability, with no eligible eventless transition and no unprocessed internal event that enables a transition.</p>
+<p>The separation makes run-to-completion intelligible: if <code>submit</code> triggers state entry that raises <code>validate.complete</code>, the resulting internal transition can execute before an already queued external <code>cancel</code> is reconsidered. The exact processing order matters for acceptance tests, user-interface feedback, and security review. “Events are FIFO” is not a sufficient model: there is FIFO <strong>within</strong> queues, but eventless transitions have their own precedence, and the internal queue is processed before returning to the external queue.</p>
+</section>
+<section id="macrosteps-and-microsteps" aria-labelledby="heading-macrosteps-and-microsteps">
+<h2 id="heading-macrosteps-and-microsteps">Macrosteps and Microsteps</h2>
+<p>A <strong>microstep</strong> is execution of the selected, compatible set of transitions. It may exit states, perform transition content, enter new states, update the datamodel, and queue more events. A <strong>macrostep</strong> is the sequence of such microsteps that finishes when no eventless transition is enabled and the internal event queue has been exhausted. A macrostep may therefore involve more than one state transition after a single external input, and it may fail to terminate if an eventless transition or internally raised event repeats indefinitely.</p>
+<p>The word <em>atomic</em> is sometimes used informally for run-to-completion. In SCXML, it does <strong>not</strong> promise ACID atomicity of external I/O, and it should not imply that all side effects can be rolled back if a later action fails. It primarily means the next ordinary external event is not selected while internal processing is unfinished. The host's thread model, callbacks, transport, and database commits still require independent design.</p>
+</section>
+<section id="eventless-transitions-take-priority" aria-labelledby="heading-eventless-transitions-take-priority">
+<h2 id="heading-eventless-transitions-take-priority">Eventless Transitions Take Priority</h2>
+<p>An SCXML transition lacking the <code>event</code> attribute is enabled by its guard (or by default when no guard is supplied). The processor examines enabled eventless transitions before removing the next internal event. Only if no eventless transition is available does it consider the queued internal events; only after internal stability does it select new external events. This rule makes eventless transitions useful for immediate routing after a datamodel update, but it also creates potential livelocks.</p>
+<p>The distinction between <code>event=&quot;*&quot;</code> and an absent <code>event</code> is essential. The former <strong>matches a named event</strong>, including names outside a narrow family, subject to transition priority; the latter requires <strong>no event</strong> at all. A wildcard handler cannot stand in for automatic entry routing, and an eventless transition cannot be expected to consume a message. Similarly, an eventless guard that is always true may repeatedly fire unless the state/variable update disables it.</p>
+</section>
+<section id="a-pure-python-queue-order-demonstration" aria-labelledby="heading-a-pure-python-queue-order-demonstration">
+<h2 id="heading-a-pure-python-queue-order-demonstration">A Pure Python Queue-Order Demonstration</h2>
+<p>This implementation is a <strong>small conceptual experiment</strong>, not a complete SCXML engine. It models one stable-state loop, a transition caused by an external event, a queued internal event, and an eventless follow-up. Its purpose is to make ordering testable without falsely equating the example to Appendix D's full parallel-selection algorithm.</p>
+<pre><code class="language-python">from collections import deque
+external = deque([&quot;submit&quot;, &quot;cancel&quot;])
+internal = deque()
+state = &quot;draft&quot;
+validated = False
+trace = []
+while external or internal or (state == &quot;review&quot; and validated):
+    if state == &quot;review&quot; and validated:
+        trace.append(&quot;eventless:review-&gt;approved&quot;)
+        state = &quot;approved&quot;
+        validated = False
+        continue
+    if internal:
+        event = internal.popleft()
+        trace.append(&quot;internal:&quot; + event)
+        if state == &quot;review&quot; and event == &quot;validation.ok&quot;:
+            validated = True
+        continue
+    event = external.popleft()
+    trace.append(&quot;external:&quot; + event)
+    if state == &quot;draft&quot; and event == &quot;submit&quot;:
+        state = &quot;review&quot;
+        internal.append(&quot;validation.ok&quot;)
+assert trace == [&quot;external:submit&quot;, &quot;internal:validation.ok&quot;,
+                 &quot;eventless:review-&gt;approved&quot;, &quot;external:cancel&quot;]
+assert state == &quot;approved&quot;
+print(&quot; | &quot;.join(trace))
+</code></pre>
+<p>In a genuine SCXML interpreter, the eventless check is performed at each internal-stability point, and transition content is ordered with all exits and entries. This example isolates scheduling rather than pretending to implement state hierarchy, conflict filtering, expression evaluation, or <code>&lt;invoke&gt;</code>.</p>
+</section>
+<section id="event-names-descriptors-and-prefix-matching" aria-labelledby="heading-event-names-descriptors-and-prefix-matching">
+<h2 id="heading-event-names-descriptors-and-prefix-matching">Event Names, Descriptors, and Prefix Matching</h2>
+<p>SCXML events have names such as <code>payment.approved</code>, <code>payment.declined</code>, or <code>error.execution</code>. A transition's <code>event</code> attribute may contain <strong>space-separated descriptors</strong>. Descriptor matching is case-sensitive and token-based: descriptor <code>payment</code> matches <code>payment</code> and <code>payment.approved</code>, but not <code>payments.approved</code> or <code>paymentX</code>. A descriptor ending in <code>.*</code> is an alternate spelling of the same token-prefix intent. A sole <code>*</code> matches any named event. This design supports broad error handlers such as <code>event=&quot;error&quot;</code> and narrower application handlers without requiring a separate transition for every suffix.</p>
+<p>Event-prefix matching does <strong>not</strong> itself choose the most specific string. SCXML's transition-selection algorithm considers active-state depth and transitions in XML document order. If one state declares two enabled transitions and the first has descriptor <code>payment</code>, that earlier transition may win over a later <code>payment.approved</code> transition, even for the approval event. To obtain the desired result, place guarded or specific transitions before their broad fallbacks, or organize them in deeper states where descendant priority is appropriate.</p>
+</section>
+<section id="executable-event-descriptor-matcher" aria-labelledby="heading-executable-event-descriptor-matcher">
+<h2 id="heading-executable-event-descriptor-matcher">Executable Event-Descriptor Matcher</h2>
+<p>The following Python function demonstrates the token-prefix rule in isolation. It does not implement the complete permitted lexical space of SCXML event descriptors or error handling for malformed documents; it tests the conceptual matching cases used in this article.</p>
+<pre><code class="language-python">def match_descriptor(descriptor, event):
+    descriptor = descriptor.removesuffix(&quot;.*&quot;)
+    if descriptor == &quot;*&quot;:
+        return True
+    d, e = descriptor.split(&quot;.&quot;), event.split(&quot;.&quot;)
+    return len(d) &lt;= len(e) and d == e[:len(d)]
+
+def match_any(descriptors, event):
+    return any(match_descriptor(d, event)
+               for d in descriptors.split())
+
+assert match_any(&quot;payment error&quot;, &quot;payment.approved&quot;)
+assert match_any(&quot;error.*&quot;, &quot;error.execution&quot;)
+assert not match_any(&quot;payment&quot;, &quot;payments.approved&quot;)
+assert match_any(&quot;*&quot;, &quot;any.named.event&quot;)
+assert match_any(&quot;payment.approved&quot;, &quot;payment.approved&quot;)
+assert not match_any(&quot;payment.approved&quot;, &quot;payment.declined&quot;)
+print(&quot;Descriptor examples passed&quot;)
+</code></pre>
+<p>A production parser should validate descriptor syntax against SCXML's defined datatype rather than silently normalize unusual event names. Case conversion, trimming internal tokens, or using a generic substring check can alter application control flow and should be avoided.</p>
+</section>
+<section id="transition-sources-and-ancestor-search" aria-labelledby="heading-transition-sources-and-ancestor-search">
+<h2 id="heading-transition-sources-and-ancestor-search">Transition Sources and Ancestor Search</h2>
+<p>In SCXML, a transition is sourced from its enclosing <code>&lt;state&gt;</code> or <code>&lt;parallel&gt;</code> element. When an event is available, the interpreter searches for an enabled transition from each active <strong>atomic state</strong>. It inspects transitions on that atomic state in XML document order, then searches its ancestors from nearest to farthest. The first suitable transition within each source-state scan is collected; the candidate set is later filtered for conflicts across parallel regions. Eventless transitions use a parallel process without an event match.</p>
+<p>This is often described as a preference for descendant transitions over ancestor defaults. The nuance is that selection occurs for <strong>each active atomic state</strong> when there are parallel regions. Two candidates can be locally optimal yet conflict globally if their exit sets overlap. Thus the phrase “take the deepest transition” is helpful for a single branch but insufficient as a general implementation algorithm.</p>
+</section>
+<section id="guards-and-observable-data-snapshots" aria-labelledby="heading-guards-and-observable-data-snapshots">
+<h2 id="heading-guards-and-observable-data-snapshots">Guards and Observable Data Snapshots</h2>
+<p>The <code>cond</code> attribute is evaluated according to the selected datamodel. When a transition candidate is evaluated, its guard must be true, or absent, for the transition to be enabled. The same event may enable different transitions under different variable valuations; data conditions are therefore part of the control state. <code>cond</code> is intended as a test, not an authorized channel for sending money, mutating databases, or publishing output.</p>
+<p>One cannot assume every possible guard is evaluated once at a single global snapshot across a macrostep. After a microstep executes <code>&lt;assign&gt;</code> or other actions, the processor may examine guards again in the new configuration. The specification requires precise execution and transition order, while evaluation cost and expression-language behavior follow the chosen datamodel. For testing, capture the configuration and relevant variable values before each transition-selection pass, not only at the beginning of the external event.</p>
+</section>
+<section id="document-order-and-transition-priority" aria-labelledby="heading-document-order-and-transition-priority">
+<h2 id="heading-document-order-and-transition-priority">Document Order and Transition Priority</h2>
+<p>Within a given source state, <strong>the first enabled transition in document order</strong> is selected. An author might write a broad fallback before a narrow condition and be surprised that the fallback always wins. To illustrate, consider a <code>reviewing</code> state with transitions <code>event=&quot;result&quot;</code> and <code>event=&quot;result.approved&quot;</code> in that order. When <code>result.approved</code> arrives, the first descriptor matches by prefix. The later transition is never selected by that state's initial scan.</p>
+<p>This is an operational requirement, not merely a formatting convention. Reviewers should inspect source order and independently exercise overlapping descriptors or guards. If two rules genuinely must act together, placing them in one sequential state will not produce two transitions from that same local scan; an explicit combined action, an internal follow-up event, or properly designed parallel regions may be required.</p>
+</section>
+<section id="an-executable-priority-counterexample" aria-labelledby="heading-an-executable-priority-counterexample">
+<h2 id="heading-an-executable-priority-counterexample">An Executable Priority Counterexample</h2>
+<p>This small program demonstrates how document order defeats a naïve “most-specific descriptor first” expectation. It intentionally models one source state only.</p>
+<pre><code class="language-python">def matches(pattern, event):
+    return pattern == &quot;*&quot; or event == pattern or event.startswith(pattern + &quot;.&quot;)
+
+rules = [
+    (&quot;result&quot;, &quot;generic-result&quot;),
+    (&quot;result.approved&quot;, &quot;approved-result&quot;),
+]
+def choose(event):
+    return next((action for pattern, action in rules
+                 if matches(pattern, event)), None)
+
+assert choose(&quot;result.approved&quot;) == &quot;generic-result&quot;
+rules.reverse()
+assert choose(&quot;result.approved&quot;) == &quot;approved-result&quot;
+assert choose(&quot;result.rejected&quot;) == &quot;generic-result&quot;
+print(&quot;Earlier enabled transition takes priority within its source&quot;)
+</code></pre>
+<p>This example does not supersede SCXML's ancestor priority or cross-parallel conflict rules. It isolates the effect of ordering two transition elements inside the <strong>same</strong> state.</p>
+</section>
+<section id="selecting-a-compatible-transition-set" aria-labelledby="heading-selecting-a-compatible-transition-set">
+<h2 id="heading-selecting-a-compatible-transition-set">Selecting a Compatible Transition Set</h2>
+<p>With no parallel states, an event normally yields at most one selected transition. With active <code>&lt;parallel&gt;</code> regions, the same event can enable one transition in each active branch. SCXML selects a <strong>compatible</strong> set; it does not blindly execute every locally matching rule. A candidate's <em>exit set</em> consists of the active states that taking that transition would leave. Two transitions conflict when their exit sets intersect in the current configuration.</p>
+<p>For example, an event <code>abort</code> may enable a local <code>Task.Running -&gt; Task.Stopped</code> transition while an ancestor declares <code>Operating -&gt; Failed</code>, which exits the entire parallel system. Both cannot simply run and produce simultaneously active <code>Stopped</code> and <code>Failed</code> states. Priority prefers a transition whose source is a descendant of another candidate's source; otherwise document order breaks the tie among conflicting sources. Nonconflicting transitions in different regions can execute in one microstep.</p>
+</section>
+<section id="why-exit-set-intersections-matter" aria-labelledby="heading-why-exit-set-intersections-matter">
+<h2 id="heading-why-exit-set-intersections-matter">Why Exit-Set Intersections Matter</h2>
+<p>Testing target names alone is not adequate conflict detection. A transition that moves between descendants of a single region may exit only that region's active subpath, while another that crosses the parallel boundary exits the common parallel ancestor and all active children. Their <strong>exit sets</strong>, rather than their immediate target IDs, express whether the outcomes can coexist. Targetless transitions have empty exit sets and, under the SCXML conflict definition, do not conflict with state-changing transitions on this basis.</p>
+<p>The set of active states used in exit-set computation is the configuration at selection time. If a transition has no target, its content may still update data or raise events. It is therefore incorrect to describe a targetless transition as a no-op; it is simply a transition <strong>without structural entry or exit</strong>. Stateful side effects may produce later eventless transitions, changing the configuration in another microstep.</p>
+</section>
+<section id="a-simplified-parallel-conflict-filter" aria-labelledby="heading-a-simplified-parallel-conflict-filter">
+<h2 id="heading-a-simplified-parallel-conflict-filter">A Simplified Parallel Conflict Filter</h2>
+<p>The demonstration below makes two candidate exit sets explicit. It does not claim to reproduce the entire W3C conflict algorithm, especially ancestry-based priority; its narrow purpose is to show why disjoint transitions can coexist but overlapping ones cannot.</p>
+<pre><code class="language-python">candidates = [
+    (&quot;Task:pause&quot;, {&quot;Task.Running&quot;}),
+    (&quot;Network:disconnect&quot;, {&quot;Network.Online&quot;}),
+    (&quot;Operating:abort&quot;, {&quot;Task.Running&quot;, &quot;Network.Online&quot;, &quot;Operating&quot;}),
+]
+
+def compatible(group):
+    exited = set()
+    for _, exit_set in group:
+        if exited.intersection(exit_set):
+            return False
+        exited.update(exit_set)
+    return True
+
+assert compatible(candidates[:2])
+assert not compatible([candidates[0], candidates[2]])
+assert not compatible([candidates[1], candidates[2]])
+print(&quot;Parallel local changes are compatible; ancestor exit conflicts&quot;)
+</code></pre>
+<p>A production interpreter must additionally calculate exit sets from effective targets and the transition domain, account for history expansion, and apply the prescribed descendant/document-order precedence. Use the <a href="https://www.w3.org/TR/scxml/#AlgorithmforSCXMLInterpretation">W3C SCXML interpretation algorithm</a> for that complete procedure.</p>
+</section>
+<section id="the-microstep-execution-contract" aria-labelledby="heading-the-microstep-execution-contract">
+<h2 id="heading-the-microstep-execution-contract">The Microstep Execution Contract</h2>
+<p>After the optimal compatible transition set is chosen, SCXML executes it in three phases: <strong>exit the states that must be exited; execute the transitions' content; enter the states that must be entered</strong>. This phase separation is vital. A transition action cannot assume its new target's <code>&lt;onentry&gt;</code> handler has already run, and an exiting state's <code>&lt;onexit&gt;</code> handler executes before the transition's own actions. With parallel regions, multiple transitions can be selected, but their effects still follow the specified ordered execution rules rather than arbitrary thread interleaving.</p>
+<p>Exit ordering is descendants before ancestors, using reverse document order as appropriate among states at comparable levels. Entry ordering is ancestors before descendants, using document order to resolve ties. Executable content within ordered elements follows its defined sequence. Implementations may optimize how they compute these sets, but a diagnostic trace must reflect these meaningful orders.</p>
+</section>
+<section id="entry-and-exit-effects-in-a-complete-xml-example" aria-labelledby="heading-entry-and-exit-effects-in-a-complete-xml-example">
+<h2 id="heading-entry-and-exit-effects-in-a-complete-xml-example">Entry and Exit Effects in a Complete XML Example</h2>
+<p>This example logs an entry/exit path. It is intended for a conforming SCXML processor supporting the ECMAScript datamodel and <code>&lt;log&gt;</code>; log transport and formatting depend on the host. The expected order after <code>next</code> is <code>leave-left</code>, <code>cross</code>, <code>enter-right</code>. The enclosing <code>workspace</code> state remains active and does not re-enter.</p>
+<pre><code class="language-xml">&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; datamodel=&quot;ecmascript&quot; initial=&quot;workspace&quot;&gt;
+  &lt;state id=&quot;workspace&quot; initial=&quot;left&quot;&gt;
+    &lt;state id=&quot;left&quot;&gt;
+      &lt;onexit&gt;&lt;log label=&quot;stage&quot; expr=&quot;'leave-left'&quot;/&gt;&lt;/onexit&gt;
+      &lt;transition event=&quot;next&quot; target=&quot;right&quot;&gt;
+        &lt;log label=&quot;stage&quot; expr=&quot;'cross'&quot;/&gt;
+      &lt;/transition&gt;
+    &lt;/state&gt;
+    &lt;state id=&quot;right&quot;&gt;
+      &lt;onentry&gt;&lt;log label=&quot;stage&quot; expr=&quot;'enter-right'&quot;/&gt;&lt;/onentry&gt;
+    &lt;/state&gt;
+  &lt;/state&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p>If a UI is refreshed on the <code>cross</code> action, it must not assume the target state's entry action has already finished. A cleaner integration typically publishes a stable-state snapshot or an externally observable confirmation at a deliberate boundary, not an accidental intermediate trace of the interpreter's internal phases.</p>
+</section>
+<section id="an-executable-exitactionentry-recorder" aria-labelledby="heading-an-executable-exitactionentry-recorder">
+<h2 id="heading-an-executable-exitactionentry-recorder">An Executable Exit–Action–Entry Recorder</h2>
+<p>This Python example implements the ordering for one explicitly specified simple transition. It provides a regression-test pattern without claiming to cover all SCXML topology cases.</p>
+<pre><code class="language-python">trace = []
+def exit_state(name): trace.append(&quot;exit:&quot; + name)
+def run_action(name): trace.append(&quot;action:&quot; + name)
+def enter_state(name): trace.append(&quot;enter:&quot; + name)
+
+active = {&quot;workspace&quot;, &quot;left&quot;}
+for name in [&quot;left&quot;]:
+    exit_state(name)
+    active.remove(name)
+run_action(&quot;cross&quot;)
+for name in [&quot;right&quot;]:
+    active.add(name)
+    enter_state(name)
+assert active == {&quot;workspace&quot;, &quot;right&quot;}
+assert trace == [&quot;exit:left&quot;, &quot;action:cross&quot;, &quot;enter:right&quot;]
+print(&quot; &gt; &quot;.join(trace))
+</code></pre>
+<p>For a deeper machine, exit every active descendant required by the exit set, and enter the required ancestors and descendants. For parallel machines, compute the full selected transition set <strong>before</strong> applying this ordered change. A program that selects and executes region A completely before examining region B can accidentally make the second guard depend on the first transition's side effects, yielding behavior inconsistent with the mandated transition-set selection.</p>
+</section>
+<section id="transition-domains-and-least-common-compound-ancestors" aria-labelledby="heading-transition-domains-and-least-common-compound-ancestors">
+<h2 id="heading-transition-domains-and-least-common-compound-ancestors">Transition Domains and Least Common Compound Ancestors</h2>
+<p>For a state-changing transition, the <strong>transition domain</strong> identifies the boundary under which states are exited and entered. In the ordinary external case, it is determined using the least common <em>compound</em> ancestor of the source and effective targets (or the <code>&lt;scxml&gt;</code> wrapper when needed). The word <em>compound</em> matters: the least common node in a generic tree algorithm may not be the appropriate SCXML domain. The effective target expands history pseudo-states before the domain is resolved.</p>
+<p>For an eligible internal transition from a compound state to its own descendant, the domain may be the source itself. That preserves the source while exiting and re-entering relevant descendants. For external transitions, the source can be exited and re-entered as dictated by the domain. The exact set must be calculated from the configuration and transition type; a superficial arrow between two state IDs does not describe sufficient behavior.</p>
+</section>
+<section id="internal-versus-external-transition-types" aria-labelledby="heading-internal-versus-external-transition-types">
+<h2 id="heading-internal-versus-external-transition-types">Internal Versus External Transition Types</h2>
+<p>The <code>type</code> attribute on <code>&lt;transition&gt;</code> defaults to <code>external</code>. The special <code>type=&quot;internal&quot;</code> treatment applies when the source is a compound state and every effective target is a <strong>proper descendant</strong> of that source. In that case the source remains active, while descendants can be exited and entered. When those conditions do not hold, an <code>internal</code> transition's exit-set behavior falls back to the external case. This is not an unrestricted guarantee that “internal transitions never cause exits.”</p>
+<p>Suppose <code>Reviewing</code> contains <code>Waiting</code> and <code>Checking</code>. A transition sourced on <code>Reviewing</code>, targeting <code>Checking</code>, and marked <code>internal</code> can move between those descendants without executing the <code>Reviewing</code> state's <code>&lt;onexit&gt;</code> or <code>&lt;onentry&gt;</code>. The same source/target with default external semantics can exit and re-enter <code>Reviewing</code>. That difference affects history capture, side effects, invocation cancellation, and data initialization assumptions; it should be an explicit design decision.</p>
+</section>
+<section id="targetless-transitions-and-self-transitions" aria-labelledby="heading-targetless-transitions-and-self-transitions">
+<h2 id="heading-targetless-transitions-and-self-transitions">Targetless Transitions and Self-Transitions</h2>
+<p>A <code>&lt;transition event=&quot;heartbeat&quot;&gt;...&lt;/transition&gt;</code> with <strong>no target</strong> executes its content without changing active states. It does not run entry or exit handlers merely because its source handled the event. A transition with <code>target=&quot;sameState&quot;</code> is different: its exit and entry behavior follows SCXML's transition-domain rules, which may include reentering that state. Treating these as aliases is a common bug in table-driven implementations.</p>
+<p>Targetless transitions are useful for counters, metrics, internal notifications, or acknowledgments that do not change the mode. Nevertheless, a targetless transition can still enqueue an event, update a guard variable, or invoke an extension action that affects external systems. Tests should assert both the <strong>unchanged active configuration</strong> and the <strong>expected effects</strong>, rather than treating unchanged state as proof that nothing happened.</p>
+</section>
+<section id="executable-targetless-versus-re-entry-illustration" aria-labelledby="heading-executable-targetless-versus-re-entry-illustration">
+<h2 id="heading-executable-targetless-versus-re-entry-illustration">Executable Targetless Versus Re-Entry Illustration</h2>
+<p>The distinction can be tested with a trivial model. We model the entry/exit callback counts instead of pretending to run a full SCXML interpreter.</p>
+<pre><code class="language-python">class Mode:
+    def __init__(self):
+        self.active = &quot;watching&quot;
+        self.entries = 1
+        self.exits = 0
+        self.pulses = 0
+    def heartbeat(self):
+        self.pulses += 1           # targetless content
+    def restart(self):
+        self.exits += 1            # source-&gt;source external
+        self.entries += 1
+
+m = Mode()
+m.heartbeat()
+assert (m.entries, m.exits, m.pulses) == (1, 0, 1)
+m.restart()
+assert (m.entries, m.exits, m.pulses) == (2, 1, 1)
+print(&quot;Targetless action preserves state entry and exit counters&quot;)
+</code></pre>
+<p>In production, prefer a genuine SCXML conformance test for the exact nested topology being used, because a self-targeted transition's exit domain is sensitive to its source and ancestor relationships.</p>
+</section>
+<section id="completion-and-final-state-events" aria-labelledby="heading-completion-and-final-state-events">
+<h2 id="heading-completion-and-final-state-events">Completion and Final-State Events</h2>
+<p>When the processor enters a <code>&lt;final&gt;</code> inside a compound state, it generates a <code>done.state.ID</code> internal event where <code>ID</code> is the compound state's ID. A parallel state completes when all its child regions are in final states, at which point the appropriate <code>done.state.*</code> event is generated for the parallel parent. Entering a direct child <code>&lt;final&gt;</code> of <code>&lt;scxml&gt;</code> ends the session rather than merely generating an event for further processing by that same session.</p>
+<p>Completion is therefore <strong>structural</strong>, not an inference from a business-status variable such as <code>approved=true</code>. A service might be approved in its data model while the workflow remains in a nonfinal <code>AwaitingDispatch</code> state. Conversely, a compound review can reach its <code>&lt;final&gt;</code> and produce a completion event while the enclosing application continues. Document the particular layer at which a final state has been reached.</p>
+</section>
+<section id="completion-as-an-internal-event-xml-example" aria-labelledby="heading-completion-as-an-internal-event-xml-example">
+<h2 id="heading-completion-as-an-internal-event-xml-example">Completion as an Internal Event: XML Example</h2>
+<p>Here, entering <code>reviewDone</code> completes the compound state <code>review</code>, producing the internal event <code>done.state.review</code>. The enclosing root state <code>workspace</code> can handle that completion event and transition to its own final child. This is distinct from ending the entire SCXML interpreter.</p>
+<pre><code class="language-xml">&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; initial=&quot;workspace&quot;&gt;
+  &lt;state id=&quot;workspace&quot; initial=&quot;review&quot;&gt;
+    &lt;state id=&quot;review&quot; initial=&quot;waiting&quot;&gt;
+      &lt;state id=&quot;waiting&quot;&gt;
+        &lt;transition event=&quot;approve&quot; target=&quot;reviewDone&quot;/&gt;
+      &lt;/state&gt;
+      &lt;final id=&quot;reviewDone&quot;/&gt;
+    &lt;/state&gt;
+    &lt;transition event=&quot;done.state.review&quot; target=&quot;workspaceDone&quot;/&gt;
+    &lt;final id=&quot;workspaceDone&quot;/&gt;
+  &lt;/state&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p>The <code>done.state.review</code> event is placed in the internal queue and processed under run-to-completion semantics. On entering <code>workspaceDone</code>, the processor can also generate <code>done.state.workspace</code>, although this example defines no handler for it and has not entered a top-level final. If the intent is to terminate the session, a separate top-level <code>&lt;final&gt;</code> and transition should be supplied.</p>
+</section>
+<section id="history-default-entry-and-saved-configurations" aria-labelledby="heading-history-default-entry-and-saved-configurations">
+<h2 id="heading-history-default-entry-and-saved-configurations">History, Default Entry, and Saved Configurations</h2>
+<p>A <code>&lt;history&gt;</code> child records prior descendant activity when its parent is exited. A <strong>shallow</strong> history records immediate active children; a <strong>deep</strong> history records active atomic descendants. If the parent has not been visited before, the history element's default <code>&lt;transition&gt;</code> provides the fallback. A history transition target is a specification of which configuration to restore, not an ordinary node that remains active as a leaf.</p>
+<p>In parallel systems, restoring deep history may entail multiple atomic descendants—one in each region. An implementation must reintroduce necessary ancestors and any unfilled default regions to obtain a legal configuration. For systems with a changing schema or external resources, stored history alone cannot guarantee that resumed operations remain valid; the host must validate permissions, referenced objects, and invocation assumptions when restarting work.</p>
+</section>
+<section id="a-complete-history-declaration" aria-labelledby="heading-a-complete-history-declaration">
+<h2 id="heading-a-complete-history-declaration">A Complete History Declaration</h2>
+<p>The <code>history</code> pseudo-state lives inside the parent whose configuration is remembered. A transition targeting that history element requests restoration, not entry into a durable state named <code>recent</code>.</p>
+<pre><code class="language-xml">&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; initial=&quot;editor&quot;&gt;
+  &lt;state id=&quot;editor&quot; initial=&quot;typing&quot;&gt;
+    &lt;history id=&quot;recent&quot; type=&quot;deep&quot;&gt;
+      &lt;transition target=&quot;typing&quot;/&gt;
+    &lt;/history&gt;
+    &lt;state id=&quot;typing&quot;&gt;
+      &lt;transition event=&quot;preview&quot; target=&quot;previewing&quot;/&gt;
+    &lt;/state&gt;
+    &lt;state id=&quot;previewing&quot;&gt;
+      &lt;transition event=&quot;type&quot; target=&quot;typing&quot;/&gt;
+    &lt;/state&gt;
+    &lt;transition event=&quot;pause&quot; target=&quot;paused&quot;/&gt;
+  &lt;/state&gt;
+  &lt;state id=&quot;paused&quot;&gt;
+    &lt;transition event=&quot;resume&quot; target=&quot;recent&quot;/&gt;
+  &lt;/state&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p>After <code>preview</code> then <code>pause</code>, <code>resume</code> returns to <code>previewing</code> using stored deep history. A fresh session beginning in <code>editor</code> starts at <code>typing</code>. The semantics of restarting an interpreter process and recovering a previous session snapshot are separate from SCXML's in-session history construct; durable recovery requires a persistence design.</p>
+</section>
+<section id="datamodel-choices-and-expression-languages" aria-labelledby="heading-datamodel-choices-and-expression-languages">
+<h2 id="heading-datamodel-choices-and-expression-languages">Datamodel Choices and Expression Languages</h2>
+<p>SCXML defines abstract mechanisms for variables, guard expressions, assignments, parameters, and system data, but it does not require every implementation to support one universal language for those expressions. A document's <code>datamodel</code> attribute and the processor's supported datamodels determine valid syntax and evaluation behavior. The standard describes the ECMAScript and <code>null</code> datamodels and provides extensibility; a separate W3C specification addresses an XPath datamodel. A fragment containing <code>cond=&quot;count &gt; 0&quot;</code> must not automatically be assumed portable to a processor using a different expression language.</p>
+<p>A processor must maintain protected system variables such as <code>_event</code>, <code>_sessionid</code>, <code>_name</code>, and <code>_ioprocessors</code> as applicable to the datamodel. Document authors should not attempt to overwrite them with ordinary <code>&lt;assign&gt;</code> statements. Application data should be declared with <code>&lt;data&gt;</code> entries and given names whose ownership and value types are clear. Failure to separate system and application variables produces brittle, processor-specific code.</p>
+</section>
+<section id="early-versus-late-data-binding" aria-labelledby="heading-early-versus-late-data-binding">
+<h2 id="heading-early-versus-late-data-binding">Early Versus Late Data Binding</h2>
+<p>The SCXML root's <code>binding</code> attribute controls when declared data is initialized. With <strong>early</strong> binding, the interpreter initializes data declarations at session startup; with <strong>late</strong> binding, state-local data is initialized upon the state's <strong>first</strong> entry. This distinction is not the same as initializing data <strong>every time</strong> the state is entered. The W3C algorithm records whether a state's first entry has occurred so that an exit followed by re-entry does not blindly reset its values.</p>
+<p>For example, an <code>Editing</code> state's local <code>retryCount</code> might be initialized before any active entry under early binding, or when <code>Editing</code> is first entered under late binding. A later transition that exits and re-enters <code>Editing</code> does not, merely because of late binding, reset the count to its original value. To reset the value deliberately, use explicit executable content. For predictable restart behavior, document whether the host creates a new SCXML <strong>session</strong> or restores a prior session snapshot.</p>
+</section>
+<section id="data-assignment-and-guard-evaluation" aria-labelledby="heading-data-assignment-and-guard-evaluation">
+<h2 id="heading-data-assignment-and-guard-evaluation">Data Assignment and Guard Evaluation</h2>
+<p><code>&lt;assign location=&quot;...&quot; expr=&quot;...&quot;/&gt;</code> updates a datamodel location as executable content. A guard <code>cond=&quot;...&quot;</code> reads current values, and those values can change across successive microsteps within one macrostep. For clarity, model a business decision as two separate concerns: <em>control eligibility</em> (guard) and <em>authorized business mutation</em> (external system). An integer counter inside a statechart is not an authoritative financial ledger, nor does setting <code>approved=true</code> prove that a third-party authorization succeeded.</p>
+<p>Side effects inside actions can introduce errors and trigger <code>error.execution</code> events. An implementation may also support scripts or custom executable-content elements. Those capabilities require careful consideration of input validation, sandboxing, logging, and failure handling. Test both the success path and expression failures; a misspelled variable name or invalid type is a runtime event source, not merely a cosmetic defect in a diagram.</p>
+</section>
+<section id="assignment-and-automatic-routing-example" aria-labelledby="heading-assignment-and-automatic-routing-example">
+<h2 id="heading-assignment-and-automatic-routing-example">Assignment and Automatic Routing Example</h2>
+<p>The following example demonstrates a deliberate post-update eventless route. The XML escapes the comparison operator for attribute validity and uses the ECMAScript datamodel explicitly. When <code>increment</code> is received twice, the second assignment makes <code>count</code> equal to two, enabling the eventless transition to <code>finished</code> before another external event can be selected.</p>
+<pre><code class="language-xml">&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; datamodel=&quot;ecmascript&quot; initial=&quot;counting&quot;&gt;
+  &lt;datamodel&gt;&lt;data id=&quot;count&quot; expr=&quot;0&quot;/&gt;&lt;/datamodel&gt;
+  &lt;state id=&quot;counting&quot;&gt;
+    &lt;transition event=&quot;increment&quot;&gt;
+      &lt;assign location=&quot;count&quot; expr=&quot;count + 1&quot;/&gt;
+    &lt;/transition&gt;
+    &lt;transition cond=&quot;count &amp;gt;= 2&quot; target=&quot;finished&quot;/&gt;
+  &lt;/state&gt;
+  &lt;final id=&quot;finished&quot;/&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p>The first <code>increment</code> is a <strong>targetless</strong> transition that changes only data; the eventless test then fails. On the second increment the data update succeeds and the eventless transition becomes eligible. A static event graph that shows only arrows between states would miss this important intermediate variable change and could incorrectly describe when <code>finished</code> becomes active.</p>
+</section>
+<section id="a-small-python-model-of-datamodel-updates" aria-labelledby="heading-a-small-python-model-of-datamodel-updates">
+<h2 id="heading-a-small-python-model-of-datamodel-updates">A Small Python Model of Datamodel Updates</h2>
+<p>This independent, executable illustration verifies the intended state/data evolution. It is not a standard-complete evaluator for SCXML's ECMAScript datamodel.</p>
+<pre><code class="language-python">state = &quot;counting&quot;
+count = 0
+trace = []
+for event in [&quot;increment&quot;, &quot;increment&quot;, &quot;increment&quot;]:
+    if state != &quot;counting&quot;:
+        trace.append((event, state, count, &quot;ignored&quot;))
+        continue
+    if event == &quot;increment&quot;:
+        count += 1
+        trace.append((event, state, count, &quot;assigned&quot;))
+    if state == &quot;counting&quot; and count &gt;= 2:
+        state = &quot;finished&quot;  # eventless follow-up
+        trace.append((&quot;eventless&quot;, state, count, &quot;entered&quot;))
+assert trace == [
+    (&quot;increment&quot;, &quot;counting&quot;, 1, &quot;assigned&quot;),
+    (&quot;increment&quot;, &quot;counting&quot;, 2, &quot;assigned&quot;),
+    (&quot;eventless&quot;, &quot;finished&quot;, 2, &quot;entered&quot;),
+    (&quot;increment&quot;, &quot;finished&quot;, 2, &quot;ignored&quot;)
+]
+print(trace)
+</code></pre>
+<p>For the real XML example, entering a <strong>top-level</strong> <code>&lt;final&gt;</code> halts processing; this illustration records the third event as “ignored” for teaching purposes rather than pretending the terminated interpreter still consumes messages. Assertions about actual post-termination dispatch require testing the host's event-transport lifecycle.</p>
+</section>
+<section id="the-protected-event-structure" aria-labelledby="heading-the-protected-event-structure">
+<h2 id="heading-the-protected-event-structure">The Protected `_event` Structure</h2>
+<p>When the interpreter dequeues a named internal or external event, it binds <code>_event</code> to the event that is being processed. Required event fields include <code>name</code>, <code>type</code>, <code>sendid</code>, <code>origin</code>, <code>origintype</code>, <code>invokeid</code>, and <code>data</code>, with detailed representations depending on the datamodel. Guards can inspect <code>_event.data</code>, but should not assume the origin was authenticated solely because a field was populated. A host may attach transport-derived identity separately, and that identity must be validated in its trust context.</p>
+<p>The <code>_event</code> binding remains associated with the current named event while its selected transitions and their exit/entry content execute. In a later eventless microstep, authors should avoid relying on unstated “new event” semantics: there was no fresh dequeue just because an eventless guard was examined. If a decision should be attributable to a specific triggering message, store its validated data explicitly and log the relevant event or request correlation ID.</p>
+</section>
+<section id="error-events-and-exceptional-conditions" aria-labelledby="heading-error-events-and-exceptional-conditions">
+<h2 id="heading-error-events-and-exceptional-conditions">Error Events and Exceptional Conditions</h2>
+<p>SCXML specifies error event families such as <code>error.execution</code>, <code>error.communication</code>, and <code>error.platform</code>. Once a processor has begun executing a well-formed document, runtime errors are signaled as internal events with names beginning <code>error.</code>. An <code>event=&quot;error&quot;</code> transition can provide a broad fallback because SCXML's event-prefix matching accepts <code>error.execution</code> and related events. A more specific handler in a descendant state can take priority according to normal transition-selection rules.</p>
+<p>Error events are <strong>events</strong>, not mandatory C-style exceptions that unwind every stack frame. A guard or action failure may generate an error that is processed after the current executable-content block has progressed according to the specified semantics. Applications must define how a failure affects queued work, outstanding messages, incomplete side effects, and visible status. Silence in a trace is not evidence that no failure occurred; instrument the processor's error channel and host transport separately.</p>
+</section>
+<section id="raise-versus-send" aria-labelledby="heading-raise-versus-send">
+<h2 id="heading-raise-versus-send">`&lt;raise&gt;` Versus `&lt;send&gt;`</h2>
+<p><code>&lt;raise event=&quot;...&quot;/&gt;</code> adds a named event to the <strong>same session's internal queue</strong>, with no message body mechanism of its own. <code>&lt;send&gt;</code> can direct an event and associated data to an SCXML session or an external endpoint via an event I/O processor, and can request delayed delivery. The event's destination and configured processor determine whether it returns to the current session as internal traffic, appears in an external queue, or travels to another component.</p>
+<p>Do not simplify the distinction to “<code>raise</code> is synchronous and <code>send</code> is asynchronous.” A <code>&lt;raise&gt;</code> statement runs during executable content, but the resulting event is <strong>queued and processed later</strong>, not recursively dispatched at the exact statement. A <code>&lt;send&gt;</code> statement's transport semantics and delivery guarantees depend on the event I/O processor; the absence of an error event does not establish successful business-level receipt. Describe the queue and delivery path explicitly.</p>
+</section>
+<section id="sending-internal-events-without-recursive-dispatch" aria-labelledby="heading-sending-internal-events-without-recursive-dispatch">
+<h2 id="heading-sending-internal-events-without-recursive-dispatch">Sending Internal Events Without Recursive Dispatch</h2>
+<p>The SCXML Event I/O Processor defines destinations including the current session. A standards-aware integration must choose the correct processor and destination; a symbolic self-target should not be conflated with calling a local handler on the same programming-language stack. Delayed messages add another scheduling layer. The example below concentrates on guaranteed <code>&lt;raise&gt;</code> ordering, without relying on optional transport integration.</p>
+<pre><code class="language-xml">&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; initial=&quot;first&quot;&gt;
+  &lt;state id=&quot;first&quot;&gt;
+    &lt;transition event=&quot;advance&quot; target=&quot;second&quot;&gt;
+      &lt;raise event=&quot;follow.up&quot;/&gt;
+    &lt;/transition&gt;
+  &lt;/state&gt;
+  &lt;state id=&quot;second&quot;&gt;
+    &lt;onentry&gt;&lt;log label=&quot;stage&quot; expr=&quot;'entered second'&quot;/&gt;&lt;/onentry&gt;
+    &lt;transition event=&quot;follow.up&quot; target=&quot;third&quot;/&gt;
+  &lt;/state&gt;
+  &lt;state id=&quot;third&quot;/&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p>After <code>advance</code>, the processor completes the transition to <code>second</code>—including <code>second</code>'s entry content—before handling <code>follow.up</code> in a subsequent microstep of the same macrostep. Another external event waiting in the queue cannot intervene between these internal operations. That conclusion follows from the scheduling rules, not from a special interpretation of the string <code>follow.up</code>.</p>
+</section>
+<section id="delayed-sends-and-cancellation" aria-labelledby="heading-delayed-sends-and-cancellation">
+<h2 id="heading-delayed-sends-and-cancellation">Delayed Sends and Cancellation</h2>
+<p>A <code>&lt;send&gt;</code> action may specify a delay, and <code>&lt;cancel&gt;</code> can request cancellation of a delayed send using its identifier. Cancellation is best-effort and applies within the permitted session scope: a message already delivered or dispatched cannot be “unsent” merely by issuing <code>&lt;cancel&gt;</code>. When implementing timeouts, distinguish <em>timer was scheduled</em>, <em>timer canceled before dispatch</em>, and <em>timeout event was already enqueued</em>; these are not interchangeable facts.</p>
+<p>A robust timeout design assigns a unique correlation ID to each outstanding request or operation, treats late replies idempotently, and guards against races between cancellation and delivery. The statechart can represent these races, but a distributed scheduler still governs actual delivery. Avoid relying on wall-clock precision that the event I/O processor or host has not promised.</p>
+</section>
+<section id="invocation-lifecycle-and-stable-state-scheduling" aria-labelledby="heading-invocation-lifecycle-and-stable-state-scheduling">
+<h2 id="heading-invocation-lifecycle-and-stable-state-scheduling">Invocation Lifecycle and Stable-State Scheduling</h2>
+<p><code>&lt;invoke&gt;</code> starts a supported external service or child process under the chosen invocation type. In SCXML, invocation handlers are started at a <strong>stable macrostep boundary</strong> for states entered and not exited during that macrostep. A state entered and left immediately by eventless or internal transitions need not launch an invocation that would become obsolete before any external event is processed. This ordering is intentionally different from treating <code>&lt;invoke&gt;</code> as a simple synchronous line inside <code>&lt;onentry&gt;</code>.</p>
+<p>An invocation's completion can generate <code>done.invoke.ID</code>, and errors or child events may be routed back. When a parent state is exited, active invocations associated with it are canceled under the processor's lifecycle rules. That cancels the statechart's invocation relationship; it does not necessarily undo every external activity or compensate an irreversible business effect. Cancellation and compensation should be separate operational concepts.</p>
+</section>
+<section id="finalize-and-autoforward" aria-labelledby="heading-finalize-and-autoforward">
+<h2 id="heading-finalize-and-autoforward">`&lt;finalize&gt;` and `autoforward`</h2>
+<p>When an external event arrives from an invoked child, an associated <code>&lt;finalize&gt;</code> handler can preprocess the event and update data <strong>before</strong> the parent's transition guards are evaluated. With <code>autoforward</code>, the processor can forward external events to invoked processes according to its rules. These mechanisms alter observable event processing and should be described in diagrams and tests, especially when the parent has multiple concurrent invocations or event names overlap.</p>
+<p>A common mistake is to treat <code>&lt;finalize&gt;</code> as the same thing as a transaction finally-block or a guarantee of cleanup after any failure. It is a <strong>particular event-preprocessing construct</strong> for invocation results. If an invoked service must be released, compensated, or deduplicated, the host integration must implement those obligations using its own lifecycle controls and appropriate SCXML actions.</p>
+</section>
+<section id="a-conceptual-invocation-trace" aria-labelledby="heading-a-conceptual-invocation-trace">
+<h2 id="heading-a-conceptual-invocation-trace">A Conceptual Invocation Trace</h2>
+<p>Suppose <code>Processing</code> is entered during external event <code>start</code>, then an internal <code>ready</code> is raised, and <code>ready</code> moves the machine to <code>Waiting</code>. An invocation declared in <code>Processing</code> should not be started if <code>Processing</code> was entered and exited before the machine reached a stable boundary. In contrast, an invocation declared in <code>Waiting</code> may begin after internal processing stabilizes. This demonstrates why “on entry” and “at stable invocation time” are not synonyms.</p>
+<pre><code class="language-python">entered = []
+active = &quot;idle&quot;
+entered.append(&quot;Processing&quot;)
+active = &quot;Processing&quot;
+# Follow-up event is handled in the same macrostep.
+entered.append(&quot;Waiting&quot;)
+active = &quot;Waiting&quot;
+invocations_to_start = [s for s in entered if s == active]
+assert invocations_to_start == [&quot;Waiting&quot;]
+assert &quot;Processing&quot; not in invocations_to_start
+print(&quot;Stable-state invocation scheduling:&quot;, invocations_to_start)
+</code></pre>
+<p>This code is a pedagogical lifecycle sketch: it checks the principle that <strong>transiently visited states are excluded</strong>, not the complete queue, service-type, or cancel-invoke algorithm. A conformant processor must also account for existing invocations, document order, and errors generated while invocation begins.</p>
+</section>
+<section id="parallel-regions-and-multiple-enabled-transitions" aria-labelledby="heading-parallel-regions-and-multiple-enabled-transitions">
+<h2 id="heading-parallel-regions-and-multiple-enabled-transitions">Parallel Regions and Multiple Enabled Transitions</h2>
+<p>An active <code>&lt;parallel&gt;</code> element includes all its child regions. Each region may select a transition for the same event. If their exit sets do not overlap, SCXML can execute them within the <strong>same microstep</strong>. A communication-state region could respond to <code>network.down</code> while an editing-state region independently records that the user requested a local draft save. This is a model of multiple active behaviors, not a claim that the actions run simultaneously on two CPU cores.</p>
+<p>The selected transition set is processed with ordered exit, transition, and entry phases. A processor must resolve conflicts before taking the microstep. Consequently, the author should not rely on parallel transitions as a way to create unsequenced writes to the same variable; where actions can interact, the specified ordering and shared datamodel must be analyzed explicitly. Independent regions are valuable for separation of concerns, not a substitute for concurrency engineering.</p>
+</section>
+<section id="a-parallel-scxml-configuration" aria-labelledby="heading-a-parallel-scxml-configuration">
+<h2 id="heading-a-parallel-scxml-configuration">A Parallel SCXML Configuration</h2>
+<p>The following structurally complete example has a <code>parallel</code> root child with two regions. An event <code>reset</code> may trigger local transitions in both regions. Each region preserves its own active substate while satisfying the overall legal-configuration requirements.</p>
+<pre><code class="language-xml">&lt;scxml xmlns=&quot;http://www.w3.org/2005/07/scxml&quot;
+       version=&quot;1.0&quot; initial=&quot;operating&quot;&gt;
+  &lt;parallel id=&quot;operating&quot;&gt;
+    &lt;state id=&quot;task&quot; initial=&quot;taskIdle&quot;&gt;
+      &lt;state id=&quot;taskIdle&quot;&gt;
+        &lt;transition event=&quot;begin&quot; target=&quot;taskBusy&quot;/&gt;
+      &lt;/state&gt;
+      &lt;state id=&quot;taskBusy&quot;&gt;
+        &lt;transition event=&quot;reset&quot; target=&quot;taskIdle&quot;/&gt;
+      &lt;/state&gt;
+    &lt;/state&gt;
+    &lt;state id=&quot;network&quot; initial=&quot;online&quot;&gt;
+      &lt;state id=&quot;online&quot;&gt;
+        &lt;transition event=&quot;lost&quot; target=&quot;offline&quot;/&gt;
+      &lt;/state&gt;
+      &lt;state id=&quot;offline&quot;&gt;
+        &lt;transition event=&quot;reset&quot; target=&quot;online&quot;/&gt;
+      &lt;/state&gt;
+    &lt;/state&gt;
+  &lt;/parallel&gt;
+&lt;/scxml&gt;
+</code></pre>
+<p>After <code>begin</code> and <code>lost</code>, the active leaves are <code>taskBusy</code> and <code>offline</code>. A single <code>reset</code> event enables both regional transitions because their exit sets are disjoint. The resulting leaves are <code>taskIdle</code> and <code>online</code>. An additional ancestor-sourced <code>reset</code> transition that exited <code>operating</code> would raise a conflict-selection question and would require applying the standard's priority rules before assuming either outcome.</p>
+</section>
+<section id="reachability-under-macrostep-closure" aria-labelledby="heading-reachability-under-macrostep-closure">
+<h2 id="heading-reachability-under-macrostep-closure">Reachability Under Macrostep Closure</h2>
+<p>For verification, the externally observable state machine is often best represented at <strong>stable macrostep boundaries</strong>, after eventless and internal transitions have completed. Two different internal traces can lead to the same stable active configuration and datamodel valuation. Collapsing the internal transitions may simplify client-facing tests, but it can hide important effects, logs, generated events, and nontermination risks.</p>
+<p>A useful two-level model therefore records both <em>microstep traces</em> and <em>macrostep outcomes</em>. Microstep records support conformance and diagnosis; macrostep snapshots support user-facing behavior and integration contracts. For automated checking, specify the exact equivalence criterion: matching only active leaf states is weaker than matching datamodel values, queued events, invoked-service status, and externally emitted commands.</p>
+</section>
+<section id="a-bounded-macrostep-explorer" aria-labelledby="heading-a-bounded-macrostep-explorer">
+<h2 id="heading-a-bounded-macrostep-explorer">A Bounded Macrostep Explorer</h2>
+<p>The following finite example computes the closure of two internal follow-up rules after a hypothetical external event. The bound prevents a test from hanging if a faulty rule repeatedly produces itself. It is a <strong>simplified verifier for the teaching machine</strong>, not a W3C SCXML interpreter.</p>
+<pre><code class="language-python">from collections import deque
+
+def settle(state, queue, limit=20):
+    queue = deque(queue)
+    trace = []
+    for _ in range(limit):
+        if state == &quot;review&quot; and not queue:
+            state = &quot;ready&quot;      # eventless routing
+            trace.append(&quot;eventless:ready&quot;)
+            continue
+        if not queue:
+            return state, trace
+        event = queue.popleft()
+        trace.append(&quot;internal:&quot; + event)
+        if state == &quot;checking&quot; and event == &quot;ok&quot;:
+            state = &quot;review&quot;
+    raise RuntimeError(&quot;internal work exceeded bound&quot;)
+
+state, trace = settle(&quot;checking&quot;, [&quot;ok&quot;])
+assert state == &quot;ready&quot;
+assert trace == [&quot;internal:ok&quot;, &quot;eventless:ready&quot;]
+print(state, trace)
+</code></pre>
+<p>For genuine SCXML, the closure algorithm must check eventless transitions <strong>before</strong> dequeueing each next internal event and must also account for datamodel updates, parallel transition sets, completion events, and service invocations. A step bound is an engineering safety policy; it does not change what the unconstrained specification permits.</p>
+</section>
+<section id="nontermination-livelock-and-starvation" aria-labelledby="heading-nontermination-livelock-and-starvation">
+<h2 id="heading-nontermination-livelock-and-starvation">Nontermination, Livelock, and Starvation</h2>
+<p>A macrostep may contain infinitely many microsteps. An always-enabled eventless self-cycle or repeated internal event can prevent the next external message from being processed. The distinction between <strong>deadlock</strong> and <strong>livelock</strong> matters: a deadlocked machine has no useful enabled progress, while a livelocked machine may actively execute transitions forever without reaching stability. From the user's perspective both can resemble an unresponsive service, but their diagnostics differ.</p>
+<p>Guard eventless transitions so each execution makes progress toward disabling the condition, entering a different state, or exhausting a finite resource. Implement watchdogs, bounds, and observability at the host level; design safe failure behavior when a bound is hit. Do not assert that the W3C Recommendation itself imposes an automatic finite-microstep limit—an engine's cutoff is an additional operational choice.</p>
+</section>
+<section id="persistence-restart-and-versioned-sessions" aria-labelledby="heading-persistence-restart-and-versioned-sessions">
+<h2 id="heading-persistence-restart-and-versioned-sessions">Persistence, Restart, and Versioned Sessions</h2>
+<p>SCXML history is an in-session behavioral mechanism, not a universal durable checkpoint. A recoverable application may need to save the active-state configuration, datamodel, event queues, pending sends, outstanding invocation IDs, relevant history values, and a versioned representation of the machine definition. Restoring only the top-level state name can lose an active parallel region or replay a completed action. A rebooted host must also decide what to do with messages received during downtime and external effects already committed before a crash.</p>
+<p>One defensible implementation pattern treats external operations as <strong>idempotent commands</strong> with unique identifiers, while persisting enough state to recognize acknowledgments and duplicates. The specification's run-to-completion model helps define logical processing boundaries but does not automatically supply durable queuing, transactionality, or exactly-once business effects. When machine definitions change, migrations should map old state IDs, datamodel schemas, and pending timer meanings explicitly. Test restart during transitions, between internal and external messages, and while an invocation is active.</p>
+</section>
+<section id="event-correlation-and-idempotency" aria-labelledby="heading-event-correlation-and-idempotency">
+<h2 id="heading-event-correlation-and-idempotency">Event Correlation and Idempotency</h2>
+<p>Distributed services can deliver an acknowledgment after a timeout, duplicate a response after a retry, or process a command before the client receives confirmation. A statechart should correlate each reply to the operation that produced it, rather than treating every event with the right name as a valid current response. The SCXML <code>_event</code> metadata can carry messaging context, and application <code>data</code> can include validated correlation keys; neither substitutes for authorization or replay protection.</p>
+<p>An idempotent workflow distinguishes <em>command issued</em>, <em>command accepted</em>, <em>effect confirmed</em>, and <em>effect reconciled</em>. The external service may commit its change even if the statechart session crashes. On recovery, query or reconcile authoritative records rather than unconditionally repeating an action. In diagnostic traces, log operation IDs, invocation IDs, source identifiers, and transition outcomes without exposing passwords or sensitive event payloads.</p>
+</section>
+<section id="security-and-trust-boundaries" aria-labelledby="heading-security-and-trust-boundaries">
+<h2 id="heading-security-and-trust-boundaries">Security and Trust Boundaries</h2>
+<p>SCXML interpreters process untrusted input through event data, expression evaluation, external resource loading, XML parsing, scripts, and send/invoke integrations. A secure implementation must bound resource use, disable unsafe XML features where applicable, validate event origin and payload schemas, enforce authorization at actual side-effect boundaries, and constrain where documents can send messages or invoke services. A statechart's internal variable named <code>isAdmin</code> is not an authorization authority if an attacker can inject an event that sets it.</p>
+<p>The ability to trigger <code>error</code> handlers, wildcard transitions, or internal loops can itself become an attack surface. Apply quotas to event queues and microsteps, protect logging pipelines, limit external destinations, and exercise malformed and adversarial inputs. Where a statechart controls physical equipment or financial transactions, fail-safe and compensation behavior belongs in the domain's responsible system as well as in the control model. Never treat a standards-conformant statechart as evidence that an entire application is secure.</p>
+</section>
+<section id="trace-logging-and-observability" aria-labelledby="heading-trace-logging-and-observability">
+<h2 id="heading-trace-logging-and-observability">Trace Logging and Observability</h2>
+<p>A useful interpreter trace records the external event chosen, the active configuration before selection, relevant datamodel fields, candidate transitions and their source states, the chosen compatible set, exit and entry sets, executed actions, newly raised internal events, resulting configuration, and final macrostep stability. Log timestamps can help diagnose delays, but logical sequence numbers are often more important: two effects in one microstep may occur close enough in time that wall-clock ordering is misleading.</p>
+<p>For production observability, distinguish specification-level facts from host-level I/O facts. “<code>&lt;send&gt;</code> executed” means the interpreter attempted a send under its configured processor; it does not mean an external recipient completed the requested operation. Record a separate acknowledgment. Likewise, an <code>onentry</code> trace is not necessarily a user-visible committed state if another eventless or internal transition immediately exits that state before the macrostep ends.</p>
+</section>
+<section id="a-deterministic-trace-comparison-harness" aria-labelledby="heading-a-deterministic-trace-comparison-harness">
+<h2 id="heading-a-deterministic-trace-comparison-harness">A Deterministic Trace Comparison Harness</h2>
+<p>A test harness can compare an observed sequence of logical events with an expected sequence. The example below uses normalized records so that irrelevant runtime timestamps do not obscure behavioral differences. An actual conformant test suite would receive these events from the processor under test, not manufacture them in its own expected-value function.</p>
+<pre><code class="language-python">expected = [
+    (&quot;external&quot;, &quot;submit&quot;),
+    (&quot;select&quot;, &quot;draft-&gt;review&quot;),
+    (&quot;exit&quot;, &quot;draft&quot;),
+    (&quot;action&quot;, &quot;enqueue:validation.ok&quot;),
+    (&quot;enter&quot;, &quot;review&quot;),
+    (&quot;internal&quot;, &quot;validation.ok&quot;),
+    (&quot;select&quot;, &quot;review-&gt;approved&quot;),
+    (&quot;exit&quot;, &quot;review&quot;),
+    (&quot;enter&quot;, &quot;approved&quot;),
+]
+observed = list(expected)  # substitute processor trace in a real test
+assert observed == expected
+mutated = list(expected)
+mutated[4], mutated[5] = mutated[5], mutated[4]
+assert mutated != expected
+print(&quot;Ordering regression would detect swapped entry/internal steps&quot;)
+</code></pre>
+<p>This is an assertion-pattern illustration. It does not certify a real SCXML processor or prove that every record named here is present in a vendor's logging API. Such observability must be provided by instrumentation or a purpose-built conformance harness.</p>
+</section>
+<section id="conformance-testing-strategy" aria-labelledby="heading-conformance-testing-strategy">
+<h2 id="heading-conformance-testing-strategy">Conformance Testing Strategy</h2>
+<p>A meaningful SCXML conformance program begins with <strong>feature inventory</strong>. Record which datamodels and event I/O processors are supported, how errors are surfaced, and which optional extension elements are enabled. Separate structural validation tests from behavioral execution tests. Construct small documents with one purpose each: root initialization, nested ancestor transitions, overlapping event descriptors, true/false guard pairs, targetless transitions, internal versus external transition types, parallel conflicts, history, completion events, delayed sends, and invocation lifecycle.</p>
+<p>For each behavioral case, specify an initial configuration and datamodel, external event sequence, expected selected transitions, expected active configurations, observable action order, and any allowed platform variation. Compare a real processor with the normative Recommendation, its errata, and the available W3C test materials. Passing the executable Python demonstrations in this article does <strong>not</strong> constitute SCXML conformance; those scripts are small independent teaching models.</p>
+</section>
+<section id="test-matrix-for-critical-semantics" aria-labelledby="heading-test-matrix-for-critical-semantics">
+<h2 id="heading-test-matrix-for-critical-semantics">Test Matrix for Critical Semantics</h2>
+<table>
+<thead>
+<tr>
+  <th>Test family</th>
+  <th>Input or setup</th>
+  <th>Required observation</th>
+  <th>Common faulty implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Initialization</td>
+  <td>Root and nested default targets</td>
+  <td>Legal complete descendant configuration</td>
+  <td>Only leaf state marked active</td>
+</tr>
+<tr>
+  <td>Source priority</td>
+  <td>Child and ancestor react to same event</td>
+  <td>Child candidate preferred where applicable</td>
+  <td>Ancestor handler always fires first</td>
+</tr>
+<tr>
+  <td>Document order</td>
+  <td>Two enabled transitions in one source</td>
+  <td>Earliest enabled transition chosen</td>
+  <td>Most specific string chosen irrespective of order</td>
+</tr>
+<tr>
+  <td>Eventless precedence</td>
+  <td>Guard true with internal message queued</td>
+  <td>Eventless transition evaluated first</td>
+  <td>Internal message dequeued immediately</td>
+</tr>
+<tr>
+  <td>Queue ordering</td>
+  <td><code>&lt;raise&gt;</code> during a transition</td>
+  <td>Raised event processed after current actions</td>
+  <td>Recursive dispatch during action</td>
+</tr>
+<tr>
+  <td>Targetless transition</td>
+  <td>Action with no <code>target</code></td>
+  <td>No entry/exit, but action executes</td>
+  <td>Source exits and re-enters</td>
+</tr>
+<tr>
+  <td>Internal transition</td>
+  <td>Compound source to own descendant</td>
+  <td>Source may remain active</td>
+  <td>Treated like default external transition</td>
+</tr>
+<tr>
+  <td>Parallel compatibility</td>
+  <td>Two local transitions</td>
+  <td>Both selected when exit sets disjoint</td>
+  <td>Only one region advances</td>
+</tr>
+<tr>
+  <td>Parallel conflict</td>
+  <td>Two overlapping exit sets</td>
+  <td>Priority filter resolves conflict</td>
+  <td>Incompatible targets entered together</td>
+</tr>
+<tr>
+  <td>Completion</td>
+  <td>Compound final entered</td>
+  <td>Corresponding <code>done.state.*</code> event</td>
+  <td>Machine halts at every nested final</td>
+</tr>
+<tr>
+  <td>Invocation</td>
+  <td>State entered and left within macrostep</td>
+  <td>No obsolete invocation at stable boundary</td>
+  <td>Service launched and immediately canceled</td>
+</tr>
+<tr>
+  <td>Failure</td>
+  <td>Datamodel expression error</td>
+  <td>Error event routed per standard</td>
+  <td>Exception silently swallowed</td>
+</tr>
+</tbody>
+</table>
+<p>A matrix is an <strong>acceptance plan</strong>, not a list of claims that have been verified on an installed runtime. Every row requires an actual processor execution to count as passing evidence.</p>
+</section>
+<section id="comparing-scxml-with-uml-and-framework-specific-machines" aria-labelledby="heading-comparing-scxml-with-uml-and-framework-specific-machines">
+<h2 id="heading-comparing-scxml-with-uml-and-framework-specific-machines">Comparing SCXML with UML and Framework-Specific Machines</h2>
+<p>SCXML is a W3C XML language with specific event-queue ordering, document-order rules, and defined I/O constructs. UML state machines are a modeling facility within a broader object-oriented notation and have their own semantics for regions, completion, and transition kinds. Framework-specific libraries may offer a JSON definition, callback APIs, promises, or actor systems with related but distinct behavior. Treat differences as meaningful even when the drawn state diagrams look nearly identical.</p>
+<p>A migration needs a semantic <strong>mapping</strong>, not merely automated rewriting of state labels. Check priority, guard evaluation, history, action order, external events, queued internal follow-ups, effect cancellation, and invocation lifetimes. When no exact mapping exists, add explicit intermediate states or actions, adjust tests, and document the divergence. A chart that draws correctly after conversion might still change its behavior under an overlapping event or an error.</p>
+</section>
+<section id="common-portability-and-integration-pitfalls" aria-labelledby="heading-common-portability-and-integration-pitfalls">
+<h2 id="heading-common-portability-and-integration-pitfalls">Common Portability and Integration Pitfalls</h2>
+<p>An SCXML document can be syntactically valid yet unavailable on a given engine because it requests an unsupported datamodel, I/O processor, extension action, or invocation type. Library implementations can also differ in which optional services they expose and how they bind event data to the host language. A platform may wrap the interpreter in a multithreaded architecture without changing the logical run-to-completion contract; another may expose only a subset of SCXML capabilities.</p>
+<p>Avoid making portability claims without an explicit profile: the exact engine and version, supported features, tested XML documents, expected host transports, and known gaps. Do not silently reinterpret SCXML's ECMAScript expressions as another language or replace <code>&lt;raise&gt;</code> with arbitrary direct callbacks. For regulated or safety-sensitive integration, record a reproducible conformance baseline and retest after runtime upgrades.</p>
+</section>
+<section id="worked-scenario-1-an-approval-workflow-with-internal-validation" aria-labelledby="heading-worked-scenario-1-an-approval-workflow-with-internal-validation">
+<h2 id="heading-worked-scenario-1-an-approval-workflow-with-internal-validation">Worked Scenario 1 — An Approval Workflow with Internal Validation</h2>
+<p>A request arrives in <code>Draft</code>; the <code>submit</code> external event moves it to <code>Checking</code>. The entry action initiates a <strong>local validation computation</strong> and raises <code>validation.passed</code>, which enters the internal queue. The processor finishes the transition to <code>Checking</code>, then processes the internal event and moves into <code>Reviewing</code>. Only once internal work stabilizes may it examine the next external event, perhaps <code>cancel</code>. A test must verify that <code>cancel</code> cannot intervene between the <code>submit</code> transition's entry actions and the internal validation transition.</p>
+<p>If validation is instead a remote service, the flow should not pretend the remote acknowledgment has arrived immediately through <code>&lt;raise&gt;</code>. The remote operation belongs to <code>&lt;invoke&gt;</code> or a suitable <code>&lt;send&gt;</code> integration with an explicit waiting state and correlation ID. Its eventual response is subject to the external communication mechanism. The architectural distinction is between <strong>local, internally generated follow-up</strong> and <strong>external, independently scheduled completion</strong>.</p>
+</section>
+<section id="worked-scenario-2-a-two-region-upload-manager" aria-labelledby="heading-worked-scenario-2-a-two-region-upload-manager">
+<h2 id="heading-worked-scenario-2-a-two-region-upload-manager">Worked Scenario 2 — A Two-Region Upload Manager</h2>
+<p>The manager maintains <code>Transfer</code> and <code>Connectivity</code> regions beneath a <code>&lt;parallel&gt;</code> parent. After a file is queued, <code>Transfer</code> advances from <code>Idle</code> to <code>Uploading</code> while <code>Connectivity</code> remains <code>Online</code>. A <code>network.down</code> event changes the network region to <code>Offline</code> and may also cause a compatible transfer-region transition to <code>Paused</code>. If both changes have disjoint exit sets, the interpreter executes them in one microstep. If a parent-sourced <code>fatal</code> transition exits the entire parallel state, conflict resolution matters.</p>
+<p>Tests should assert the complete active configuration, not only the current transfer mode. An engineer must additionally model acknowledgment, retry policy, byte-range validation, and durable transfer state outside the abstract event-selection rules. SCXML can coordinate those responsibilities, but it does not provide a resumable file-transfer protocol or data integrity checking merely because a <code>&lt;parallel&gt;</code> element exists.</p>
+</section>
+<section id="worked-scenario-3-a-customer-support-conversation" aria-labelledby="heading-worked-scenario-3-a-customer-support-conversation">
+<h2 id="heading-worked-scenario-3-a-customer-support-conversation">Worked Scenario 3 — A Customer-Support Conversation</h2>
+<p>A support assistant is in <code>CollectingDetails</code>, nested under <code>OpenConversation</code>. A <code>customer.message</code> event matches a child transition that updates a transcript view, while the parent has a broad <code>customer</code> fallback for unrecognized customer events. Source priority allows the child to handle the recognized message without firing the parent's catchall. If two transitions within the child match the same message, their <strong>document order</strong> decides which one is chosen.</p>
+<p>If a completion event indicates the customer finished a form, an eventless transition may route to <code>ReadyForAgent</code> when the required fields are present. The system should record which events were processed before a stable response is sent. It should also use verified channel identity and authorization; prefix matching a string such as <code>customer.admin</code> is not evidence that the sender is an administrator.</p>
+</section>
+<section id="worked-scenario-4-a-network-recovery-supervisor" aria-labelledby="heading-worked-scenario-4-a-network-recovery-supervisor">
+<h2 id="heading-worked-scenario-4-a-network-recovery-supervisor">Worked Scenario 4 — A Network Recovery Supervisor</h2>
+<p>The supervisor has modes <code>Connected</code>, <code>Waiting</code>, and <code>Recovering</code>, with delayed retries. When a disconnect occurs, it enters <code>Waiting</code>, schedules a retry message, and may cancel that message if reconnection succeeds first. An event arriving just as <code>&lt;cancel&gt;</code> executes may already be dispatched. Accordingly, a retry handler checks the current generation number and connection state before performing work, rather than trusting cancellation as guaranteed prevention.</p>
+<p>A genuine implementation must define the delay's time source, retry budget, and response correlation. A nonterminating eventless retry loop would starve future external events and consume resources; a bounded waiting state is better. Record whether the processor or an external scheduler owns outstanding timers when a process restarts.</p>
+</section>
+<section id="worked-scenario-5-a-payment-authorization-integration" aria-labelledby="heading-worked-scenario-5-a-payment-authorization-integration">
+<h2 id="heading-worked-scenario-5-a-payment-authorization-integration">Worked Scenario 5 — A Payment Authorization Integration</h2>
+<p>A payment request enters <code>AuthorizationPending</code> and invokes a payment service. An event <code>done.invoke.auth42</code> or a provider-specific result may indicate completion, and <code>&lt;finalize&gt;</code> may normalize the returned data before guards select a success or failure branch. Authorization, capture, settlement, and ledger posting are distinct business events. The statechart should not mark all four complete because a single invocation returned without an error.</p>
+<p>A crash may occur after the provider authorizes a charge but before the local system logs the response. Reissuing without an idempotency key could create a duplicate operation. The safe design persists correlation, reconciles provider state, and reserves compensating actions for cases where an external side effect must be reversed. <strong>SCXML run-to-completion is not a distributed transaction</strong>; that is the governing lesson.</p>
+</section>
+<section id="worked-scenario-6-an-interactive-learning-assessment" aria-labelledby="heading-worked-scenario-6-an-interactive-learning-assessment">
+<h2 id="heading-worked-scenario-6-an-interactive-learning-assessment">Worked Scenario 6 — An Interactive Learning Assessment</h2>
+<p>A quiz statechart models <code>PresentQuestion</code>, <code>CheckingAnswer</code>, <code>Feedback</code>, and <code>Complete</code>. The learner's <code>submit.answer</code> event leads to <code>CheckingAnswer</code>, where an internal event may indicate locally computed scoring. A completed quiz enters a nested <code>&lt;final&gt;</code> that raises <code>done.state.quiz</code>, allowing the enclosing lesson session to move to <code>ReviewSummary</code> without terminating the entire application.</p>
+<p>The learning platform also requires accessibility, assessment validity, and secure records. A learner can navigate backward visually without undoing a completed official submission. A correct statechart distinguishes <em>display state</em> from <em>authoritative academic record</em> and tests that an unauthorized client event cannot overwrite the score. Implementation is successful when SCXML behavior, learner experience, and institutional data controls agree.</p>
+</section>
+<section id="ten-gate-scxml-engineering-framework" aria-labelledby="heading-ten-gate-scxml-engineering-framework">
+<h2 id="heading-ten-gate-scxml-engineering-framework">Ten-Gate SCXML Engineering Framework</h2>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Decision question</th>
+  <th>Evidence required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. Choose semantics</td>
+  <td>Is SCXML 1.0 actually the execution contract?</td>
+  <td>Standard/version and supported runtime profile</td>
+</tr>
+<tr>
+  <td>2. Validate structure</td>
+  <td>Are the active configurations and targets legal?</td>
+  <td>Document validation and initialization tests</td>
+</tr>
+<tr>
+  <td>3. Define events</td>
+  <td>Which events are internal, external, or platform-generated?</td>
+  <td>Event catalog, routing, and trust classification</td>
+</tr>
+<tr>
+  <td>4. Audit transition priority</td>
+  <td>Which rule wins under overlap?</td>
+  <td>Nested-source and document-order counterexamples</td>
+</tr>
+<tr>
+  <td>5. Analyze data</td>
+  <td>Which datamodel and binding policy apply?</td>
+  <td>Typed variables, guard cases, initialization tests</td>
+</tr>
+<tr>
+  <td>6. Check microsteps</td>
+  <td>Are exits, actions, and entries correctly ordered?</td>
+  <td>Instrumented microstep traces</td>
+</tr>
+<tr>
+  <td>7. Check macrosteps</td>
+  <td>Do eventless and internal transitions reach stability?</td>
+  <td>Bounded exploration and nontermination tests</td>
+</tr>
+<tr>
+  <td>8. Govern effects</td>
+  <td>How do send, invoke, cancel, and failures behave?</td>
+  <td>I/O processor profile and acknowledgment handling</td>
+</tr>
+<tr>
+  <td>9. Verify recovery</td>
+  <td>Can a session restart without duplicating business work?</td>
+  <td>Checkpoint, idempotency, migration, and replay tests</td>
+</tr>
+<tr>
+  <td>10. Establish conformance</td>
+  <td>Does the chosen engine behave as claimed?</td>
+  <td>Repeatable processor test suite against W3C requirements</td>
+</tr>
+</tbody>
+</table>
+<p>The framework should be applied before production deployment and again when adding parallel regions, changing event names, upgrading an engine, or introducing new I/O integrations. Each gate concerns a distinct failure mode; passing an XML parser check does not satisfy the other nine.</p>
+</section>
+<section id="common-misconceptions" aria-labelledby="heading-common-misconceptions">
+<h2 id="heading-common-misconceptions">Common Misconceptions</h2>
+<p><strong>“Every external event causes one transition.”</strong> An external event can cause zero transition executions if no rule is enabled, or several microsteps when internal and eventless follow-ups occur. <strong>“All matching parallel transitions run.”</strong> Only a compatible optimal set runs, following conflict resolution. <strong>“Internal transitions have no exit/entry effects.”</strong> That description is false outside the defined compound-source/proper-descendant special case. <strong>“A wildcard is eventless.”</strong> <code>event=&quot;*&quot;</code> matches a named event; an omitted <code>event</code> is eventless. <strong>“Late binding resets data at every entry.”</strong> It initializes state-local data on first entry.</p>
+<p><strong>“A successful <code>&lt;send&gt;</code> equals successful delivery.”</strong> Dispatch and external business acknowledgment are separate. <strong>“Final ends every containing machine.”</strong> A nested final generates completion events; a top-level final ends the SCXML session. <strong>“Run-to-completion makes I/O atomic.”</strong> The rule orders interpreter work but does not confer transaction semantics on external services. <strong>“The example Python engines are conformant.”</strong> They deliberately implement only narrow behavioral ideas. <strong>“Valid XML means valid SCXML.”</strong> Structural constraints, supported datamodels, and execution obligations extend far beyond XML well-formedness.</p>
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions">
+<h2 id="heading-review-questions">Review Questions</h2>
+<ol>
+<li>Distinguish the internal event queue from the external event queue. Why must a processor examine eventless transitions before dequeueing an internal event?</li>
+<li>Define a microstep and a macrostep, then give an example of one external event producing three microsteps.</li>
+<li>If a child and its parent have eligible transitions for the same event, which candidate receives priority in the ordinary single-branch case?</li>
+<li>How can XML document order affect a decision even if an event descriptor appears more specific than an earlier one?</li>
+<li>What makes two parallel-region transitions conflict? Why are targetless transitions special under this criterion?</li>
+<li>Give the required order of exit handlers, transition content, and entry handlers.</li>
+<li>Under what conditions does <code>type=&quot;internal&quot;</code> preserve the compound source state?</li>
+<li>Why is entering a nested final state different from entering a top-level final state?</li>
+<li>Explain the operational difference between <code>&lt;raise&gt;</code>, <code>&lt;send&gt;</code>, <code>&lt;invoke&gt;</code>, and <code>&lt;finalize&gt;</code>.</li>
+<li>Why is a session-history state insufficient for crash-safe recovery of an external payment workflow?</li>
+<li>How do early and late datamodel binding differ, and what happens on re-entry after first initialization?</li>
+<li>What evidence would you request before accepting a product's claim of SCXML 1.0 conformance?</li>
+</ol>
+</section>
+<section id="guided-exercises" aria-labelledby="heading-guided-exercises">
+<h2 id="heading-guided-exercises">Guided Exercises</h2>
+<p><strong>Exercise A — Priority and overlap:</strong> Write a two-state document where <code>event=&quot;error&quot;</code> occurs before <code>event=&quot;error.execution&quot;</code> within the same state. Predict which transition wins when <code>error.execution</code> arrives. Reverse the XML order and repeat. State the difference between the event descriptor and a guard.</p>
+<p><strong>Exercise B — Microstep sequence:</strong> Start in <code>Draft</code>; let <code>submit</code> enter <code>Checking</code>, whose <code>&lt;onentry&gt;</code> raises <code>check.ok</code>; let <code>check.ok</code> enter <code>Ready</code>; and let an eventless guard route <code>Ready</code> to <code>Complete</code>. Write an ordered trace of exits, transition actions, entries, internal enqueue/dequeue, and stable state. Explain whether a queued external <code>cancel</code> can be processed between these steps.</p>
+<p><strong>Exercise C — Parallel conflict:</strong> Draw a <code>&lt;parallel&gt;</code> with two regions, each reacting locally to <code>reset</code>. Add a parent-sourced transition that exits the parallel state. Identify candidate transitions, compute their exit sets, and apply the descendant/document-order rules. Test the result in an SCXML processor.</p>
+<p><strong>Exercise D — Recovery:</strong> Design a payment flow with an invoke result, a timeout, and a later reconciliation step. Identify statechart data that must be checkpointed and business records that must remain authoritative. Specify a crash-restart test that proves one provider response cannot cause a duplicate capture.</p>
+<p><strong>Exercise E — Processor verification:</strong> Select an engine and list its supported datamodel and I/O processors. Run the priority, history, completion, error, and invocation cases from the conformance matrix. Record the exact version, input file, observed trace, expected behavior, and any documented profile limitations; do not describe a case as “passed” without execution evidence.</p>
+</section>
+<section id="glossary" aria-labelledby="heading-glossary">
+<h2 id="heading-glossary">Glossary</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Active configuration</td>
+  <td>Legal set of currently active states and their required ancestors</td>
+</tr>
+<tr>
+  <td>Atomic state</td>
+  <td>State with no child states, including a <code>&lt;final&gt;</code> for algorithmic purposes</td>
+</tr>
+<tr>
+  <td>Compound state</td>
+  <td>State with nested state children and one active child branch</td>
+</tr>
+<tr>
+  <td><code>&lt;parallel&gt;</code></td>
+  <td>State whose child regions are simultaneously active</td>
+</tr>
+<tr>
+  <td>Eventless transition</td>
+  <td>Transition without an <code>event</code> attribute, tested by guard availability</td>
+</tr>
+<tr>
+  <td>Event descriptor</td>
+  <td>Token-prefix pattern used to match a named SCXML event</td>
+</tr>
+<tr>
+  <td>Optimal transition set</td>
+  <td>Compatible high-priority enabled transitions selected for a microstep</td>
+</tr>
+<tr>
+  <td>Exit set</td>
+  <td>Active states exited by a transition or compatible transition set</td>
+</tr>
+<tr>
+  <td>Transition domain</td>
+  <td>Boundary used in determining exit/entry behavior of a transition</td>
+</tr>
+<tr>
+  <td>Microstep</td>
+  <td>One execution of an optimal transition set with its ordered effects</td>
+</tr>
+<tr>
+  <td>Macrostep</td>
+  <td>Internal processing sequence ending in a stable configuration</td>
+</tr>
+<tr>
+  <td>Run-to-completion</td>
+  <td>Rule that another external event is not selected during unfinished internal processing</td>
+</tr>
+<tr>
+  <td><code>&lt;raise&gt;</code></td>
+  <td>Executable action that enqueues an internal event in the current session</td>
+</tr>
+<tr>
+  <td><code>&lt;send&gt;</code></td>
+  <td>Executable action for event delivery through an event I/O processor</td>
+</tr>
+<tr>
+  <td><code>&lt;invoke&gt;</code></td>
+  <td>Construction starting an external service under a supported invocation type</td>
+</tr>
+<tr>
+  <td><code>&lt;finalize&gt;</code></td>
+  <td>Preprocessing executable content for events returned from an invocation</td>
+</tr>
+<tr>
+  <td><code>&lt;cancel&gt;</code></td>
+  <td>Best-effort cancellation of a delayed send created by the session</td>
+</tr>
+<tr>
+  <td><code>_event</code></td>
+  <td>Protected datamodel variable describing the most recently dequeued event</td>
+</tr>
+<tr>
+  <td><code>done.state.*</code></td>
+  <td>Platform-generated event indicating a compound or parallel completion</td>
+</tr>
+<tr>
+  <td><code>done.invoke.*</code></td>
+  <td>Event signaling completion of a particular invocation</td>
+</tr>
+<tr>
+  <td>Shallow history</td>
+  <td>Saved immediate active child configuration of a parent</td>
+</tr>
+<tr>
+  <td>Deep history</td>
+  <td>Saved atomic descendant configuration of a parent</td>
+</tr>
+<tr>
+  <td>Early binding</td>
+  <td>Data declarations initialized at session startup</td>
+</tr>
+<tr>
+  <td>Late binding</td>
+  <td>State-local data initialized upon first entry of that state</td>
+</tr>
+<tr>
+  <td>Conformance test</td>
+  <td>Executed case comparing processor behavior with a specified normative requirement</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="suggested-study-pathway" aria-labelledby="heading-suggested-study-pathway">
+<h2 id="heading-suggested-study-pathway">Suggested Study Pathway</h2>
+<p>Start with <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/formal-transition-systems">Formal Transition Systems</a> to understand configurations and paths. Study <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/extended-finite-state-machines">Extended Finite-State Machines</a> for datamodel guards, <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/hierarchical-statecharts">Hierarchical Statecharts</a> for nesting and parallel regions, then this SCXML article for exact operational rules. Next examine <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/safety-and-liveness-properties">Safety and Liveness Properties</a>, <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-space-exploration-and-model-checking">State-Space Exploration and Model Checking</a>, and <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-machine-implementation-patterns">State Machine Implementation Patterns</a>.</p>
+<p>For an implementation-oriented pathway, begin with the complete XML examples, then construct the test matrix as executable SCXML processor tests. Only after matching the relevant normative behavior should a project add external sends, invocations, durable checkpoints, and platform extensions. This sequence separates <strong>semantic correctness</strong> from <strong>system integration reliability</strong>, which is essential for trustworthy applications.</p>
+</section>
+<section id="specialist-sub-articles-and-neighboring-topics" aria-labelledby="heading-specialist-sub-articles-and-neighboring-topics">
+<h2 id="heading-specialist-sub-articles-and-neighboring-topics">Specialist Sub-Articles and Neighboring Topics</h2>
+<p>The directory below reproduces the State Machines specialist unit's prescribed 20-topic structure. Links to planned destinations are intentionally active even if a given file has not yet been installed or deployed. The current article is SCXML Execution Semantics.</p>
+<ol class="course-links">
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/formal-transition-systems"><strong>Formal Transition Systems</strong></a> — States, labels, paths, and relations.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/deterministic-finite-automata"><strong>Deterministic Finite Automata</strong></a> — Total transition functions and recognition.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/nondeterministic-finite-automata"><strong>Nondeterministic Finite Automata</strong></a> — Branching, epsilon moves, subset construction.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/regular-languages-and-automata"><strong>Regular Languages and Automata</strong></a> — Automata equivalence and formal expressions.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/mealy-and-moore-machines"><strong>Mealy and Moore Machines</strong></a> — Output-producing finite-state transducers.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-machine-diagrams-and-tables"><strong>State Machine Diagrams and Tables</strong></a> — Notation and coverage techniques.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/extended-finite-state-machines"><strong>Extended Finite-State Machines</strong></a> — Variables, guards, and side effects.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/hierarchical-statecharts"><strong>Hierarchical Statecharts</strong></a> — Nested and concurrent reactive behavior.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/scxml-execution-semantics"><strong>SCXML Execution Semantics</strong></a> — Event dispatch, entry and exit effects. <em>(Current specialist article.)</em></li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/automata-minimization"><strong>Automata Minimization</strong></a> — Equivalent states and partition refinement.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/reachability-and-deadlock-analysis"><strong>Reachability and Deadlock Analysis</strong></a> — Graph exploration and blocked execution.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/safety-and-liveness-properties"><strong>Safety and Liveness Properties</strong></a> — Invariants, progress, and fairness.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/temporal-logic-for-state-machines"><strong>Temporal Logic for State Machines</strong></a> — Logical specifications over execution traces.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-space-exploration-and-model-checking"><strong>State-Space Exploration and Model Checking</strong></a> — Explicit-state and symbolic verification.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/timed-automata"><strong>Timed Automata</strong></a> — Clock constraints and real-time behavior.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/probabilistic-state-machines"><strong>Probabilistic State Machines</strong></a> — Markov transitions and uncertain outcomes.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-machines-in-distributed-systems"><strong>State Machines in Distributed Systems</strong></a> — Messages, retries, failures, and persistence.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-based-software-testing"><strong>State-Based Software Testing</strong></a> — Transition coverage and generated sequences.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-machine-security"><strong>State Machine Security</strong></a> — Authorization, workflow bypass, and trust boundaries.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/state-machine-implementation-patterns"><strong>State Machine Implementation Patterns</strong></a> — Table-driven, event-driven, and durable designs.</li>
+</ol>
+
+<p><strong>Parent and neighboring divisions:</strong> <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines">State Machines overview</a> · <a href="/library/encyclopedia/computer-science/computational-foundations/state-machines-articles/">State Machines specialist index</a> · <a href="/library/encyclopedia/computer-science/computational-foundations/">Computational Foundations</a> · <a href="/library/encyclopedia/computer-science/software-systems/">Software Systems</a> · <a href="/library/encyclopedia/computer-science/programming-and-development/">Programming and Development</a> · <a href="/library/encyclopedia/computer-science/security-systems/">Security Systems</a>.</p>
+</section>
+<section id="sources-and-further-reading" aria-labelledby="heading-sources-and-further-reading">
+<h2 id="heading-sources-and-further-reading">Sources and Further Reading</h2>
+<ol>
+<li><strong>World Wide Web Consortium.</strong> <a href="https://www.w3.org/TR/2015/REC-scxml-20150901/"><em>State Chart XML (SCXML): State Machine Notation for Control Abstraction</em></a>, W3C Recommendation, 1 September 2015. Primary normative reference for structure, events, transition selection, and execution.</li>
+<li><strong>W3C.</strong> <a href="https://www.w3.org/2015/08/scxml-errata.html"><em>Errata for the SCXML Recommendation</em></a>. Corrections and clarifications accompanying the published Recommendation; consult together with the main specification.</li>
+<li><strong>W3C.</strong> <a href="https://www.w3.org/standards/history/scxml/">SCXML publication history</a>. Historical record distinguishing the 2015 Recommendation from earlier Working Drafts.</li>
+<li><strong>W3C.</strong> <a href="https://www.w3.org/TR/scxml/#AlgorithmforSCXMLInterpretation">SCXML Appendix D: Algorithm for SCXML Interpretation</a>. Informative pseudocode illustrating the normative interpreter behavior.</li>
+<li><strong>W3C.</strong> <a href="https://www.w3.org/TR/scxml-xpath-dm/"><em>XPath Data Model for SCXML</em></a>. A separate datamodel specification relevant to expression-language portability.</li>
+<li><strong>David Harel.</strong> “Statecharts: A Visual Formalism for Complex Systems,” <em>Science of Computer Programming</em> 8 (1987), 231–274. Foundational account of hierarchy, orthogonality, and event-driven statechart ideas.</li>
+<li><strong>David Harel and Michal Politi.</strong> <em>Modeling Reactive Systems with Statecharts: The STATEMATE Approach.</em> McGraw-Hill, 1998. Historical and methodological context; not a substitute for the SCXML 1.0 normative processing rules.</li>
+<li><strong>Object Management Group.</strong> <a href="https://www.omg.org/spec/UML/">Unified Modeling Language specification</a>. Companion state-machine tradition with distinct modeling semantics, useful for comparative study.</li>
+</ol>
+</section>
+<section id="editorial-scope-and-publication-note" aria-labelledby="heading-editorial-scope-and-publication-note">
+<h2 id="heading-editorial-scope-and-publication-note">Editorial Scope and Publication Note</h2>
+<p>This article is a standalone MGU Encyclopedia Level 5 specialist treatment of <strong>SCXML 1.0 execution semantics</strong>. It is grounded in the W3C Recommendation and its errata, uses an explicit distinction between normative SCXML requirements and simplified Python teaching models, and does not claim that the Python examples implement a complete SCXML interpreter. The XML fragments illustrate the stated constructs; processors still need to be assessed for the requested datamodel, I/O, and invocation support.</p>
+<p>The current local deliverable is a completed HTML manuscript, not evidence of deployment to the public website. The sibling URLs in the specialist directory are planned publication destinations and remain active by MGU navigation policy. Live hosting, external event I/O integration, and full processor-specific W3C conformance testing are outside the scope of the manuscript itself.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

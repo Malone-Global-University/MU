@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Length Prefixes, Delimiters, and Record Framing | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="A specialist MGU Encyclopedia guide to binary record framing: length prefixes, fixed-width records, delimiters, byte stuffing, incremental parsing, truncation, and bounded decoding.">
+<meta name="keywords" content="record framing, length prefix, binary record, delimiter, sentinel, byte stuffing, TCP message boundaries, incremental parsing, framed records, endian, truncated messages, defensive parsing">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/length-prefixes-delimiters-and-record-framing">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Length Prefixes, Delimiters, and Record Framing | MGU Encyclopedia">
+<meta property="og:description" content="Compare framing strategies and decode three byte-exact records across partial stream reads with practical Python and PowerShell examples.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/length-prefixes-delimiters-and-record-framing">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== SHARED HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Length Prefixes, Delimiters, and Record Framing</h1>
+<p class="subtitle">Locating record boundaries in binary byte streams: fixed widths, prefixes, sentinels, escaping, bounded incremental parsing, and reliable handling of partial input.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#definition-and-scope">Definition and Scope</a></li>
+<li><a href="#framing-as-a-contract-between-producer-and-consumer">Framing as a Contract Between Producer and Consumer</a></li>
+<li><a href="#streams-chunks-segments-and-records-are-different-things">Streams, Chunks, Segments, and Records Are Different Things</a></li>
+<li><a href="#fixed-length-records">Fixed-Length Records</a></li>
+<li><a href="#length-prefixed-records">Length-Prefixed Records</a></li>
+<li><a href="#length-field-width-byte-order-and-count-semantics">Length-Field Width, Byte Order, and Count Semantics</a></li>
+<li><a href="#worked-example-three-variable-length-records">Worked Example: Three Variable-Length Records</a></li>
+<li><a href="#an-intentionally-awkward-chunking-of-the-same-stream">An Intentionally Awkward Chunking of the Same Stream</a></li>
+<li><a href="#python-encoder-for-the-mgu-fr16-format">Python Encoder for the MGU-FR16 Format</a></li>
+<li><a href="#incremental-python-decoder-a-two-state-machine">Incremental Python Decoder: A Two-State Machine</a></li>
+<li><a href="#parser-trace-what-the-decoder-knows-and-when">Parser Trace: What the Decoder Knows and When</a></li>
+<li><a href="#end-of-input-partial-headers-and-truncated-payloads">End-of-Input, Partial Headers, and Truncated Payloads</a></li>
+<li><a href="#empty-records-zero-length-and-end-markers">Empty Records, Zero Length, and End Markers</a></li>
+<li><a href="#size-bounds-and-overflow-safe-arithmetic">Size Bounds and Overflow-Safe Arithmetic</a></li>
+<li><a href="#variable-length-integer-prefixes">Variable-Length Integer Prefixes</a></li>
+<li><a href="#sentinel-delimiters-and-boundary-scanning">Sentinel Delimiters and Boundary Scanning</a></li>
+<li><a href="#escaping-byte-stuffing-and-reserved-markers">Escaping, Byte Stuffing, and Reserved Markers</a></li>
+<li><a href="#newline-delimited-text-is-not-generic-binary-framing">Newline-Delimited Text Is Not Generic Binary Framing</a></li>
+<li><a href="#choosing-between-prefixes-and-delimiters">Choosing Between Prefixes and Delimiters</a></li>
+<li><a href="#boundaries-supplied-by-an-enclosing-layer">Boundaries Supplied by an Enclosing Layer</a></li>
+<li><a href="#real-world-example-http11-message-framing">Real-World Example: HTTP/1.1 Message Framing</a></li>
+<li><a href="#real-world-example-websocket-frame-lengths">Real-World Example: WebSocket Frame Lengths</a></li>
+<li><a href="#file-formats-append-only-logs-and-record-journals">File Formats, Append-Only Logs, and Record Journals</a></li>
+<li><a href="#pipes-subprocesses-and-interprocess-messaging">Pipes, Subprocesses, and Interprocess Messaging</a></li>
+<li><a href="#byte-stuffing-versus-length-prefixing-under-corruption">Byte Stuffing Versus Length Prefixing Under Corruption</a></li>
+<li><a href="#framing-and-integrity-are-different-requirements">Framing and Integrity Are Different Requirements</a></li>
+<li><a href="#multiplexed-streams-and-nested-framing">Multiplexed Streams and Nested Framing</a></li>
+<li><a href="#throughput-buffer-management-and-backpressure">Throughput, Buffer Management, and Backpressure</a></li>
+<li><a href="#design-comparison-and-selection-matrix">Design Comparison and Selection Matrix</a></li>
+<li><a href="#a-reusable-framing-design-checklist">A Reusable Framing Design Checklist</a></li>
+<li><a href="#validation-and-interoperability-test-matrix">Validation and Interoperability Test Matrix</a></li>
+<li><a href="#windows-powershell-51-inspecting-the-three-frames">Windows PowerShell 5.1: Inspecting the Three Frames</a></li>
+<li><a href="#study-questions-and-practical-exercises">Study Questions and Practical Exercises</a></li>
+<li><a href="#glossary-of-framing-terms">Glossary of Framing Terms</a></li>
+<li><a href="#sub-articles-and-further-study">Sub-Articles and Further Study</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#technical-references-and-further-reading">Technical References and Further Reading</a></li>
+</ol>
+</section>
+<section aria-labelledby="heading-definition-and-scope" id="definition-and-scope"><h2 id="heading-definition-and-scope">Definition and Scope</h2>
+<p><strong>Record framing</strong> is the set of rules by which a reader locates the beginning and end of one logical record within a sequence of bytes. A record may be a telemetry reading, serialized object, log entry, file component, database change, or application message. Its bytes may be perfectly valid while its boundary is ambiguous: if the receiver does not know where one record stops, it cannot reliably decide which bytes belong to the next. Framing solves this boundary problem; a schema subsequently explains how to interpret the content within each boundary.</p>
+<p>The principal approaches are <strong>fixed-size records</strong>, <strong>length prefixes</strong>, <strong>sentinel delimiters</strong>, <strong>delimiters with escaping or stuffing</strong>, and boundaries supplied by a containing protocol or file structure. These choices are not interchangeable. Each defines different obligations for writers, readers, recovery tools, and security controls. A two-byte length field, for example, requires an agreed byte order and a rule for whether the length includes the header; a newline-delimited file requires a rule for whether newline is allowed inside a record and whether the file may end without one. These are contract terms, not implementation trivia.</p>
+<p>This Level 5 article belongs to the MGU Encyclopedia's Binary Data unit. It concentrates on <strong>application-level binary record boundaries</strong> for streams, files, and interprocess messages. It does not attempt to teach how TCP congestion control or routing works; those are networking subjects. Nor does it replace the companion <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">Binary Serialization and Schema Contracts</a> article, which establishes the fields and meanings <em>inside</em> a record. The two layers must nevertheless agree about byte counts, version changes, validation, and failure handling.</p>
+</section><section aria-labelledby="heading-framing-as-a-contract-between-producer-and-consumer" id="framing-as-a-contract-between-producer-and-consumer"><h2 id="heading-framing-as-a-contract-between-producer-and-consumer">Framing as a Contract Between Producer and Consumer</h2>
+<p>A useful framing contract answers at least seven questions: how a start is recognized; how the record length or end is determined; what the size unit is; which byte order or integer encoding describes a length; whether empty records are legal; what the maximum record length is; and how incomplete or malformed input is handled. Further questions include whether framing bytes are included in the count, whether multiple records can appear consecutively, whether padding is permitted, and whether the receiving application is allowed to resynchronize after an error.</p>
+<p>Consider a byte sequence <code>00 03 41 42 43 00 02 44 45</code>. It contains the ASCII bytes for <code>ABC</code> and <code>DE</code>, but that interpretation is meaningful only if the first two bytes are a big-endian unsigned record length and the following bytes are the corresponding payload. Under that convention the stream holds two records. Without it, the same bytes could instead be a fixed-layout structure containing a numeric value followed by character fields or part of a longer compressed payload. The bytes do not announce their intended boundaries independently of a specification.</p>
+<p>A complete contract must be shared by independent implementations. A parser that “usually works” with its companion writer can still fail against a valid implementation using different read sizes or operating under a different scheduling pattern. The right test is whether the writer's output can be parsed according to an explicit grammar, even when the transport hands the bytes to the reader in unexpected fragments.</p>
+</section><section aria-labelledby="heading-streams-chunks-segments-and-records-are-different-things" id="streams-chunks-segments-and-records-are-different-things"><h2 id="heading-streams-chunks-segments-and-records-are-different-things">Streams, Chunks, Segments, and Records Are Different Things</h2>
+<p>Many APIs expose byte streams. The caller asks for some number of bytes, and the API returns whatever portion is presently available within its contract. The returned chunk is <strong>not necessarily one logical record</strong>. A reader may receive a single record in pieces, the end of one record followed by the start of another, or several complete records at once. For a stream-oriented socket such as TCP, there is no application-message boundary implied by an individual <code>send</code> or <code>recv</code> call. Reading from an ordinary file at a chosen buffer size likewise does not convert buffer boundaries into record boundaries.</p>
+<p>The distinction is central to correctness. Suppose an application writes a four-byte header and a hundred-byte payload. A receiver asking for 104 bytes may obtain three bytes, then another 20, then 81. Treating the first read as an entire header or the second as an entire message makes the parser nondeterministic with respect to scheduling and buffer sizes. Conversely, a receiver that stops parsing after its first complete record may leave a second complete record already present in its read buffer; a streaming parser must retain that remainder for the next iteration.</p>
+<p>Not every transport has these semantics. Some datagram or message-oriented interfaces preserve message boundaries at the transport API, although datagrams can still be lost, truncated, or restricted in size. Even then, an application payload may itself contain multiple subrecords requiring its own format. <strong>Always identify the precise abstraction promised by the interface</strong> before adding or removing a framing layer.</p>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Boundary is supplied by</th>
+<th>Safe inference</th>
+<th>Unsafe inference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>File read buffer</td>
+<td>Caller and file-reading API</td>
+<td>The bytes returned came from a file offset</td>
+<td>Each read is one business record</td>
+</tr>
+<tr>
+<td>TCP read chunk</td>
+<td>Stream API and available data</td>
+<td>Bytes preserve stream order</td>
+<td>Every <code>recv</code> matches one <code>send</code></td>
+</tr>
+<tr>
+<td>Length-prefixed record</td>
+<td>Framing grammar</td>
+<td>Declared number of payload bytes follows</td>
+<td>Length is trustworthy without validation</td>
+</tr>
+<tr>
+<td>Datagram message</td>
+<td>Message-oriented transport API</td>
+<td>A received datagram represents a delivered datagram unit</td>
+<td>Delivery, integrity, and completeness are universal guarantees</td>
+</tr>
+<tr>
+<td>Nested binary container</td>
+<td>Container specification</td>
+<td>An entry boundary can be decoded from its format</td>
+<td>The entry's internal fields need no schema</td>
+</tr>
+</tbody>
+</table>
+</section><section aria-labelledby="heading-fixed-length-records" id="fixed-length-records"><h2 id="heading-fixed-length-records">Fixed-Length Records</h2>
+<p>A fixed-length format assigns each record a size known in advance, such as 24 bytes. The reader can split a complete 240-byte file into ten records simply by applying the fixed width. There is no per-record length field, and the next record begins exactly 24 bytes after the previous one. Fixed-size records can support straightforward indexing and predictable allocation. They are appropriate when each item has stable, tightly bounded fields or when unused space has a defined padding rule.</p>
+<p>Fixed width is not the same as alignment. A 24-byte <em>wire record</em> is 24 bytes because its format says so, regardless of the in-memory alignment of a particular machine's structures. An implementation that copies a native C structure, including compiler-dependent padding, directly into a file may produce a different size on another platform. Portable formats should specify field offsets and any reserved bytes, not rely on an accidental compiler layout.</p>
+<p>Fixed widths also impose costs. Variable-length strings need a maximum and perhaps a separate used-length field. A missing optional section may still occupy reserved space. Changing a schema in a way that changes the record width can invalidate offset calculations or require versioned partitions. For a file of fixed-width records, a trailing byte count not divisible by the record width is an obvious truncation signal, though divisibility by itself does not establish that the content is valid.</p>
+</section><section aria-labelledby="heading-length-prefixed-records" id="length-prefixed-records"><h2 id="heading-length-prefixed-records">Length-Prefixed Records</h2>
+<p>A <strong>length prefix</strong> appears before the payload and states how many bytes the decoder should consume for that payload. A conventional format might use a two-byte unsigned big-endian integer, followed by exactly that number of bytes. Under this rule, the frame length is <code>2 + payload_length</code>; the <strong>length value itself excludes</strong> the two-byte prefix. Other formats count the entire frame or use multiple lengths for different layers, so their semantics must be spelled out rather than assumed.</p>
+<p>Length prefixes are attractive when payloads vary in size and may contain arbitrary byte values. No payload byte needs to be escaped merely because it resembles punctuation or an end marker. A receiver reads the fixed-width prefix, validates the resulting length, then gathers precisely the indicated number of bytes. The next byte, if any, is the beginning of the next frame's length prefix. Producers can concatenate successive frames without gaps, but readers must be prepared for partial headers and partial payloads.</p>
+<p>The width sets a representational ceiling, not a recommended allocation policy. An unsigned two-byte field can encode integers from 0 through 65,535; an application might still impose a 4,096-byte operational maximum. That smaller bound should be checked <strong>before</strong> allocating or buffering the payload. A declared length of 65,000 must not make a receiver allocate 65,000 bytes just because the integer fits the wire field.</p>
+</section><section aria-labelledby="heading-length-field-width-byte-order-and-count-semantics" id="length-field-width-byte-order-and-count-semantics"><h2 id="heading-length-field-width-byte-order-and-count-semantics">Length-Field Width, Byte Order, and Count Semantics</h2>
+<p>A framing contract must say whether length is one, two, four, or another number of bytes; whether it is fixed-width or variable-length; whether it is signed or unsigned; and how its bytes are ordered. For the integer <code>258</code> (<code>0x0102</code>), a two-byte big-endian prefix is <code>01 02</code>, while little-endian is <code>02 01</code>. A reader using the wrong order will expect 513 bytes instead of 258, potentially consuming the next record or waiting for bytes that are not part of the current record.</p>
+<p>Lengths should normally count <strong>encoded octets</strong>, not Unicode characters or application objects. The UTF-8 text <code>Bé</code> occupies three bytes (<code>42 C3 A9</code>) but contains two Unicode code points. A three-byte UTF-8 payload must be prefixed with byte length 3 if the framing grammar measures bytes. The reader may decode the completed payload as text, but it should not read two bytes because a separate text-field schema says the string contains two characters.</p>
+<table>
+<thead>
+<tr>
+<th>Contract parameter</th>
+<th>Example choice</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Length-field width</td>
+<td>Unsigned 16-bit integer</td>
+<td>Limits representable values to 0–65,535</td>
+</tr>
+<tr>
+<td>Byte order</td>
+<td>Big-endian</td>
+<td><code>00 03</code> means 3, not 768</td>
+</tr>
+<tr>
+<td>Counted region</td>
+<td>Payload only</td>
+<td>Total frame occupies <code>2 + length</code> bytes</td>
+</tr>
+<tr>
+<td>Count unit</td>
+<td>Bytes (octets)</td>
+<td>Multibyte UTF-8 characters do not shorten the byte count</td>
+</tr>
+<tr>
+<td>Zero length</td>
+<td>Valid empty record</td>
+<td>A <code>00 00</code> prefix is a frame, not automatically end-of-stream</td>
+</tr>
+<tr>
+<td>Maximum payload</td>
+<td>4,096 bytes</td>
+<td>Resource limit is stricter than the wire-field capacity</td>
+</tr>
+<tr>
+<td>End of input</td>
+<td>Must fall at a frame boundary</td>
+<td>A lone prefix byte or incomplete payload is truncation</td>
+</tr>
+</tbody>
+</table>
+</section><section aria-labelledby="heading-worked-example-three-variable-length-records" id="worked-example-three-variable-length-records"><h2 id="heading-worked-example-three-variable-length-records">Worked Example: Three Variable-Length Records</h2>
+<p>The following intentionally simple educational format, called <strong>MGU-FR16</strong>, has an unsigned 16-bit big-endian payload-length field followed immediately by its payload. The length excludes the prefix. Payloads are arbitrary binary data: they need not be text. Zero-byte payloads are allowed, although none of the three examples below is empty. The worked stream comprises: the ASCII bytes <code>CAT</code>; the two raw bytes <code>00 FF</code>; and the ASCII bytes <code>HELLO</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Frame</th>
+<th>Length prefix</th>
+<th>Payload bytes</th>
+<th style="text-align:right">Total bytes</th>
+<th>Stream byte offsets</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>00 03</code></td>
+<td><code>43 41 54</code> (<code>CAT</code>)</td>
+<td style="text-align:right">5</td>
+<td>0–4</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>00 02</code></td>
+<td><code>00 FF</code> (binary bytes)</td>
+<td style="text-align:right">4</td>
+<td>5–8</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>00 05</code></td>
+<td><code>48 45 4C 4C 4F</code> (<code>HELLO</code>)</td>
+<td style="text-align:right">7</td>
+<td>9–15</td>
+</tr>
+<tr>
+<td><strong>Combined</strong></td>
+<td><strong>6 prefix bytes</strong></td>
+<td><strong>10 payload bytes</strong></td>
+<td style="text-align:right"><strong>16</strong></td>
+<td><strong>0–15</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The concatenated stream is exactly:</p>
+<pre><code class="language-text">Offset  00 01 02 03 04 |05 06 07 08 |09 10 11 12 13 14 15
+Bytes   00 03 43 41 54 |00 02 00 FF |00 05 48 45 4C 4C 4F
+        [N=3][ CAT   ] [N=2][raw]   [N=5][   HELLO     ]
+</code></pre>
+<p>A reader starts at offset 0, decodes <code>00 03</code> as length 3, and consumes bytes 2–4. The next prefix begins at offset 5. It decodes <code>00 02</code> and consumes the two bytes at offsets 7–8, including the zero byte; <code>00</code> inside a payload is not a terminator. Finally, offset 9 starts <code>00 05</code>, and bytes 11–15 comprise the third record. No padding or separator appears between frames. The entire 16-byte sequence is valid regardless of how it is divided into input chunks.</p>
+</section><section aria-labelledby="heading-an-intentionally-awkward-chunking-of-the-same-stream" id="an-intentionally-awkward-chunking-of-the-same-stream"><h2 id="heading-an-intentionally-awkward-chunking-of-the-same-stream">An Intentionally Awkward Chunking of the Same Stream</h2>
+<p>To expose a common mistake, suppose the reader receives the 16 bytes in five pieces whose boundaries do not coincide with frames:</p>
+<table>
+<thead>
+<tr>
+<th>Delivery</th>
+<th>Bytes handed to parser</th>
+<th>New issue exposed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>00</code></td>
+<td>Half of the first two-byte length field</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>03 43</code></td>
+<td>Header completed, but only one of three payload bytes present</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>41 54 00 02 00</code></td>
+<td>First record completes; second header and first payload byte arrive</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>FF 00 05 48 45</code></td>
+<td>Second record completes; third header and two payload bytes arrive</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>4C 4C 4F</code></td>
+<td>Third record completes</td>
+</tr>
+</tbody>
+</table>
+<p>The reader must emit no records after deliveries 1 and 2, emit <code>CAT</code> after delivery 3, emit the two-byte binary payload after delivery 4, and emit <code>HELLO</code> after delivery 5. A parser that tries to interpret each delivery as a record will fail; a parser that incorrectly assumes an entire header arrives in one delivery will also fail. <strong>Framing depends on the accumulated byte sequence and its grammar, not on delivery boundaries.</strong></p>
+<p>The same test is useful for file readers and pipes. A file-reading buffer might happen to be 4,096 bytes while the format allows records of 20,000 bytes. The implementation must assemble a bounded record across reads or choose a different abstraction; it must not silently assume the file's read buffer is also the record-width limit.</p>
+</section><section aria-labelledby="heading-python-encoder-for-the-mgu-fr16-format" id="python-encoder-for-the-mgu-fr16-format"><h2 id="heading-python-encoder-for-the-mgu-fr16-format">Python Encoder for the MGU-FR16 Format</h2>
+<p>The following executable example writes a list of binary payloads under the declared contract. <code>struct.pack("&gt;H", length)</code> explicitly selects a two-byte unsigned big-endian integer. The chosen operational limit of 4,096 bytes applies before serialization; <code>bytes</code> are required so that accidental implicit text encoding cannot obscure the byte count. Real applications may add message types, checksums, and versioning to the <em>payload schema</em>, but those are separate design decisions.</p>
+<pre><code class="language-python">import struct
+
+MAX_PAYLOAD = 4096
+
+
+def encode_frames(payloads):
+    output = bytearray()
+    for payload in payloads:
+        if type(payload) is not bytes:
+            raise TypeError("Each payload must be bytes")
+        if len(payload) &gt; MAX_PAYLOAD:
+            raise ValueError("Payload exceeds 4096-byte limit")
+        output += struct.pack("&gt;H", len(payload))
+        output += payload
+    return bytes(output)
+
+
+sample_payloads = [b"CAT", bytes.fromhex("00 ff"), b"HELLO"]
+wire = encode_frames(sample_payloads)
+assert len(wire) == 16
+assert wire.hex(" ") == (
+    "00 03 43 41 54 00 02 00 ff 00 05 48 45 4c 4c 4f"
+)
+print(wire.hex(" "))
+</code></pre>
+<p>The encoder's output is deterministic for a given list of bytes. It does not specify whether the transport sends all 16 bytes in one operation, whether the receiver obtains the bytes in a single read, or whether the receiver's application is authorized to trust the meaning of the payload. Those are deliberately separate concerns.</p>
+</section><section aria-labelledby="heading-incremental-python-decoder-a-two-state-machine" id="incremental-python-decoder-a-two-state-machine"><h2 id="heading-incremental-python-decoder-a-two-state-machine">Incremental Python Decoder: A Two-State Machine</h2>
+<p>An incremental decoder can be modeled as two states: <strong>awaiting two prefix bytes</strong> and <strong>awaiting a declared number of payload bytes</strong>. Each call to <code>feed</code> contributes some arbitrary number of new bytes and may produce zero, one, or several completed records. The implementation below is deliberately small enough for instruction, not a production-ready network server. It bounds the size of each supplied chunk to avoid unbounded batch buffering, validates the declared record size as soon as the prefix is available, and distinguishes an incomplete stream at final end-of-input.</p>
+<pre><code class="language-python">class FrameDecoder:
+    MAX_PAYLOAD = 4096
+    MAX_INPUT_CHUNK = 65536
+
+    def __init__(self):
+        self.pending = bytearray()
+        self.expected = None
+
+    def feed(self, chunk):
+        if type(chunk) is not bytes:
+            raise TypeError("Feed requires bytes")
+        if len(chunk) &gt; self.MAX_INPUT_CHUNK:
+            raise ValueError("Input chunk exceeds batch limit")
+        self.pending.extend(chunk)
+        records = []
+
+        while True:
+            if self.expected is None:
+                if len(self.pending) &lt; 2:
+                    break
+                self.expected = int.from_bytes(self.pending[:2], "big")
+                del self.pending[:2]
+                if self.expected &gt; self.MAX_PAYLOAD:
+                    raise ValueError("Frame declares an excessive length")
+
+            if len(self.pending) &lt; self.expected:
+                break
+
+            records.append(bytes(self.pending[:self.expected]))
+            del self.pending[:self.expected]
+            self.expected = None
+
+        return records
+
+    def finish(self):
+        if self.expected is not None or self.pending:
+            raise ValueError("Truncated frame at end of input")
+
+
+chunks = [
+    bytes.fromhex("00"),
+    bytes.fromhex("03 43"),
+    bytes.fromhex("41 54 00 02 00"),
+    bytes.fromhex("ff 00 05 48 45"),
+    bytes.fromhex("4c 4c 4f"),
+]
+reader = FrameDecoder()
+outputs = [reader.feed(chunk) for chunk in chunks]
+assert outputs == [[], [], [b"CAT"], [b"\x00\xff"], [b"HELLO"]]
+reader.finish()
+print(outputs)
+</code></pre>
+<p>The decoder uses a <code>bytearray</code> and removes bytes from its front, which is easy to read but may be less efficient than a cursor/ring buffer at high throughput. A production implementation should also include stream cancellation, deadlines, accounting for the number of frames per interval, appropriate exception handling, and a policy for discarding the decoder after a protocol error. The example does not attempt recovery after an invalid length; its caller should terminate or reset the failed framing context rather than feed more untrusted bytes into an ambiguous state.</p>
+</section><section aria-labelledby="heading-parser-trace-what-the-decoder-knows-and-when" id="parser-trace-what-the-decoder-knows-and-when"><h2 id="heading-parser-trace-what-the-decoder-knows-and-when">Parser Trace: What the Decoder Knows and When</h2>
+<p>The decoder retains state across feeds, which is what protects it from accidental dependence on delivery segmentation. After the very first <code>00</code>, it cannot know the length because the second length byte has not arrived. Once <code>03</code> arrives, it knows the next payload must be three bytes, but the <code>43</code> that followed is only the first payload byte. The third delivery supplies <code>41 54</code>, completing <code>CAT</code>; it also contains another complete header <code>00 02</code> and one payload byte <code>00</code>. A single feed can therefore both complete one frame and begin a second.</p>
+<table>
+<thead>
+<tr>
+<th>After delivery</th>
+<th style="text-align:right">Decoded next length</th>
+<th>Pending payload/header bytes</th>
+<th>Frames emitted on delivery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:right">Unknown</td>
+<td>Prefix fragment <code>00</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:right">3</td>
+<td><code>43</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:right">2</td>
+<td><code>00</code></td>
+<td><code>CAT</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:right">5</td>
+<td><code>48 45</code></td>
+<td><code>00 FF</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td style="text-align:right">None; next prefix needed</td>
+<td>Empty</td>
+<td><code>HELLO</code></td>
+</tr>
+</tbody>
+</table>
+<p>This model is <strong>incremental parsing</strong>. Its general technique applies to variable-width integers, escaped delimiters, tagged record layouts, and nested containers, although their state machines differ. In all cases a parser must retain exactly the information required to decide whether the next byte is a continuation, payload, escape sequence, terminator, or start of another record.</p>
+</section><section aria-labelledby="heading-end-of-input-partial-headers-and-truncated-payloads" id="end-of-input-partial-headers-and-truncated-payloads"><h2 id="heading-end-of-input-partial-headers-and-truncated-payloads">End-of-Input, Partial Headers, and Truncated Payloads</h2>
+<p>Partial data is normal while a stream remains open; incomplete data at a declared, final end-of-input is usually an error. Under MGU-FR16, a lone byte <code>00</code> at end-of-file means the two-byte length field was truncated. The bytes <code>00 04 41 42</code> mean a four-byte payload was promised, but only two payload bytes arrived. A reader should not invent the missing <code>43 44</code>, return <code>AB</code> as a valid two-byte record, or quietly treat an incomplete frame as a complete empty record.</p>
+<p>End-of-input is distinct from a temporary absence of bytes. A nonblocking reader may receive an indication that no more data is currently available; that is not necessarily an EOF. Similarly, an asynchronous read can be canceled or time out while part of a frame is pending. Applications must define whether retrying is allowed, whether the connection remains usable, and whether the incomplete frame can be resumed. A robust consumer reports the phase, declared size, and amount received without leaking sensitive content into logs.</p>
+<p>Transport truncation can be caused by crashes, dropped connections, aborted writes, file corruption, or deliberate attacks. The framing layer can diagnose incompleteness when it knows a promised length, but it cannot guarantee that a logically complete record was authentic. For authenticity or integrity, use the format's specified checksums or cryptographic protections where appropriate rather than treating complete framing as proof of correctness.</p>
+</section><section aria-labelledby="heading-empty-records-zero-length-and-end-markers" id="empty-records-zero-length-and-end-markers"><h2 id="heading-empty-records-zero-length-and-end-markers">Empty Records, Zero Length, and End Markers</h2>
+<p>What does a zero-length prefix mean? Under the worked MGU-FR16 contract it represents a legitimate empty record, encoded as <code>00 00</code>. The decoder immediately emits <code>b""</code> without consuming payload bytes and then reads the next prefix. Some other formats instead use zero as an end-of-sequence marker, a heartbeat, or a prohibited value. Neither interpretation is intrinsically correct: it must be stated in the record grammar. Using zero simultaneously to mean both “empty message” and “end of data” without an escape or mode distinction makes the grammar ambiguous.</p>
+<p>A one-byte zero inside a nonempty record is also not an implicit delimiter. The second worked record contains <code>00 FF</code>, and the parser consumes both bytes because the prefix declares length two. This illustrates one benefit of length-prefix framing: the full byte alphabet is available for payload values. The same safety does not hold for an unescaped delimiter format, which must reserve a byte pattern or provide a representation for its occurrence within content.</p>
+<p>Some designs allow a stream to end only after an explicit terminal record. That can detect an unexpected early EOF in streams where the last ordinary frame happened to be complete, but it adds another contract condition. A terminal marker must have an unambiguous representation, and a decoder must reject ordinary records after it if the grammar forbids them.</p>
+</section><section aria-labelledby="heading-size-bounds-and-overflow-safe-arithmetic" id="size-bounds-and-overflow-safe-arithmetic"><h2 id="heading-size-bounds-and-overflow-safe-arithmetic">Size Bounds and Overflow-Safe Arithmetic</h2>
+<p>The first security question about an untrusted prefix is not “how many bytes can this integer represent?” but <strong>“how many bytes will this application permit?”</strong> The format width may allow a value orders of magnitude larger than the resource budget. Enforce a maximum before allocating payload storage or accepting more data; apply separate bounds to total stream length, nesting depth, decompressed size, record count, and time where relevant. A 4,096-byte frame maximum does not by itself prevent a peer from sending millions of legal small frames.</p>
+<p>Length arithmetic is another attack surface. In a fixed-width integer environment, computing <code>header_length + declared_payload_length</code> without checking overflow can wrap a large value into a small one, undermining allocation or bounds checks. A safer pattern checks <code>declared_payload_length &lt;= MAX_ALLOWED</code> and that the available bytes are sufficient for the declared region without adding unchecked values. If an enclosing container has a known number of bytes remaining, compare the declared count against the remaining space before advancing offsets. Avoid converting large unsigned wire values to smaller signed integers before validation.</p>
+<table>
+<thead>
+<tr>
+<th>Input or condition</th>
+<th>Required treatment under a strict bounded design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Two-byte prefix <code>10 01</code> (4,097)</td>
+<td>Reject before buffering a payload when maximum is 4,096</td>
+</tr>
+<tr>
+<td>Header ends after first prefix byte</td>
+<td>Wait if stream open; fail if final EOF</td>
+</tr>
+<tr>
+<td>Valid header, fewer payload bytes than declared</td>
+<td>Retain state pending more bytes; fail at final EOF</td>
+</tr>
+<tr>
+<td>Several complete frames in one read</td>
+<td>Emit all available records or preserve extras</td>
+</tr>
+<tr>
+<td><code>00 00</code> prefix</td>
+<td>Emit empty record when zero length is legal</td>
+</tr>
+<tr>
+<td>Correct frame followed by trailing prefix fragment</td>
+<td>Emit complete frame, then report truncation at EOF</td>
+</tr>
+<tr>
+<td>Repeated zero-length frames</td>
+<td>Honor grammar but apply event/record-rate limits</td>
+</tr>
+<tr>
+<td>Checksum mismatch in a higher-level record</td>
+<td>Reject or quarantine according to integrity policy</td>
+</tr>
+</tbody>
+</table>
+</section><section aria-labelledby="heading-variable-length-integer-prefixes" id="variable-length-integer-prefixes"><h2 id="heading-variable-length-integer-prefixes">Variable-Length Integer Prefixes</h2>
+<p>Some formats avoid a fixed two- or four-byte header by encoding lengths as variable-width integers. A common family of schemes uses seven payload bits in each byte and a continuation bit to indicate whether more bytes follow. Small lengths occupy a single byte; large lengths require several. This can save space when many records are small, but it creates extra parse states: a prefix itself may be split across reads, may become excessively long, or may encode values outside the permitted range.</p>
+<p>An agreed variable-length scheme needs rules for maximum encoded byte count, integer range, whether redundant nonminimal encodings are permitted, and how malformed continuation patterns are rejected. One format's “varint” might use a different signed-value mapping or canonicalization policy than another's. A parser should bound the prefix <em>during</em> decoding, not after accumulating an arbitrary number of continuation bytes. It should also reject a decoded size beyond the permitted payload budget before fetching a payload.</p>
+<p>Fixed-width prefixes are often easier for educational examples and simple framed streams, while varints can reduce header overhead on a distribution dominated by small records. Neither choice determines compression ratio, application throughput, or trustworthiness in isolation. The surrounding implementation and workload matter.</p>
+</section><section aria-labelledby="heading-sentinel-delimiters-and-boundary-scanning" id="sentinel-delimiters-and-boundary-scanning"><h2 id="heading-sentinel-delimiters-and-boundary-scanning">Sentinel Delimiters and Boundary Scanning</h2>
+<p>A <strong>sentinel delimiter</strong> is a distinguished byte or byte sequence that marks a boundary, such as a newline <code>0A</code>, a zero byte <code>00</code>, or a longer magic terminator. A reader scans until it encounters the delimiter, then treats the preceding bytes as a record. This is convenient for line-oriented log files and some command protocols. It removes the need to know the record's length before reading, but it introduces a new obligation: the delimiter must not appear unambiguously inside unescaped payload data.</p>
+<p>For example, a format that uses <code>00</code> as a terminator can encode <code>41 42 00 43 44 00</code> as two records, <code>AB</code> and <code>CD</code>. But it cannot directly encode the raw bytes <code>41 00 42</code> as one record without additional rules because the middle <code>00</code> would prematurely terminate the record. This is not a defect in every delimiter-based system; it is a reason the system must restrict content or define an escape/stuffing mechanism.</p>
+<p>Delimiter scans must enforce maximum record sizes even if no delimiter arrives. Otherwise a malicious or buggy producer can stream unlimited bytes and force a receiver to retain them while waiting for the terminator. A streaming delimiter parser can look for the marker incrementally and enforce an upper bound on the bytes since the last completed record. Multi-byte markers add the problem of a marker divided across input chunks; the parser must preserve the appropriate suffix so it can recognize the marker when the next chunk arrives.</p>
+</section><section aria-labelledby="heading-escaping-byte-stuffing-and-reserved-markers" id="escaping-byte-stuffing-and-reserved-markers"><h2 id="heading-escaping-byte-stuffing-and-reserved-markers">Escaping, Byte Stuffing, and Reserved Markers</h2>
+<p><strong>Escaping</strong> represents reserved delimiter bytes differently when they occur as content. In one hypothetical format, <code>7E</code> marks a frame boundary, and <code>7D</code> is an escape byte. A payload <code>41 7E 42</code> could be transformed into <code>41 7D 5E 42</code> by writing the reserved marker as an escaped sequence. The exact transformation and what happens to literal escape bytes must be documented. Real protocols may use an exclusive-OR transformation or a more specialized rule. An escaped delimiter must not accidentally close the frame.</p>
+<p><strong>Byte stuffing</strong> inserts extra bytes or transformed sequences to ensure the reserved marker does not appear inside the framed representation. <strong>Bit stuffing</strong> addresses a similar problem at a bit level, inserting bits to avoid accidental delimiter patterns. The additional bytes or bits are overhead; their quantity depends on the data. The receiver reverses the transformation only after identifying frame boundaries and must reject invalid or truncated escape sequences. For a trailing escape byte with no following character, “wait for more input” is reasonable while the stream is open, but final EOF is malformed.</p>
+<p>An escape convention should be unambiguous and reversible. If <code>7D 5E</code> means a literal <code>7E</code>, then the contract must also define how literal <code>7D</code> is encoded. It should specify whether <code>7D</code> followed by an unknown byte is invalid or an extension. If malformed escape sequences are silently interpreted as literal bytes, two implementations can disagree about boundaries, a dangerous condition when the records carry security-sensitive actions.</p>
+<table>
+<thead>
+<tr>
+<th>Delimiter strategy</th>
+<th>Advantages</th>
+<th>Reader obligation</th>
+<th>Main limitation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reserved newline byte</td>
+<td>Simple visual inspection of text records</td>
+<td>Scan, bound line length, define line ending</td>
+<td>Embedded newline needs restriction or representation</td>
+</tr>
+<tr>
+<td>NUL-terminated binary item</td>
+<td>Simple single-byte terminator</td>
+<td>Scan to <code>00</code> with maximum bound</td>
+<td>Raw NUL requires another representation</td>
+</tr>
+<tr>
+<td>Marker with escaping</td>
+<td>Arbitrary content can be represented</td>
+<td>Track escapes and reject malformed sequences</td>
+<td>Variable overhead and parser complexity</td>
+</tr>
+<tr>
+<td>Length prefix</td>
+<td>Arbitrary byte values without escaping</td>
+<td>Parse, bound, and honor declared length</td>
+<td>Corrupted prefix can obscure the next boundary</td>
+</tr>
+<tr>
+<td>Fixed-width records</td>
+<td>Predictable offsets and sizes</td>
+<td>Consume precisely fixed width</td>
+<td>Padding or versioned layouts may be necessary</td>
+</tr>
+</tbody>
+</table>
+</section><section aria-labelledby="heading-newline-delimited-text-is-not-generic-binary-framing" id="newline-delimited-text-is-not-generic-binary-framing"><h2 id="heading-newline-delimited-text-is-not-generic-binary-framing">Newline-Delimited Text Is Not Generic Binary Framing</h2>
+<p>A newline-delimited JSON log or UTF-8 line protocol is a useful special case, not proof that newline is a universal framing byte. Its grammar must specify whether line endings are LF (<code>0A</code>) or CRLF (<code>0D 0A</code>), whether a final line can omit a trailing line ending, whether blank lines represent records, and how newline characters <em>inside a logical value</em> are escaped. For example, a JSON string containing a newline is ordinarily serialized with an escape sequence rather than a literal line-break byte in its single-line representation.</p>
+<p>Text encodings matter. The byte <code>0A</code> denotes a line feed in UTF-8 and in common ASCII-compatible formats, but a UTF-16LE line feed is represented as <code>0A 00</code>. A byte-by-byte scan for <code>0A</code> in a UTF-16LE payload can therefore recognize boundaries incorrectly if the framing contract was defined in terms of Unicode code points instead of raw octets. In practice, define framing over bytes first, or fully specify the decoding layer before interpreting code-point delimiters. Avoid heuristics that mix byte and character indexing without agreement.</p>
+<p>Line-based formats are excellent for human inspection, append-only logs, and administrative scripts when their limits and escaping are clear. Binary protocols frequently choose a length prefix because arbitrary payloads may contain every possible byte value. A design can also combine newline records with an inner binary encoding such as base64, accepting expansion in exchange for simpler line-oriented tooling.</p>
+</section><section aria-labelledby="heading-choosing-between-prefixes-and-delimiters" id="choosing-between-prefixes-and-delimiters"><h2 id="heading-choosing-between-prefixes-and-delimiters">Choosing Between Prefixes and Delimiters</h2>
+<p>The design choice depends on the properties of the data and its environment. Length-prefix framing gives direct knowledge of the expected payload size, which can simplify reservation, skipping of unsupported record types, and detection of an incomplete trailing record. However, a damaged prefix can cause a reader to consume unrelated bytes as one giant payload or leave it waiting for an impossible amount of data. Hard caps, format checks, and explicit errors reduce this risk; they do not eliminate every recovery problem.</p>
+<p>A delimiter-based format may allow a scanner to locate the next plausible record after a corrupted one, especially if the delimiter is rare and properly escaped. But the reader must scan for the marker and guard against maliciously absent delimiters. If the payload alphabet is unrestricted, escaping or an encoding transformation may add overhead. The simplicity of <code>readline()</code> is useful only when the writer really guarantees a line protocol. Neither strategy is inherently more secure or more efficient in all cases.</p>
+<p>For a file that must support random access, a table of entry offsets or lengths may be as important as local framing. For a sequence of tiny events, the overhead of a four-byte prefix might be significant; for megabyte-sized messages it is negligible. Compression changes the size distribution: a compressed payload length counts compressed bytes in the enclosing frame, while decompressed output must be separately limited.</p>
+</section><section aria-labelledby="heading-boundaries-supplied-by-an-enclosing-layer" id="boundaries-supplied-by-an-enclosing-layer"><h2 id="heading-boundaries-supplied-by-an-enclosing-layer">Boundaries Supplied by an Enclosing Layer</h2>
+<p>Sometimes the application need not invent another record frame because the enclosing container already supplies a reliable boundary and length. A structured file may have a directory of offsets, an archive entry may carry a compressed size, or a message-oriented API may return one complete message per operation. In such cases adding a second framing system can be redundant, although the application still needs a schema for the entry's contents and must validate the enclosing length or API contract.</p>
+<p>There is no universal “one frame per packet” rule. Network packets, transport stream segments, API reads, and logical application messages occupy different layers. A network packet might include portions of several application records after aggregation or only a fragment of one record. If an interface exposes an ordered stream rather than preserved message boundaries, the application must supply framing or rely on a higher-level library that already does so.</p>
+<p>Some protocols use <strong>connection-close delimitation</strong> for a final body: the end of the stream itself marks completion. This can be workable when the contract reserves the entire remainder of the connection for one body and has an explicit policy for unexpected disconnects. It is unsuitable for multiplexing many records on a persistent connection unless another layer provides boundaries. A reader generally cannot infer that a clean-looking final EOF was the producer's intended logical end unless the protocol provides the necessary signals.</p>
+</section><section aria-labelledby="heading-real-world-example-http11-message-framing" id="real-world-example-http11-message-framing"><h2 id="heading-real-world-example-http11-message-framing">Real-World Example: HTTP/1.1 Message Framing</h2>
+<p>HTTP/1.1 provides a consequential example of framing rules that combine headers with body-length semantics. The current HTTP/1.1 message syntax specification, <a href="https://www.rfc-editor.org/rfc/rfc9112.html">RFC 9112</a>, defines how recipients determine message-body length using the message type, <code>Transfer-Encoding</code>, <code>Content-Length</code>, and other conditions. A <code>Content-Length</code> value is an octet count, not a count of text characters. The <code>chunked</code> transfer coding, when applicable and correctly used, adds its own framing of chunks and an end indicator. The body length cannot be guessed merely by reading until a temporarily empty socket buffer.</p>
+<p>This illustrates the hazards of <strong>conflicting parsers</strong>. If a front-end intermediary and an origin server interpret the same message boundaries differently, bytes that one side treats as a body may be treated by the other as another request. The resulting class of security flaws includes HTTP request smuggling. RFC 9112 defines strict rules for invalid or conflicting framing metadata; implementation convenience is not a license to interpret ambiguous combinations however one wishes. The correct implementation is to follow the complete HTTP specification, not borrow a fragment of its syntax for an improvised binary protocol.</p>
+<p>HTTP is used here as a case study of boundary agreement across independently implemented components. Network server operation, HTTP request processing, and protocol security belong to their deeper networking and security subjects. The reusable Binary Data lesson is that a single byte stream can become dangerously ambiguous when its participants disagree about how a length is derived or when a body ends.</p>
+</section><section aria-labelledby="heading-real-world-example-websocket-frame-lengths" id="real-world-example-websocket-frame-lengths"><h2 id="heading-real-world-example-websocket-frame-lengths">Real-World Example: WebSocket Frame Lengths</h2>
+<p>The WebSocket framing specification, <a href="https://www.rfc-editor.org/rfc/rfc6455.html">RFC 6455</a>, demonstrates a more elaborate binary frame header. A WebSocket frame includes flags and an initial seven-bit payload-length indicator. Values up to 125 can directly indicate the payload length; the special indicators 126 and 127 cause the reader to use an additional 16-bit or 64-bit length field, respectively. The length is encoded according to the protocol rules, and the 64-bit form reserves its high bit. Client-to-server frames are masked under the base protocol; those details are not optional in a correct implementation.</p>
+<p>A <strong>frame</strong> and a complete WebSocket <strong>message</strong> also need not be the same thing: messages may be fragmented across frames, and control frames have additional restrictions. A frame parser should not treat every received transport chunk as a frame, nor every frame as a complete application message. This example also shows why a general-purpose length decoder cannot be substituted for a protocol-specific parser. The length bits interact with flags, masking, extensions, and fragmentation semantics.</p>
+<p>Even when a wire format can represent huge lengths, real servers must enforce application-appropriate memory and workload limits. Parsing according to the protocol grammar and enforcing operational limits are separate, complementary responsibilities.</p>
+</section><section aria-labelledby="heading-file-formats-append-only-logs-and-record-journals" id="file-formats-append-only-logs-and-record-journals"><h2 id="heading-file-formats-append-only-logs-and-record-journals">File Formats, Append-Only Logs, and Record Journals</h2>
+<p>Framing is equally important outside networking. Consider an append-only log whose entries are <code>[length][record]</code>. The writer may append one complete entry at a time, but a crash can leave a partial header or partial payload at the file's end. On restart, a reader can parse the complete prefix sequence and detect truncation at the tail. Whether it discards the incomplete tail, quarantines the file, or refuses to start is a <strong>recovery policy</strong> that depends on the log's durability guarantees and business requirements.</p>
+<p>A declared length is not enough to detect all corruption. A flipped byte inside a payload may leave the frame structurally complete; a corrupted length might skip to an unrelated offset that happens to look plausible. Journals commonly combine boundaries with checksums, sequence numbers, version fields, or transaction markers. Those extras can help detect and recover from partial or corrupted writes, but they are part of a richer record contract. They do not guarantee that data has been durably persisted unless the storage and synchronization protocol provides that guarantee.</p>
+<p>If a log supports concurrent writers, the system needs a rule for atomicity and ordering. Simply appending two prefix+payload sequences from different writers without coordination can interleave their bytes. The resulting file is not repaired by adding length prefixes. The writer side must ensure serialized or otherwise transactionally bounded output according to the storage API's guarantees.</p>
+</section><section aria-labelledby="heading-pipes-subprocesses-and-interprocess-messaging" id="pipes-subprocesses-and-interprocess-messaging"><h2 id="heading-pipes-subprocesses-and-interprocess-messaging">Pipes, Subprocesses, and Interprocess Messaging</h2>
+<p>Byte-oriented pipes and standard-input streams frequently carry structured records between processes. A program that launches a helper and writes multiple requests to its standard input may use length-prefix framing to distinguish them. The helper can read two length bytes, then the promised payload, perform one operation, and return a framed response on standard output. This works across processes and programming languages when the wire contract defines sizes, byte order, encoding, and error behavior.</p>
+<p>A common failure occurs when human-readable diagnostic messages are written to the same byte stream as the binary protocol. A single debug print can insert unexpected bytes before a length prefix, causing the receiver to decode an absurd length or lose synchronization. Structured programs typically keep protocol bytes on one channel and diagnostics on a separate logging channel. Framing alone cannot separate valid protocol data from arbitrary text mixed into the stream.</p>
+<p>Timeouts, process termination, and backpressure also matter. A subprocess may stop responding after sending one byte of a two-byte header, or it may block because its output pipe is full while the caller blocks writing input. Those operational concerns surround framing without altering its grammar: at the parser level, the one byte remains an incomplete prefix until more data arrives or the channel is definitively closed.</p>
+</section><section aria-labelledby="heading-byte-stuffing-versus-length-prefixing-under-corruption" id="byte-stuffing-versus-length-prefixing-under-corruption"><h2 id="heading-byte-stuffing-versus-length-prefixing-under-corruption">Byte Stuffing Versus Length Prefixing Under Corruption</h2>
+<p>When a length field is corrupted, a parser may lose its place for the rest of the stream. Suppose a three-byte frame is mistakenly declared to contain 300 bytes. The receiver may wait for future records and consume them as though they belonged to the corrupted frame. A maximum-length rule can reject some such cases immediately; it cannot always detect a plausible but incorrect length. A checksum in the frame may identify bad content after the frame is assembled, but it does not automatically say where the next valid frame begins.</p>
+<p>By contrast, a delimiter scheme with a unique reserved marker may have opportunities to <strong>resynchronize</strong> at the next unescaped marker, provided the marker is trustworthy and the corruption has not altered escape handling. This is not guaranteed: accidental marker patterns, truncated escape sequences, or corrupt length fields in nested components can defeat recovery. Fixed-size records can sometimes resynchronize using a known stride, but a lost or inserted byte shifts all later offsets.</p>
+<p>A robust archival format may combine several aids: a recognizable record signature, bounded length, version, checksum, and periodic resynchronization points. Each adds bytes and implementation complexity. Such a design should specify how false positives are handled when ordinary payload bytes resemble a signature; a matching magic value by itself is not proof of a valid record.</p>
+</section><section aria-labelledby="heading-framing-and-integrity-are-different-requirements" id="framing-and-integrity-are-different-requirements"><h2 id="heading-framing-and-integrity-are-different-requirements">Framing and Integrity Are Different Requirements</h2>
+<p>A frame decoder answers the syntactic question, “Which bytes form this record?” An integrity check asks whether a record appears to have been altered accidentally. Authentication can additionally provide assurances about origin and deliberate modification, depending on the cryptographic construction and key management. A complete frame does not imply a trustworthy frame; a valid checksum does not establish authenticity against an adversary capable of recomputing it.</p>
+<p>For example, a length-prefixed payload could include a CRC32 value. A receiver first identifies the frame according to its length, then checks the CRC over the specified bytes. It must know whether the length and checksum field are themselves included in the covered region. If the entire transport already provides authenticated encryption, an additional per-record checksum may have different value than in an unauthenticated file format. These are design trade-offs, not universal prescriptions.</p>
+<p>Equally important is the order of operations. If a compressed record declares a small compressed length but decompresses to several gigabytes, enforcing a 4,096-byte <strong>compressed</strong> frame maximum does not bound memory used for decompression. Apply appropriate output-size, nesting, and processing limits at each processing layer. When encryption or compression transformations operate across multiple frames, the framing contract must specify whether boundaries apply before or after the transformation.</p>
+</section><section aria-labelledby="heading-multiplexed-streams-and-nested-framing" id="multiplexed-streams-and-nested-framing"><h2 id="heading-multiplexed-streams-and-nested-framing">Multiplexed Streams and Nested Framing</h2>
+<p>A single connection may carry several independent logical channels. A frame header might contain both a length and a channel identifier. The parser uses length to find the frame boundary and then uses the channel field to route its payload. The channel's own message may be made from several frames, and the application may need an end-of-message flag or sequence number to reconstruct it. A frame length alone is insufficient to determine when a higher-level multi-frame transaction finishes.</p>
+<p>Nested framing also occurs in binary files: a file has sections, each section has blocks, and each block has records. Every nested length must be validated against the <strong>containing</strong> region, not merely against the total file size. Otherwise a record can claim bytes that cross its section boundary while still remaining inside the overall file. Validation should enforce containment, nonoverlap where required, and per-level quotas before decoding nested content.</p>
+<p>A nested structure should declare whether a child length includes its own header, whether zero-length children are allowed, and whether trailing padding is legal within the parent. Without these rules, a parser may accept malformed records that another implementation rejects, or two readers may interpret the same bytes differently.</p>
+</section><section aria-labelledby="heading-throughput-buffer-management-and-backpressure" id="throughput-buffer-management-and-backpressure"><h2 id="heading-throughput-buffer-management-and-backpressure">Throughput, Buffer Management, and Backpressure</h2>
+<p>A framing method influences performance but does not determine it by itself. Fixed-length records allow straightforward offset arithmetic. Length prefixes allow a reader to reserve exactly the declared payload length <em>after validating it</em>. Delimiter scanning can be fast with optimized search functions, especially when markers are common and content rarely requires escaping. Differences in memory copies, cache locality, buffering, syscalls, parsing libraries, and batching often dominate theoretical per-record header overhead.</p>
+<p>An incremental parser should avoid repeatedly copying a growing unbounded buffer. A small educational <code>bytearray</code> is appropriate for teaching state, but busy services often use cursor-based buffers, ring buffers, pooled storage, or staged reads. A streaming parser can process available complete records and leave a small partial suffix for the next read. Limits should apply to <strong>aggregate pending bytes and queued decoded records</strong>, not just to the maximum per-frame payload; otherwise an attacker can send many valid frames faster than downstream consumers can handle them.</p>
+<p>Backpressure is the rule by which a producer slows or stops when the consumer cannot keep up. A frame parser can recognize boundaries perfectly and still exhaust the program's memory if it enqueues unlimited completed records. Operational design therefore needs queue bounds, cancellation, deadlines, and an explicit choice to reject, pause, or shed load. These measures complement the wire framing grammar; they do not change which bytes belong to each frame.</p>
+</section><section aria-labelledby="heading-design-comparison-and-selection-matrix" id="design-comparison-and-selection-matrix"><h2 id="heading-design-comparison-and-selection-matrix">Design Comparison and Selection Matrix</h2>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Fixed-size</th>
+<th>Length-prefixed</th>
+<th>Delimiter with escaping</th>
+<th>Enclosing message boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Variable record lengths</td>
+<td>Padding or redesign required</td>
+<td>Native support</td>
+<td>Native support</td>
+<td>Depends on enclosing protocol</td>
+</tr>
+<tr>
+<td>Arbitrary binary payload bytes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes, if escaping covers all reserved patterns</td>
+<td>Depends on container</td>
+</tr>
+<tr>
+<td>Bound known before payload</td>
+<td>Fixed by design</td>
+<td>Yes, after prefix decode</td>
+<td>Usually not until delimiter found</td>
+<td>Usually yes, from container</td>
+</tr>
+<tr>
+<td>Overhead per record</td>
+<td>None for size header, possible padding</td>
+<td>Fixed or variable prefix</td>
+<td>Terminator plus variable escaping</td>
+<td>Container-specific</td>
+</tr>
+<tr>
+<td>Recover from corrupted boundary</td>
+<td>Stride may help</td>
+<td>Difficult without additional anchors</td>
+<td>May scan for next valid terminator</td>
+<td>Container-specific</td>
+</tr>
+<tr>
+<td>Easy random access by ordinal</td>
+<td>Yes for fixed widths</td>
+<td>Requires index or scan</td>
+<td>Requires index or scan</td>
+<td>Container-specific</td>
+</tr>
+<tr>
+<td>Basic reader complexity</td>
+<td>Low</td>
+<td>Low to medium</td>
+<td>Medium when escaping is needed</td>
+<td>Depends on API</td>
+</tr>
+<tr>
+<td>Major failure mode</td>
+<td>Wrong stride or partial final record</td>
+<td>Wrong/hostile length or truncation</td>
+<td>Missing delimiter or bad escaping</td>
+<td>Incorrect assumption about API guarantees</td>
+</tr>
+</tbody>
+</table>
+<p>A selection process should begin with the actual data model and stream properties. First ask whether each record is a fixed size; if yes, fixed width may be sufficient. If not, ask whether the payload can contain arbitrary bytes. If so, length-prefixed framing is often a simple starting point. If the material is line-oriented text and operational inspection matters, a clearly specified line-delimited representation may be better. If the enclosing API already provides complete messages with trustworthy sizes, adding another layer requires a deliberate reason.</p>
+</section><section aria-labelledby="heading-a-reusable-framing-design-checklist" id="a-reusable-framing-design-checklist"><h2 id="heading-a-reusable-framing-design-checklist">A Reusable Framing Design Checklist</h2>
+<p>Before publishing a binary framing specification, answer each of these operational questions in prose or in a machine-readable grammar:</p>
+<ol>
+<li><strong>Scope:</strong> Is this a file, continuous stream, datagram payload, or container entry? Which layer already supplies boundaries?</li>
+<li><strong>Start:</strong> Does the first record begin at byte zero, after a file header, or after a negotiated preamble?</li>
+<li><strong>Length/terminator:</strong> Which exact bytes indicate the end, and how are reserved patterns represented within payloads?</li>
+<li><strong>Units and encoding:</strong> Are lengths measured in bytes, and what are their width, signedness, byte order, and included regions?</li>
+<li><strong>Zero and absence:</strong> Is an empty record valid? Does zero mean a terminator? What distinguishes a missing record from an empty one?</li>
+<li><strong>Limits:</strong> What are maximum payload, total input, nesting depth, record count, and allocation limits?</li>
+<li><strong>Incrementality:</strong> Can any header or payload arrive in pieces, and can one input chunk include several records?</li>
+<li><strong>EOF:</strong> How are an incomplete prefix, incomplete payload, and clean boundary at end-of-input distinguished?</li>
+<li><strong>Errors:</strong> Does a malformed frame close the channel, quarantine data, or invoke a precisely specified resynchronization method?</li>
+<li><strong>Evolution:</strong> How are new versions, unsupported record types, and unknown extension fields handled?</li>
+<li><strong>Integrity:</strong> Is a checksum or authenticated envelope present, and which bytes are covered?</li>
+<li><strong>Testing:</strong> Are the parser and writer checked against byte-exact fixtures, random chunk boundaries, malformed inputs, and resource budgets?</li>
+</ol>
+<p>The checklist is intentionally format-independent. It is equally useful for a local journal, an interprocess channel, a telemetry stream, and a data-transfer format.</p>
+</section><section aria-labelledby="heading-validation-and-interoperability-test-matrix" id="validation-and-interoperability-test-matrix"><h2 id="heading-validation-and-interoperability-test-matrix">Validation and Interoperability Test Matrix</h2>
+<p>A robust test suite should vary both the <em>contents</em> of frames and the <em>way input bytes arrive</em>. Content tests should include zero-length payloads where legal; maximum-size payloads; embedded zero, newline, and delimiter-like bytes; multibyte encoded text; and random binary data. Segmentation tests should split the two-byte prefix between reads, split the payload at every byte offset, concatenate multiple frames, and end input at every possible truncation point. For an educational decoder, property tests can compare its output to the original list of arbitrary byte strings over many random chunk sizes.</p>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Example</th>
+<th>Correct outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One valid frame</td>
+<td><code>00 03 43 41 54</code></td>
+<td>Emits <code>CAT</code></td>
+</tr>
+<tr>
+<td>Two frames concatenated</td>
+<td><code>00 01 41 00 01 42</code></td>
+<td>Emits <code>A</code>, then <code>B</code></td>
+</tr>
+<tr>
+<td>Split prefix</td>
+<td>First <code>00</code>, then <code>01 41</code></td>
+<td>Emits <code>A</code> only after second feed</td>
+</tr>
+<tr>
+<td>Split body</td>
+<td>First <code>00 03 43</code>, then <code>41 54</code></td>
+<td>Emits <code>CAT</code> after second feed</td>
+</tr>
+<tr>
+<td>Empty record</td>
+<td><code>00 00</code></td>
+<td>Emits empty payload if contract permits</td>
+</tr>
+<tr>
+<td>Embedded zero</td>
+<td><code>00 02 00 FF</code></td>
+<td>Emits exactly two raw bytes</td>
+</tr>
+<tr>
+<td>Excessive declared length</td>
+<td><code>10 01</code> with 4,096-byte max</td>
+<td>Rejects immediately</td>
+</tr>
+<tr>
+<td>Truncated final body</td>
+<td><code>00 03 41 42</code> at EOF</td>
+<td>Reports truncation</td>
+</tr>
+<tr>
+<td>Trailing header fragment</td>
+<td><code>00 01 41 00</code> at EOF</td>
+<td>Emits <code>A</code>; reports truncation</td>
+</tr>
+<tr>
+<td>Empty complete stream</td>
+<td>Zero bytes and final EOF</td>
+<td>Valid zero-record sequence when permitted</td>
+</tr>
+</tbody>
+</table>
+<p>A production-grade test plan should add timeouts, failure recovery, simultaneous connections, and denial-of-service quotas. Code-review checks should prohibit assuming that one read returns a full record. Interoperability tests are especially valuable when writer and reader use different languages, because unsigned lengths, byte order, and string byte counts are common sources of divergence.</p>
+</section><section aria-labelledby="heading-windows-powershell-51-inspecting-the-three-frames" id="windows-powershell-51-inspecting-the-three-frames"><h2 id="heading-windows-powershell-51-inspecting-the-three-frames">Windows PowerShell 5.1: Inspecting the Three Frames</h2>
+<p>Windows PowerShell 5.1 can inspect the worked stream using an ordinary byte array. The short example below operates on an already complete 16-byte buffer, so it is a <strong>bounded-buffer decoder</strong>, not a replacement for the incremental Python streaming example. It explicitly combines the two length bytes in big-endian order and verifies that enough bytes remain before copying each payload. The bit shift does not use the host machine's default numeric byte order.</p>
+<pre><code class="language-powershell">$wire = [byte[]](
+    0x00,0x03,0x43,0x41,0x54,
+    0x00,0x02,0x00,0xFF,
+    0x00,0x05,0x48,0x45,0x4C,0x4C,0x4F
+)
+$offset = 0
+$maxPayload = 4096
+$frames = New-Object System.Collections.Generic.List[byte[]]
+
+while ($offset -lt $wire.Length) {
+    if ($wire.Length - $offset -lt 2) {
+        throw "Incomplete length prefix at byte $offset"
+    }
+    $length = ([int]$wire[$offset] -shl 8) -bor [int]$wire[$offset+1]
+    $offset += 2
+    if ($length -gt $maxPayload) { throw "Frame too large" }
+    if ($length -gt $wire.Length - $offset) {
+        throw "Truncated payload at byte $offset"
+    }
+
+    $payload = New-Object byte[] $length
+    [Array]::Copy($wire, $offset, $payload, 0, $length)
+    $frames.Add($payload)
+    $offset += $length
+}
+
+$frames.Count                 # 3
+($frames[0] | ForEach-Object { $_.ToString('X2') }) -join ' '  # 43 41 54
+($frames[1] | ForEach-Object { $_.ToString('X2') }) -join ' '  # 00 FF
+($frames[2] | ForEach-Object { $_.ToString('X2') }) -join ' '  # 48 45 4C 4C 4F
+</code></pre>
+<p>In actual streaming PowerShell code, a <code>Stream.Read()</code> call may return fewer bytes than requested. A reader must loop to gather the required prefix and payload or maintain incremental buffer state. It must also respect end-of-stream, timeouts, and cancellation rules. Parsing a complete byte array is helpful for format inspection, but should not be misrepresented as proof that fragmented transport reads have been handled.</p>
+</section><section aria-labelledby="heading-study-questions-and-practical-exercises" id="study-questions-and-practical-exercises"><h2 id="heading-study-questions-and-practical-exercises">Study Questions and Practical Exercises</h2>
+<ol>
+<li><strong>Define the boundary problem.</strong> Why does an ordered byte stream not by itself reveal the producer's logical record boundaries? Give a file and an interprocess example.</li>
+<li><strong>Decode a stream.</strong> Interpret <code>00 01 5A 00 03 41 00 42</code> under MGU-FR16. How many records appear, and which contain zero bytes?</li>
+<li><strong>Challenge a byte-order mistake.</strong> If a length prefix <code>01 02</code> is interpreted as little-endian rather than big-endian, what different size does the receiver expect?</li>
+<li><strong>Calculate overhead.</strong> What percentage of the 16-byte three-frame worked stream consists of framing headers? How would the percentage change for large payloads?</li>
+<li><strong>Test chunk independence.</strong> Divide the worked 16-byte stream into one-byte chunks. Will the incremental decoder emit the same three records, in the same order? Explain.</li>
+<li><strong>Inspect truncation.</strong> A file ends with <code>00 05 48 45</code>. At what stage should the error be reported, and why is emitting <code>HE</code> invalid?</li>
+<li><strong>Design an empty-record rule.</strong> Explain how <code>00 00</code> should be interpreted in a format where empty payloads are legal. How could a separate explicit end marker be provided?</li>
+<li><strong>Compare formats.</strong> Contrast an escaped-newline protocol and a length-prefixed protocol for arbitrary compressed binary data.</li>
+<li><strong>Defend resource limits.</strong> Explain why a 16-bit length prefix should not automatically allow every 65,535-byte payload. What other limits are needed?</li>
+<li><strong>Trace a parsing discrepancy.</strong> Describe how two HTTP intermediaries that disagree about framing could interpret one stream differently, without attempting a live exploit.</li>
+<li><strong>Recover an append log.</strong> Propose a documented policy for a log with several valid entries followed by a partial final entry after a crash.</li>
+<li><strong>Build fixtures.</strong> Implement three encoders or decoders in different languages or libraries and verify byte-identical output for the worked stream, including arbitrary payload bytes.</li>
+</ol>
+<p>Exercises should be evaluated against the stated format rather than an unstated guess about text. For example, the raw <code>00 FF</code> payload is valid binary even if it cannot be decoded as UTF-8 text. This distinction reinforces the separation of framing, type interpretation, and application semantics.</p>
+</section><section aria-labelledby="heading-glossary-of-framing-terms" id="glossary-of-framing-terms"><h2 id="heading-glossary-of-framing-terms">Glossary of Framing Terms</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Record</td>
+<td>One logical unit of application or file data</td>
+</tr>
+<tr>
+<td>Frame</td>
+<td>The representation that identifies a record's boundary, including framing overhead</td>
+</tr>
+<tr>
+<td>Payload</td>
+<td>Content enclosed by the framing metadata</td>
+</tr>
+<tr>
+<td>Length prefix</td>
+<td>Field giving the size of a following region</td>
+</tr>
+<tr>
+<td>Sentinel delimiter</td>
+<td>Reserved marker identifying the end or boundary of a record</td>
+</tr>
+<tr>
+<td>Escape sequence</td>
+<td>Representation that distinguishes literal marker bytes from markers used as syntax</td>
+</tr>
+<tr>
+<td>Byte stuffing</td>
+<td>Insertion or transformation of bytes to keep reserved markers out of encoded payload</td>
+</tr>
+<tr>
+<td>Incremental parser</td>
+<td>Reader that preserves state across arbitrarily divided input chunks</td>
+</tr>
+<tr>
+<td>Truncation</td>
+<td>Missing bytes at final end-of-input relative to a declared frame</td>
+</tr>
+<tr>
+<td>Resynchronization</td>
+<td>Attempt to regain a valid boundary after corruption or parse error</td>
+</tr>
+<tr>
+<td>Backpressure</td>
+<td>Flow control preventing producers from overwhelming downstream consumers</td>
+</tr>
+<tr>
+<td>Operational limit</td>
+<td>Bound enforced by an application even when the wire field could represent a larger value</td>
+</tr>
+</tbody>
+</table>
+</section><section aria-labelledby="heading-sub-articles-and-further-study" id="sub-articles-and-further-study"><h2 id="heading-sub-articles-and-further-study">Sub-Articles and Further Study</h2>
+<p>This page is itself a <strong>Level 5 child</strong> of <a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data</a> and its <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/">unit directory</a>. Its treatment is deliberately focused on framing semantics; it does not introduce a new Level 6 companion directory. Further work on individual framing protocols should be commissioned only when those subjects justify independently scoped specialist coverage.</p>
+<p>The following sibling subarticles provide directly supporting detail:</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">Binary Serialization and Schema Contracts</a> — how payload fields and versions are defined once record boundaries are known.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/endianness-and-byte-order">Endianness and Byte Order</a> — how to decode the multibyte length prefix without platform-dependent assumptions.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/numeric-field-width-alignment-and-padding">Numeric Field Width, Alignment, and Padding</a> — how numeric widths and record layouts affect byte offsets.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/raw-bytes-text-and-character-encoding-boundaries">Raw Bytes, Text, and Character-Encoding Boundaries</a> — why byte counts, text decoding, and Unicode character counts must be kept distinct.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-file-headers-and-magic-numbers">Binary File Headers and Magic Numbers</a> — format identifiers and validation of container entry points.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-data-in-memory-storage-and-transmission">Binary Data in Memory, Storage, and Transmission</a> — planned study of where byte sequences are stored and moved across system layers.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/hex-dumps-binary-inspection-and-forensic-reading">Hex Dumps, Binary Inspection, and Forensic Reading</a> — planned practical methods for verifying bytes and offsets.</li>
+</ul>
+</section><section aria-labelledby="heading-related-encyclopedia-topics" id="related-encyclopedia-topics"><h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>The following are neighboring subjects, not children of this specific Level 5 entry. They are provided for conceptual navigation:</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/data-systems/information-retrieval">Information Retrieval</a> — indexing and retrieving records from larger collections.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-storage-methods">Data Storage Methods</a> — logical and physical persistence strategies for records.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/file-systems">File Systems</a> — files, directories, and storage abstractions that may hold framed record streams.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-encryption">Data Encryption</a> — protective transformations that may operate on framed or unframed data.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a> — pipelines that ingest, validate, and transform data records.</li>
+<li><a href="/library/encyclopedia/computer-science/">Computer Science</a> — parent volume directory for broader computing context.</li>
+</ul>
+</section><section aria-labelledby="heading-technical-references-and-further-reading" id="technical-references-and-further-reading"><h2 id="heading-technical-references-and-further-reading">Technical References and Further Reading</h2>
+<ol>
+<li>Fielding, R., Nottingham, M., and Reschke, J. <strong>RFC 9112: HTTP/1.1</strong>. Internet Engineering Task Force, June 2022. Particularly message body length determination, transfer codings, and framing-related security considerations. <a href="https://www.rfc-editor.org/rfc/rfc9112.html">Official RFC text</a>.</li>
+<li>Fette, I., and Melnikov, A. <strong>RFC 6455: The WebSocket Protocol</strong>. Internet Engineering Task Force, December 2011. Frame format, extended payload lengths, masking, and message fragmentation. <a href="https://www.rfc-editor.org/rfc/rfc6455.html">Official RFC text</a>.</li>
+<li>Python Software Foundation. <strong><code>struct</code> — Interpret bytes as packed binary data</strong>. Python Standard Library documentation. Standard-size packing and unpacking, byte order, and field widths. <a href="https://docs.python.org/3/library/struct.html">Documentation</a>.</li>
+<li>Python Software Foundation. <strong><code>asyncio.StreamReader.readexactly</code></strong>. Python Standard Library documentation. A concrete example of reading exactly a specified number of bytes or receiving an incomplete-read error. <a href="https://docs.python.org/3/library/asyncio-stream.html#asyncio.StreamReader.readexactly">Documentation</a>.</li>
+<li>Microsoft. <strong><code>System.IO.Stream.Read</code></strong>. .NET API documentation. Read operations may return fewer bytes than requested and must be handled according to their API contract. <a href="https://learn.microsoft.com/en-us/dotnet/api/system.io.stream.read">Documentation</a>.</li>
+<li>Saltzer, J. H., and Kaashoek, M. F. <strong>Principles of Computer System Design: An Introduction</strong>. Morgan Kaufmann, 2009. System-level treatment of interfaces, modularity, and communication between layers.</li>
+<li>Stevens, W. R., Fenner, B., and Rudoff, A. M. <strong>UNIX Network Programming, Volume 1: The Sockets Networking API</strong>, third edition. Addison-Wesley, 2004. Stream-oriented I/O, partial reads and writes, and application-protocol message boundaries.</li>
+</ol>
+<p><strong>Editorial scope and status:</strong> This article is a completed standalone specialist treatment within the Binary Data unit's planned 20-article directory. Source citations describe standards, not a claim that any local server implements every referenced protocol rule. The educational MGU-FR16 wire format and its three-record example are original teaching examples; they are not registered standards or claims about production software. The linked sibling-directory titles include planned future articles that may not yet be published.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== EXACT SHARED LOADERS ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>
