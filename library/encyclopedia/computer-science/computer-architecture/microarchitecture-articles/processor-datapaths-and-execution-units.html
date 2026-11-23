@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Processor Datapaths and Execution Units | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="A specialist encyclopedia treatment of processor datapaths, integer and floating-point execution units, SIMD and vector pipelines, operand steering, execution ports, bypass networks, latency, throughput, and processor design tradeoffs.">
+<meta name="keywords" content="processor datapath, execution units, arithmetic logic unit, ALU, floating point unit, SIMD, vector execution, processor ports, bypass network, microarchitecture, execution latency, reciprocal throughput">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/processor-datapaths-and-execution-units">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Processor Datapaths and Execution Units | MGU Encyclopedia">
+<meta property="og:description" content="How processor cores move operands, execute scalar and vector operations, and deliver results—and why unit counts alone cannot predict performance.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/processor-datapaths-and-execution-units">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-22-2026" data-updated="11-22-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Processor Datapaths and Execution Units</h1>
+<p class="subtitle">How operands traverse a processor core, how specialized circuits carry out operations, and why the availability of functional units is only one limit on instruction performance.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#overview">Definition and Architectural Context</a></li>
+<li><a href="#instruction-path">From an Instruction to a Result</a></li>
+<li><a href="#datapath-elements">Datapath Elements and Operand Steering</a></li>
+<li><a href="#integer-units">Integer Arithmetic and Logic Units</a></li>
+<li><a href="#multiply-divide">Multiplication, Division, and Specialized Operations</a></li>
+<li><a href="#floating-point">Floating-Point Execution</a></li>
+<li><a href="#vector-simd">SIMD, Vector, and Matrix Execution</a></li>
+<li><a href="#address-memory">Address Generation and Memory Operations</a></li>
+<li><a href="#operand-delivery">Registers, Read Ports, and Result Delivery</a></li>
+<li><a href="#execution-ports">Execution Ports, Issue Capacity, and Contention</a></li>
+<li><a href="#latency-throughput">Latency, Throughput, and Pipeline Occupancy</a></li>
+<li><a href="#forwarding">Forwarding and Dependent Instruction Chains</a></li>
+<li><a href="#worked-trace">Worked Instruction Trace: Dependent and Independent Work</a></li>
+<li><a href="#quantitative-examples">Worked Capacity and Bottleneck Calculations</a></li>
+<li><a href="#physical-tradeoffs">Physical Design, Power, and Area Tradeoffs</a></li>
+<li><a href="#correctness">Correctness, Exceptions, and Implementation Variation</a></li>
+<li><a href="#investigation-framework">Design and Performance Investigation Framework</a></li>
+<li><a href="#misconceptions">Common Misconceptions and Key Distinctions</a></li>
+<li><a href="#glossary">Specialist Glossary</a></li>
+<li><a href="#references">References and Further Reading</a></li>
+<li><a href="#related-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#editorial-scope">Editorial Scope and Status</a></li>
+</ol>
+</section>
+
+<section id="overview" aria-labelledby="heading-overview">
+<h2 id="heading-overview">Definition and Architectural Context</h2>
+<p>A <strong>processor datapath</strong> is the collection of internal circuits and connections that holds operands, selects their destinations and sources, carries values through computation, and delivers results. <strong>Execution units</strong> are functional circuits within that datapath that perform particular classes of operations: additions, logical combinations, shifts, multiplications, floating-point computations, vector operations, comparisons, address generation, and other functions. The two concepts overlap, but they are not interchangeable. An arithmetic logic unit (ALU) is an execution unit; multiplexers, register-file wiring, operand buses, and forwarding paths are also datapath resources even when they perform no arithmetic.</p>
+<p>This article is a Level 5 specialist entry in the <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/"><strong>Microarchitecture unit</strong></a>. The parent <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture overview</a> covers the overall implementation of an instruction set. Here the focus is deliberately narrower: the computational pathways and their immediate supporting structures. Detailed fetch and decode, renaming, instruction scheduling, pipeline organization, and memory ordering have their own specialist articles in the same unit.</p>
+<p>The essential distinction is between <strong>what an instruction means</strong> and <strong>how a particular processor realizes it</strong>. The instruction set architecture (ISA) specifies the required behavior of an addition or floating-point operation, along with architectural state and exceptions. It does not normally prescribe one adder topology, a fixed number of ALUs, a particular register-file layout, or a universal execution latency. Two processors implementing the same ISA can therefore obtain different performance, energy consumption, and physical size from the same program while producing equivalent architectural results.</p>
+<p>Datapaths exist in simple microcontrollers, high-performance general-purpose CPUs, digital signal processors, and specialized accelerators. Some cores have one shared arithmetic path; others have multiple scalar pipelines, distinct vector engines, or execution clusters. A design may have operations that execute in parallel, operations that share a physical unit, and exceptional operations handled by multi-cycle sequencers. Accordingly, this page presents <em>architectural patterns and explicitly hypothetical examples</em>, not a supposed universal block diagram.</p>
+<table>
+<thead><tr><th scope="col">Concept</th><th scope="col">Question answered</th><th scope="col">Examples</th></tr></thead>
+<tbody>
+<tr><td>ISA operation</td><td>What computation or state change is required?</td><td>Integer addition; floating-point division; vector compare</td></tr>
+<tr><td>Datapath</td><td>Where do values travel during implementation?</td><td>Operand select, registers, wiring, ALU inputs, result bus</td></tr>
+<tr><td>Execution unit</td><td>Which physical resource performs the operation?</td><td>Integer ALU, multiplier, FPU, vector lane, address generator</td></tr>
+<tr><td>Control and scheduling</td><td>When may the operation access those resources?</td><td>Operand-ready checks, issue selection, port allocation, interlocks</td></tr>
+<tr><td>Architectural completion</td><td>When are the required effects committed or made visible?</td><td>Retirement and exception handling, according to the core design</td></tr>
+</tbody>
+</table>
+<p>One useful mental model separates a processor into <strong>operand preparation</strong>, <strong>functional execution</strong>, and <strong>result distribution</strong>. A high-throughput core must provision all three. Adding an execution unit without enough data sources or result destinations can move the bottleneck rather than improve useful work.</p>
+</section>
+
+<section id="instruction-path" aria-labelledby="heading-instruction-path">
+<h2 id="heading-instruction-path">From an Instruction to a Result</h2>
+<p>Consider an integer instruction with the mathematical meaning <code>R1 = R2 + R3</code>. Software sees a change to the destination register when the instruction's architectural semantics take effect. Internally, a typical processor must identify the operation, obtain the two operands, choose an execution resource, calculate the sum, and make the result available to later work. In an out-of-order core the destination may initially be a physical register rather than the architectural register named in the instruction. In a simpler core the mapping may be direct. These implementations differ without changing what the instruction is required to compute.</p>
+<ol>
+<li><strong>Decode and interpretation:</strong> instruction bits or decoded internal operations indicate the required function, source references, destination reference, data width, and any control attributes.</li>
+<li><strong>Operand acquisition:</strong> values are read from a register file, chosen from a bypass path, generated as an immediate constant, or obtained from another appropriate source.</li>
+<li><strong>Resource selection:</strong> control logic ensures that a compatible execution unit and the necessary input/output paths can accept the work.</li>
+<li><strong>Operation:</strong> combinational logic, a pipelined unit, or a multi-cycle engine performs the required transformation.</li>
+<li><strong>Result delivery:</strong> the result reaches a destination, perhaps through forwarding and a register-file write. A later consumer may use it before its final architectural retirement.</li>
+<li><strong>Commit and exceptions:</strong> the processor maintains the ISA's externally required ordering and exception rules. Internal completion and architectural retirement are not necessarily the same event.</li>
+</ol>
+<p>For some instructions these activities involve only a short path; for others they span multiple execution cycles or several internal operations. A load instruction, for example, may use an address generator and then wait for data from a memory hierarchy. A divide can occupy an iterative arithmetic engine. A vector operation might involve groups of elements processed over one or more beats, depending on implementation width and vector length.</p>
+<p>The <strong>functional path</strong> is not identical to the <strong>instruction pipeline</strong>. A conceptual instruction can be divided into stages, while multiple different physical pipelines share front-end resources or converge at a result network. Pipeline stages define timing boundaries. Datapaths define the resources and connections crossing or operating within those boundaries. The separate <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/pipeline-organization-and-stage-boundaries">Pipeline Organization and Stage Boundaries</a> article owns a full treatment of those timing partitions.</p>
+<h3>Conceptual one-instruction flow</h3>
+<pre><code>Decoded operation
+       |
+       v
+ Source selection ----- immediate / forwarded operand
+       |
+       v
+ Register values ------+------+
+                       |      |
+                       v      v
+                   Operand A Operand B
+                       \      /
+                        \    /
+                     Execution unit
+                           |
+                      Result select
+                           |
+                  Forwarding / writeback
+                           |
+                  Later dependent operations</code></pre>
+<p>This is a teaching diagram, not an assertion that all cores have a single shared result selector or centralized writeback network. Some designs distribute functional units into clusters, use separate physical register files, or avoid a conventional register-writeback step for selected internal operations.</p>
+</section>
+
+<section id="datapath-elements" aria-labelledby="heading-datapath-elements">
+<h2 id="heading-datapath-elements">Datapath Elements and Operand Steering</h2>
+<p>The best-known datapath block is the ALU, but much of a processor's cost arises from moving values to and from the ALU and other functional units. A datapath normally combines <strong>storage</strong>, <strong>selection</strong>, <strong>transformation</strong>, and <strong>transport</strong>. Registers and pipeline latches hold information; multiplexers select competing sources; arithmetic and logic circuits transform values; buses and local interconnections transport them. Control signals determine which selections and state updates are valid.</p>
+<h3>Selection and routing structures</h3>
+<p>A <strong>multiplexer</strong> selects one input from several possible values. For example, the second input of an ALU might come from a register, an immediate constant, a forwarded result, or a fixed constant such as one. A <strong>demultiplexing or destination-selection function</strong> can route a result toward one of several consumers, although real result distribution may rely on separate wiring, crossbars, or broadcast structures. Wide multiplexers and long shared wires can increase delay, area, capacitance, and energy per operation.</p>
+<p>Data width matters. A 64-bit arithmetic path may require correspondingly wide operand and result transport. A vector path hundreds of bits wide can demand still more substantial wiring. Designers can reduce some costs by placing a unit close to its operand storage, but that placement can complicate sharing with other units. A physically localized <em>execution cluster</em> may therefore provide good timing and power efficiency while requiring additional cycles or resources for communication across clusters.</p>
+<h3>Control and status information</h3>
+<p>Alongside the numerical operand, a datapath may carry operation codes, element-width selections, validity bits, destination tags, exception flags, vector masks, and other control or bookkeeping information. An operation's value and its identity are distinct: a result broadcast to several candidate consumers must be associated with the correct producing instruction. Similarly, a vector datapath needs to know which elements are active, not merely how wide the arithmetic circuitry is.</p>
+<p>Designers must balance the logical simplicity of a common datapath against the physical cost of many selectable inputs. A shared resource saves area but introduces contention; dedicated paths reduce some contention but increase transistors, leakage, and wiring. This <strong>resource allocation problem</strong> appears repeatedly in arithmetic, memory, and vector execution.</p>
+</section>
+
+<section id="integer-units" aria-labelledby="heading-integer-units">
+<h2 id="heading-integer-units">Integer Arithmetic and Logic Units</h2>
+<p>An <strong>arithmetic logic unit (ALU)</strong> performs elementary integer computations and bitwise operations. Typical capabilities include addition, subtraction, AND, OR, XOR, shifts, and comparisons, although particular implementations distribute these functions among different blocks. Signed and unsigned integer addition often use the same underlying binary adder for the sum; interpretation of overflow and flags depends on the instruction and ISA. Subtraction can commonly be implemented with an adder using two's-complement arithmetic, but there is no requirement for every core to implement it in exactly that way.</p>
+<h3>Adders and arithmetic width</h3>
+<p>Binary addition requires carry propagation. A straightforward ripple-carry adder passes carry information from one bit position to the next and can be compact, but its longest carry path increases with operand width. Higher-performance techniques, including carry-lookahead and prefix families, use additional logic to reduce or reorganize carry-dependency depth. Real implementations select topologies according to timing, area, energy, and synthesis constraints; the terms <em>fast</em> and <em>small</em> are meaningful only relative to a technology and design point.</p>
+<p>Subword instructions introduce further choices. A 64-bit execution datapath may operate on 8-, 16-, 32-, and 64-bit fields with appropriate selection, masking, or sign extension. Alternatively, the implementation may use more than one physical datapath width. An instruction's architectural data width does not by itself reveal the width, number, or internal staging of its physical execution circuits.</p>
+<h3>Logical, shift, and comparison functions</h3>
+<p>Bitwise logic is generally simpler than a full multiplication, but it still consumes input selection and result bandwidth. Shifts can use a <strong>barrel shifter</strong> or staged selection network to move a value by a variable number of bit positions. Rotations, bit counts, leading-zero counts, sign extension, and bit manipulation functions may be implemented in dedicated combinational structures, via shared shifter/logic resources, or in multi-step sequences. Integer comparisons may derive flags or Boolean results from subtract-like operations, from parallel comparator logic, or from specialized structures.</p>
+<p>Branch condition evaluation sometimes shares the integer ALU; other cores include dedicated compare or branch units. This matters because an application rich in comparisons and address arithmetic can compete for some of the same functional resources as ordinary additions. A diagram with two boxes labeled “integer ALU” says little unless the supported operation classes and their allowed simultaneous use are specified.</p>
+<h3>Unit inventory versus useful progress</h3>
+<p>A core with three integer arithmetic units does not automatically execute three arbitrary integer instructions per cycle. It may be limited by decode or issue width, the register read network, supported operation types, the availability of independent operands, or result write ports. If only one unit supports a required bit-manipulation operation, three nominal ALUs do not provide three-way throughput for that particular instruction. Performance analysis therefore starts with <strong>operation-to-resource mapping</strong>, not a raw count of units.</p>
+</section>
+
+<section id="multiply-divide" aria-labelledby="heading-multiply-divide">
+<h2 id="heading-multiply-divide">Multiplication, Division, and Specialized Operations</h2>
+<p>Integer multiplication combines partial products and additions. Hardware may use array structures, tree reduction, pipelined multipliers, or more specialized algorithms. Division is often more expensive and may use iterative quotient-generation steps, although detailed implementations vary. Multiply and divide are sometimes hosted in the same arithmetic cluster, yet their latencies and rates of accepting new operations can be very different.</p>
+<p>A <strong>pipelined multiplier</strong> may have a several-cycle result latency while accepting a new independent multiplication every cycle. A <strong>partly iterative divider</strong> may occupy its engine for several cycles and accept another divide only when some of its resources become available. The programmer-visible instruction does not convey these implementation facts; processor-specific optimization material or careful measurement is required.</p>
+<p>Other specialized paths may execute population counts, cryptographic primitives, polynomial operations, saturating arithmetic, or address calculations. Some CPUs have dedicated circuitry; others share ordinary ALU structures or break complex operations into internal steps. Specialized hardware is an optimization choice, not proof that the corresponding ISA operation is conceptually outside integer arithmetic.</p>
+<table>
+<thead><tr><th scope="col">Operation family</th><th scope="col">Possible unit organization</th><th scope="col">Typical design question</th></tr></thead>
+<tbody>
+<tr><td>Integer add/subtract</td><td>General-purpose scalar ALU</td><td>Carry-path timing and operation supply</td></tr>
+<tr><td>Bitwise logic and comparison</td><td>Shared ALU or specialized simple logic</td><td>Port mapping and result-selection conflicts</td></tr>
+<tr><td>Variable shift/rotate</td><td>Shared or dedicated shifter</td><td>Selection depth, area, and issue restrictions</td></tr>
+<tr><td>Integer multiply</td><td>Pipelined or iterative multiplier</td><td>Latency versus new-operation initiation rate</td></tr>
+<tr><td>Integer divide/remainder</td><td>Iterative or otherwise specialized engine</td><td>Variable cost, occupancy, and interaction with other work</td></tr>
+<tr><td>Bit manipulation or cryptography</td><td>Dedicated logic, shared blocks, or sequenced operations</td><td>Whether a specific implementation accelerates the operation</td></tr>
+</tbody>
+</table>
+<p>The table describes possible organizations rather than universal instruction latencies. A divide can vary in timing with operand values on some implementations; other implementations may deliberately choose more regular timing. Likewise, support for a multiply instruction in the ISA does not guarantee a fully pipelined physical multiplier.</p>
+</section>
+
+<section id="floating-point" aria-labelledby="heading-floating-point">
+<h2 id="heading-floating-point">Floating-Point Execution</h2>
+<p>A <strong>floating-point unit (FPU)</strong> implements operations defined by the processor's floating-point architecture. Binary floating-point addition may require alignment of significands, sign handling, arithmetic, normalization, and rounding. Multiplication uses significand multiplication and exponent processing; division and square root may demand more elaborate iteration or approximation-refinement machinery. Supporting exceptional values and rounding requirements complicates implementation even when an operation is mathematically simple.</p>
+<h3>Arithmetic operations and exceptional behavior</h3>
+<p>IEEE 754–based floating-point formats and operations commonly require handling of zero, subnormal numbers, infinities, NaNs, rounding modes, and exception conditions. The precise architectural requirements depend on the ISA and any implemented extensions. A processor may pipeline common cases efficiently while using extra handling for some exceptional paths, but such assists or slow paths should not be assumed universal. An arithmetic pipeline must implement the specified result semantics regardless of its performance choices.</p>
+<p>A <strong>fused multiply-add (FMA)</strong> operation computes a multiplication followed by addition with a single final rounding under the relevant floating-point semantics. The fused result is not necessarily bit-identical to executing separately rounded multiplication and addition instructions. In performance discussions, one FMA on one scalar element is often counted as <strong>two floating-point operations</strong>—one multiply and one addition—although this counting convention is distinct from the number of issued instructions or micro-operations.</p>
+<h3>Scalar versus vector floating point</h3>
+<p>Some FP pipelines handle scalar and vector operations in related or shared structures; others separate them. A core may offer high throughput for FP addition and multiplication but considerably different costs for division, square root, conversion, or exceptional cases. The presence of a 256-bit or 512-bit instruction encoding tells the reader what software may request, not how many physical lanes a particular implementation executes simultaneously.</p>
+<p>Further, floating-point performance must be assessed together with data movement. A kernel cannot sustain an arithmetic unit's ideal operations per second when its operands arrive too slowly, when dependencies serialize calculations, or when reduction operations frequently exchange values between lanes. The <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/cache-access-prefetching-and-memory-level-parallelism">Cache Access, Prefetching, and Memory-Level Parallelism</a> article develops the broader memory side of that constraint.</p>
+</section>
+
+<section id="vector-simd" aria-labelledby="heading-vector-simd">
+<h2 id="heading-vector-simd">SIMD, Vector, and Matrix Execution</h2>
+<p><strong>Single instruction, multiple data (SIMD)</strong> processing applies an instruction to multiple data elements, typically organized into lanes. For example, an illustrative 256-bit vector containing eight 32-bit elements can express eight elementwise additions with one vector instruction. The execution hardware may process those eight elements at once or spread them across cycles; the instruction's logical vector width and the implementation's physical arithmetic width are separate design facts.</p>
+<h3>Vector lanes, masks, and element width</h3>
+<p>A vector instruction may apply the same operation to all active lanes, use a predicate or mask to suppress selected updates, or reorganize data through shuffles and permutations. Narrower element widths can make more parallel element operations fit in the same physical width, but performance depends on which widths are supported at full throughput and on the cost of moving or packing data. Reductions introduce dependencies between elements, so they have different timing characteristics from straightforward lane-wise arithmetic.</p>
+<p>Vector instruction set models vary. Fixed-width SIMD instructions specify operations on registers of an architectural width. Scalable or variable-length vector systems expose other ways to express element counts and groups. For example, the official <a href="https://docs.riscv.org/reference/isa/_attachments/riscv-unprivileged.pdf">RISC-V unprivileged ISA manual</a> describes vector instructions, scalar/vector operand forms, and masking. None of these ISA-level descriptions prescribes a single physical lane count for every implementing processor.</p>
+<h3>Matrix and domain-specific engines</h3>
+<p>Processors and accelerators may include multiply–accumulate arrays or matrix-oriented engines. These structures can reuse operands across numerous operations and achieve much higher arithmetic density for compatible workloads. Their efficiency depends on supported number formats, matrix dimensions, tiling, data delivery, and accumulation rules. A matrix unit may sit within a CPU core or alongside it in a system-on-chip; its precise boundary is a product-specific design choice.</p>
+<p>A broad vector unit can increase peak compute throughput at the expense of register bandwidth, chip area, wiring complexity, and dynamic power. It is therefore unsound to compare two processors solely by nominal vector width. The useful measures include supported operations per cycle, lane utilization, issue and execution restrictions, data movement costs, and achievable application throughput.</p>
+<h3>Three different meanings of width</h3>
+<table>
+<thead><tr><th scope="col">Width</th><th scope="col">Meaning</th><th scope="col">What it does not establish</th></tr></thead>
+<tbody>
+<tr><td>ISA vector width / vector length model</td><td>Amount or organization of data named by a vector instruction</td><td>Number of physical arithmetic circuits</td></tr>
+<tr><td>Physical execution width</td><td>Number of bits/elements processed concurrently by hardware</td><td>Final sustained throughput for a full program</td></tr>
+<tr><td>Issue / dispatch width</td><td>Number of operations admitted to a stage per cycle</td><td>How many individual vector lanes finish simultaneously</td></tr>
+</tbody>
+</table>
+</section>
+
+<section id="address-memory" aria-labelledby="heading-address-memory">
+<h2 id="heading-address-memory">Address Generation and Memory Operations</h2>
+<p>Loads and stores often require arithmetic before a cache or memory system can be accessed. An <strong>address generation unit (AGU)</strong> calculates an effective address from an instruction's base register, index, displacement, scale, or other applicable fields. For a common abstract addressing form, the arithmetic resembles <code>effective_address = base + index × scale + displacement</code>. Not every ISA supports that exact form, and implementations may realize it using different combinations of adders, shifters, or dedicated addressing hardware.</p>
+<p>An AGU is an execution resource, but it is not necessarily the same as a data-processing ALU. A core might be able to perform several integer additions and fewer new memory-address calculations per cycle. Conversely, an architecture may assign some address arithmetic to regular scalar pipelines. Count the paths that can initiate the <em>relevant kind of work</em>, rather than assuming every adder can perform an effective-address calculation in parallel with every other instruction.</p>
+<p>Producing an address does <strong>not</strong> complete a load. The address may need translation, cache tag lookup, access-permission checking, ordering checks, and data return. Stores may calculate addresses and data at different times and hold pending writes in buffers. A load may forward data from an older store when required conditions are met. These processes connect the arithmetic datapath to a more extensive memory execution subsystem.</p>
+<p>Accordingly, a processor may report an AGU execution opportunity in one cycle and deliver a load value many cycles later. <em>Address-generation throughput</em>, <em>load initiation throughput</em>, <em>load-to-use latency</em>, and <em>memory bandwidth</em> are four different quantities. Some will be restricted by AGUs, others by cache access ports, ordering logic, translation resources, interconnects, or external memory response. Detailed handling of loads, stores, memory disambiguation, and TLB operation belongs to <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/load-store-queues-and-memory-disambiguation">Load-Store Queues and Memory Disambiguation</a> and <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/address-generation-tlbs-and-page-walks">Address Generation, TLBs, and Page Walks</a>.</p>
+</section>
+
+<section id="operand-delivery" aria-labelledby="heading-operand-delivery">
+<h2 id="heading-operand-delivery">Registers, Read Ports, and Result Delivery</h2>
+<p>An execution unit cannot compute with operands it cannot receive. The <strong>register file</strong> stores values and exposes physical read and write capabilities. In many designs, simultaneous source reads require independently addressable read ports or suitable banking and replication arrangements. An instruction with two source operands can create a different delivery demand from an instruction with three sources; vector operands consume greater width, and several simultaneously issued instructions multiply the requirement.</p>
+<h3>Why ports are expensive</h3>
+<p>Adding ports to a large register file can increase area, routing, access delay, and power. A literal design that gives every unit access to every operand and destination can become impractical. Designers instead consider clustered register files, shared read ports, operand latches, replicated storage, banked layouts, selective bypassing, and other schemes. These choices alter which combinations of operations are simultaneously sustainable.</p>
+<p>It is important to distinguish a <strong>register-file read port</strong> from an <strong>execution port</strong>. The first is an interface to operand storage; the second is a scheduling or hardware access channel to one or more execution resources in a particular implementation model. An “execution port” number in a vendor tool is not a physical guarantee that one connector, one ALU, and one result wire are permanently paired in a universal fashion.</p>
+<h3>Bypass paths and writeback</h3>
+<p>Many processors offer a result to a dependent instruction through <strong>forwarding</strong> or <strong>bypassing</strong> rather than waiting for a complete write-and-read round trip through a register file. This reduces some data dependency delays but demands fast value selection and routing. For large cores, the forwarding network can be a nontrivial timing and energy burden. A result may also require a write port or result bus; two units capable of finishing simultaneously are not useful at their theoretical peak if the downstream machinery cannot accept both outputs without a stall.</p>
+<p>For a full discussion of architectural versus physical registers, operand readiness, banking, and register-file organization, see <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/register-files-and-operand-delivery">Register Files and Operand Delivery</a>. Here those structures matter because they constrain the execution datapath's usable capacity.</p>
+</section>
+
+<section id="execution-ports" aria-labelledby="heading-execution-ports">
+<h2 id="heading-execution-ports">Execution Ports, Issue Capacity, and Contention</h2>
+<p>High-performance processors often expose or document some notion of <strong>execution ports</strong>: ways for issued internal operations to gain access to functional execution resources. A port may feed one kind of unit or share access among several. A particular operation may be accepted on more than one port, while another operation may be restricted to one specialized resource. The actual meaning of a port, as well as its naming or numbering, depends on the processor family.</p>
+<p>Suppose a hypothetical core can issue two operations per cycle to an arithmetic back end. It has a simple integer unit <em>E0</em>, a second unit <em>E1</em> that also accepts simple integer operations, and a pipelined multiplier <em>M0</em>. If a decoding or issuing stage is limited to two total operations per cycle, the presence of three units does not create a three-operation issue capability. If two ready instructions both require M0, they still compete for its input even if E0 and E1 are idle. And if a required instruction can execute only on E1, the unused capacity of E0 is irrelevant to that instruction.</p>
+<h3>Structural hazards</h3>
+<p>A <strong>structural hazard</strong> occurs when two eligible operations need a resource that cannot serve both under the current timing conditions. The resource might be a multiplier, writeback channel, register bank, issue slot, or memory access port. Hardware can prevent simultaneous allocation, queue the competing operation, or arbitrate among ready candidates. Such contention is distinct from a true <strong>data dependency</strong>, in which an instruction must wait for a value produced by another instruction.</p>
+<h3>Shared, duplicated, and clustered units</h3>
+<p>Duplicating an execution unit can relieve contention for its operation class, but its value depends on whether the upstream issue logic can feed it and the downstream network can drain results. Conversely, a single expensive divider may be sufficient when division is rare. Clustering arithmetic units near local operand storage can save wiring costs but introduce cross-cluster forwarding latency. A design may optimize common cases by using highly capable general units alongside smaller specialized units.</p>
+<p>The Intel <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel64-and-ia32-architectures-optimization.html">optimization reference materials</a> provide processor-family-specific throughput, latency, and execution-resource information. They are useful precisely because <em>there is no portable execution-port map for all CPUs</em>. The separate <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/execution-port-utilization-and-bottleneck-analysis">Execution Port Utilization and Bottleneck Analysis</a> specialist article develops quantitative port-pressure methods.</p>
+</section>
+
+<section id="latency-throughput" aria-labelledby="heading-latency-throughput">
+<h2 id="heading-latency-throughput">Latency, Throughput, and Pipeline Occupancy</h2>
+<p>Arithmetic performance discussions fail when they confuse the time required for <strong>one dependent result</strong> with the rate at which <strong>many independent operations</strong> can be processed. These are related but distinct properties.</p>
+<table>
+<thead><tr><th scope="col">Metric</th><th scope="col">Definition</th><th scope="col">Example interpretation</th></tr></thead>
+<tbody>
+<tr><td>Execution latency</td><td>Delay from usable inputs or operation start to a usable result, under defined conditions</td><td>A dependent consumer must wait three cycles for a result</td></tr>
+<tr><td>Initiation interval</td><td>Minimum spacing at which one unit can accept another applicable operation</td><td>One new multiply every cycle</td></tr>
+<tr><td>Reciprocal throughput</td><td>Cycles per operation at sustained throughput, under a specified scenario</td><td>0.5 cycles per instruction across two eligible units</td></tr>
+<tr><td>Peak throughput</td><td>Highest theoretical completion or initiation rate under ideal conditions</td><td>Two independent ALU operations per cycle</td></tr>
+<tr><td>Actual throughput</td><td>Observed useful rate for a workload</td><td>Lower because of dependencies, contention, stalls, or issue limits</td></tr>
+<tr><td>Resource occupancy</td><td>Period for which an operation reserves a scarce resource</td><td>An iterative engine may be unavailable for several cycles</td></tr>
+</tbody>
+</table>
+<p><strong>Example:</strong> a fictional multiplier has a latency of three cycles but an initiation interval of one cycle. Independent multiplies may enter at the beginnings of cycles 0, 1, and 2, with their results becoming usable at the beginnings of cycles 3, 4, and 5. The machine performs no first multiplication “instantaneously”; it overlaps the internal stages. A true dependency chain where each multiplication consumes the preceding result instead starts multiplications at cycles 0, 3, 6, and so on. The same physical unit exhibits good independent throughput and a much lower dependent-chain rate.</p>
+<p>A different fictional divider might have a latency of twelve cycles and an initiation interval of twelve cycles. Only one new divide could begin every twelve cycles on that engine, even if independent instructions are waiting. Other divider architectures may permit overlapping divides or variable latency. Without a specified unit and operation type, the statement “division takes twelve cycles” is not generally meaningful.</p>
+<p>Instruction latency can depend on which operand feeds a critical path, the destination type, special numerical values, and implementation-specific handling. Throughput can depend on the mix of concurrently executing operations, port eligibility, and input/output bandwidth. When reading a table, establish <strong>what is being timed</strong>, <strong>which processor is measured</strong>, and <strong>whether the rate assumes independent operations</strong>.</p>
+<p>Clock frequency provides a conversion of cycles to time only if the relevant operating frequency is known. At a constant 2 GHz, one cycle is 0.5 ns, so a three-cycle dependency latency corresponds to 1.5 ns in the simplified model. Modern processors may change frequencies or impose shared power limits; an isolated cycle count does not guarantee that a workload will see the same nanoseconds under all conditions.</p>
+</section>
+
+<section id="forwarding" aria-labelledby="heading-forwarding">
+<h2 id="heading-forwarding">Forwarding and Dependent Instruction Chains</h2>
+<p>A <strong>read-after-write (RAW) dependency</strong> exists when an instruction consumes a value produced by an earlier instruction. This is a true dataflow requirement: no amount of extra ALU capacity eliminates the need to obtain the earlier result. A <strong>forwarding network</strong> can deliver a completed value directly to the waiting unit, reducing overhead that would otherwise arise from writing the result into a register and reading it back.</p>
+<p>Consider an abstract program fragment:</p>
+<pre><code>A: x1 = x2 + x3
+B: x4 = x1 + x5
+C: x6 = x4 + x7</code></pre>
+<p>B cannot use its real input until A produces <code>x1</code>, and C cannot use <code>x4</code> until B finishes. If all three additions have a one-cycle result latency and the forwarding paths support immediate next-cycle consumption, this chain can begin A in cycle 0, B in cycle 1, and C in cycle 2. Three or thirty additional ALUs do not by themselves make the chain complete in fewer dependency steps. A shorter dependency latency, a different algorithm, or other relevant transformations would be required.</p>
+<p>Now consider independent operations:</p>
+<pre><code>D: x8  = x9  + x10
+E: x11 = x12 + x13
+F: x14 = x15 + x16</code></pre>
+<p>There is no dataflow edge among D, E, and F. If the core can supply enough issue slots, operands, and arithmetic paths, some may execute concurrently. This is <strong>instruction-level parallelism</strong>. Hardware must still respect the ISA and precise exception requirements; issuing an independent operation early is not permission to commit invalid architectural state.</p>
+<p>Forwarding can also be selective. A result from one class of unit may reach another with a particular delay, while crossing physical clusters or moving between scalar and vector domains may impose additional cost. A latency reported for one type of producer-consumer path may not describe every possible pair. Detailed forwarding topology is an implementation matter, not an ISA rule.</p>
+</section>
+
+<section id="worked-trace" aria-labelledby="heading-worked-trace">
+<h2 id="heading-worked-trace">Worked Instruction Trace: Dependent and Independent Work</h2>
+<p>The following constructed example tests the claim that “more execution units always mean more instructions completed per cycle.” It deliberately uses a small invented core rather than claiming to model any commercial processor. The cycle numbers describe when operations are <em>issued into their execution units</em>, not necessarily when they retire architecturally.</p>
+<h3>Hypothetical processor assumptions</h3>
+<ul>
+<li>At most <strong>two operations</strong> may begin execution per cycle.</li>
+<li>Two scalar arithmetic units, E0 and E1, can each start one add or XOR per cycle; their result latency is <strong>one cycle</strong>.</li>
+<li>One multiplier, M0, can start one multiplication per cycle; its result latency is <strong>three cycles</strong>.</li>
+<li>The processor can select ready operations from the illustrated window, subject to dependencies; results can be forwarded to a consumer at the beginning of the cycle in which they become available.</li>
+<li>All operands other than explicitly produced results are ready at cycle 0. No cache misses, branches, extra operand-port conflicts, or retirement constraints intervene.</li>
+</ul>
+<h3>Instruction sequence</h3>
+<pre><code>A: r1  = r2  + r3         ; add
+B: r4  = r1  + r5         ; depends on A
+C: r6  = r7  XOR r8       ; independent of A, B
+D: r9  = r6  * r10        ; depends on C
+E: r11 = r4  + r12        ; depends on B
+F: r13 = r14 + r15        ; independent
+G: r16 = r9  + r11        ; depends on D and E</code></pre>
+<p>One legal schedule under the assumptions is:</p>
+<table>
+<thead><tr><th scope="col">Cycle beginning</th><th scope="col">Operation issued</th><th scope="col">Unit</th><th scope="col">Result first usable</th><th scope="col">Reason</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>A, C</td><td>E0, E1</td><td>1, 1</td><td>Independent source values ready</td></tr>
+<tr><td>1</td><td>B, D</td><td>E0, M0</td><td>2, 4</td><td>A and C became usable at cycle 1</td></tr>
+<tr><td>2</td><td>E, F</td><td>E0, E1</td><td>3, 3</td><td>B completed; F remains independent</td></tr>
+<tr><td>3</td><td>None</td><td>—</td><td>—</td><td>G still waits on D, which is not usable until cycle 4</td></tr>
+<tr><td>4</td><td>G</td><td>E0</td><td>5</td><td>Both D and E now have usable results</td></tr>
+</tbody>
+</table>
+<p>Seven operations have entered execution by the end of cycle 4, and the last result becomes usable at the beginning of cycle 5. In this simplified example, <strong>the longest dependency path is C → D → G</strong>: one cycle for XOR, three cycles for multiply, and one cycle for the final add, giving a five-cycle path from the start of C to the availability of G. The alternative path A → B → E → G takes four one-cycle arithmetic stages. The machine has three functional units but issues at most two operations in a cycle, and one cycle has no eligible work because the final instruction is blocked by a dependency.</p>
+<h3>What a unit count misses</h3>
+<p>A second multiplier would not shorten this trace because only one multiplication is present. A third simple integer ALU would not speed the critical C → D → G chain without changing issue timing or operation latency. Reducing the multiplication's result latency from three cycles to two would, under otherwise identical assumptions, permit G to start at cycle 3 and make its result usable at cycle 4. Alternatively, a different sequence with several independent multiplications might benefit from increased multiplier initiation capacity even without reducing single-operation latency.</p>
+<p>The example also illustrates a measurement trap: counting seven operations over five calendar cycles produces an average of 1.4 operations issued per cycle over the interval from cycle 0 through cycle 4. It does <em>not</em> prove that the machine has a sustained capacity of 1.4 for other instruction mixes. Scheduling-window size, operand preparation, issue policy, memory effects, and retirement behavior are intentionally idealized here. For broader instruction-selection machinery consult <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/instruction-scheduling-and-reservation-stations">Instruction Scheduling and Reservation Stations</a> and <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/out-of-order-execution-and-reorder-buffers">Out-of-Order Execution and Reorder Buffers</a>.</p>
+</section>
+
+<section id="quantitative-examples" aria-labelledby="heading-quantitative-examples">
+<h2 id="heading-quantitative-examples">Worked Capacity and Bottleneck Calculations</h2>
+<p>Capacity arithmetic is valuable when its assumptions are visible. It should not be mistaken for a benchmark or an independently verified performance claim. The following three examples isolate different limiting resources.</p>
+<h3>Example 1 — Two scalar ALUs versus one dependency chain</h3>
+<p>Suppose a fictional processor has two identical ALUs, each able to accept one independent addition per cycle with one-cycle result latency. Under ideal operand supply and issue conditions, the two ALUs permit <strong>two additions per cycle</strong>. At 2.5 GHz, that amounts to a theoretical maximum of <strong>5 billion additions per second</strong> for an appropriate independent stream. A chain of additions in which each uses the preceding result, however, can initiate only <strong>one dependent addition per cycle</strong> under these latency assumptions, regardless of whether one or two units are present. This is a dependency-limited computation, not evidence of a defective second ALU.</p>
+<h3>Example 2 — A vector floating-point ceiling</h3>
+<p>Consider two hypothetical 128-bit vector FMA execution pipelines. Each can accept one vector operation per cycle, each operation contains <strong>four 32-bit elements</strong>, and every element performs an FMA. Under the conventional accounting of two floating-point operations per FMA element, the maximum is:</p>
+<p><strong>2 pipelines × 4 elements × 2 FLOPs per element = 16 FLOPs per cycle.</strong></p>
+<p>At a sustained 3 GHz the ideal rate would be <strong>48 GFLOP/s</strong> for an eligible, fully populated instruction stream. This assumes that both pipelines really support such operations concurrently, every relevant instruction can be issued, all operands arrive, no instruction masks away lanes, the operating frequency remains fixed, and the results can be accepted. The unit count and element width give a <em>conditional upper bound</em>; real sustained throughput is not implied.</p>
+<h3>Example 3 — Port pressure caps independent work</h3>
+<p>Suppose an invented processor can issue four operations per cycle, with two generic integer ALUs and one specialized integer multiply resource. A loop iteration performs <strong>four independent integer additions and two independent multiplies</strong>, with adequate register and result bandwidth. If only one multiply can begin each cycle, the loop needs <strong>at least two issue cycles</strong> for its two multiplies. The issue width gives a separate lower bound of six operations ÷ four per cycle = 1.5, or at least two whole issue cycles. The additions can also fit across two cycles at two per cycle. Therefore a schedule completing all six issues in two cycles is <em>feasible under the idealized assumptions</em>. A third generic ALU would not improve that two-cycle minimum. Doubling multiplier initiation capacity would still leave the four-wide overall issue cap and the requirement to issue six operations, so the minimum would remain two cycles.</p>
+<p>These calculations use resource bounds: for each required resource, divide its demanded work by its issue capacity and respect discrete scheduling and dependencies. The tightest bound may change with instruction mix. A more complete model also accounts for front-end supply, operation mapping, input/output ports, buffer capacity, actual latency, and memory behavior. <strong>Peak performance is not the sum of independently advertised peaks if those operations compete for common hardware.</strong></p>
+</section>
+
+<section id="physical-tradeoffs" aria-labelledby="heading-physical-tradeoffs">
+<h2 id="heading-physical-tradeoffs">Physical Design, Power, and Area Tradeoffs</h2>
+<p>Adding a functional unit consumes more than the transistors that implement its computation. It may also require additional register-file ports, operand multiplexers, wakeup and scheduling capacity, forwarding links, result buses, verification work, and power distribution. These supporting structures can grow disproportionately as a processor becomes wider and more connected. The physical feasibility of moving operands across the die may constrain a design even when the arithmetic logic itself is fast.</p>
+<h3>Wiring and timing</h3>
+<p>Wide broadcast networks increase capacitive loading and wire delay. To meet a clock target, designers may partition execution clusters, add pipeline boundaries, duplicate storage, or restrict which units communicate directly. These choices affect instruction latency. A unit positioned near the register file may be cheap to feed, while a distant unit can require longer operand delivery or an extra pipeline stage. The path between producer and consumer is therefore part of the performance-critical datapath.</p>
+<h3>Dynamic power and utilization</h3>
+<p>Active circuits expend dynamic energy when signals switch. More lanes, more ports, and more frequently active result networks can raise power consumption, although exact effects depend on technology, activity, voltage, and design technique. Clock gating and operand isolation can reduce needless switching. Power gating can reduce leakage in inactive regions at the expense of wakeup cost. A large unit that is seldom used may be poor value for an energy-constrained core; a smaller shared unit may be preferable even if peak throughput decreases.</p>
+<h3>Different workloads, different optima</h3>
+<p>A microcontroller optimized for predictable control work may choose a compact integer datapath and little speculative machinery. A high-performance application processor may spend substantial area on wide execution and routing to exploit independent instructions. A scientific or media-oriented processor may prioritize vector and FMA throughput. A real-time system may favor timing predictability over maximum average throughput. None of these priorities follows automatically from the ISA name.</p>
+<p>Evaluate additions to an execution inventory against <strong>measured workload demand</strong>: what fraction of cycles is the resource saturated, what dependencies constrain progress, and what alternative use of area and energy would deliver greater benefit? A larger ALU count may have lower return than improving operand supply, caches, clock frequency, or the latency of a frequently used specialized operation. The separate <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/power-frequency-area-and-timing-tradeoffs">Power, Frequency, Area, and Timing Tradeoffs</a> entry studies that broader optimization space.</p>
+</section>
+
+<section id="correctness" aria-labelledby="heading-correctness">
+<h2 id="heading-correctness">Correctness, Exceptions, and Implementation Variation</h2>
+<p>Microarchitectural freedom is bounded by architectural behavior. A processor may implement an instruction with a dedicated circuit, a pipelined engine, or a sequence of internal steps, but must still satisfy its ISA's required results, flags, exceptions, and memory semantics. A core that completes an instruction internally before an older instruction may be correct if it preserves required architectural effects; a visible result that violates the contract is not excused by a faster datapath.</p>
+<h3>Precise architectural state</h3>
+<p>In an out-of-order design, work may finish out of program order. Retirement or equivalent control mechanisms ensure that exceptions and architecturally visible updates meet the processor's rules. A unit can produce a result that is temporarily held rather than immediately committed. Similarly, an operation executed on a mispredicted path may use execution units and alter transient resource state without being allowed to commit incorrect architectural effects. These questions connect execution hardware to <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/speculative-execution-checkpointing-and-recovery">Speculative Execution, Checkpointing, and Recovery</a>, but full recovery mechanisms fall outside this page's primary scope.</p>
+<h3>Arithmetic corner cases</h3>
+<p>Integer overflow treatment, saturating operations, divide-by-zero rules, exceptional floating-point values, rounding modes, and predicated vector updates are defined according to the architecture and chosen instruction. A datapath must account for such cases, sometimes through specialized correction logic or additional execution steps. Fast-path performance cannot be evaluated as though corner cases did not exist; neither should the presence of a slow path be asserted for every implementation.</p>
+<h3>Security and observable timing</h3>
+<p>Shared execution paths may expose contention or timing differences. Architectural equivalence between two implementations does not imply identical timing behavior, and execution-resource contention can contribute to some microarchitectural side-channel risks. Practical exploitability depends on sharing, timing resolution, attacker capabilities, and controls; the mere existence of a shared multiplier is not proof of an exploitable vulnerability. The dedicated <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/microarchitectural-side-channels-and-mitigations">Microarchitectural Side Channels and Mitigations</a> article addresses threat models and defenses.</p>
+</section>
+
+<section id="investigation-framework" aria-labelledby="heading-investigation-framework">
+<h2 id="heading-investigation-framework">Design and Performance Investigation Framework</h2>
+<p>Investigating arithmetic execution requires an evidence chain from the instruction mix to the relevant units and their constraints. The following questions help avoid unsupported conclusions from product marketing, isolated peak numbers, or a single performance counter.</p>
+<table>
+<thead><tr><th scope="col">Investigation question</th><th scope="col">Evidence or distinction needed</th><th scope="col">Likely next study</th></tr></thead>
+<tbody>
+<tr><td>Which operations dominate the workload?</td><td>Dynamic instruction mix, data types, vector widths, scalar versus memory operations</td><td><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/performance-counters-and-cpi-analysis">Performance Counters and CPI Analysis</a></td></tr>
+<tr><td>Are the operations independent?</td><td>Dependency graph and critical path, not merely instruction count</td><td><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/data-hazards-forwarding-and-interlocks">Data Hazards, Forwarding, and Interlocks</a></td></tr>
+<tr><td>Which units can actually execute each operation?</td><td>Processor-specific operation-to-unit mapping and shared resources</td><td><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/execution-port-utilization-and-bottleneck-analysis">Execution Port Utilization and Bottleneck Analysis</a></td></tr>
+<tr><td>What limits new operations per cycle?</td><td>Front end, scheduling, execution ports, read ports, or result bandwidth</td><td><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/instruction-scheduling-and-reservation-stations">Instruction Scheduling and Reservation Stations</a></td></tr>
+<tr><td>What limits completion of one dependency chain?</td><td>Actual producer-to-consumer latency, bypass route, and critical path</td><td><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/register-files-and-operand-delivery">Register Files and Operand Delivery</a></td></tr>
+<tr><td>Are arithmetic units idle because data is late?</td><td>Load latency, memory-level parallelism, cache behavior, and address throughput</td><td><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/cache-access-prefetching-and-memory-level-parallelism">Cache Access, Prefetching, and Memory-Level Parallelism</a></td></tr>
+<tr><td>Does a faster arithmetic design remain worthwhile?</td><td>Power, area, timing, frequency scaling, and realistic duty cycle</td><td><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/power-frequency-area-and-timing-tradeoffs">Power, Frequency, Area, and Timing Tradeoffs</a></td></tr>
+</tbody>
+</table>
+<h3>A disciplined investigation sequence</h3>
+<ol>
+<li><strong>Specify the exact processor:</strong> identify the microarchitecture and relevant configuration, rather than assuming two chips implementing the same ISA have identical units.</li>
+<li><strong>Define the workload and numerator:</strong> clarify whether the goal is operations per second, instructions retired, elements processed, latency, energy per operation, or end-to-end elapsed time.</li>
+<li><strong>Determine instruction mix and dataflow:</strong> distinguish independent arithmetic from dependent chains, reductions, memory addresses, and specialized instructions.</li>
+<li><strong>Identify supported operation mappings:</strong> consult documentation or robust measurements for the units, port eligibility, and applicable latencies and throughputs.</li>
+<li><strong>Check non-compute constraints:</strong> verify operand-read supply, forwarding, writeback, issue capacity, cache behavior, and frequency stability.</li>
+<li><strong>Compare a bound with measurements:</strong> use explicit idealized ceilings to test plausibility; then use workload counters and controlled experiments rather than treating the ceiling as an expected result.</li>
+<li><strong>Evaluate changes in context:</strong> determine whether unit duplication, different instruction selection, software vectorization, improved locality, or algorithmic restructuring addresses the measured bottleneck.</li>
+</ol>
+<p>Performance counters can be useful but may represent implementation-specific events. A high percentage of active arithmetic cycles is not necessarily proof that arithmetic is the limiting factor; the question is whether reducing that resource's demand or increasing its capacity improves the objective. The <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/performance-counters-and-cpi-analysis">Performance Counters and CPI Analysis</a> article develops counter interpretation in depth.</p>
+</section>
+
+<section id="misconceptions" aria-labelledby="heading-misconceptions">
+<h2 id="heading-misconceptions">Common Misconceptions and Key Distinctions</h2>
+<table>
+<thead><tr><th scope="col">Misleading statement</th><th scope="col">More accurate interpretation</th></tr></thead>
+<tbody>
+<tr><td>“Four ALUs mean four instructions per cycle.”</td><td>Unit count does not guarantee four suitable operations, issue slots, ready operands, or result paths.</td></tr>
+<tr><td>“A three-cycle multiply can only execute once every three cycles.”</td><td>Three-cycle latency can coexist with one new multiplication per cycle if the multiplier is suitably pipelined.</td></tr>
+<tr><td>“A 256-bit vector instruction always uses 256 bits of physical arithmetic at once.”</td><td>Logical instruction width does not dictate physical lane width or number of execution beats.</td></tr>
+<tr><td>“All integer operations use the same ALU.”</td><td>Multiplication, division, shifting, comparison, and cryptographic operations may use distinct or shared paths, depending on the design.</td></tr>
+<tr><td>“An AGU completing means the load is complete.”</td><td>Address generation is only one part of translation, cache access, ordering checks, and data return.</td></tr>
+<tr><td>“An operation finished executing, so it has retired.”</td><td>Internal completion and committed architectural state can be separate stages.</td></tr>
+<tr><td>“A higher clock always makes a processor faster.”</td><td>Effective instructions or work per cycle, latency, memory effects, and power constraints also matter.</td></tr>
+<tr><td>“A port is the same as a functional unit.”</td><td>An execution port is an implementation-specific access or issue abstraction, which can feed shared or specialized structures.</td></tr>
+<tr><td>“Every processor with the same ISA has the same datapath.”</td><td>ISA equivalence leaves considerable freedom in units, widths, routing, pipeline depth, and timing.</td></tr>
+</tbody>
+</table>
+<p>The unifying principle is that <strong>arithmetic throughput, dependence latency, and data movement must be analyzed together</strong>. Each is a possible bottleneck, and improvements in one dimension can expose limitations in another.</p>
+</section>
+
+<section id="glossary" aria-labelledby="heading-glossary">
+<h2 id="heading-glossary">Specialist Glossary</h2>
+<dl>
+<dt><strong>Arithmetic logic unit (ALU)</strong></dt><dd>Execution circuitry for selected integer arithmetic, logical, or related operations.</dd>
+<dt><strong>Address generation unit (AGU)</strong></dt><dd>Hardware that computes effective addresses for memory-oriented instructions or accesses.</dd>
+<dt><strong>Bypass network</strong></dt><dd>Connections allowing freshly computed results to reach consumers without waiting for an ordinary register-file round trip.</dd>
+<dt><strong>Critical path (data dependency)</strong></dt><dd>The longest latency-constraining chain of dependent operations in a particular computation model.</dd>
+<dt><strong>Datapath</strong></dt><dd>Storage, wiring, selection, and functional hardware through which operands and results move inside a processor.</dd>
+<dt><strong>Execution cluster</strong></dt><dd>A physically or logically grouped set of units and operand-delivery resources.</dd>
+<dt><strong>Execution port</strong></dt><dd>An implementation-specific path or issue resource used to allocate operations to back-end functional hardware.</dd>
+<dt><strong>Execution unit</strong></dt><dd>A functional block that performs one or more classes of operations.</dd>
+<dt><strong>Floating-point unit (FPU)</strong></dt><dd>Hardware implementing applicable floating-point arithmetic and associated semantics.</dd>
+<dt><strong>Fused multiply-add (FMA)</strong></dt><dd>A floating-point operation combining a multiplication and addition with one final rounding, under the specified rules.</dd>
+<dt><strong>Initiation interval</strong></dt><dd>The shortest supported interval between accepting new operations on a resource in a stated scenario.</dd>
+<dt><strong>Instruction-level parallelism</strong></dt><dd>Opportunity to execute independent instructions in overlapping periods.</dd>
+<dt><strong>Latency</strong></dt><dd>Time or cycles from defined operation start or source availability to a usable result.</dd>
+<dt><strong>Operand steering</strong></dt><dd>Selection and routing of appropriate input values toward an execution resource.</dd>
+<dt><strong>Register-file port</strong></dt><dd>A separately usable read or write interface to operand storage, subject to the storage design.</dd>
+<dt><strong>Result writeback</strong></dt><dd>Delivery or storage of a completed value to an implementation destination; distinct from architectural retirement where those stages are separate.</dd>
+<dt><strong>SIMD</strong></dt><dd>Single instruction, multiple data: operations applied to multiple elements under one logical instruction.</dd>
+<dt><strong>Structural hazard</strong></dt><dd>Conflict because concurrent operations require more instances or bandwidth of a resource than is available.</dd>
+<dt><strong>Throughput</strong></dt><dd>Rate of processing operations or results, defined for a particular workload, measure, and time interval.</dd>
+<dt><strong>Vector lane</strong></dt><dd>A logical or physical element-processing portion of a vector operation, depending on context.</dd>
+</dl>
+</section>
+
+<section id="references" aria-labelledby="heading-references">
+<h2 id="heading-references">References and Further Reading</h2>
+<p>The resources below distinguish the <em>instruction-set contract</em> from the <em>implementation-specific performance characteristics</em> emphasized in this article. Vendor documentation often applies only to named products or cores; consult the relevant edition and product family before importing a numerical latency or port claim.</p>
+<ul>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel64-and-ia32-architectures-optimization.html"><strong>Intel — Intel 64 and IA-32 Architectures Optimization</strong></a>. Official collection of optimization references, including processor-specific instruction latency and throughput resources.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html"><strong>Intel — Software Developer's Manuals</strong></a>. Architecture and instruction semantics to be distinguished from hardware execution arrangements.</li>
+<li><a href="https://www.arm.com/architecture/cpu"><strong>Arm — CPU Architecture</strong></a>. Official explanation of the architectural contract and variation among implementing microarchitectures.</li>
+<li><a href="https://docs.riscv.org/reference/isa/_attachments/riscv-unprivileged.pdf"><strong>RISC-V International — The RISC-V Instruction Set Manual, Volume I: Unprivileged Architecture</strong></a>. Official instruction and extension semantics, including integer, floating-point, and vector operations; not a universal physical execution-unit specification.</li>
+<li>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em>. Standard reference on processor performance, pipelining, instruction-level parallelism, and design tradeoffs; consult the edition used.</li>
+<li>David A. Patterson and John L. Hennessy, <em>Computer Organization and Design</em>. Instruction-to-datapath instructional models, arithmetic, control, and processor organization; consult an architecture-specific edition as appropriate.</li>
+</ul>
+<p>Any numerical unit counts, frequencies, capacities, and instruction schedules in the worked examples are constructed educational assumptions. They are <strong>not extracted benchmark measurements</strong> from the references.</p>
+</section>
+
+<section id="related-topics" aria-labelledby="heading-related-topics">
+<h2 id="heading-related-topics">Related Encyclopedia Topics</h2>
+<p>The first group contains sibling specialist entries in the same Microarchitecture unit. Their links are intentionally active as planned article destinations; availability on the public website should not be inferred merely from their appearance here.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/"><strong>Microarchitecture Sub-Articles — Unit Directory</strong></a> — The governing specialist taxonomy and study pathways.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/instruction-fetch-decode-and-micro-ops"><strong>Instruction Fetch, Decode, and Micro-Ops</strong></a> — Preparation of operations before the execution datapath.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/register-files-and-operand-delivery"><strong>Register Files and Operand Delivery</strong></a> — Storage and distribution mechanisms for input and output operands.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/hardwired-control-and-microcoded-sequencing"><strong>Hardwired Control and Microcoded Sequencing</strong></a> — How control directs and sequences datapath actions.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/pipeline-organization-and-stage-boundaries"><strong>Pipeline Organization and Stage Boundaries</strong></a> — Timing partitions within processor implementations.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/data-hazards-forwarding-and-interlocks"><strong>Data Hazards, Forwarding, and Interlocks</strong></a> — True dependencies and how hardware handles producer-consumer relationships.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/instruction-scheduling-and-reservation-stations"><strong>Instruction Scheduling and Reservation Stations</strong></a> — Selection of eligible operations for available execution resources.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/execution-port-utilization-and-bottleneck-analysis"><strong>Execution Port Utilization and Bottleneck Analysis</strong></a> — Operation-to-port constraints and practical scheduling limits.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/performance-counters-and-cpi-analysis"><strong>Performance Counters and CPI Analysis</strong></a> — Measured workload behavior versus theoretical execution capacity.</li>
+</ul>
+<p>The following are <strong>neighboring overview articles</strong>, not additional children of this entry:</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture"><strong>Microarchitecture</strong></a> — Parent overview for whole-core organization and implementation.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture"><strong>Instruction Set Architecture</strong></a> — Programmer-visible operation semantics and machine state.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing"><strong>Pipeline Processing</strong></a> — Pipeline principles and hazards across computing systems.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/digital-logic"><strong>Digital Logic</strong></a> — Gates, combinational circuits, and sequential logic underlying execution hardware.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy"><strong>Memory Hierarchy</strong></a> — Latency, locality, and storage levels feeding computation.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/parallel-architecture"><strong>Parallel Architecture</strong></a> — Broader parallel computing beyond individual instruction datapaths.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit"><strong>Central Processing Unit</strong></a> — Processor hardware in the larger system context.</li>
+</ul>
+</section>
+
+<section id="editorial-scope" aria-labelledby="heading-editorial-scope">
+<h2 id="heading-editorial-scope">Editorial Scope and Status</h2>
+<p><strong>Completed in this file:</strong> the substantive Level 5 article <em>Processor Datapaths and Execution Units</em>, with foundational definitions, differentiated scalar and vector unit coverage, operand-routing mechanisms, performance models, a dependency trace, quantitative examples, design constraints, specialist glossary, and reading references.</p>
+<p><strong>Taxonomy:</strong> this page is the first specialist child of the Microarchitecture unit. Its on-disk path is <code>computer-architecture/microarchitecture-articles/processor-datapaths-and-execution-units.html</code>; the public canonical URL ends in <code>/microarchitecture-articles/processor-datapaths-and-execution-units</code>. The governing unit index remains <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/">microarchitecture-articles/</a>. No additional Level 6 companion articles have been created.</p>
+<p><strong>Boundary:</strong> this article owns the physical compute pathways and their immediate capacity constraints, not comprehensive instruction decoding, register renaming, instruction scheduling, memory ordering, or platform-level power engineering. Those subjects are retained by their respective specialist or neighboring encyclopedia pages. Active links to future sibling articles are editorial destinations, not assertions of current deployment.</p>
+<p>Illustrative schedules and ideal ceilings are explicitly hypothetical; microarchitecture-specific claims should be verified against appropriate processor-family documentation before use as measured facts. Publication and live routing of this file have not been independently verified.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent =
+        `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>
