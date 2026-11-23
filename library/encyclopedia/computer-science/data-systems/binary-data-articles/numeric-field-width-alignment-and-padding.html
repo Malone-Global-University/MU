@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Numeric Field Width, Alignment, and Padding | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="An encyclopedia guide to numeric field widths, ABI alignment, structure padding, portable binary layouts, packed records, and safe serialization in C, Python and PowerShell.">
+<meta name="keywords" content="numeric field width, data alignment, structure padding, tail padding, ABI, packed structs, binary layout, record offsets, serialization, sizeof, offsetof">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/numeric-field-width-alignment-and-padding">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Numeric Field Width, Alignment, and Padding | MGU Encyclopedia">
+<meta property="og:description" content="An encyclopedia guide to numeric field widths, ABI alignment, structure padding, portable binary layouts, packed records, and safe serialization in C, Python and PowerShell.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/numeric-field-width-alignment-and-padding">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== SHARED HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<section class="hero">
+<h1>Numeric Field Width, Alignment, and Padding</h1>
+<p class="subtitle">How field size, address alignment and padding determine the shape of binary records—and why portable formats must define their own layout.</p>
+</section>
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-and-scope">Definition and Scope</a></li>
+<li><a href="#core-vocabulary-and-three-layout-layers">Core Vocabulary and Three Layout Layers</a></li>
+<li><a href="#numeric-width-and-range">Numeric Width and Range</a></li>
+<li><a href="#value-bits-storage-units-and-reserved-bits">Value Bits, Storage Units, and Reserved Bits</a></li>
+<li><a href="#alignment-requirements-and-rationale">Alignment Requirements and Rationale</a></li>
+<li><a href="#computing-an-aligned-offset">Computing an Aligned Offset</a></li>
+<li><a href="#worked-example-natural-layout-of-a-small-record">Worked Example: Natural Layout of a Small Record</a></li>
+<li><a href="#internal-padding-and-tail-padding">Internal Padding and Tail Padding</a></li>
+<li><a href="#packed-layouts-benefits-and-tradeoffs">Packed Layouts: Benefits and Tradeoffs</a></li>
+<li><a href="#byte-order-signedness-and-alignment-are-independent">Byte Order, Signedness, and Alignment Are Independent</a></li>
+<li><a href="#external-schema-design-and-fixed-offsets">External Schema Design and Fixed Offsets</a></li>
+<li><a href="#variable-length-fields-and-alignment-boundaries">Variable-Length Fields and Alignment Boundaries</a></li>
+<li><a href="#inspecting-actual-native-layout-in-c">Inspecting Actual Native Layout in C</a></li>
+<li><a href="#portable-c-parsing-without-unaligned-casts">Portable C Parsing Without Unaligned Casts</a></li>
+<li><a href="#python-explicit-width-and-padding-control">Python: Explicit Width and Padding Control</a></li>
+<li><a href="#windows-powershell-5-1-decoding-exact-offsets">Windows PowerShell 5.1: Decoding Exact Offsets</a></li>
+<li><a href="#arrays-stride-and-storage-overhead">Arrays, Stride, and Storage Overhead</a></li>
+<li><a href="#bitfields-and-sub-byte-packing">Bitfields and Sub-Byte Packing</a></li>
+<li><a href="#memory-safety-security-and-interoperability">Memory Safety, Security, and Interoperability</a></li>
+<li><a href="#abi-compiler-options-and-foreign-function-interfaces">ABI, Compiler Options, and Foreign-Function Interfaces</a></li>
+<li><a href="#worked-cases-choosing-the-correct-representation">Worked Cases: Choosing the Correct Representation</a></li>
+<li><a href="#selection-and-review-framework">Selection and Review Framework</a></li>
+<li><a href="#study-questions-and-worked-answers">Study Questions and Worked Answers</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#references-and-further-reading">References and Further Reading</a></li>
+<li><a href="#editorial-scope-and-publication-placement">Editorial Scope and Publication Placement</a></li>
+</ol></section>
+<section id="definition-and-scope" aria-labelledby="heading-definition-and-scope"><h2 id="heading-definition-and-scope">Definition and Scope</h2>
+<p><strong>Numeric Field Width, Alignment, and Padding</strong> is a Level 5 specialist article in the <a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data</a> unit of the MGU Encyclopedia. It examines how binary representations reserve space for numeric values, how in-memory objects are positioned at address boundaries, and why structures sometimes contain bytes not assigned to any named field.</p>
+<p>These are three related but distinct design decisions. <strong>Width</strong> establishes how many bits or bytes represent a field. <strong>Alignment</strong> restricts where a field or object may begin in memory under a particular execution environment. <strong>Padding</strong> occupies positions inserted to satisfy layout rules, or explicitly reserved by a file-format specification. A programmer who knows a value is a 32-bit integer cannot infer its offset in a larger native structure, the byte order of its serialized representation, or the total size of that structure.</p>
+<p>The principal use cases are systems programming, memory-mapped records, foreign-function interfaces, device registers, database pages, binary-file analysis, and portable interchange protocols. This article separates representation <em>in a program's memory</em> from representation <em>on the wire or on disk</em>. Binary formats should define their own offsets, widths, order, and validation rules even if their authors initially implement them in C or C++.</p>
+</section>
+<section id="core-vocabulary-and-three-layout-layers" aria-labelledby="heading-core-vocabulary-and-three-layout-layers"><h2 id="heading-core-vocabulary-and-three-layout-layers">Core Vocabulary and Three Layout Layers</h2>
+<p>A <strong>bit</strong> is one binary digit; an <strong>octet</strong> is exactly eight bits. Most modern platforms use eight-bit bytes, but a portable external format should say “octet” or otherwise state that its byte is eight bits rather than implicitly equating all C-language bytes with octets. A <strong>field</strong> is a named portion of a record with specified meaning; an <strong>offset</strong> measures the distance from the record start; and a <strong>stride</strong> is the distance between successive elements in a sequence.</p>
+<table>
+<thead><tr><th>Layer</th><th>Primary question</th><th>Typical authority</th></tr></thead>
+<tbody>
+<tr><td>Logical value</td><td>What number or state does this field express?</td><td>Schema, application model, numeric convention</td></tr>
+<tr><td>External binary representation</td><td>How many octets, at which offsets, in what byte/bit order?</td><td>Wire protocol or file-format specification</td></tr>
+<tr><td>Native in-memory layout</td><td>Where may the compiler place fields and padding?</td><td>Language rules, ABI, compiler options and platform</td></tr>
+</tbody></table>
+<p>In a native structure, an object may be stored at an address divisible by four, for example, because that target ABI imposes four-byte alignment for its type. On disk, the same integer may appear immediately after a one-octet tag, because the external format explicitly defines an offset of one. Neither layout is universally superior; both are correct when used for their own purpose and decoded according to their actual contracts.</p>
+</section>
+<section id="numeric-width-and-range" aria-labelledby="heading-numeric-width-and-range"><h2 id="heading-numeric-width-and-range">Numeric Width and Range</h2>
+<p>A numeric field has a <strong>declared width</strong>. For a fixed-width, unsigned, <em>n</em>-bit binary integer with no other reserved codes, the range is 0 through 2<sup>n</sup> − 1. For an <em>n</em>-bit two's-complement signed integer, the range is −2<sup>n−1</sup> through 2<sup>n−1</sup> − 1. Width alone does not imply signedness, scaling, unit, endianness, or whether particular values are reserved as sentinels.</p>
+<table>
+<thead><tr><th>Width</th><th>Storage for an octet-based integer</th><th>Unsigned range</th><th>Signed two’s-complement range</th></tr></thead>
+<tbody>
+<tr><td>8 bits</td><td>1 octet</td><td>0 to 255</td><td>−128 to 127</td></tr>
+<tr><td>12 bits</td><td>12 meaningful bits, often inside 2 octets</td><td>0 to 4,095</td><td>−2,048 to 2,047</td></tr>
+<tr><td>16 bits</td><td>2 octets</td><td>0 to 65,535</td><td>−32,768 to 32,767</td></tr>
+<tr><td>24 bits</td><td>3 octets</td><td>0 to 16,777,215</td><td>−8,388,608 to 8,388,607</td></tr>
+<tr><td>32 bits</td><td>4 octets</td><td>0 to 4,294,967,295</td><td>−2,147,483,648 to 2,147,483,647</td></tr>
+<tr><td>64 bits</td><td>8 octets</td><td>0 to 18,446,744,073,709,551,615</td><td>−9,223,372,036,854,775,808 to 9,223,372,036,854,775,807</td></tr>
+</tbody></table>
+<p>A 24-bit field is not an invitation to reinterpret the same three octets as a native 32-bit integer without first assembling and validating them. A 12-bit measurement stored in two octets is different again: the specification must say which four bits of the 16-bit container are unused, whether they must be zero, and how signed values extend. <strong>Container width</strong> and <strong>meaningful value width</strong> are separate properties.</p>
+</section>
+<section id="value-bits-storage-units-and-reserved-bits" aria-labelledby="heading-value-bits-storage-units-and-reserved-bits"><h2 id="heading-value-bits-storage-units-and-reserved-bits">Value Bits, Storage Units, and Reserved Bits</h2>
+<p>The physical storage needed for a logical field is not necessarily its numeric width divided by eight. If a 12-bit reading occupies two octets, the 16-bit container has four additional bit positions. A format might allocate those to status flags, insist they be zero, or combine several readings into a packed stream. Each policy leads to different decoding logic and versioning consequences.</p>
+<p>Consider a 12-bit unsigned sample whose valid reading is <code>0xABC</code> (2,748). One explicit big-endian container convention is <code>0A BC</code> with the high four bits reserved and zero. A second convention might transmit the reading left-aligned as <code>AB C0</code> with the low four bits reserved. The value is the same, but the byte sequences differ. A reader cannot choose between them merely from the advertised “12-bit” width.</p>
+<p>Fixed-length character or identifier fields illustrate another distinction. A field reserved for sixteen octets may contain fewer meaningful octets followed by an explicitly defined fill value; this is <em>format-level padding</em>, not an alignment gap introduced by a compiler. Padding also must not be confused with a parity bit, a check field, or a deliberately reserved extension field: these are semantically defined positions even when their current values must be zero.</p>
+</section>
+<section id="alignment-requirements-and-rationale" aria-labelledby="heading-alignment-requirements-and-rationale"><h2 id="heading-alignment-requirements-and-rationale">Alignment Requirements and Rationale</h2>
+<p><strong>Alignment</strong> describes a set of permitted starting addresses or offsets. For an alignment of <em>a</em> octets, a common layout rule requires <code>address mod a = 0</code>. Alignments frequently have powers-of-two values, but rules depend on the target language, ABI and object type. It is inaccurate to assume every 32-bit integer necessarily has four-byte alignment or that all 64-bit values universally require eight-byte alignment.</p>
+<p>Why align objects? Some processors require particular accesses to be aligned; other processors support unaligned loads but may incur additional work, particularly across cache-line or page boundaries. Alignment can also satisfy atomic-access guarantees, language memory-model requirements, device-bus restrictions, vector instructions, or calling conventions. An unaligned access may work on one platform yet be invalid, inefficient or unsafe on another.</p>
+<p>There is no universal rule saying that an external file-format field must be naturally aligned. When parsing an octet stream, its offsets are part of the format contract. The decoder may copy bytes into a suitably aligned native object or assemble a value arithmetically; it must not assume the input buffer provides suitable alignment merely because the target type ordinarily has it.</p>
+</section>
+<section id="computing-an-aligned-offset" aria-labelledby="heading-computing-an-aligned-offset"><h2 id="heading-computing-an-aligned-offset">Computing an Aligned Offset</h2>
+<p>Layout procedures need a repeatable way to advance from the current record position to the next permitted start. Given a nonnegative offset <em>o</em> and an alignment <em>a</em> greater than zero, the <strong>next aligned offset</strong> is the smallest offset not less than <em>o</em> that is divisible by <em>a</em>.</p>
+<p><code>aligned = o + ((a − (o mod a)) mod a)</code></p>
+<p>For example, after a one-octet field, an object requiring four-octet alignment moves from offset 1 to offset 4; the gap is three octets. After a field ending at offset 10, a four-octet boundary is offset 12, a gap of two. If the current offset is already aligned, the gap is zero.</p>
+<table>
+<thead><tr><th>Current offset</th><th>Required alignment</th><th>Next aligned offset</th><th>Gap inserted</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>4</td><td>0</td><td>0</td></tr>
+<tr><td>1</td><td>4</td><td>4</td><td>3</td></tr>
+<tr><td>4</td><td>4</td><td>4</td><td>0</td></tr>
+<tr><td>6</td><td>4</td><td>8</td><td>2</td></tr>
+<tr><td>10</td><td>4</td><td>12</td><td>2</td></tr>
+<tr><td>13</td><td>8</td><td>16</td><td>3</td></tr>
+</tbody></table>
+<p>Some implementations express the calculation as <code>((o + a − 1) / a) * a</code> using integer division; that variant requires guarding the intermediate addition against integer overflow. Even when alignment is known, a safe record-size calculator must bound the total number of fields, the number of elements and the maximum buffer length.</p>
+</section>
+<section id="worked-example-natural-layout-of-a-small-record" aria-labelledby="heading-worked-example-natural-layout-of-a-small-record"><h2 id="heading-worked-example-natural-layout-of-a-small-record">Worked Example: Natural Layout of a Small Record</h2>
+<p>Suppose a C-compatible native record contains an 8-bit tag, 32-bit sequence number, 16-bit count and 8-bit flags. On an <strong>illustrative ABI</strong> where the 8-, 16- and 32-bit members have respective alignments of 1, 2 and 4 octets, the natural layout is:</p>
+<table>
+<thead><tr><th>Position in record</th><th>Content</th><th>Width</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td>Offset 0</td><td><code>tag</code></td><td>1 octet</td><td>First member</td></tr>
+<tr><td>Offsets 1–3</td><td>Internal padding</td><td>3 octets</td><td>Advance to four-octet boundary</td></tr>
+<tr><td>Offsets 4–7</td><td><code>sequence</code></td><td>4 octets</td><td>Four-octet-aligned field</td></tr>
+<tr><td>Offsets 8–9</td><td><code>count</code></td><td>2 octets</td><td>Two-octet-aligned field</td></tr>
+<tr><td>Offset 10</td><td><code>flags</code></td><td>1 octet</td><td>One-octet field</td></tr>
+<tr><td>Offset 11</td><td>Tail padding</td><td>1 octet</td><td>Round total size to multiple of four</td></tr>
+</tbody></table>
+<p>The named fields consume <strong>8 octets</strong> (1 + 4 + 2 + 1), yet the native structure's size is <strong>12 octets</strong> under these stated alignment assumptions. This is not an assertion that C requires this exact layout on every implementation. The numbers are conditional on the ABI, compiler and type definitions; the deployed program should inspect or assert them.</p>
+<p>In an array of such native structures, elements under this illustrative ABI start at offsets 0, 12, 24, and so forth. Omitting the final pad would cause the next record's four-aligned member to land at a misaligned relative address. This explains why <strong>the sum of member sizes</strong> is generally not a safe substitute for <code>sizeof(struct)</code>.</p>
+</section>
+<section id="internal-padding-and-tail-padding" aria-labelledby="heading-internal-padding-and-tail-padding"><h2 id="heading-internal-padding-and-tail-padding">Internal Padding and Tail Padding</h2>
+<p><strong>Internal padding</strong> appears between named members to position a later member appropriately. <strong>Tail padding</strong> may appear after the final member so that the enclosing object's size is compatible with its alignment and array stride. They solve different placement problems. Tail padding can be present even when no field follows within the same record, because another record may follow immediately in an array.</p>
+<p>Padding is not usually a public data field. For a native C structure, the contents of padding bytes should not be relied upon as stable semantic data. Bytewise comparisons of entire structures can report differences where named members have equal values, and serializing native memory verbatim may copy unspecified padding contents. Initializing members is not a portable promise that every padding byte receives a predictable value.</p>
+<p>By contrast, an <strong>explicitly reserved</strong> octet in a versioned external format has a defined position and a defined rule. It can be mandated zero, included in a checksum, or reserved for a later extension. A reader can validate it because it belongs to the interchange contract. Always identify which category a particular “unused byte” occupies before deciding whether to read, write or compare it.</p>
+</section>
+<section id="packed-layouts-benefits-and-tradeoffs" aria-labelledby="heading-packed-layouts-benefits-and-tradeoffs"><h2 id="heading-packed-layouts-benefits-and-tradeoffs">Packed Layouts: Benefits and Tradeoffs</h2>
+<p>A packed record places fields at agreed offsets without automatic intervening gaps, or uses a reduced alignment cap specified by a particular toolchain. In the four-field example above, the straightforward packed external sequence is eight octets: <code>tag</code> at offset 0, <code>sequence</code> at offsets 1–4, <code>count</code> at offsets 5–6, and <code>flags</code> at offset 7. The packed sequence occupies one-third less space than the illustrative 12-octet native object.</p>
+<p>Packing is not automatically a portability solution. Compiler annotations such as <code>__attribute__((packed))</code>, compiler packing pragmas, .NET interop layout controls, and Rust's <code>repr(packed)</code> have separate language and platform contracts. On some targets, direct access to an unaligned member is costly or invalid; obtaining a reference to a packed member can violate the language's alignment rules. Robust access uses the relevant documented APIs, unaligned-safe operations, or explicit byte copying and decoding.</p>
+<p>Packed structures also cannot, on their own, define endian order, sign representation, bit numbering, pointer size, nested layout, or format version. Treat a compiler's packing control as a tool for a particular implementation boundary, not as a substitute for specifying a durable external format.</p>
+</section>
+<section id="byte-order-signedness-and-alignment-are-independent" aria-labelledby="heading-byte-order-signedness-and-alignment-are-independent"><h2 id="heading-byte-order-signedness-and-alignment-are-independent">Byte Order, Signedness, and Alignment Are Independent</h2>
+<p><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/endianness-and-byte-order">Endianness and Byte Order</a> addresses the sequence of octets inside a multioctet field; this article addresses a field's width and placement. Signedness determines how the resulting bit pattern is interpreted numerically. All three must be known to decode the field. None can be inferred from the other two.</p>
+<table>
+<thead><tr><th>Decision</th><th>Illustrative rule</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Width</td><td>Unsigned 32-bit integer</td><td>Four octets of numeric payload</td></tr>
+<tr><td>Byte order</td><td>Big-endian</td><td><code>0x12345678</code> appears as <code>12 34 56 78</code></td></tr>
+<tr><td>Alignment</td><td>Field begins at record offset 1</td><td>No implied gap in that external schema</td></tr>
+<tr><td>Sign interpretation</td><td>Unsigned</td><td>Pattern is 305,419,896</td></tr>
+<tr><td>Record stride</td><td>Eight octets</td><td>Next serialized record begins eight octets later</td></tr>
+</tbody></table>
+<p>In an application, an unsigned 32-bit value may be computed correctly yet written to the wrong offset, or stored at the correct offset but emitted in host-native byte order rather than the schema's required order. Both are interoperability defects. Conversely, inserting alignment gaps into a format that does not specify them creates extra bytes and shifts all subsequent fields, even if individual values are correctly encoded.</p>
+</section>
+<section id="external-schema-design-and-fixed-offsets" aria-labelledby="heading-external-schema-design-and-fixed-offsets"><h2 id="heading-external-schema-design-and-fixed-offsets">External Schema Design and Fixed Offsets</h2>
+<p>A portable binary record should specify a layout by <strong>octet offset, field width, representation, byte order and validity rule</strong>. It should never depend on a reader guessing the native alignment of the producer's compiler. A compact, explicit version of the illustrative record could have this contract:</p>
+<table>
+<thead><tr><th>Offset</th><th>Field</th><th>External representation</th><th>Validation</th></tr></thead>
+<tbody>
+<tr><td>0</td><td><code>tag</code></td><td>Unsigned 8-bit</td><td>Allowlisted record kind</td></tr>
+<tr><td>1–4</td><td><code>sequence</code></td><td>Unsigned 32-bit, big-endian</td><td>Within application sequence policy</td></tr>
+<tr><td>5–6</td><td><code>count</code></td><td>Unsigned 16-bit, big-endian</td><td>Bounded by available payload</td></tr>
+<tr><td>7</td><td><code>flags</code></td><td>Unsigned 8-bit bitmask</td><td>Reject or mask reserved bits per version</td></tr>
+</tbody></table>
+<p>A corresponding example stream is <code>7F 12 34 56 78 02 01 A5</code>. It represents tag <code>0x7F</code>, sequence <code>0x12345678</code>, count <code>0x0201</code> (513), and flags <code>0xA5</code>. The fixed header length is exactly eight octets. There are <strong>no implicit padding bytes</strong>; a reader follows the defined offsets regardless of the reader's architecture.</p>
+<p>If a schema deliberately aligns a payload on an eight-octet boundary, the specification must explicitly state the required filler length, filler value, and whether that filler participates in integrity protection. Such <em>protocol-level</em> alignment is valid precisely because the agreement is visible and testable, not because a compiler happened to choose that arrangement.</p>
+</section>
+<section id="variable-length-fields-and-alignment-boundaries" aria-labelledby="heading-variable-length-fields-and-alignment-boundaries"><h2 id="heading-variable-length-fields-and-alignment-boundaries">Variable-Length Fields and Alignment Boundaries</h2>
+<p>Once a record contains variable-length strings, arrays or nested blobs, a single static table may no longer describe every absolute offset. A common format places a fixed-width length before a variable segment and then computes the next field's offset. The decoder must distinguish <strong>length in octets</strong> from length in characters, elements, Unicode code points or application objects.</p>
+<p>For example, suppose a schema requires a one-octet type, a two-octet big-endian payload length, the payload itself, and enough explicit zero filler to bring the next record to a four-octet boundary. A payload of five octets gives a three-octet prefix plus five-octet body, totaling eight; no filler is required. A payload of six yields nine octets, so three filler octets are required. This is an external alignment rule only if the format explicitly declares it.</p>
+<p>Adversarial input can provide a length that exceeds the available buffer, wraps an offset calculation or makes the parser seek into another record. Check <code>length &lt;= remaining</code> before advancing, validate arithmetic before rounding, and enforce resource limits. <strong>Alignment does not validate a length;</strong> it merely changes a position that is already supposed to be valid.</p>
+</section>
+<section id="inspecting-actual-native-layout-in-c" aria-labelledby="heading-inspecting-actual-native-layout-in-c"><h2 id="heading-inspecting-actual-native-layout-in-c">Inspecting Actual Native Layout in C</h2>
+<p>The C standard library supplies <code>sizeof</code> and <code>offsetof</code> to inspect structure size and member offsets. A C11 implementation also provides <code>_Alignof</code> to query alignment requirements. The following program prints actual values for the host compiler. Its output should be tested rather than assumed, especially when changing architecture or packing flags.</p>
+<pre><code class="language-c">#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+
+struct Example {
+    uint8_t  tag;
+    uint32_t sequence;
+    uint16_t count;
+    uint8_t  flags;
+};
+
+int main(void) {
+    printf(&quot;sizeof(struct Example) = %zu\n&quot;, sizeof(struct Example));
+    printf(&quot;_Alignof(struct Example) = %zu\n&quot;, (size_t)_Alignof(struct Example));
+    printf(&quot;tag offset      = %zu\n&quot;, offsetof(struct Example, tag));
+    printf(&quot;sequence offset = %zu\n&quot;, offsetof(struct Example, sequence));
+    printf(&quot;count offset    = %zu\n&quot;, offsetof(struct Example, count));
+    printf(&quot;flags offset    = %zu\n&quot;, offsetof(struct Example, flags));
+}
+</code></pre>
+<p>On the ABI assumed in the worked layout, the printed values are <code>12</code> for structure size, <code>4</code> for alignment and <code>0, 4, 8, 10</code> for member offsets. On another implementation the output may differ. The exact-width types <code>uint8_t</code>, <code>uint16_t</code> and <code>uint32_t</code> are available only on implementations supporting those widths, and their presence alone does not standardize structure layout.</p>
+<p>Do not write an entire C struct directly as a portable disk or network record merely because its members are fixed-width types. Instead, serialize each field according to the external schema. Direct memory copying can transfer native padding and byte order along with the logical values.</p>
+</section>
+<section id="portable-c-parsing-without-unaligned-casts" aria-labelledby="heading-portable-c-parsing-without-unaligned-casts"><h2 id="heading-portable-c-parsing-without-unaligned-casts">Portable C Parsing Without Unaligned Casts</h2>
+<p>For the eight-octet external schema, a bytewise decoder can assemble the fields without pointer casts, assumptions about native alignment, or reliance on the host's byte order. The example below requires a complete eight-octet header and does not yet interpret any following payload.</p>
+<pre><code class="language-c">#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+struct Decoded {
+    uint8_t tag;
+    uint32_t sequence;
+    uint16_t count;
+    uint8_t flags;
+};
+
+bool parse_header(const uint8_t *p, size_t length, struct Decoded *out) {
+    if (p == NULL || out == NULL || length &lt; 8) return false;
+    out-&gt;tag = p[0];
+    out-&gt;sequence = ((uint32_t)p[1] &lt;&lt; 24) |
+                    ((uint32_t)p[2] &lt;&lt; 16) |
+                    ((uint32_t)p[3] &lt;&lt;  8) |
+                    (uint32_t)p[4];
+    out-&gt;count = (uint16_t)(((uint16_t)p[5] &lt;&lt; 8) | p[6]);
+    out-&gt;flags = p[7];
+    return true;
+}
+</code></pre>
+<p>Each shift occurs after conversion to a sufficiently wide unsigned type. This prevents the common mistake of shifting a narrow signed intermediate beyond its representable range. The function's success means only that the header could be decoded; callers must still check supported tags, flag masks, acceptable counts and the availability of any payload described by <code>count</code>.</p>
+<p>Directly evaluating an expression such as <code>*(const uint32_t *)(p + 1)</code> is not an equivalent portable decoder: the address may be misaligned, the operation invokes type-access constraints, and the host byte order may not match the external schema. Safe byte assembly is intentionally explicit.</p>
+</section>
+<section id="python-explicit-width-and-padding-control" aria-labelledby="heading-python-explicit-width-and-padding-control"><h2 id="heading-python-explicit-width-and-padding-control">Python: Explicit Width and Padding Control</h2>
+<p>Python's <code>struct</code> module distinguishes <strong>native</strong> layout conventions from <strong>standard</strong> sizes and controlled byte order. A format string beginning with <code>&gt;</code> uses big-endian byte order and standard field sizes without implicit alignment padding; <code>&lt;</code> uses little-endian standard layout. The native <code>@</code> mode follows the host's native byte order, type sizes and alignment rules, so it is generally inappropriate for a durable external format.</p>
+<pre><code class="language-python">import struct
+
+wire_format = &#x27;&gt;BIHB&#x27;  # u8, u32, u16, u8; no implicit gaps
+record = struct.pack(wire_format, 0x7F, 0x12345678, 513, 0xA5)
+assert len(record) == 8
+assert record.hex(&#x27; &#x27;) == &#x27;7f 12 34 56 78 02 01 a5&#x27;
+assert struct.unpack(wire_format, record) == (
+    0x7F, 0x12345678, 513, 0xA5
+)
+
+# Explicit 3-octet gap and 1-octet trailer, if a FORMAT specifies them.
+with_padding = struct.pack(&#x27;&gt;B3xIHBx&#x27;, 0x7F, 0x12345678, 513, 0xA5)
+assert len(with_padding) == 12
+assert with_padding.hex(&#x27; &#x27;) == (
+    &#x27;7f 00 00 00 12 34 56 78 02 01 a5 00&#x27;
+)
+</code></pre>
+<p>The <code>x</code> format code inserts explicit padding octets. The first expression is the recommended form for the hypothetical compact wire schema. The second only matches a <em>different</em> hypothetical schema that explicitly mandates those positions; it should not be silently substituted because a local C structure happens to be 12 octets long.</p>
+<p>An important subtlety: Python's native <code>struct</code> formats do not automatically add trailing structure padding at the end of every format string. Therefore <code>struct.calcsize('@BIHB')</code> cannot be assumed equal to the native C <code>sizeof(struct Example)</code> on all platforms. The official module documentation specifies the distinctions.</p>
+</section>
+<section id="windows-powershell-5-1-decoding-exact-offsets" aria-labelledby="heading-windows-powershell-5-1-decoding-exact-offsets"><h2 id="heading-windows-powershell-5-1-decoding-exact-offsets">Windows PowerShell 5.1: Decoding Exact Offsets</h2>
+<p>In Windows PowerShell 5.1, a <code>[byte[]]</code> can represent an external octet stream. For a format with explicitly defined offsets, arithmetic on individual bytes avoids assumptions about how .NET's native integer converters order multibyte values. The following code decodes the same eight-octet header and checks the result.</p>
+<pre><code class="language-powershell">[byte[]]$raw = 0x7F,0x12,0x34,0x56,0x78,0x02,0x01,0xA5
+if ($raw.Length -ne 8) { throw &#x27;Expected exactly 8 header bytes.&#x27; }
+
+$tag = $raw[0]
+$sequence = [uint32](
+    ([uint64]$raw[1] * 16777216) +
+    ([uint64]$raw[2] * 65536) +
+    ([uint64]$raw[3] * 256) +
+    [uint64]$raw[4]
+)
+$count = [uint16](([int]$raw[5] * 256) + [int]$raw[6])
+$flags = $raw[7]
+
+if ($sequence -ne 305419896 -or $count -ne 513) {
+    throw &#x27;Header was decoded incorrectly.&#x27;
+}
+&quot;Tag=$tag Sequence=$sequence Count=$count Flags=$flags&quot;
+</code></pre>
+<p>The cast to <code>[uint64]</code> before multiplication keeps intermediate arithmetic safely within a wide unsigned domain for this fixed four-octet example. The calculation follows the schema's big-endian rule and does not depend on <code>[BitConverter]::IsLittleEndian</code>. Production parsers must first verify that the input contains enough bytes, and should validate the semantic meaning of the decoded fields.</p>
+</section>
+<section id="arrays-stride-and-storage-overhead" aria-labelledby="heading-arrays-stride-and-storage-overhead"><h2 id="heading-arrays-stride-and-storage-overhead">Arrays, Stride, and Storage Overhead</h2>
+<p>In an array, a fixed-size native structure generally occupies its complete <code>sizeof</code> footprint, including its tail padding. Its <strong>stride</strong> is the distance from one element's beginning to the next. That matters when allocating millions of records, interpreting memory maps, or designing column-oriented processing. Small per-record gaps become significant at scale.</p>
+<table>
+<thead><tr><th>Record representation</th><th>Per-record space</th><th>Space for 1,000,000 records</th><th>Interpretation</th></tr></thead>
+<tbody>
+<tr><td>Illustrative naturally aligned structure</td><td>12 octets</td><td>12,000,000 octets</td><td>Includes four octets of total padding per record</td></tr>
+<tr><td>Explicit compact external schema</td><td>8 octets</td><td>8,000,000 octets</td><td>No automatic padding</td></tr>
+<tr><td>Difference</td><td>4 octets</td><td>4,000,000 octets</td><td>One-third of the natural layout footprint</td></tr>
+</tbody></table>
+<p>This comparison demonstrates storage overhead, not a universal performance ranking. On many processors, naturally aligned records can simplify loads and stores; packed records can improve memory density and transfer bandwidth, yet incur extraction or unaligned-access costs. The appropriate representation depends on access patterns, hardware, cache use, vectorization, read/write frequency and compatibility requirements.</p>
+<p>Changing the order of members may reduce some native padding, but it changes offsets and therefore any ABI expectations. In columnar formats, separating each field into its own array may eliminate some record-level gaps and enable efficient scans, while introducing different locality tradeoffs for queries that need complete records.</p>
+</section>
+<section id="bitfields-and-sub-byte-packing" aria-labelledby="heading-bitfields-and-sub-byte-packing"><h2 id="heading-bitfields-and-sub-byte-packing">Bitfields and Sub-Byte Packing</h2>
+<p>A <strong>bitfield</strong> shares a storage unit with other fields at sub-octet granularity. A 3-bit mode and a 5-bit counter can occupy one octet under a defined external rule, but the producer and consumer must agree which positions belong to each. A field description such as “3 bits followed by 5 bits” is incomplete unless bit numbering, boundary behavior and the relation to octet order are clear.</p>
+<p>Native C bit-fields are particularly unsuitable as an unspecified wire format: allocation order, crossing of storage units and alignment details depend on implementation choices. Even if a compiler packs the intended fields into one octet locally, another ABI need not reproduce the same bit layout.</p>
+<p>For an explicit convention where the three most-significant bits hold <code>mode</code> and the remaining five hold <code>count</code>, decode a raw octet <code>b</code> with <code>mode = (b &gt;&gt; 5) &amp; 0x07</code> and <code>count = b &amp; 0x1F</code>. This expression has a meaning because the external format specified those masks; it does not depend on a language's in-memory bitfield order.</p>
+</section>
+<section id="memory-safety-security-and-interoperability" aria-labelledby="heading-memory-safety-security-and-interoperability"><h2 id="heading-memory-safety-security-and-interoperability">Memory Safety, Security, and Interoperability</h2>
+<p>Incorrect width and padding assumptions create failures more serious than an incorrectly displayed number. If a parser trusts an unvalidated length field, it may allocate excessive memory or read past a buffer. If a structure is copied into a response without controlling padding, the copied bytes may carry unintended process data. If two implementations disagree about alignment gaps, an apparently valid header can shift the interpretation of every later field.</p>
+<ul>
+<li><strong>Out-of-bounds access:</strong> verify each requested width against remaining input before decoding; for dynamic records, guard addition, multiplication and rounding.</li>
+<li><strong>Unaligned pointers:</strong> do not cast an arbitrary byte offset to a pointer to a wider native type without meeting that type's alignment and access rules.</li>
+<li><strong>Information disclosure:</strong> construct output buffers explicitly and write known values to format-reserved bytes; avoid sending whole native structs with unspecified padding.</li>
+<li><strong>Parser disagreement:</strong> specify the same widths, offsets, endian conventions and rejection rules for all supported implementations.</li>
+<li><strong>Cross-language ABI drift:</strong> validate native interop layouts using documented layout attributes and measured offsets instead of assuming identical defaults.</li>
+<li><strong>Untrusted size fields:</strong> ensure record counts and element strides do not overflow intermediate arithmetic or exceed configured limits.</li>
+</ul>
+<p>Portable decoders distinguish three kinds of confidence: the bytes have the required length; the bytes decode according to the schema; and the resulting values are valid in the application's context. Passing the first two checks does not establish the third. Strong formats include versioning, maximum lengths, reserved-bit policy, test vectors and error behavior.</p>
+</section>
+<section id="abi-compiler-options-and-foreign-function-interfaces" aria-labelledby="heading-abi-compiler-options-and-foreign-function-interfaces"><h2 id="heading-abi-compiler-options-and-foreign-function-interfaces">ABI, Compiler Options, and Foreign-Function Interfaces</h2>
+<p>An <strong>application binary interface</strong> (ABI) defines expectations that allow separately compiled program components to exchange data and call functions. Structure member alignment and layout can be part of those expectations, alongside calling conventions and type sizes. A shared native structure should be treated as an ABI contract only when its layout has actually been established for the target platform.</p>
+<p>Compiler options, packing pragmas, architecture and foreign-language runtime controls can change layout. Microsoft .NET provides <code>StructLayoutAttribute</code> and related controls for interoperating with native types; Rust provides representation attributes such as <code>repr(C)</code> for C-compatible layout; and C/C++ provide facilities for inspecting offsets and alignments. These tools help enforce a specific boundary but are not universal portable serialization formats.</p>
+<p>In particular, <code>repr(C)</code> means that a Rust type uses the target's C layout conventions; it does not freeze one numeric offset map across all ABIs. Likewise, a field-level packing cap in an interop declaration is different from a requirement that all file formats use that packing. Declare the target environment in a compatibility plan and verify the actual offsets with tests.</p>
+</section>
+<section id="worked-cases-choosing-the-correct-representation" aria-labelledby="heading-worked-cases-choosing-the-correct-representation"><h2 id="heading-worked-cases-choosing-the-correct-representation">Worked Cases: Choosing the Correct Representation</h2>
+<h3>Case A — A 24-bit instrument measurement</h3>
+<p>A sensor transmits a 24-bit unsigned measurement in three big-endian octets. A reader cannot indiscriminately consume four octets as a native integer, because the fourth octet belongs to the next field. Given <code>01 23 45</code>, compute <code>(0x01 &lt;&lt; 16) | (0x23 &lt;&lt; 8) | 0x45</code> = <code>0x012345</code> = 74,565. Preserve the declared three-octet width, then validate the instrument's legal measurement range.</p>
+<h3>Case B — A binary journal header</h3>
+<p>A journal format specifies a 1-octet record type, 4-octet checksum, and 2-octet payload length, without gaps. Its header is seven octets, even if an equivalent native structure occupies more space. A writer must emit the seven contracted octets and use defined byte order; padding bytes discovered in a compiler debugger are not extra journal fields.</p>
+<h3>Case C — Memory-mapped hardware registers</h3>
+<p>A device register map states that a 32-bit status register begins at offset <code>0x08</code> and a 16-bit control field at <code>0x0C</code>. These offsets are the device's specification, not something the driver should infer from ordinary structure packing. Access size, alignment, memory-ordering rules and side effects must follow the device's documentation. Reserved register bits may require read-modify-write precautions.</p>
+<h3>Case D — Porting a parser</h3>
+<p>An older program writes raw native structs to files; its successor reads those files with a new compiler. The two builds disagree about alignment, so offsets and record sizes change. The remedy is to identify every historical layout actually used, version the file interpretation if needed, convert records into an explicit portable schema and test with authentic historical samples. Simply adding a packing directive can make old values worse if the original files used natural alignment.</p>
+</section>
+<section id="selection-and-review-framework" aria-labelledby="heading-selection-and-review-framework"><h2 id="heading-selection-and-review-framework">Selection and Review Framework</h2>
+<p>When authoring, migrating or auditing a numeric binary layout, answer these questions in order:</p>
+<ol>
+<li><strong>Purpose:</strong> Is this an internal native object, an ABI boundary, a memory-mapped device view, or a persistent/exchanged byte sequence?</li>
+<li><strong>Widths:</strong> Are bits, octets, integer widths and any sub-byte containers explicitly defined?</li>
+<li><strong>Meaning:</strong> Are signedness, value range, scale, units, reserved codes and field version documented?</li>
+<li><strong>Positions:</strong> Does each field have a fixed offset, or is there a bounded calculation from prior lengths?</li>
+<li><strong>Alignment:</strong> Is alignment a property of a target ABI or an explicit part of the external schema? Which boundaries apply?</li>
+<li><strong>Padding:</strong> Are gaps internal compiler choices or specified reserved octets? Must they be zero or ignored?</li>
+<li><strong>Byte order:</strong> Is multioctet ordering defined per field, including mixed-format cases?</li>
+<li><strong>Arrays:</strong> Is element stride established, including tail padding where native records are involved?</li>
+<li><strong>Bounds:</strong> Can any offset, count, allocation or stride calculation overflow or exceed the input?</li>
+<li><strong>Compatibility:</strong> Are there independent test vectors, language-specific offset tests and a migration policy?</li>
+</ol>
+<p>A useful specification is one that a second engineer can implement without being told which compiler or processor was used to generate a sample file. If the only available description is “we dumped the structure,” the format has not yet been made portable.</p>
+</section>
+<section id="study-questions-and-worked-answers" aria-labelledby="heading-study-questions-and-worked-answers"><h2 id="heading-study-questions-and-worked-answers">Study Questions and Worked Answers</h2>
+<p><strong>Question 1.</strong> A record contains fields of 1, 4, 2 and 1 octets. Must its native structure size be 8? <strong>No.</strong> Under an ABI aligning the four-octet member to 4 and the two-octet member to 2, a member order of 1–4–2–1 creates internal and tail padding, giving a 12-octet example.</p>
+<p><strong>Question 2.</strong> In that layout, why does the four-octet member start at offset 4? <strong>Its alignment is four octets under the stated ABI.</strong> The starting offset after the one-octet tag is 1; it rounds up to 4, inserting three padding octets.</p>
+<p><strong>Question 3.</strong> What is the range of a 12-bit unsigned integer? <strong>0 through 4,095.</strong> If stored in a two-octet container, the other four bit positions require a separate format rule.</p>
+<p><strong>Question 4.</strong> Does <code>struct.pack('&gt;BIHB', ...)</code> insert native gaps? <strong>No.</strong> Its <code>&gt;</code> prefix selects big-endian, standard sizes and no implicit alignment gaps. The illustrative record is eight octets.</p>
+<p><strong>Question 5.</strong> Why might <code>sizeof(struct Example)</code> exceed the sum of the members' sizes? <strong>Internal and/or tail padding.</strong> The full size reflects the target's layout rules, including stride requirements for arrays.</p>
+<p><strong>Question 6.</strong> Is a three-octet integer automatically a 32-bit integer? <strong>No.</strong> A 24-bit field has its own width and range. A safe decoder consumes exactly three octets and combines them by the specified byte order.</p>
+<p><strong>Question 7.</strong> Is it safe to copy a C structure directly to a network socket if all its members use fixed-width integer types? <strong>Not inherently.</strong> The memory image may contain padding and may use a native byte order different from the protocol.</p>
+<p><strong>Question 8.</strong> A schema prescribes a 4-octet boundary after a header of nine octets. How many filler octets are needed? <strong>Three.</strong> The next multiple of four is twelve, so the format must include three explicitly defined filler octets.</p>
+<p><strong>Question 9.</strong> Why should a parser not simply cast <code>p + 1</code> to <code>uint32_t*</code>? <strong>The address may be improperly aligned, the access may violate type and object rules, and the byte order may be wrong.</strong> Use explicit decoding or another well-defined conversion approach.</p>
+<p><strong>Question 10.</strong> If a stored count is 65,535, may a reader immediately allocate 65,535 records? <strong>Only after policy and bounds checks.</strong> Validate element size, multiplication, available input, maximum allowed count and allocation limits.</p>
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics"><h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>These links distinguish complementary subjects from the present specialist article. The first group contains established or planned siblings in the Binary Data unit; the second group points to separate parent subjects.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/bits-bytes-words-and-size-units">Bits, Bytes, Words, and Size Units</a> — Numeric storage units and size terminology.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/signed-and-unsigned-binary-interpretations">Signed and Unsigned Binary Interpretations</a> — Signedness, width-dependent ranges and conversions.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/endianness-and-byte-order">Endianness and Byte Order</a> — Ordering bytes within multibyte values.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/bit-masks-fields-flags-and-packed-data">Bit Masks, Fields, Flags, and Packed Data</a> — Bit-level extraction and packed fields.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">Binary Serialization and Schema Contracts</a> — Planned treatment of interoperable record formats.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-parsing-lengths-and-bounds-checking">Binary Parsing, Lengths, and Bounds Checking</a> — Planned treatment of safe record decoding and cursor bounds.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-modeling">Data Modeling</a> — Schema meaning and relationships among fields.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-storage-methods">Data Storage Methods</a> — Persistence organization and stored representations.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a> — Validation and transformation pipelines for structured information.</li>
+</ul>
+<p>Some sibling links lead to reserved article URLs that may not yet be deployed; they identify the unit's intended hierarchy rather than certify publication.</p>
+</section>
+<section id="references-and-further-reading" aria-labelledby="heading-references-and-further-reading"><h2 id="heading-references-and-further-reading">References and Further Reading</h2>
+<p>The following resources substantiate the language-specific and implementation rules. ABI- or device-specific behavior should always be checked against the relevant target documentation.</p>
+<ol>
+<li><a href="https://docs.python.org/3/library/struct.html" target="_blank" rel="noopener noreferrer">Python Software Foundation, <em>struct — Interpret bytes as packed binary data</em></a>. Defines native and standard size/alignment modes, byte-order prefixes, explicit padding, and format sizes.</li>
+<li><a href="https://doc.rust-lang.org/reference/type-layout.html" target="_blank" rel="noopener noreferrer">The Rust Reference, <em>Type Layout</em></a>. Explains data layout, alignment, <code>repr(C)</code>, packing and restrictions on unaligned references.</li>
+<li><a href="https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.structlayoutattribute.pack" target="_blank" rel="noopener noreferrer">Microsoft Learn, <em>StructLayoutAttribute.Pack Field</em></a>. Documents member alignment and interop packing behavior.</li>
+<li><a href="https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.structlayoutattribute" target="_blank" rel="noopener noreferrer">Microsoft Learn, <em>StructLayoutAttribute Class</em></a>. Describes sequential and explicit structure layout controls.</li>
+<li><a href="https://en.cppreference.com/w/c/language/object" target="_blank" rel="noopener noreferrer">C language reference, <em>Objects and Alignment</em></a>. Discusses object representation, alignment requirements and structure padding.</li>
+<li><a href="https://en.cppreference.com/w/c/types/offsetof" target="_blank" rel="noopener noreferrer">C language reference, <em>offsetof</em></a>. Documents member-offset inspection, including the effect of padding.</li>
+<li><a href="https://learn.microsoft.com/en-us/cpp/cpp/alignment-cpp-declarations" target="_blank" rel="noopener noreferrer">Microsoft Learn, <em>Alignment (C++ Declarations)</em></a>. Explains declarations and alignment controls in C++.</li>
+</ol>
+<p>These technical references describe tools and platform-specific rules. The example record layout in this article is deliberately illustrative; the external eight-octet schema is independently and explicitly defined for teaching.</p>
+</section>
+<section id="editorial-scope-and-publication-placement" aria-labelledby="heading-editorial-scope-and-publication-placement"><h2 id="heading-editorial-scope-and-publication-placement">Editorial Scope and Publication Placement</h2>
+<p><strong>Taxonomy:</strong> Computer Science (Level 2) → Data Systems (Level 3) → Binary Data (Level 4) → Numeric Field Width, Alignment, and Padding (Level 5). The present topic concerns fixed-width numeric representation and data layout, not a new Data Systems summary overview. Deeper Level 6 companion articles are optional and outside this document.</p>
+<p><strong>Windows destination:</strong> <code>C:\MGU\library\encyclopedia\computer-science\data-systems\binary-data-articles\numeric-field-width-alignment-and-padding.html</code>.</p>
+<p><strong>Canonical public route:</strong> <code>/library/encyclopedia/computer-science/data-systems/binary-data-articles/numeric-field-width-alignment-and-padding</code>.</p>
+<p><strong>Edition note:</strong> the field-width, alignment and padding rules depend on the representation layer; platform-dependent examples are labeled with their assumptions. Planned sibling links are intentional and should not be treated as evidence that linked pages are already published.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== EXACT SHARED LOADERS ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

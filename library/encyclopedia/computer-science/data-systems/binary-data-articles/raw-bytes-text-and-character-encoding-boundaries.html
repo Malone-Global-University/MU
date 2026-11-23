@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raw Bytes, Text, and Character-Encoding Boundaries | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="A specialist encyclopedia article on the boundary between raw bytes and Unicode text: UTF-8, malformed input, BOMs, normalization, byte lengths, binary records and safe decoding.">
+<meta name="keywords" content="raw bytes, text encoding, UTF-8, Unicode, character decoding, mojibake, encoding errors, BOM, surrogate pairs, data interchange, byte length">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/raw-bytes-text-and-character-encoding-boundaries">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Raw Bytes, Text, and Character-Encoding Boundaries | MGU Encyclopedia">
+<meta property="og:description" content="How raw byte streams are decoded into text—and how to preserve meaning, validity and fidelity across file, protocol and application boundaries.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/raw-bytes-text-and-character-encoding-boundaries">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== SHARED HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Raw Bytes, Text, and Character-Encoding Boundaries</h1>
+<p class="subtitle">Decoding raw bytes into valid text while preserving meaning, evidence and interoperable formats.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#definition-and-scope">Definition and Scope</a></li>
+<li><a href="#a-boundary-not-a-property-of-the-bytes">A Boundary, Not a Property of the Bytes</a></li>
+<li><a href="#the-representation-chain-six-different-questions">The Representation Chain: Six Different Questions</a></li>
+<li><a href="#unicode-code-points-and-encoding-forms">Unicode, Code Points, and Encoding Forms</a></li>
+<li><a href="#how-a-utf-8-decoder-recognizes-sequences">How a UTF-8 Decoder Recognizes Sequences</a></li>
+<li><a href="#ascii-single-byte-encodings-and-mojibake">ASCII, Single-Byte Encodings, and Mojibake</a></li>
+<li><a href="#encoding-declarations-defaults-and-detection-limits">Encoding Declarations, Defaults, and Detection Limits</a></li>
+<li><a href="#byte-order-marks-and-their-limits">Byte-Order Marks and Their Limits</a></li>
+<li><a href="#invalid-sequences-and-decode-failure-policies">Invalid Sequences and Decode Failure Policies</a></li>
+<li><a href="#replacement-characters-loss-and-round-trip-integrity">Replacement Characters, Loss, and Round-Trip Integrity</a></li>
+<li><a href="#controls-nul-and-invisible-characters">Controls, NUL, and Invisible Characters</a></li>
+<li><a href="#normalization-and-visual-equivalence">Normalization and Visual Equivalence</a></li>
+<li><a href="#counting-bytes-code-units-scalars-and-graphemes">Counting Bytes, Code Units, Scalars, and Graphemes</a></li>
+<li><a href="#offsets-slicing-and-search-positions">Offsets, Slicing, and Search Positions</a></li>
+<li><a href="#streaming-decoders-and-split-multibyte-sequences">Streaming Decoders and Split Multibyte Sequences</a></li>
+<li><a href="#line-endings-tabs-and-text-file-interpretation">Line Endings, Tabs, and Text-File Interpretation</a></li>
+<li><a href="#text-fields-inside-binary-containers">Text Fields Inside Binary Containers</a></li>
+<li><a href="#json-http-csv-and-other-interchange-boundaries">JSON, HTTP, CSV, and Other Interchange Boundaries</a></li>
+<li><a href="#filenames-paths-and-operating-system-interfaces">Filenames, Paths, and Operating-System Interfaces</a></li>
+<li><a href="#security-ambiguous-decoding-and-double-interpretation">Security: Ambiguous Decoding and Double Interpretation</a></li>
+<li><a href="#worked-hex-dump-from-storage-to-human-reading">Worked Hex Dump: From Storage to Human Reading</a></li>
+<li><a href="#python-explicit-and-reproducible-bytetext-conversions">Python: Explicit and Reproducible Byte/Text Conversions</a></li>
+<li><a href="#windows-powershell-51-exact-bytes-and-strict-utf-8">Windows PowerShell 5.1: Exact Bytes and Strict UTF-8</a></li>
+<li><a href="#engineering-an-import-migration-or-etl-pipeline">Engineering an Import, Migration, or ETL Pipeline</a></li>
+<li><a href="#selection-framework-choose-the-correct-boundary-policy">Selection Framework: Choose the Correct Boundary Policy</a></li>
+<li><a href="#study-questions-and-worked-answers">Study Questions and Worked Answers</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#technical-references-and-further-reading">Technical References and Further Reading</a></li>
+<li><a href="#editorial-scope-and-placement">Editorial Scope and Placement</a></li>
+</ol>
+</section>
+<section aria-labelledby="heading-definition-and-scope" id="definition-and-scope"><h2 id="heading-definition-and-scope">Definition and Scope</h2>
+<p><strong>Raw bytes</strong> are units of stored or transmitted information whose values are integers from 0 through 255. <strong>Text</strong> is an interpretation of information as a sequence of characters or other Unicode text elements. A <strong>character encoding</strong> establishes how textual information is represented in bytes and how a decoder can recover text from those bytes. The distinction is not a difference between two kinds of physical storage. A byte stream becomes text when an application applies a specified encoding and associated validity rules.</p>
+<p>The stream <code>43 61 66 C3 A9</code> can be decoded as <strong>UTF-8</strong> to produce <code>Café</code>; the very same five bytes interpreted as Windows-1252 produce <code>CafÃ©</code>. The second interpretation does not mean that the underlying bytes have changed. It means that the software used the wrong decoding contract. Likewise, not every byte stream represents valid text at all: encrypted ciphertext, compressed data, images, machine code, and arbitrary sensor samples should not be processed as strings merely because software can display a sequence of glyphs for some of their bytes.</p>
+<p>This specialist article addresses the <strong>boundary between byte-oriented representation and character-oriented interpretation</strong>: choosing an encoding, validating its byte sequences, handling errors, preserving original data, counting lengths, and safely crossing file, network, application, and storage interfaces. The companion <a href="/library/encyclopedia/computer-science/data-systems/character-encoding">Character Encoding</a> overview owns the broader history, repertoire and taxonomy of character sets; this child of <a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data</a> concentrates on what happens when an actual byte stream is converted into or out of text.</p>
+</section><section aria-labelledby="heading-a-boundary-not-a-property-of-the-bytes" id="a-boundary-not-a-property-of-the-bytes"><h2 id="heading-a-boundary-not-a-property-of-the-bytes">A Boundary, Not a Property of the Bytes</h2>
+<p>A text editor typically shows decoded characters, while a hex viewer shows byte values. Both views can describe the same file. Neither view alone guarantees the file's intended format. A UTF-8-encoded letter <code>A</code> occupies the byte <code>41</code> in hexadecimal, which coincides with the ASCII value for <code>A</code>; an arbitrary binary record containing <code>41</code> can display that letter without having a text field. The semantic decision comes from the schema or protocol.</p>
+<p>At a text boundary the program needs answers to four questions: <strong>What bytes are in scope? Which encoding applies? What is the decoding error policy? How will the resulting text be used?</strong> A trustworthy parser does not guess those answers from whatever appearance happens to be produced by a permissive decoder. A filename extension, editor default, language locale or operating-system setting may be a useful clue, but does not override an explicit format specification.</p>
+<p>The reverse boundary matters equally. Encoding a string for output requires selecting the target encoding, deciding what to do with characters it cannot represent, and observing the exact resulting bytes. A string containing <code>€</code> can be encoded in UTF-8 as <code>E2 82 AC</code>, in Windows-1252 as <code>80</code>, or not encoded at all in strict ASCII. A choice that is harmless in a display widget can corrupt a durable identifier or interchange record.</p>
+</section><section aria-labelledby="heading-the-representation-chain-six-different-questions" id="the-representation-chain-six-different-questions"><h2 id="heading-the-representation-chain-six-different-questions">The Representation Chain: Six Different Questions</h2>
+<p>The terminology of a text-processing system often compresses several steps into the ambiguous word “character.” It is more precise to separate the following layers:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Question</th>
+<th>Example</th>
+<th>Frequent confusion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Byte</td>
+<td>What octets actually exist?</td>
+<td><code>C3 A9</code></td>
+<td>Treating every byte as one character</td>
+</tr>
+<tr>
+<td>Encoded sequence</td>
+<td>Which byte pattern is valid under a selected encoding?</td>
+<td>UTF-8 two-byte sequence</td>
+<td>Reading part of one encoded scalar as a full value</td>
+</tr>
+<tr>
+<td>Unicode scalar value</td>
+<td>Which abstract code point does a valid Unicode decoding produce?</td>
+<td><code>U+00E9</code></td>
+<td>Equating scalar values with visual symbols</td>
+</tr>
+<tr>
+<td>Code point sequence</td>
+<td>What ordered Unicode values make up the string?</td>
+<td><code>U+0065 U+0301</code></td>
+<td>Assuming visually equal strings have identical code points</td>
+</tr>
+<tr>
+<td>Grapheme cluster</td>
+<td>What does a reader commonly perceive as one text element?</td>
+<td><code>e</code> followed by combining accent</td>
+<td>Using byte count or UTF-16 length as “number of letters”</td>
+</tr>
+<tr>
+<td>Rendered glyphs</td>
+<td>How does the font and shaping system display the text?</td>
+<td>A visible accented <code>é</code></td>
+<td>Assuming glyphs equal scalar values or bytes</td>
+</tr>
+</tbody>
+</table>
+<p>For Unicode text, code points include values that are not Unicode scalar values (notably surrogate code points). Standard UTF-8 encodes <strong>Unicode scalar values</strong>, not standalone surrogates. The more general idea of a character repertoire predates Unicode, but modern cross-platform text exchanges commonly use a Unicode encoding such as UTF-8.</p>
+<p>A file-size measurement may count bytes; an editing operation may count grapheme clusters; a programming-language API may count UTF-16 code units. Using the same integer as though it answered all three questions is a recurrent source of truncation bugs, offset drift and data loss.</p>
+</section><section aria-labelledby="heading-unicode-code-points-and-encoding-forms" id="unicode-code-points-and-encoding-forms"><h2 id="heading-unicode-code-points-and-encoding-forms">Unicode, Code Points, and Encoding Forms</h2>
+<p>Unicode assigns identifying numbers to characters and other textual code points. A notation such as <code>U+00E9</code> names a code point; it is <strong>not</strong> the bytes of that character in a particular file. Encoding forms define how supported Unicode scalar values become code units, and encoding schemes specify how multibyte code units are serialized. The distinction becomes especially visible with UTF-16 and UTF-32.</p>
+<p><strong>UTF-8</strong> uses one to four bytes for each Unicode scalar value, preserving the single-byte encodings of the ASCII range <code>U+0000</code> through <code>U+007F</code>. <strong>UTF-16</strong> generally uses one 16-bit code unit for scalar values in the Basic Multilingual Plane other than surrogates, and a surrogate pair of two 16-bit code units for supplementary scalar values. <strong>UTF-32</strong> uses one 32-bit code unit per scalar value. Each encoding has rules for what inputs are valid; simply chopping a byte array into widths of two or four does not make an arbitrary file valid UTF-16 or UTF-32.</p>
+<table>
+<thead>
+<tr>
+<th>Text value</th>
+<th>Code point</th>
+<th>UTF-8 bytes</th>
+<th>UTF-16BE bytes</th>
+<th>UTF-16LE bytes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>A</code></td>
+<td><code>U+0041</code></td>
+<td><code>41</code></td>
+<td><code>00 41</code></td>
+<td><code>41 00</code></td>
+</tr>
+<tr>
+<td><code>é</code></td>
+<td><code>U+00E9</code></td>
+<td><code>C3 A9</code></td>
+<td><code>00 E9</code></td>
+<td><code>E9 00</code></td>
+</tr>
+<tr>
+<td><code>€</code></td>
+<td><code>U+20AC</code></td>
+<td><code>E2 82 AC</code></td>
+<td><code>20 AC</code></td>
+<td><code>AC 20</code></td>
+</tr>
+<tr>
+<td><code>💾</code></td>
+<td><code>U+1F4BE</code></td>
+<td><code>F0 9F 92 BE</code></td>
+<td><code>D8 3D DC BE</code></td>
+<td><code>3D D8 BE DC</code></td>
+</tr>
+</tbody>
+</table>
+<p>The supplementary example uses <strong>two UTF-16 code units</strong>, <code>D83D</code> and <code>DCBE</code>, which are each serialized in the required order. Its four UTF-16 bytes do not mean that it occupies two independent Unicode characters. A Unicode-aware application must account for the fact that this one scalar value spans two UTF-16 code units.</p>
+</section><section aria-labelledby="heading-how-a-utf-8-decoder-recognizes-sequences" id="how-a-utf-8-decoder-recognizes-sequences"><h2 id="heading-how-a-utf-8-decoder-recognizes-sequences">How a UTF-8 Decoder Recognizes Sequences</h2>
+<p>In UTF-8 the first byte identifies the length of the encoded sequence. ASCII bytes <code>00</code>–<code>7F</code> represent one-byte values. Legal multibyte sequences begin with a lead byte in an allowed range and are followed by continuation bytes of the form <code>10xxxxxx</code>, hexadecimal <code>80</code>–<code>BF</code>. A valid UTF-8 decoder must also enforce the restrictions on which lead and continuation combinations represent a valid scalar value.</p>
+<table>
+<thead>
+<tr>
+<th>Encoded width</th>
+<th>Typical first-byte pattern</th>
+<th>Continuations</th>
+<th>Applicable scalar-value range</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 byte</td>
+<td><code>0xxxxxxx</code></td>
+<td>None</td>
+<td><code>U+0000</code>–<code>U+007F</code></td>
+</tr>
+<tr>
+<td>2 bytes</td>
+<td><code>110xxxxx</code></td>
+<td>1</td>
+<td><code>U+0080</code>–<code>U+07FF</code></td>
+</tr>
+<tr>
+<td>3 bytes</td>
+<td><code>1110xxxx</code></td>
+<td>2</td>
+<td><code>U+0800</code>–<code>U+FFFF</code>, excluding surrogates</td>
+</tr>
+<tr>
+<td>4 bytes</td>
+<td><code>11110xxx</code></td>
+<td>3</td>
+<td><code>U+10000</code>–<code>U+10FFFF</code></td>
+</tr>
+</tbody>
+</table>
+<p>The bit patterns alone are <strong>not</strong> a complete validity test. For instance, <code>C0 80</code> has the structural appearance of a two-byte sequence but is an <strong>overlong</strong> attempt to encode NUL and is forbidden. The range <code>ED A0 80</code> would encode a surrogate value and is invalid. <code>F4 90 80 80</code> exceeds the highest Unicode code point. A safe decoder checks the entire set of lead-byte, continuation-byte and scalar-range constraints described by RFC 3629 and the Unicode Standard.</p>
+<h3>Worked decoding: from bytes to code point</h3>
+<p>The letter <code>é</code> (U+00E9) is represented in UTF-8 by <code>C3 A9</code>. The five payload bits in the lead byte <code>C3</code> contribute <code>00011</code> (decimal 3), and the six payload bits in the continuation byte <code>A9</code> contribute <code>101001</code> (decimal 41). The computed scalar value is <code>3 × 64 + 41 = 233</code>, or <code>0xE9</code>. In the same way, <code>E2 82 AC</code> decodes to U+20AC, the euro sign.</p>
+<p>A UTF-8 decoder operates on <strong>code-unit sequences</strong>, not one byte at a time independently. A newline after the complete <code>C3 A9</code> pair does not change that interpretation. If only <code>C3</code> arrives at the end of a network chunk, a correct streaming decoder must wait for more bytes or report a truncated sequence when it knows the stream is finished.</p>
+</section><section aria-labelledby="heading-ascii-single-byte-encodings-and-mojibake" id="ascii-single-byte-encodings-and-mojibake"><h2 id="heading-ascii-single-byte-encodings-and-mojibake">ASCII, Single-Byte Encodings, and Mojibake</h2>
+<p><strong>ASCII</strong> maps 7-bit values to controls and characters using the range <code>00</code>–<code>7F</code>; many modern encodings agree on these first 128 values. A legacy single-byte encoding maps individual byte values to characters according to its own table, but there is no globally universal 8-bit “extended ASCII.” Windows-1252 and ISO-8859-1, for example, are distinct encodings. In Windows-1252, byte <code>80</code> represents <code>€</code>; ISO-8859-1 instead assigns a control code to that position.</p>
+<p><strong>Mojibake</strong> describes visible corruption caused by decoding bytes with the wrong encoding, often followed by re-encoding the resulting erroneous text. The UTF-8 bytes <code>C3 A9</code> represent <code>é</code>. If decoded as Windows-1252 they display as <code>Ã©</code>. Saving that incorrect display as UTF-8 produces different bytes, <code>C3 83 C2 A9</code>. What began as a mistaken <em>interpretation</em> has now become an actual <em>transformation</em> of stored data.</p>
+<p>Repeating speculative conversions is risky. A second conversion can create another layer of mojibake, and choosing a replacement error policy may destroy information needed to reconstruct the original. Before changing data, capture the original byte sequence, any encoding declaration, the provenance of the file, and the exact operation that produced the corrupted display. When ambiguity remains, preserve the original and generate a corrected <strong>separate</strong> result.</p>
+</section><section aria-labelledby="heading-encoding-declarations-defaults-and-detection-limits" id="encoding-declarations-defaults-and-detection-limits"><h2 id="heading-encoding-declarations-defaults-and-detection-limits">Encoding Declarations, Defaults, and Detection Limits</h2>
+<p>A decoder may learn the intended encoding from a file-format specification, a protocol field, a recognized byte-order mark, a trustworthy application configuration, or a declared content type. Different environments also have defaults, some of them dependent on system locale or version. Those defaults are implementation behavior rather than evidence of the creator's intent.</p>
+<p><strong>Automatic character-encoding detection is heuristic unless the format provides a trustworthy declaration or signature.</strong> Pure ASCII bytes are valid UTF-8 but are also valid input to multiple other encodings. A byte sequence may happen to be plausible under two distinct legacy mappings. Detecting that one result “looks like English” provides a useful hypothesis, not certainty; it is less reliable for short identifiers, mixed languages, machine-generated logs and binary material.</p>
+<p>Use an explicit encoding in the producing and consuming system whenever feasible. Treat a BOM and an encoding declaration according to the governing format, and resolve contradictions as errors rather than silently favoring one clue. A decoding pipeline should record its choice so that it can be reproduced later.</p>
+</section><section aria-labelledby="heading-byte-order-marks-and-their-limits" id="byte-order-marks-and-their-limits"><h2 id="heading-byte-order-marks-and-their-limits">Byte-Order Marks and Their Limits</h2>
+<p>A <strong>byte-order mark</strong>, or BOM, is a short leading signature that some formats use to identify a Unicode encoding scheme or its endian variant. A UTF-8 BOM, <code>EF BB BF</code>, represents U+FEFF when decoded as UTF-8. Because UTF-8 has no endian variants, the UTF-8 BOM is chiefly a signature rather than a byte-order instruction. It is optional in many contexts and forbidden for emission by some interchange standards.</p>
+<table>
+<thead>
+<tr>
+<th>Initial bytes</th>
+<th>Often associated with</th>
+<th>Important limitation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>EF BB BF</code></td>
+<td>UTF-8 with signature</td>
+<td>UTF-8 itself has no endian choice; format may prohibit BOM</td>
+</tr>
+<tr>
+<td><code>FF FE</code></td>
+<td>UTF-16LE BOM</td>
+<td>Longer prefixes can identify UTF-32LE, so examine the format and sufficient bytes</td>
+</tr>
+<tr>
+<td><code>FE FF</code></td>
+<td>UTF-16BE BOM</td>
+<td>Applicability depends on the containing format</td>
+</tr>
+<tr>
+<td><code>FF FE 00 00</code></td>
+<td>UTF-32LE BOM</td>
+<td>Do not identify it prematurely as a two-byte UTF-16 prefix</td>
+</tr>
+<tr>
+<td><code>00 00 FE FF</code></td>
+<td>UTF-32BE BOM</td>
+<td>Requires a format or decoder that permits this scheme</td>
+</tr>
+</tbody>
+</table>
+<p>A BOM must not be inserted or stripped indiscriminately. A binary field beginning with <code>EF BB BF</code> could legitimately contain those byte values as payload. A UTF-8 JSON producer covered by RFC 8259 <strong>must not add a BOM</strong> to network-transmitted JSON text; a conforming parser <em>may</em> ignore one if present. The correct handling depends on whether the application is reading a raw binary sequence, a complete text file, or a format with independent rules for character encoding.</p>
+</section><section aria-labelledby="heading-invalid-sequences-and-decode-failure-policies" id="invalid-sequences-and-decode-failure-policies"><h2 id="heading-invalid-sequences-and-decode-failure-policies">Invalid Sequences and Decode Failure Policies</h2>
+<p>Decoding errors arise when an input violates the chosen encoding's rules. Examples include a stray UTF-8 continuation byte <code>80</code>, a lead byte lacking necessary continuations, an overlong sequence, a UTF-8 encoding of a surrogate, or a truncated UTF-16 code unit. A mature text-processing interface exposes an <strong>error policy</strong> rather than hiding the issue.</p>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th>Behavior</th>
+<th>Appropriate use</th>
+<th>Main risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Strict / fatal</td>
+<td>Stop on malformed input</td>
+<td>Identifiers, signed content, protocol fields and quality-controlled imports</td>
+<td>Requires explicit exception handling</td>
+</tr>
+<tr>
+<td>Replacement</td>
+<td>Substitute a marker such as U+FFFD</td>
+<td>Best-effort display of damaged, untrusted material</td>
+<td>Original bytes cannot normally be recovered from replacement alone</td>
+</tr>
+<tr>
+<td>Ignore / drop</td>
+<td>Discard malformed units</td>
+<td>Narrowly justified data-cleaning workflows</td>
+<td>Silent information loss and potential identifier collisions</td>
+</tr>
+<tr>
+<td>Escaped byte preservation</td>
+<td>Record undecodable values in an explicit reversible representation</td>
+<td>Diagnostic logs or provenance-preserving transformations</td>
+<td>Representation may not be normal interchange text</td>
+</tr>
+<tr>
+<td>Incorrect alternate decoder</td>
+<td>Interpret bytes under another encoding</td>
+<td>Only when evidence supports a different declared encoding</td>
+<td>Plausible-looking but false content</td>
+</tr>
+</tbody>
+</table>
+<p>For authoritative data ingestion, validate first and preserve the original bytes. A display interface may show a replacement character so that humans can inspect the surrounding context, but it should not present the replacement text as an unmodified copy of the source. Python's <code>surrogateescape</code> is a specialized mechanism for reversible handling of certain undecodable bytes within an application; it is not a general-purpose guarantee of valid Unicode interchange text.</p>
+</section><section aria-labelledby="heading-replacement-characters-loss-and-round-trip-integrity" id="replacement-characters-loss-and-round-trip-integrity"><h2 id="heading-replacement-characters-loss-and-round-trip-integrity">Replacement Characters, Loss, and Round-Trip Integrity</h2>
+<p>The Unicode <strong>replacement character</strong> is U+FFFD (<code>�</code>), typically displayed when a decoder replaces malformed material. Its appearance does not tell an investigator which invalid byte or sequence was originally present. Worse, U+FFFD may have been present <em>legitimately</em> in the source text before encoding. A replacement glyph therefore cannot always distinguish source data from decoder intervention.</p>
+<p>Define an intended round trip as <code>bytes → decode → text → encode → bytes</code>. If the encoding is unchanged, the input is valid, and the codec semantics preserve the relevant sequences, the initial and final byte arrays can be equal. When a decoding step substitutes U+FFFD, or an encoding step substitutes <code>?</code>, the byte arrays normally differ. Two visually similar strings may also encode to different byte sequences if they use different normalization forms.</p>
+<p>For a data pipeline, test <strong>both</strong> semantic acceptability and byte-for-byte preservation when the use case requires exact recovery. A transformed display is not an archival master. Retain hashes or original content identifiers where forensic reproducibility matters, and keep a recorded decode/encode policy in your ingestion metadata.</p>
+</section><section aria-labelledby="heading-controls-nul-and-invisible-characters" id="controls-nul-and-invisible-characters"><h2 id="heading-controls-nul-and-invisible-characters">Controls, NUL, and Invisible Characters</h2>
+<p>Not every valid textual code point is printable. ASCII and Unicode include control characters such as NUL (U+0000), TAB (U+0009), carriage return (U+000D), and line feed (U+000A). A UTF-8 byte <code>00</code> is a valid encoding of NUL; it does not by itself demonstrate file corruption. However, <strong>NUL-terminated APIs</strong> and text interfaces that prohibit embedded NUL can interpret such data differently from byte-oriented APIs.</p>
+<p>A malicious or accidental embedded NUL can cause one component to treat an identifier as longer than another component does. For example, a system that validates all of <code>report.txt\0.exe</code> but passes it to an API that truncates at NUL may enforce a different security decision than intended. Modern APIs vary in handling; the correct defense is to validate against the contract of the target interface, not to presume that every programming language or file system truncates strings at NUL.</p>
+<p>Other invisible or near-invisible characters include bidirectional controls, combining marks, zero-width joiners and variation selectors. They may be valid Unicode text but can complicate auditing, filenames, logging and visual comparison. Character validation and rendering safety are distinct from byte-sequence well-formedness: a string can be valid UTF-8 yet inappropriate as a file path, database key or security-relevant identifier.</p>
+</section><section aria-labelledby="heading-normalization-and-visual-equivalence" id="normalization-and-visual-equivalence"><h2 id="heading-normalization-and-visual-equivalence">Normalization and Visual Equivalence</h2>
+<p>Unicode allows some text to be represented by different code point sequences that have the same canonical interpretation. For example, precomposed <code>é</code> is the single code point <code>U+00E9</code>, while decomposed <code>e</code> followed by COMBINING ACUTE ACCENT is <code>U+0065 U+0301</code>. Their UTF-8 sequences differ: <code>C3 A9</code> versus <code>65 CC 81</code>. Both can display as the same accented letter depending on font and rendering context.</p>
+<p><strong>Unicode normalization</strong> can map canonically equivalent sequences to a common representation, such as NFC or NFD. However, normalization does <strong>not</strong> repair invalid byte streams, and decoding does not automatically normalize text. If an application needs canonical comparison, it should decode valid data, apply a specifically chosen normalization policy, and compare according to the intended semantics. Some applications intentionally retain the original code point sequence for accurate reproduction or digital signatures.</p>
+<p><strong>Visual similarity</strong> is broader than canonical equivalence. Different scripts may contain confusable symbols, and some rendering systems join multiple code points into one grapheme cluster. Normalization alone does not eliminate spoofing or display ambiguity. Security-sensitive identifiers may need additional constraints beyond Unicode validity, following appropriate identifier-profile and confusable-character guidance.</p>
+</section><section aria-labelledby="heading-counting-bytes-code-units-scalars-and-graphemes" id="counting-bytes-code-units-scalars-and-graphemes"><h2 id="heading-counting-bytes-code-units-scalars-and-graphemes">Counting Bytes, Code Units, Scalars, and Graphemes</h2>
+<p>Length has no universal meaning until the unit is defined. The string <code>A💾</code> occupies <strong>5 UTF-8 bytes</strong> (<code>41 F0 9F 92 BE</code>), <strong>3 UTF-16 code units</strong> (<code>0041 D83D DCBE</code>), <strong>2 Unicode scalar values</strong>, and typically <strong>2 extended grapheme clusters</strong>. A software API returning “length 3” may be correct for UTF-16 code-unit count but inappropriate for a screen-label restriction advertised as “two characters.”</p>
+<table>
+<thead>
+<tr>
+<th>Measurement for <code>A💾</code></th>
+<th style="text-align:right">Value</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UTF-8 bytes</td>
+<td style="text-align:right">5</td>
+<td>One ASCII byte plus four-byte supplementary scalar</td>
+</tr>
+<tr>
+<td>UTF-16 code units</td>
+<td style="text-align:right">3</td>
+<td>One code unit plus surrogate pair</td>
+</tr>
+<tr>
+<td>Unicode scalar values</td>
+<td style="text-align:right">2</td>
+<td><code>U+0041</code> and <code>U+1F4BE</code></td>
+</tr>
+<tr>
+<td>Typical extended grapheme clusters</td>
+<td style="text-align:right">2</td>
+<td>One displayed <code>A</code> and one displayed symbol</td>
+</tr>
+</tbody>
+</table>
+<p>The distinction matters for maximum-size fields, database column limits, encoded network lengths, cursor positions, and safe string slicing. A byte-limited transport field should check <strong>encoded-byte length after selecting the encoding</strong>, while a user-interface limit should choose a user-relevant text unit. Truncating UTF-8 at an arbitrary byte boundary can leave a dangling lead or continuation byte; truncating UTF-16 after the first surrogate can leave an unpaired surrogate.</p>
+</section><section aria-labelledby="heading-offsets-slicing-and-search-positions" id="offsets-slicing-and-search-positions"><h2 id="heading-offsets-slicing-and-search-positions">Offsets, Slicing, and Search Positions</h2>
+<p>A character index is not a byte offset. In the UTF-8 string <code>Café</code>, <code>C</code> begins at byte offset 0, <code>a</code> at 1, <code>f</code> at 2, and <code>é</code> at 3 but occupies byte offsets 3 and 4. If a text-search API reports character offset 3 for <code>é</code>, a program cannot necessarily use that value directly as a byte offset in a different encoding or after normalization.</p>
+<p>A robust system defines the coordinate space of every index: <strong>original byte offsets, decoded scalar indexes, UTF-16 code-unit indexes, grapheme indexes, or document-specific positions</strong>. Conversion between coordinate spaces must reference the relevant version of the text and the exact encoding. After inserting or normalizing characters, old offsets can become stale even if the visible words appear unchanged.</p>
+<p>When a protocol uses byte lengths for frames, do not fill a declared field with a count of Unicode characters. For example, <code>Café</code> is four scalar values but five UTF-8 bytes. A length prefix of 4 paired with the five-byte UTF-8 payload would cause an octet-counting parser to stop in the middle of the final character, potentially invalidating the remainder of the stream.</p>
+</section><section aria-labelledby="heading-streaming-decoders-and-split-multibyte-sequences" id="streaming-decoders-and-split-multibyte-sequences"><h2 id="heading-streaming-decoders-and-split-multibyte-sequences">Streaming Decoders and Split Multibyte Sequences</h2>
+<p>Networks and file readers deliver bytes in arbitrary chunks, not necessarily at character boundaries. Suppose a UTF-8 stream contains the euro sign <code>E2 82 AC</code>, but a read operation returns <code>[E2]</code> followed by <code>[82 AC]</code>. Decoding each chunk independently in strict mode will report the first chunk as incomplete; decoding each with replacement may produce corruption. Neither outcome reflects the validity of the full stream.</p>
+<p>A <strong>stateful incremental decoder</strong> retains the partial sequence until its next input. It completes the euro sign when the remaining continuation bytes arrive. At actual end-of-stream, a decoder told that no further bytes will arrive must resolve an incomplete sequence according to its chosen failure policy. Equivalent principles apply to UTF-16 surrogate pairs and multibyte legacy encodings.</p>
+<p>Record framing is a separate problem. A transport may define a fixed byte length, length prefix, escape mechanism, or delimiter. Do not assume that the boundary of one socket read equals one application message or one Unicode scalar. When a delimiter is defined as a <em>byte sequence</em>, verify that this framing choice is safe for the selected encoding and escaping rules; when it is defined as a <em>character</em>, decode appropriately before comparing characters.</p>
+</section><section aria-labelledby="heading-line-endings-tabs-and-text-file-interpretation" id="line-endings-tabs-and-text-file-interpretation"><h2 id="heading-line-endings-tabs-and-text-file-interpretation">Line Endings, Tabs, and Text-File Interpretation</h2>
+<p>Textual data includes line boundaries and separators whose encoded representations depend on encoding and convention. In UTF-8, line feed <code>LF</code> is <code>0A</code>; carriage return <code>CR</code> is <code>0D</code>; the familiar CRLF sequence is <code>0D 0A</code>. Under UTF-16LE, the same two code points are encoded as <code>0D 00 0A 00</code>. A parser scanning a UTF-16 file for raw <code>0A</code> bytes may find misleading hits inside code units.</p>
+<p>The difference between a byte-oriented line reader and a Unicode-aware line reader matters especially when a file contains non-ASCII text, embedded NUL, multiple newline conventions, or malformed sequences. Some software performs newline conversion when reading or writing in text mode. Such conversion can be desirable for documents but is not appropriate for signed bytes, exact hashes or binary protocol records.</p>
+<p>For deterministic interchange, specify encoding, newline convention when relevant, and whether an initial BOM is allowed. A text-mode API should not be used as a substitute for reading exact bytes when evaluating file headers, compressed payloads or binary record offsets.</p>
+</section><section aria-labelledby="heading-text-fields-inside-binary-containers" id="text-fields-inside-binary-containers"><h2 id="heading-text-fields-inside-binary-containers">Text Fields Inside Binary Containers</h2>
+<p>A binary file may contain one or more textual fields without making the whole file a text document. A hypothetical record might begin with a one-byte version, two-byte unsigned length, then an exactly specified number of UTF-8 bytes representing a label. The container's numeric fields still require their own width and endian rules. The label alone is subject to UTF-8 validation and any allowed-character policy.</p>
+<p>Suppose a record defines a big-endian 16-bit byte length followed by a UTF-8 payload. The bytes <code>00 05 43 61 66 C3 A9</code> decode as a five-octet payload containing <code>Café</code>. If a writer mistakenly encodes the scalar count, <code>00 04</code>, as the length, the reader takes only <code>43 61 66 C3</code>, truncating the UTF-8 sequence and leaving <code>A9</code> to be misinterpreted as another field. The resulting fault involves <strong>both framing and text decoding</strong>, not merely a display problem.</p>
+<p>Avoid using a terminating NUL as an implicit boundary unless the format specifically defines it and the character repertoire or escaping scheme makes that choice safe. For structured data, define maximum byte length, encoding, nullability, normalization policy if any, and what to do with invalid input. This is the foundation of a stable binary/text schema contract.</p>
+</section><section aria-labelledby="heading-json-http-csv-and-other-interchange-boundaries" id="json-http-csv-and-other-interchange-boundaries"><h2 id="heading-json-http-csv-and-other-interchange-boundaries">JSON, HTTP, CSV, and Other Interchange Boundaries</h2>
+<p>A structured data format is not automatically free of encoding rules. RFC 8259 requires JSON text exchanged outside a closed ecosystem to be <strong>UTF-8</strong>, and says generators <strong>must not</strong> add a BOM to network-transmitted JSON. JSON string escape sequences such as <code>\\u00E9</code> are a <em>textual syntax</em> for representing characters within JSON; they are not the raw bytes of the UTF-8 form of <code>é</code>. The serialized JSON text itself is then encoded as bytes.</p>
+<p>HTTP carries message bodies as byte sequences, and the selected <strong>media type</strong> and relevant specification govern interpretation. A declared charset parameter is meaningful for certain media types, but should not be applied as a universal rule to arbitrary <code>application/octet-stream</code> bodies. For <code>application/json</code>, the JSON specification's UTF-8 requirement governs cross-system interchange; adding an unsupported or conflicting charset assumption does not change that requirement.</p>
+<p>CSV and plain-text file exchange are more variable. A <code>.csv</code> extension alone does not guarantee an encoding. A receiver should use an agreed schema or document-delivery contract when possible and record the selected codec. A UTF-8 CSV file opened with a legacy Windows code page may display mojibake despite having byte-for-byte correct storage.</p>
+</section><section aria-labelledby="heading-filenames-paths-and-operating-system-interfaces" id="filenames-paths-and-operating-system-interfaces"><h2 id="heading-filenames-paths-and-operating-system-interfaces">Filenames, Paths, and Operating-System Interfaces</h2>
+<p>File paths add another character boundary. On Windows, common wide-character file APIs represent path text through UTF-16 code units. On many Unix-like systems, filenames are represented at the operating-system boundary as byte sequences with only certain byte-level restrictions; application runtimes choose how to expose those filenames as strings. The precise guarantees vary by API and platform.</p>
+<p>That variation matters when copying filenames across systems, serializing file inventories, or testing Unicode normalization. A filename that displays identically on two systems need not have the same underlying Unicode sequence or native representation. Code should use the platform's supported path interfaces and apply a documented policy before deriving stable textual keys.</p>
+<p>Security controls for paths must validate the <strong>decoded and normalized representation actually consumed by the file API</strong>. A program must not check a raw byte string with one encoding and then hand a differently decoded value to the filesystem. Reserved names, path separators, relative segments and NUL handling are platform and API properties, not consequences of UTF-8 alone.</p>
+</section><section aria-labelledby="heading-security-ambiguous-decoding-and-double-interpretation" id="security-ambiguous-decoding-and-double-interpretation"><h2 id="heading-security-ambiguous-decoding-and-double-interpretation">Security: Ambiguous Decoding and Double Interpretation</h2>
+<p>Encoding boundaries can become security boundaries when two components interpret the same bytes differently. Historically dangerous patterns include <strong>overlong UTF-8</strong> treated by one component as punctuation or NUL, while another component rejects or treats it differently; inconsistent normalization of identifiers; double-decoding of percent-escaped URL material; and incorrectly truncated strings at embedded NUL.</p>
+<p>A robust architecture applies a consistent set of transformations in a documented order: determine the transport framing, establish the intended encoding, reject malformed sequences where required, normalize only according to policy, validate the semantic value, and then pass that exact validated value to the downstream operation. A security filter that operates on one representation while a database, router or file API consumes another is susceptible to bypasses even if each individual component seems correct.</p>
+<p>Do not attempt to “sanitize” arbitrary binary payloads by decoding them as text and deleting anything that looks suspicious. Binary data should remain binary until a schema identifies a text field. Text requiring validation should be decoded once under a known rule; the validation and consumer must agree on what has been decoded and transformed.</p>
+</section><section aria-labelledby="heading-worked-hex-dump-from-storage-to-human-reading" id="worked-hex-dump-from-storage-to-human-reading"><h2 id="heading-worked-hex-dump-from-storage-to-human-reading">Worked Hex Dump: From Storage to Human Reading</h2>
+<p>Consider this six-byte file fragment, displayed in increasing byte offset:</p>
+<table>
+<thead>
+<tr>
+<th>Offset</th>
+<th>Hexadecimal</th>
+<th>Interpretation under UTF-8</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>43</code></td>
+<td><code>C</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>61</code></td>
+<td><code>a</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>66</code></td>
+<td><code>f</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>C3</code></td>
+<td>First byte of <code>é</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>A9</code></td>
+<td>Continuation byte completing <code>é</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>0A</code></td>
+<td>LF newline</td>
+</tr>
+</tbody>
+</table>
+<p>With the explicit UTF-8 rule, the resulting text is <code>Café</code> followed by a line feed. The visible word has four Unicode scalar values; the file has six bytes. If decoded as Windows-1252, the same stream instead reads <code>CafÃ©</code> followed by the line feed. This comparison demonstrates how a <em>display</em> can differ without any modification to the underlying file.</p>
+<p>Now replace the two-byte sequence <code>C3 A9</code> with only <code>C3</code>. The file becomes <code>43 61 66 C3 0A</code>. Under strict UTF-8 decoding, the sequence is ill-formed, because <code>0A</code> is not a continuation byte. A replacement-mode decoder may display <code>Caf�</code> and the newline. It would be incorrect to claim that the replacement marker proves the source contained the valid UTF-8 representation of U+FFFD; it may have been introduced by the error handler.</p>
+</section><section aria-labelledby="heading-python-explicit-and-reproducible-bytetext-conversions" id="python-explicit-and-reproducible-bytetext-conversions"><h2 id="heading-python-explicit-and-reproducible-bytetext-conversions">Python: Explicit and Reproducible Byte/Text Conversions</h2>
+<p>Python represents raw byte sequences using <code>bytes</code> or <code>bytearray</code>, and Unicode text using <code>str</code>. Encoding converts <code>str</code> into <code>bytes</code>; decoding converts <code>bytes</code> into <code>str</code>. These operations should specify the codec, and strict error behavior is the safest default for validating interchange boundaries.</p>
+<pre><code class="language-python">raw = bytes.fromhex('43 61 66 C3 A9 0A')
+text = raw.decode('utf-8', errors='strict')
+assert text == 'Café\n'
+assert text.encode('utf-8') == raw
+assert len(raw) == 6            # number of encoded bytes
+assert len(text) == 5           # four scalar values plus LF
+
+# An invalid UTF-8 sequence is rejected rather than guessed away.
+broken = bytes.fromhex('43 61 66 C3 0A')
+try:
+    broken.decode('utf-8', errors='strict')
+except UnicodeDecodeError as exc:
+    print('Invalid UTF-8 at byte offset:', exc.start)
+
+# Replacement is useful for display, but is not a lossless repair.
+print(broken.decode('utf-8', errors='replace'))
+</code></pre>
+<p>When reading a text file, <code>open(path, 'r', encoding='utf-8', errors='strict')</code> makes the intended boundary visible. When exact bytes are necessary, use <code>open(path, 'rb')</code>; do not rely on a platform-dependent default text encoding or newline conversion. Python's <code>codecs</code> module documents additional modes, including <code>surrogateescape</code>, for specialized workflows.</p>
+<h3>Streaming without breaking UTF-8 sequences</h3>
+<p>Use Python's incremental decoder when incoming byte chunks do not align with encoded characters. The <code>final</code> flag distinguishes a temporarily incomplete sequence from a truly truncated stream.</p>
+<pre><code class="language-python">import codecs
+
+reader = codecs.getincrementaldecoder('utf-8')(errors='strict')
+first = reader.decode(bytes.fromhex('E2'), final=False)
+second = reader.decode(bytes.fromhex('82 AC'), final=True)
+assert first == ''
+assert second == '€'
+</code></pre>
+<p>Do not call <code>.decode('utf-8')</code> separately on the individual chunks if you intend them to represent one contiguous text stream; doing so discards the state needed to complete multibyte characters.</p>
+</section><section aria-labelledby="heading-windows-powershell-51-exact-bytes-and-strict-utf-8" id="windows-powershell-51-exact-bytes-and-strict-utf-8"><h2 id="heading-windows-powershell-51-exact-bytes-and-strict-utf-8">Windows PowerShell 5.1: Exact Bytes and Strict UTF-8</h2>
+<p>Windows PowerShell 5.1 uses .NET Framework text APIs and has command-specific output encoding defaults. A UTF-8 text boundary can therefore be made unambiguous by starting from a <code>[byte[]]</code> and explicitly constructing a strict UTF-8 decoder. For exact binary work, use the byte-oriented .NET file APIs instead of assuming that a text cmdlet preserves every original byte.</p>
+<pre><code class="language-powershell">[byte[]]$raw = 0x43, 0x61, 0x66, 0xC3, 0xA9, 0x0A
+$utf8Strict = [System.Text.UTF8Encoding]::new($false, $true)
+
+$text = $utf8Strict.GetString($raw)
+if ($text -ne "Caf$([char]0x00E9)`n") {
+    throw 'Unexpected text decoding.'
+}
+
+[byte[]]$encoded = $utf8Strict.GetBytes($text)
+if ([System.BitConverter]::ToString($raw) -cne
+        [System.BitConverter]::ToString($encoded)) {
+    throw 'Round-trip bytes differ.'
+}
+
+# Demonstrate a strict failure on an incomplete UTF-8 character.
+[byte[]]$bad = 0x43, 0x61, 0x66, 0xC3, 0x0A
+try {
+    $null = $utf8Strict.GetString($bad)
+    throw 'Unexpected successful decode.'
+} catch [System.Text.DecoderFallbackException] {
+    'Malformed UTF-8 rejected.'
+}
+</code></pre>
+<p>The <code>throwOnInvalidBytes = $true</code> argument is the important safety setting. A decoder configured with replacement fallback may produce readable text but conceal invalid sequences. Windows PowerShell 5.1 also has BOM and ANSI-related defaults that differ from later PowerShell versions; when writing a UTF-8 file without a BOM, <code>WriteAllBytes()</code> with explicitly encoded data is predictable:</p>
+<pre><code class="language-powershell">$path = 'C:\MGU\example-utf8.txt'
+[System.IO.File]::WriteAllBytes($path, $encoded)
+[byte[]]$readBack = [System.IO.File]::ReadAllBytes($path)
+$verified = $utf8Strict.GetString($readBack)
+</code></pre>
+<p>The illustrative path should be changed to a file under the reader's control before running the write example. Exact bytes are especially important when processing checksums, signatures, fixed-width records, or foreign files whose declared encoding is known independently of local console settings.</p>
+</section><section aria-labelledby="heading-engineering-an-import-migration-or-etl-pipeline" id="engineering-an-import-migration-or-etl-pipeline"><h2 id="heading-engineering-an-import-migration-or-etl-pipeline">Engineering an Import, Migration, or ETL Pipeline</h2>
+<p>A production import should identify the binary and textual parts of the workflow explicitly. Begin by recording the source file's byte length, acquisition method, declared format, candidate encoding and original bytes when preservation is required. If the format contains a binary header and a text payload, validate header lengths and offsets <strong>before</strong> decoding the payload. Confirm that the payload lies within bounds and that its stated byte length agrees with actual input.</p>
+<p>Decode using the format's declared encoding, in strict mode when interoperability or integrity requires it. If the material is malformed, quarantine the original or record a rejected row; do not mutate the source by guessing a repair. Apply normalization or whitespace processing only when the destination schema expressly requires it, and record these transformations because they may affect identifiers, sorting and equality.</p>
+<p>Finally, encode the output in the target system's required form, enforce byte-size constraints <strong>after</strong> encoding, and test round-trip fidelity where exact preservation is part of the contract. Store metrics for malformed rows, replacement decisions, BOM presence, unexpectedly mixed encodings, and conversion failures. For external feeds, a reproducible transformation log is usually more valuable than a silent “best effort” that makes later investigation impossible.</p>
+</section><section aria-labelledby="heading-selection-framework-choose-the-correct-boundary-policy" id="selection-framework-choose-the-correct-boundary-policy"><h2 id="heading-selection-framework-choose-the-correct-boundary-policy">Selection Framework: Choose the Correct Boundary Policy</h2>
+<table>
+<thead>
+<tr>
+<th>Application context</th>
+<th>Recommended approach</th>
+<th>Avoid</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw image, compressed archive or encrypted block</td>
+<td>Keep as bytes; parse with its binary format</td>
+<td>Unconditional text decoding</td>
+</tr>
+<tr>
+<td>Standards-governed JSON interchange</td>
+<td>UTF-8 with JSON-valid syntax and established BOM rules</td>
+<td>Locale-based guessing</td>
+</tr>
+<tr>
+<td>Database identifier or access-control key</td>
+<td>Strict decoding, explicit comparison and normalization policy</td>
+<td>Silent replacement of malformed input</td>
+</tr>
+<tr>
+<td>Legacy document of uncertain origin</td>
+<td>Preserve bytes; inspect declarations and provenance; document chosen conversion</td>
+<td>Overwriting original after heuristic detection</td>
+</tr>
+<tr>
+<td>User-facing preview of damaged material</td>
+<td>Allow labeled replacement display alongside byte-level evidence</td>
+<td>Claiming the rendered preview is exact source text</td>
+</tr>
+<tr>
+<td>Streaming UTF-8 socket data</td>
+<td>Stateful incremental decoder and independent message framing</td>
+<td>Per-chunk stateless decoding</td>
+</tr>
+<tr>
+<td>Versioned binary record containing a UTF-8 label</td>
+<td>Byte-length framing, bounds check, strict decode of specified field</td>
+<td>Equating character count with byte count</td>
+</tr>
+<tr>
+<td>Cross-platform file transfer</td>
+<td>Explicit UTF-8 or format-defined encoding and documented filename policy</td>
+<td>Assuming all filesystem APIs use the same string representation</td>
+</tr>
+</tbody>
+</table>
+<p>An effective design preserves the distinction between <strong>data fidelity</strong> (what bytes were received), <strong>text validity</strong> (what the declared encoding permits), <strong>semantic policy</strong> (what characters are allowed in a particular field), and <strong>display policy</strong> (how users inspect the result). Treat these as separate review points rather than one generic “string handling” decision.</p>
+</section><section aria-labelledby="heading-study-questions-and-worked-answers" id="study-questions-and-worked-answers"><h2 id="heading-study-questions-and-worked-answers">Study Questions and Worked Answers</h2>
+<p><strong>1. Why can the bytes <code>C3 A9</code> appear as <code>é</code> in one program and <code>Ã©</code> in another?</strong> The first program decodes as UTF-8. The second decodes the same bytes as Windows-1252. This is a difference of character-encoding interpretation, not a difference in stored bytes.</p>
+<p><strong>2. Does <code>EF BB BF</code> mean a UTF-8 file is big-endian?</strong> No. UTF-8 has no byte-order variants. That prefix is a possible UTF-8 signature/BOM, and individual formats determine whether it is permitted.</p>
+<p><strong>3. A binary record contains <code>00 05 43 61 66 C3 A9</code>. The first two bytes give the payload's byte length as big-endian. What text follows?</strong> The length is five bytes, and those bytes are the valid UTF-8 sequence for <code>Café</code>. The logical text has four scalar values even though the payload has five bytes.</p>
+<p><strong>4. Why might a program that reads UTF-8 over a network produce decoding errors for valid text?</strong> Network reads can end in the middle of multibyte sequences. A stateful decoder must retain incomplete sequences across chunk boundaries rather than treating every read as a complete text input.</p>
+<p><strong>5. What is lost if invalid UTF-8 is decoded with replacement?</strong> The exact identity and sometimes the extent of the malformed original bytes. The resulting U+FFFD text usually cannot be re-encoded to recover the initial stream.</p>
+<p><strong>6. If two Unicode strings look identical, must their UTF-8 bytes match?</strong> No. A precomposed <code>é</code> and a decomposed <code>e</code> plus combining acute accent can render similarly while using different code point sequences and therefore different UTF-8 bytes.</p>
+<p><strong>7. Why should a text field's length prefix describe bytes rather than characters in many binary protocols?</strong> The receiving parser advances through a byte stream. A length expressed in Unicode scalars or UTF-16 code units may not describe the physical payload width and may cut a multibyte sequence in half.</p>
+<p><strong>8. What should a parser do if a header claims a UTF-8 field of 100 bytes but only 20 remain?</strong> Reject or defer the record according to the framing protocol; it must not read beyond the available bytes, attempt speculative decoding, or treat a partial record as complete.</p>
+<p><strong>9. Is decoding as UTF-8 enough to make a string safe for a filename?</strong> No. Unicode validity does not enforce path rules, control-character policy, normalization consistency, reserved names, or authorization constraints.</p>
+<p><strong>10. When can a byte/text round trip be considered lossless?</strong> When the selected decoding and encoding policies preserve the original data under the application's exactness requirements. With valid UTF-8 and strict decoding/encoding, byte-for-byte equality can be checked directly; transformations such as normalization, newline conversion or replacement may change the bytes.</p>
+</section><section aria-labelledby="heading-related-encyclopedia-topics" id="related-encyclopedia-topics"><h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>The immediate unit parent is <a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data</a>, and the <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/">Binary Data Sub-Articles index</a> provides the broader specialist directory. Other unit siblings address the components of a complete binary-processing pipeline:</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/bits-bytes-words-and-size-units">Bits, Bytes, Words, and Size Units</a> — The fundamental units in which field sizes and payload lengths are measured.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/endianness-and-byte-order">Endianness and Byte Order</a> — How multibyte numeric fields are ordered independently of character encoding.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/numeric-field-width-alignment-and-padding">Numeric Field Width, Alignment, and Padding</a> — Width and placement rules for binary fields.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">Binary Serialization and Schema Contracts</a> — Planned specialist treatment of external byte layouts and schema compatibility.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-input-validation-and-safe-parsing">Binary Input Validation and Safe Parsing</a> — Planned specialist treatment of defensive parsing and size validation.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/hex-dumps-binary-inspection-and-forensic-reading">Hex Dumps, Binary Inspection, and Forensic Reading</a> — Planned specialist methods for observing the original bytes.</li>
+</ul>
+<p>Separate parent-level topics include <a href="/library/encyclopedia/computer-science/data-systems/character-encoding">Character Encoding</a>, <a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a>, <a href="/library/encyclopedia/computer-science/data-systems/data-modeling">Data Modeling</a>, and <a href="/library/encyclopedia/computer-science/data-systems/data-storage-methods">Data Storage Methods</a>. Some sibling hyperlinks point to reserved destinations in the unit's editorial plan and do not imply those pages are already deployed.</p>
+</section><section aria-labelledby="heading-technical-references-and-further-reading" id="technical-references-and-further-reading"><h2 id="heading-technical-references-and-further-reading">Technical References and Further Reading</h2>
+<ol>
+<li><strong>The Unicode Consortium</strong>, <a href="https://www.unicode.org/versions/latest/">Unicode Standard</a> and <a href="https://www.unicode.org/faq/utf_bom.html">UTF-8/UTF-16/UTF-32 and BOM FAQ</a>. Authoritative definitions of code points, encoding forms, well-formedness and byte-order-mark behavior.</li>
+<li><strong>IETF</strong>, <a href="https://www.rfc-editor.org/rfc/rfc3629">RFC 3629: UTF-8, a transformation format of ISO 10646</a>. Defines the Internet's UTF-8 format, valid scalar ranges and prohibited overlong encodings.</li>
+<li><strong>WHATWG</strong>, <a href="https://encoding.spec.whatwg.org/">Encoding Standard</a>. Specifies browser-oriented decoding algorithms, decoder error modes and compatibility mappings.</li>
+<li><strong>IETF</strong>, <a href="https://www.rfc-editor.org/rfc/rfc8259">RFC 8259: The JavaScript Object Notation (JSON) Data Interchange Format</a>. Documents JSON's UTF-8 interchange requirement and BOM generation rule.</li>
+<li><strong>Python Software Foundation</strong>, <a href="https://docs.python.org/3/library/codecs.html">codecs — Codec registry and base classes</a>. Documents strict, replacement and specialized reversible error handling, plus incremental decoding.</li>
+<li><strong>Python Software Foundation</strong>, <a href="https://docs.python.org/3/howto/unicode.html">Unicode HOWTO</a>. Practical explanations of encoding/decoding, normalization context and text-oriented programming.</li>
+<li><strong>Microsoft Learn</strong>, <a href="https://learn.microsoft.com/en-us/dotnet/api/system.text.utf8encoding?view=netframework-4.8">UTF8Encoding class</a> and <a href="https://learn.microsoft.com/en-us/dotnet/api/system.text.utf8encoding.-ctor?view=netframework-4.8">UTF8Encoding constructors</a>. Specifies strict error behavior and .NET encoding conversion.</li>
+<li><strong>Microsoft Learn</strong>, <a href="https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_character_encoding?view=powershell-5.1">about_Character_Encoding — Windows PowerShell 5.1</a>. Describes command-dependent text encoding choices and BOM handling.</li>
+<li><strong>The Unicode Consortium</strong>, <a href="https://www.unicode.org/reports/tr29/">Unicode Standard Annex #29: Unicode Text Segmentation</a>. Defines algorithms and properties for extended grapheme clusters, distinct from code units and byte counts.</li>
+<li><strong>The Unicode Consortium</strong>, <a href="https://www.unicode.org/reports/tr15/">Unicode Standard Annex #15: Unicode Normalization Forms</a>. Establishes NFC, NFD and related text normalization schemes.</li>
+</ol>
+<p>For a deployed system, these general references supplement—but do not replace—the specific schema, file format or protocol version controlling the actual byte stream.</p>
+</section><section aria-labelledby="heading-editorial-scope-and-placement" id="editorial-scope-and-placement"><h2 id="heading-editorial-scope-and-placement">Editorial Scope and Placement</h2>
+<p><strong>Taxonomy:</strong> Computer Science (Level 2) → Data Systems (Level 3) → Binary Data (Level 4) → Raw Bytes, Text, and Character-Encoding Boundaries (Level 5). This is an interpretive-boundary specialist article, not an additional Data Systems overview and not a replacement for the Character Encoding unit.</p>
+<p><strong>Windows destination:</strong> <code>C:\MGU\library\encyclopedia\computer-science\data-systems\binary-data-articles\raw-bytes-text-and-character-encoding-boundaries.html</code>.</p>
+<p><strong>Canonical public route:</strong> <code>/library/encyclopedia/computer-science/data-systems/binary-data-articles/raw-bytes-text-and-character-encoding-boundaries</code>.</p>
+<p><strong>Editorial boundary:</strong> This article emphasizes explicit encoding contracts, observability of raw bytes, validation and interoperability. The specialized study of cryptographic encodings, transport encryption, language-specific typography, and broad text-search tokenization belongs to their own units. Planned sibling links are active intentionally and are not a claim of completed publication.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== EXACT SHARED LOADERS ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>
