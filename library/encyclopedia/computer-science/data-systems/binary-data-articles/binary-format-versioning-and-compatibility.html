@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Binary Format Versioning and Compatibility | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="An in-depth MGU Encyclopedia guide to binary format versioning, backward and forward compatibility, TLV evolution, schema contracts, reader-writer interoperability, archival migration, and secure decoding.">
+<meta name="keywords" content="binary format versioning, backward compatibility, forward compatibility, schema evolution, TLV, field identifiers, Protocol Buffers, Apache Avro, FlatBuffers, CBOR, schema registry, file migration, version negotiation, unknown fields">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-format-versioning-and-compatibility">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Binary Format Versioning and Compatibility | MGU Encyclopedia">
+<meta property="og:description" content="An in-depth MGU Encyclopedia guide to binary format versioning, backward and forward compatibility, TLV evolution, schema contracts, reader-writer interoperability, archival migration, and secure decoding.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-format-versioning-and-compatibility">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== SHARED HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Binary Format Versioning and Compatibility</h1>
+<p class="subtitle">Designing durable binary representations through backward- and forward-compatible schemas, explicit version barriers, and safe migrations.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#definition-scope-and-the-evolution-problem">Definition, Scope, and the Evolution Problem</a></li>
+<li><a href="#learning-outcomes-and-guiding-questions">Learning Outcomes and Guiding Questions</a></li>
+<li><a href="#byte-compatibility-schema-compatibility-and-semantic-compatibility">Byte Compatibility, Schema Compatibility, and Semantic Compatibility</a></li>
+<li><a href="#backward-compatibility-new-readers-and-old-data">Backward Compatibility: New Readers and Old Data</a></li>
+<li><a href="#forward-compatibility-old-readers-and-new-data">Forward Compatibility: Old Readers and New Data</a></li>
+<li><a href="#readerwriter-compatibility-is-directional">Reader–Writer Compatibility Is Directional</a></li>
+<li><a href="#version-numbers-are-labels-not-parsers">Version Numbers Are Labels, Not Parsers</a></li>
+<li><a href="#fixed-offsets-why-extension-is-difficult">Fixed Offsets: Why Extension Is Difficult</a></li>
+<li><a href="#tagged-fields-and-tlv-extensions">Tagged Fields and TLV Extensions</a></li>
+<li><a href="#presence-defaults-null-and-unknown-values">Presence, Defaults, Null, and Unknown Values</a></li>
+<li><a href="#adding-removing-and-reusing-fields">Adding, Removing, and Reusing Fields</a></li>
+<li><a href="#critical-extensions-and-feature-negotiation">Critical Extensions and Feature Negotiation</a></li>
+<li><a href="#a-complete-teaching-format-bver">A Complete Teaching Format: BVER</a></li>
+<li><a href="#baseline-worked-record-version-10">Baseline Worked Record: Version 1.0</a></li>
+<li><a href="#compatible-addition-version-11">Compatible Addition: Version 1.1</a></li>
+<li><a href="#incompatible-change-unknown-critical-field">Incompatible Change: Unknown Critical Field</a></li>
+<li><a href="#python-versioned-encoder-and-bounded-decoder">Python: Versioned Encoder and Bounded Decoder</a></li>
+<li><a href="#python-compatibility-and-malformed-input-tests">Python: Compatibility and Malformed-Input Tests</a></li>
+<li><a href="#powershell-51-inspecting-a-versioned-binary-record">PowerShell 5.1: Inspecting a Versioned Binary Record</a></li>
+<li><a href="#the-round-trip-preservation-problem">The Round-Trip Preservation Problem</a></li>
+<li><a href="#protocol-buffers-field-numbers-and-unknown-data">Protocol Buffers: Field Numbers and Unknown Data</a></li>
+<li><a href="#apache-avro-writer-and-reader-schema-resolution">Apache Avro: Writer and Reader Schema Resolution</a></li>
+<li><a href="#flatbuffers-table-evolution-and-deprecated-fields">FlatBuffers: Table Evolution and Deprecated Fields</a></li>
+<li><a href="#cbor-and-extensible-data-models">CBOR and Extensible Data Models</a></li>
+<li><a href="#version-metadata-and-schema-registries">Version Metadata and Schema Registries</a></li>
+<li><a href="#data-migration-versus-on-the-fly-decoding">Data Migration Versus On-the-Fly Decoding</a></li>
+<li><a href="#mixed-version-rollouts-and-rollbacks">Mixed-Version Rollouts and Rollbacks</a></li>
+<li><a href="#archival-durability-provenance-and-reproducibility">Archival Durability, Provenance, and Reproducibility</a></li>
+<li><a href="#security-strict-parsing-version-downgrades-and-resource-limits">Security: Strict Parsing, Version Downgrades, and Resource Limits</a></li>
+<li><a href="#size-performance-and-compatibility-tradeoffs">Size, Performance, and Compatibility Tradeoffs</a></li>
+<li><a href="#compatibility-test-matrix-and-release-gate">Compatibility Test Matrix and Release Gate</a></li>
+<li><a href="#an-editorial-decision-framework-for-format-changes">An Editorial Decision Framework for Format Changes</a></li>
+<li><a href="#common-failures-and-troubleshooting-patterns">Common Failures and Troubleshooting Patterns</a></li>
+<li><a href="#worked-review-questions-and-exercises">Worked Review Questions and Exercises</a></li>
+<li><a href="#key-terms">Key Terms</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#technical-references-and-further-reading">Technical References and Further Reading</a></li>
+<li><a href="#concluding-principle-preserve-meaning-across-releases">Concluding Principle: Preserve Meaning Across Releases</a></li>
+</ol>
+</section>
+<section aria-labelledby="heading-definition-scope-and-the-evolution-problem" id="definition-scope-and-the-evolution-problem"><h2 id="heading-definition-scope-and-the-evolution-problem">Definition, Scope, and the Evolution Problem</h2>
+<p>A <strong>binary format</strong> is a documented mapping between a sequence of bytes and the information a producer intends a reader to recover. <strong>Format versioning</strong> is the practice of recording and governing changes to that mapping; <strong>compatibility</strong> is the property that a particular producer, reader, data instance, and interpretation can continue to work together across a change. Those words describe an engineering contract, not a guarantee conferred by placing a version number in a header. A file marked “version 2” may remain completely readable by a version-1 implementation, or it may share only a few recognizable bytes before interpretation fails. Conversely, a format without an explicit version field can support careful evolution when its field identifiers, lengths, defaults, and extension behavior have been defined in advance.</p>
+<p>The central problem is that binary data outlives the software that created it. A sensor recorder may retain measurements for decades; a university archive may ingest older database exports; a desktop application may exchange files with installations that cannot be upgraded simultaneously. Distributed systems complicate the problem further: producers and consumers are deployed by different operators, run different revisions, and may have incompatible rollout schedules. Data also moves through caches, queues, backups, and migration pipelines. A change that works between two current programs can still fail against historical records or an intermediary that knows only an older layout.</p>
+<p>This article is a specialist child of the <a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data overview</a>. It concentrates on byte-level and semantic compatibility across releases: how to design an extensible record, distinguish safe and unsafe changes, negotiate capabilities, validate older input, and operate a responsible migration. Foundational treatments of <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">Binary Serialization and Schema Contracts</a>, <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-file-headers-and-magic-numbers">Binary File Headers and Magic Numbers</a>, and <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-input-validation-and-safe-parsing">Binary Input Validation and Safe Parsing</a> establish related but distinct subjects.</p>
+</section><section aria-labelledby="heading-learning-outcomes-and-guiding-questions" id="learning-outcomes-and-guiding-questions"><h2 id="heading-learning-outcomes-and-guiding-questions">Learning Outcomes and Guiding Questions</h2>
+<p>After studying this article, readers should be able to distinguish backward from forward compatibility; state which component plays the role of <strong>writer</strong> and <strong>reader</strong> in a compatibility claim; analyze why unchanged byte layouts can nevertheless convey changed meanings; select between fixed-layout, tagged-field, and negotiated formats; derive and validate a complete versioned teaching record; and design a test matrix that includes stored historical messages, mixed-version deployments, malformed input, and intended breaking changes.</p>
+<p>Three questions govern the engineering analysis. First, <strong>what exactly is stable</strong>—byte offsets, field identifiers, field types, semantic meanings, or the public API? Second, <strong>what may the reader do with an element it does not recognize</strong>—reject, ignore, preserve, or pass it through without interpreting it? Third, <strong>who controls the transition</strong>—a single application release, both communication peers, an archive custodian, or independent systems? Answers must be documented for each evolving format rather than assumed from the habits of a programming language or serialization library.</p>
+<p>The objectives are diagnostic as well as constructive. A correct implementation should reject unsupported critical features, avoid unbounded allocation from untrusted length fields, preserve any attributes that it promises to preserve, and make version-specific interpretation visible in the code. A successful round-trip using one new writer and one new reader proves much less than a systematic cross-version matrix. Compatibility is established through explicit invariants and evidence, not by a single smoke test.</p>
+</section><section aria-labelledby="heading-byte-compatibility-schema-compatibility-and-semantic-compatibility" id="byte-compatibility-schema-compatibility-and-semantic-compatibility"><h2 id="heading-byte-compatibility-schema-compatibility-and-semantic-compatibility">Byte Compatibility, Schema Compatibility, and Semantic Compatibility</h2>
+<p>An unchanged byte sequence is not necessarily an unchanged message. Suppose a four-byte field remains at the same offset with the same signed integer encoding, but its unit is silently changed from milliseconds to microseconds. An old reader can successfully parse every byte while making its time calculations wrong by a factor of one thousand. This is <strong>syntactic compatibility without semantic compatibility</strong>. Likewise, a two-byte number may keep its width and endianness while its meaning changes from an identifier to a bitmask. Binary parsers cannot infer the intended meaning solely from size and type.</p>
+<p>Compatibility should therefore be evaluated at several layers. The framing layer determines record boundaries and safe size limits. The structural layer determines field identities, types, lengths, cardinalities, presence, and ordering. The interpretation layer assigns units, coordinate systems, enum meanings, default semantics, and constraints. The application layer determines which combinations remain useful, and the operational layer determines what actually happens when mixed versions coexist. An enhancement is safe only when the relevant consumers continue to behave according to their contracts—not simply when they avoid throwing exceptions.</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Example of apparently minor change</th>
+<th>Possible compatibility consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framing</td>
+<td>Payload length widened from 16 to 32 bits</td>
+<td>Old readers mislocate subsequent bytes</td>
+</tr>
+<tr>
+<td>Field identity</td>
+<td>Field tag <code>03</code> is reused for a different concept</td>
+<td>Old readers silently misinterpret data</td>
+</tr>
+<tr>
+<td>Field encoding</td>
+<td>Signed two-byte field switched to unsigned</td>
+<td>Values above signed maximum change meaning</td>
+</tr>
+<tr>
+<td>Semantic units</td>
+<td>Temperature scale changes without a new tag</td>
+<td>Every reader may parse but calculate incorrectly</td>
+</tr>
+<tr>
+<td>Defaults</td>
+<td>Absent <code>enabled</code> changes from false to true</td>
+<td>Historical records acquire new behavior</td>
+</tr>
+<tr>
+<td>Application policy</td>
+<td>Previously optional field becomes compulsory</td>
+<td>Old records may now be rejected</td>
+</tr>
+<tr>
+<td>Operational storage</td>
+<td>New writer permanently rewrites old files</td>
+<td>Rollback may become impossible</td>
+</tr>
+</tbody>
+</table>
+<p>A compatibility specification should record which layers the guarantee covers. “Wire-compatible” is narrower than “semantically safe for all older applications.” A schema registry can verify many structural constraints, yet cannot generally prove that a field called <code>price</code> has retained its currency or that a status code has retained its business meaning.</p>
+</section><section aria-labelledby="heading-backward-compatibility-new-readers-and-old-data" id="backward-compatibility-new-readers-and-old-data"><h2 id="heading-backward-compatibility-new-readers-and-old-data">Backward Compatibility: New Readers and Old Data</h2>
+<p>A <strong>backward-compatible reader</strong> can consume data produced under the older supported contract and interpret it as intended. For a binary archive, this is the most visible preservation requirement: after the application is upgraded, files written five years ago should remain intelligible. Backward compatibility is often achieved by supplying defaults for newly introduced fields, recognizing legacy encodings, honoring historical unit definitions, or implementing explicit old-version decoders followed by conversion into a current internal representation.</p>
+<p>Consider a version-1 record with device identifier and temperature, and a version-2 reader that additionally understands battery percentage. If battery percentage was absent from the original file, the new reader must know whether its appropriate representation is “unknown,” “not measured,” a defined default, or an error. Choosing zero as a convenience can create the false assertion that the historical device had an empty battery. The parser should distinguish absent information from a genuine measured zero when the application needs that distinction.</p>
+<p>Backward support is not unlimited. A vendor may intentionally discontinue support for malformed legacy encodings, obsolete cryptography, or versions with unfixable ambiguity. Such decisions can be justified, but they require a clear policy: data-conversion tools, retention requirements, migration instructions, and a documented unsupported-version response. It is misleading to claim universal backward compatibility if that support exists only for the most recent few releases.</p>
+</section><section aria-labelledby="heading-forward-compatibility-old-readers-and-new-data" id="forward-compatibility-old-readers-and-new-data"><h2 id="heading-forward-compatibility-old-readers-and-new-data">Forward Compatibility: Old Readers and New Data</h2>
+<p>A <strong>forward-compatible reader</strong>—in the conventional compatibility matrix—can process an appropriately constrained future version of a message. More precisely, an older reader can accept newer data when the future writer changes the record only in ways permitted by the older reader's extension contract. The old implementation cannot predict arbitrary future semantics. It can, however, skip an unknown <strong>noncritical</strong>, length-delimited field without disturbing the known fields, provided the format specifies exactly how unknown entries are delimited and what their omission means.</p>
+<p>This property is especially important for mixed-version deployments. Suppose a new recorder appends a battery field that the older analytics program does not need. A well-designed tagged format can allow the older program to read the temperature while ignoring the battery. A format that assumes each record is exactly eight bytes, with no extension region or length framing, may cause the old parser to mistake the added bytes for the beginning of the next record. The extension mechanism must be included in the initial design; it cannot reliably be retrofitted after old code has already fixed the record length and offset rules.</p>
+<p>An older application should <strong>not</strong> silently ignore new fields required to interpret the existing fields correctly. A new field declaring the scale of temperature, a mandatory security policy, or a compression algorithm changes how the rest of the record must be processed. Such changes need a version barrier, a required-feature flag, or another unmistakable incompatibility signal. Unknown-field tolerance is safe only when the producer has defined the unknown field as optional for the old reader's task.</p>
+</section><section aria-labelledby="heading-readerwriter-compatibility-is-directional" id="readerwriter-compatibility-is-directional"><h2 id="heading-readerwriter-compatibility-is-directional">Reader–Writer Compatibility Is Directional</h2>
+<p>“Version A is compatible with version B” is incomplete unless direction and operations are specified. A reader of release B may read writer-A records, while a reader of release A may reject writer-B records. A new program may load an older file successfully but then save it in a form no older program can reopen. A service may accept an older request but send a new response that the requesting client does not recognize. Compatibility questions therefore belong in an explicit matrix indexed by writer version and reader version.</p>
+<table>
+<thead>
+<tr>
+<th>Writer → Reader</th>
+<th>Reader 1.0</th>
+<th>Reader 1.1</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Writer 1.0 emits only baseline fields</td>
+<td>Accept</td>
+<td>Accept</td>
+<td>New reader keeps baseline contract</td>
+</tr>
+<tr>
+<td>Writer 1.1 adds optional, length-delimited battery field</td>
+<td>Accept and ignore unknown battery</td>
+<td>Accept and interpret battery</td>
+<td>Older reader can skip optional extension</td>
+</tr>
+<tr>
+<td>Writer 1.1 redefines temperature units without signaling</td>
+<td><strong>Incorrect interpretation</strong></td>
+<td>Potentially correct</td>
+<td>A structural parse is not semantic compatibility</td>
+</tr>
+<tr>
+<td>Writer 2.0 changes the record grammar</td>
+<td>Reject deliberately</td>
+<td>Reject deliberately</td>
+<td>Unsupported major version signals break</td>
+</tr>
+<tr>
+<td>Writer 1.1 emits a new unknown critical feature</td>
+<td>Reject deliberately</td>
+<td>Accept only if implemented</td>
+<td>Fail closed on required semantics</td>
+</tr>
+</tbody>
+</table>
+<p>The table describes a deliberately designed example developed later in this article; it is not a universal feature of the labels <code>1.0</code> and <code>1.1</code>. The matrix must separately cover reading, writing, modification, conversion, streaming, and any intermediate message relay. A version-1 reader that ignores new fields may be adequate for read-only reporting but unacceptable as a read–modify–write gateway if it silently discards those fields while saving the message.</p>
+</section><section aria-labelledby="heading-version-numbers-are-labels-not-parsers" id="version-numbers-are-labels-not-parsers"><h2 id="heading-version-numbers-are-labels-not-parsers">Version Numbers Are Labels, Not Parsers</h2>
+<p>Many binary formats use a major/minor pair; others use a single monotonically increasing number, an explicit schema identifier, a feature bitmap, a tagged root type, or a declared compatibility profile. The label's interpretation must be written into the specification. It is sensible to use a changed major value for a deliberately incompatible grammar and a changed minor value for additions allowed by an existing extension policy. But the often cited formula “major breaks, minor adds” is a <strong>project convention</strong>, not a universal decoding algorithm.</p>
+<p>A reader that encounters a higher minor version has choices only because the format has already defined them. It might accept higher minors when no unknown critical features appear, reject any higher minor, or use a capability map to decide. These policies create different interoperability envelopes. A minor number alone cannot indicate which fields may be skipped, nor whether an omitted unknown attribute is safe for a downstream operation.</p>
+<p>Distinguish <strong>file-format version</strong>, <strong>schema revision</strong>, <strong>protocol capability version</strong>, <strong>application release</strong>, and <strong>library runtime version</strong>. An application numbered 5.3 might write wire format 1.2 and use a serialization library numbered 4.0. A registry may assign a new schema identifier without changing the framing grammar. These identifiers have different lifecycles, and inventing an equality between them unnecessarily ties archival readability to software distribution history.</p>
+</section><section aria-labelledby="heading-fixed-offsets-why-extension-is-difficult" id="fixed-offsets-why-extension-is-difficult"><h2 id="heading-fixed-offsets-why-extension-is-difficult">Fixed Offsets: Why Extension Is Difficult</h2>
+<p>In a fixed-layout record, each field is stored at an agreed offset and width. This is efficient and appropriate for many controlled contexts, but evolution requires care. A layout consisting of a two-byte type followed by a four-byte amount cannot add a field in the middle without changing the location of the amount. Appending bytes may be permissible if each record has an independent total-length field and the decoder is required to skip the surplus; it is not permissible if old readers assume a constant stride between consecutive records.</p>
+<p>There are several legitimate fixed-layout extension strategies: reserve a documented region for future use; give the record a declared length and append fields without moving existing offsets; place a version-specific extension block after a common prefix; or maintain parallel record types with different identifiers. Reserved regions must have prescribed initial values and rules for interpretation. Unused padding is <strong>not automatically</strong> safe to repurpose: an old writer may emit arbitrary bytes into uninitialized padding, and an old reader may compare raw structures or include padding in a checksum.</p>
+<p>Changing the architecture-dependent layout of a C structure also differs from evolving a portable disk format. Compiler alignment, natural padding, integer widths, and calling conventions can change layout even when source-level field names stay constant. Files and protocols should specify wire bytes independently of native in-memory layout. The related <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/numeric-field-width-alignment-and-padding">Numeric Field Width, Alignment, and Padding</a> article explores that boundary.</p>
+</section><section aria-labelledby="heading-tagged-fields-and-tlv-extensions" id="tagged-fields-and-tlv-extensions"><h2 id="heading-tagged-fields-and-tlv-extensions">Tagged Fields and TLV Extensions</h2>
+<p>A <strong>type–length–value</strong> or <strong>tag–length–value</strong> (TLV) structure prefixes each field with an identifier and its encoded length. A parser can often skip an unknown field by reading the length and advancing safely to the next entry. This supports independent field additions, but only when tag widths, length encodings, maximum lengths, duplicate rules, ordering rules, unknown-tag behavior, and nesting limits are explicitly specified. Without limits, a tag claiming a four-gigabyte payload is not a harmless extension; it can be a denial-of-service input.</p>
+<p>Unknown fields are usually separated into at least two categories. <strong>Noncritical extensions</strong> may be ignored by older readers if they do not affect the interpretation of supported fields. <strong>Critical extensions</strong> must be understood or the message is rejected. Designs sometimes encode the distinction in one bit of the tag, while others use a separate feature mask or a special extension namespace. This is a protocol design choice, not a property of TLV itself. Furthermore, preserving an unknown field for a round-trip is an additional capability. Being able to skip it on input does not mean that the writer will retain its bytes on output.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Fixed-layout approach</th>
+<th>Self-delimited tagged approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Locate a known field</td>
+<td>Fixed offset</td>
+<td>Parse tags and lengths, or use an index</td>
+</tr>
+<tr>
+<td>Add an optional field</td>
+<td>Requires reserved space or extension region</td>
+<td>Often append a new unique tag</td>
+</tr>
+<tr>
+<td>Skip unknown data</td>
+<td>Only if size and location are known</td>
+<td>Possible with validated length rules</td>
+</tr>
+<tr>
+<td>Runtime overhead</td>
+<td>Usually small</td>
+<td>Per-field tags and lengths</td>
+</tr>
+<tr>
+<td>Schema identity</td>
+<td>May be implicit in record type</td>
+<td>Often field IDs plus schema contract</td>
+</tr>
+<tr>
+<td>Duplicates and order</td>
+<td>Often impossible or fixed</td>
+<td>Must be defined and validated</td>
+</tr>
+<tr>
+<td>Security requirements</td>
+<td>Offset/length validation</td>
+<td>Tag/length/nesting/duplicate validation</td>
+</tr>
+</tbody>
+</table>
+<p>A tag is not a license to change a value's meaning. Once <code>02</code> has represented temperature in tenths of a degree Celsius, reusing <code>02</code> for pressure or Fahrenheit readings creates semantically invalid backward reads. Assign a new tag for the new concept, define a conversion, or introduce an explicitly incompatible format version.</p>
+</section><section aria-labelledby="heading-presence-defaults-null-and-unknown-values" id="presence-defaults-null-and-unknown-values"><h2 id="heading-presence-defaults-null-and-unknown-values">Presence, Defaults, Null, and Unknown Values</h2>
+<p>An evolving schema needs a rigorous theory of <strong>absence</strong>. At minimum, distinguish a field that is absent, present with value zero, explicitly null, unavailable, intentionally redacted, and unrecognized by an old decoder. Some formats represent these cases identically unless the schema introduces presence markers or a separate status field. Two versions that interpret absence differently can corrupt an archive even when all serialized fields remain unchanged.</p>
+<p>Defaults may be attached to a reader schema, a writer contract, an application migration, or a user interface. Those choices are not equivalent. A reader default of <code>false</code> can be useful when a newly added historical attribute was definitively false for every old record. It is a poor default when the attribute was not measured. For the example developed below, an absent battery measurement is reported as <strong>unknown</strong>, not zero percent. That policy is independent of the encoding of the one-byte battery value when the field is present.</p>
+<p>Versioned applications should document whether default values are serialized, whether a missing value can be distinguished from an explicitly supplied default, and whether a read–modify–write operation preserves this distinction. Readers must also distinguish unknown enumeration members from invalid wire bytes when the format permits future enum values. A robust design may include an <code>UNKNOWN</code> outcome, but it must avoid treating an unknown security-critical state as automatically authorized or enabled.</p>
+</section><section aria-labelledby="heading-adding-removing-and-reusing-fields" id="adding-removing-and-reusing-fields"><h2 id="heading-adding-removing-and-reusing-fields">Adding, Removing, and Reusing Fields</h2>
+<p>Adding a new optional field with a unique identifier is a typical compatible extension when the old reader can skip it and the new reader has a defined behavior when it is missing. Removing a field is more complicated. An older reader may require the field, and older persisted records may contain it for decades. A safe retirement usually involves deprecating the field, stopping new writers from setting it only after readers no longer rely on it, and reserving its identifier permanently so that a future writer cannot assign a conflicting meaning.</p>
+<p>Changing a field's number or binary type can break old readers even if its human-readable name remains the same. Some encodings make certain type changes byte-compatible for restricted value ranges, but a general compatibility policy should not assume that a changed integer width, signedness, repetition rule, or message cardinality is safe without proving the relevant value and decoding constraints. A change from a single value to repeated values can also shift the application meaning even when a codec accepts both representations.</p>
+<table>
+<thead>
+<tr>
+<th>Proposed modification</th>
+<th>Default disposition</th>
+<th>Conditions for making it safe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Add new optional tag with bounded length</td>
+<td>Often compatible</td>
+<td>Old readers skip; new readers handle absence</td>
+</tr>
+<tr>
+<td>Add mandatory field to all future records</td>
+<td>Usually breaking for old readers</td>
+<td>Negotiate capability or use major-version barrier</td>
+</tr>
+<tr>
+<td>Delete field needed by old readers</td>
+<td>Breaking</td>
+<td>Retain field or retire old readers first</td>
+</tr>
+<tr>
+<td>Reuse retired field ID</td>
+<td>Prohibited by good evolution policy</td>
+<td>Assign a never-used ID instead</td>
+</tr>
+<tr>
+<td>Change bytes but preserve field name</td>
+<td>Presume breaking</td>
+<td>Explicit migration and versioned decoding</td>
+</tr>
+<tr>
+<td>Rename source-language identifier only</td>
+<td>Encoding-dependent</td>
+<td>Wire ID and semantics unchanged, API consumers updated</td>
+</tr>
+<tr>
+<td>Broaden allowed enum values</td>
+<td>Requires receiver policy</td>
+<td>Unknown-value handling verified in all runtimes</td>
+</tr>
+<tr>
+<td>Tighten validation of historical value range</td>
+<td>Potentially breaking</td>
+<td>Demonstrate historical data satisfies new bounds</td>
+</tr>
+</tbody>
+</table>
+<p>The safest rule is deliberately conservative: do not silently reinterpret an established wire identifier. Prefer explicit version adapters and documented field retirement over opportunistic reuse.</p>
+</section><section aria-labelledby="heading-critical-extensions-and-feature-negotiation" id="critical-extensions-and-feature-negotiation"><h2 id="heading-critical-extensions-and-feature-negotiation">Critical Extensions and Feature Negotiation</h2>
+<p>Forward-compatibility rules need an explicit escape hatch for changes that old software must not ignore. Common methods include a <strong>major format change</strong>, a <strong>must-understand flag</strong>, a <strong>critical extension identifier</strong>, or a <strong>negotiated capability</strong>. Their purpose is to convert dangerous misinterpretation into a visible unsupported-format error. The exact mechanisms differ between a long-lived file, a datagram, and a bidirectional conversation. A stored file can declare what it requires; it cannot negotiate with a reader that arrives twenty years later. A network endpoint can exchange capabilities before selecting the bytes it will send, but it still needs a safe response if the negotiated peer violates the agreement.</p>
+<p>A feature bit should identify an actual required behavior such as compression, a new record cipher, or an interpretation-changing policy. It should not be allocated for every cosmetic application release. The specification must say which bits are defined, how unknown bits are handled, whether bits may be combined, which combinations are invalid, and whether a feature applies to the whole message or only one subrecord. If a reader has no means to implement an unknown required behavior, rejection is correct. Masking unsupported bits and continuing with normal interpretation is not robustness; it is contract violation.</p>
+<p>Intermediaries introduce a special hazard. An old relay may be permitted to forward a message transparently without understanding a critical extension, but <strong>parsing and acting on that message</strong> is not the same as forwarding opaque bytes unchanged. If it changes or discards unknown material, it may violate the producer's protection or the recipient's assumptions. Write separate rules for opaque transport, semantic inspection, transformation, and reserialization.</p>
+</section><section aria-labelledby="heading-a-complete-teaching-format-bver" id="a-complete-teaching-format-bver"><h2 id="heading-a-complete-teaching-format-bver">A Complete Teaching Format: <code>BVER</code></h2>
+<p>The following format, named <strong><code>BVER</code></strong> for <em>Binary Versioned Example Record</em>, is fictional and exists only for instruction. It is not a registered file type or external standard. The format illustrates a stable common header and a self-delimited extension region. All multibyte integers are <strong>big-endian</strong>; all byte offsets in the field table are zero-based. A reader must apply the format's bounds checks before allocating or walking any declared payload. Its record size limit is deliberately small enough for classroom use.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">Offset</th>
+<th style="text-align:right">Width</th>
+<th>Field</th>
+<th>Wire encoding and rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right"><code>0..3</code></td>
+<td style="text-align:right">4 bytes</td>
+<td>Magic</td>
+<td>ASCII <code>BVER</code>; hex <code>42 56 45 52</code></td>
+</tr>
+<tr>
+<td style="text-align:right"><code>4</code></td>
+<td style="text-align:right">1 byte</td>
+<td>Major</td>
+<td>Only <code>01</code> supported by these readers</td>
+</tr>
+<tr>
+<td style="text-align:right"><code>5</code></td>
+<td style="text-align:right">1 byte</td>
+<td>Minor</td>
+<td>Writer revision; higher minor can be accepted under extension contract</td>
+</tr>
+<tr>
+<td style="text-align:right"><code>6..7</code></td>
+<td style="text-align:right">2 bytes</td>
+<td>TLV length</td>
+<td>Unsigned big-endian <code>n</code>, at most <code>4096</code></td>
+</tr>
+<tr>
+<td style="text-align:right"><code>8..9</code></td>
+<td style="text-align:right">2 bytes</td>
+<td>Required-feature mask</td>
+<td>Unsigned big-endian; <code>0000</code> for the defined revisions</td>
+</tr>
+<tr>
+<td style="text-align:right"><code>10..(9+n)</code></td>
+<td style="text-align:right"><code>n</code> bytes</td>
+<td>TLV area</td>
+<td>Fields according to grammar below</td>
+</tr>
+<tr>
+<td style="text-align:right">Whole record</td>
+<td style="text-align:right"><code>10+n</code> bytes</td>
+<td>Total length</td>
+<td>Exactly header plus TLV area, with no trailing bytes</td>
+</tr>
+</tbody>
+</table>
+<p>Each TLV comprises <strong>one tag byte, one length byte, and exactly that many value bytes</strong>. The high bit of a tag (<code>0x80</code>) means <em>critical</em>: a reader that does not implement that field's semantics must reject the entire record. The seven lower bits identify a field from 1 through 127; zero is invalid. Fields must appear once each and in strictly increasing <strong>base identifier</strong> order. An implementation enforces these constraints even on fields it does not understand. The declared two-byte TLV-region length establishes the end of the region; a TLV is invalid if its header or value overruns that boundary. The teaching format does not permit nested TLVs, so recursion-depth concerns do not arise in the example. It does not include a checksum, signature, or encryption: compatibility and integrity are separate contract dimensions.</p>
+<table>
+<thead>
+<tr>
+<th>Base tag</th>
+<th>V1.0 meaning</th>
+<th>Encoding</th>
+<th>Presence and validation</th>
+<th>V1.1 change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>01</code></td>
+<td>Device ID</td>
+<td>Unsigned 16-bit big-endian</td>
+<td>Required; length exactly 2</td>
+<td>Unchanged</td>
+</tr>
+<tr>
+<td><code>02</code></td>
+<td>Temperature</td>
+<td>Signed 16-bit big-endian; units 0.1 °C</td>
+<td>Required; length exactly 2</td>
+<td>Unchanged</td>
+</tr>
+<tr>
+<td><code>04</code></td>
+<td>Battery percentage</td>
+<td>Unsigned one byte</td>
+<td>Unknown optional to reader 1.0</td>
+<td>Optional; length exactly 1; 0–100</td>
+</tr>
+<tr>
+<td>Other noncritical IDs</td>
+<td>Not defined</td>
+<td>Self-delimited opaque bytes</td>
+<td>Skip safely; do not interpret</td>
+<td>Same extension contract</td>
+</tr>
+<tr>
+<td>Unknown critical IDs</td>
+<td>Not defined</td>
+<td>Self-delimited but must-understand</td>
+<td>Reject whole message</td>
+<td>Same rejection rule</td>
+</tr>
+</tbody>
+</table>
+<p>A reader of version 1.1 represents absent battery data as <strong>unknown</strong> rather than 0%. A reader of version 1.0 ignores noncritical tag <code>04</code> entirely and can still interpret the required device and temperature fields. Both readers reject a nonzero required-feature mask because neither implements any mask bits. No extra fields are introduced merely by changing the minor byte; the rule for extensions is carried by tag IDs and criticality, not by numerology.</p>
+</section><section aria-labelledby="heading-baseline-worked-record-version-10" id="baseline-worked-record-version-10"><h2 id="heading-baseline-worked-record-version-10">Baseline Worked Record: Version 1.0</h2>
+<p>A recorder emits device ID <code>298</code> (<code>0x012A</code>) and temperature <code>21.5 °C</code>, represented as 215 tenths (<code>0x00D7</code>). The two required TLVs are <code>01 02 01 2A</code> and <code>02 02 00 D7</code>, eight bytes in total. The TLV-region length is therefore <code>00 08</code>. The header's major and minor bytes are <code>01 00</code>, and the feature mask is <code>00 00</code>. Concatenating these components produces exactly 18 bytes:</p>
+<pre><code class="language-text">Offset  Hex bytes                                    Explanation
+00      42 56 45 52                                  Magic "BVER"
+04      01                                           Major 1
+05      00                                           Minor 0
+06      00 08                                        TLV region = 8 bytes
+08      00 00                                        Required features = none
+0A      01 02 01 2A                                  Device ID 298
+0E      02 02 00 D7                                  Temperature 21.5 °C
+
+Complete record:
+42 56 45 52 01 00 00 08 00 00 01 02 01 2A 02 02 00 D7
+</code></pre>
+<p>The size check is <code>10 + 8 = 18</code> bytes. The two known TLVs have ascending base identifiers, fixed expected lengths, and no duplicates. A new reader can reconstruct the device and temperature. Battery percentage is unknown because the old writer never measured or transmitted it. Notice that the temperature interpretation includes <strong>both</strong> signedness and a scale factor. Reading the same two temperature bytes as a plain unsigned integer or as a temperature in Fahrenheit would be a semantic defect, even though the byte offset calculation is still correct.</p>
+</section><section aria-labelledby="heading-compatible-addition-version-11" id="compatible-addition-version-11"><h2 id="heading-compatible-addition-version-11">Compatible Addition: Version 1.1</h2>
+<p>The new recorder retains tags <code>01</code> and <code>02</code> without changing their meaning or encoding. It adds noncritical tag <code>04</code>, with one byte <code>64</code> (hexadecimal) representing decimal 100% battery. The new TLV is <code>04 01 64</code>, three bytes. The new payload length is eleven bytes (<code>00 0B</code>), and the minor revision is 1. The complete version-1.1 record occupies <strong>21 bytes</strong>:</p>
+<pre><code class="language-text">Offset  Hex bytes                                    Explanation
+00      42 56 45 52                                  Magic "BVER"
+04      01                                           Major 1
+05      01                                           Minor 1
+06      00 0B                                        TLV region = 11 bytes
+08      00 00                                        Required features = none
+0A      01 02 01 2A                                  Device ID 298
+0E      02 02 00 D7                                  Temperature 21.5 °C
+12      04 01 64                                     Battery 100%
+
+Complete record:
+42 56 45 52 01 01 00 0B 00 00 01 02 01 2A 02 02 00 D7 04 01 64
+</code></pre>
+<p>A version-1.0 reader validates the header, parses tags <code>01</code> and <code>02</code>, sees unknown tag <code>04</code>, reads its length of one, skips the next byte, and produces the same temperature and device values as before. A version-1.1 reader recognizes the battery field and returns 100%. Both readers avoid interpreting an absent battery measurement as zero. The byte preservation guarantee remains separate: an old reader that constructs a <strong>new</strong> version-1.0 record from the interpreted fields would drop the battery value unless it also carries unknown fields forward. Accordingly, the example's old reader is safe for interpretation, not automatically safe for rewriting newer records.</p>
+</section><section aria-labelledby="heading-incompatible-change-unknown-critical-field" id="incompatible-change-unknown-critical-field"><h2 id="heading-incompatible-change-unknown-critical-field">Incompatible Change: Unknown Critical Field</h2>
+<p>Imagine a future writer adds critical tag <code>85</code> (<code>0x80 | 0x05</code>) requiring a calibration profile that must be applied to the temperature. Even if the record still contains a familiar tag <code>02</code>, an older reader that simply ignores calibration could report an incorrect temperature. The high bit explicitly warns that the new field is required for correct interpretation. When the old reader encounters <code>85</code>, it must reject the record rather than accept the old temperature value and pretend no behavioral change occurred.</p>
+<p>For a one-byte critical value <code>01</code>, the added TLV would be <code>85 01 01</code>. It increases the TLV region by three bytes and requires updating the total length. The new writer must still follow ascending base-ID order, placing field 5 after fields 1, 2, and (if present) 4. The old reader is required to validate the frame's length and field grammar before declaring the unknown critical field unsupported. A suitable diagnostic distinguishes <code>unsupported critical field 5</code> from a truncated record or a malformed length. Distinct error classes help administrators decide whether a software update, repair, or security investigation is appropriate.</p>
+<p>Changing the major version provides a second deliberate barrier. If a future revision switches the header grammar or redefines temperature units globally, it should publish a new major contract (or separate format identifier) and prevent both teaching readers from treating it as ordinary version 1. The major change must be enforced <strong>before</strong> interpreting the bytes under the old grammar. Allowing the parser to fall back to version 1 after seeing an unsupported major value defeats the version marker's purpose.</p>
+</section><section aria-labelledby="heading-python-versioned-encoder-and-bounded-decoder" id="python-versioned-encoder-and-bounded-decoder"><h2 id="heading-python-versioned-encoder-and-bounded-decoder">Python: Versioned Encoder and Bounded Decoder</h2>
+<p>The following standalone Python 3 program implements the fictional <code>BVER</code> rules. The decoder takes a <code>supports_battery</code> parameter to model software built with the version-1.0 or version-1.1 schema. Both readers can accept a higher minor value if all encountered extensions remain noncritical and the required feature mask is supported; neither reader accepts a different major value. The code does not perform I/O or call external packages. In real applications, the field schema should be encoded in types and tested against independent implementations, not duplicated as informal constants across products.</p>
+<pre><code class="language-python">MAGIC = b"BVER"
+MAX_TLV_BYTES = 4096
+HEADER_BYTES = 10
+
+
+def encode_bver(device_id: int, temperature_tenths: int,
+                battery_percent: int | None = None) -&gt; bytes:
+    if type(device_id) is not int or not 0 &lt;= device_id &lt;= 65535:
+        raise ValueError("device id out of range")
+    if type(temperature_tenths) is not int or not -32768 &lt;= temperature_tenths &lt;= 32767:
+        raise ValueError("temperature out of range")
+
+    fields = bytearray()
+    fields.extend((1, 2))
+    fields.extend(device_id.to_bytes(2, "big"))
+    fields.extend((2, 2))
+    fields.extend(temperature_tenths.to_bytes(2, "big", signed=True))
+
+    minor = 0
+    if battery_percent is not None:
+        if type(battery_percent) is not int or not 0 &lt;= battery_percent &lt;= 100:
+            raise ValueError("battery percent out of range")
+        minor = 1
+        fields.extend((4, 1, battery_percent))
+
+    if len(fields) &gt; MAX_TLV_BYTES:
+        raise ValueError("TLV section too large")
+    return (MAGIC + bytes((1, minor)) + len(fields).to_bytes(2, "big")
+            + b"\x00\x00" + bytes(fields))
+
+
+def decode_bver(blob: bytes, supports_battery: bool) -&gt; dict:
+    if not isinstance(blob, bytes):
+        raise TypeError("blob must be bytes")
+    if len(blob) &lt; HEADER_BYTES or len(blob) &gt; HEADER_BYTES + MAX_TLV_BYTES:
+        raise ValueError("invalid total length")
+    if blob[:4] != MAGIC:
+        raise ValueError("wrong format signature")
+    if blob[4] != 1:
+        raise ValueError("unsupported major version")
+
+    minor = blob[5]
+    payload_length = int.from_bytes(blob[6:8], "big")
+    if payload_length &gt; MAX_TLV_BYTES:
+        raise ValueError("payload exceeds policy limit")
+    if len(blob) != HEADER_BYTES + payload_length:
+        raise ValueError("truncated or trailing data")
+    features = int.from_bytes(blob[8:10], "big")
+    if features != 0:
+        raise ValueError("unsupported required features")
+
+    known = {1, 2, 4} if supports_battery else {1, 2}
+    values = {}
+    unknown_count = 0
+    previous_id = 0
+    position = HEADER_BYTES
+
+    while position &lt; len(blob):
+        if len(blob) - position &lt; 2:
+            raise ValueError("incomplete TLV header")
+        tag, length = blob[position], blob[position + 1]
+        position += 2
+        base_id = tag &amp; 0x7F
+        critical = bool(tag &amp; 0x80)
+        if base_id == 0 or base_id &lt;= previous_id:
+            raise ValueError("zero, duplicate, or out-of-order tag")
+        previous_id = base_id
+        if length &gt; len(blob) - position:
+            raise ValueError("TLV value exceeds payload boundary")
+        raw_value = blob[position:position + length]
+        position += length
+
+        if base_id not in known:
+            if critical:
+                raise ValueError("unsupported critical field")
+            unknown_count += 1
+            continue
+
+        expected_length = {1: 2, 2: 2, 4: 1}[base_id]
+        if length != expected_length:
+            raise ValueError("invalid known field length")
+        if base_id == 1:
+            values["device_id"] = int.from_bytes(raw_value, "big")
+        elif base_id == 2:
+            values["temperature_tenths"] = int.from_bytes(
+                raw_value, "big", signed=True)
+        else:
+            if raw_value[0] &gt; 100:
+                raise ValueError("battery out of range")
+            values["battery_percent"] = raw_value[0]
+
+    if "device_id" not in values or "temperature_tenths" not in values:
+        raise ValueError("missing required fields")
+    values.setdefault("battery_percent", None)
+    values["minor"] = minor
+    values["unknown_fields_skipped"] = unknown_count
+    return values
+</code></pre>
+<p>This example defines no checksum; corruption and adversarial manipulation are therefore detected only to the extent that they violate the explicit structural and semantic checks. A production protocol that requires integrity or authentication must specify and implement those layers separately. For teaching simplicity, the example insists that each TLV field has a distinct base identifier and that all base identifiers are in ascending order. Other real-world formats may permit repeated fields or arbitrary ordering. Such behavior must follow their own formal specifications, not this example's restrictions.</p>
+</section><section aria-labelledby="heading-python-compatibility-and-malformed-input-tests" id="python-compatibility-and-malformed-input-tests"><h2 id="heading-python-compatibility-and-malformed-input-tests">Python: Compatibility and Malformed-Input Tests</h2>
+<p>The following test driver can be appended to the preceding program and run with Python 3.10 or later. It verifies the complete bytes of both records, exercises old and new readers, and deliberately introduces unsupported and malformed inputs. The checks distinguish a compatible optional addition from a critical change and a major-version break. Tests should include exact expected hex output, rather than merely asserting that the serializer can read back its own output: identical encoder and decoder defects can otherwise cancel one another.</p>
+<pre><code class="language-python">v10 = encode_bver(298, 215)
+v11 = encode_bver(298, 215, 100)
+assert v10.hex(" ").upper() == (
+    "42 56 45 52 01 00 00 08 00 00 01 02 01 2A 02 02 00 D7")
+assert v11.hex(" ").upper() == (
+    "42 56 45 52 01 01 00 0B 00 00 01 02 01 2A 02 02 00 D7 04 01 64")
+
+legacy_on_legacy = decode_bver(v10, supports_battery=False)
+new_on_legacy = decode_bver(v10, supports_battery=True)
+legacy_on_new = decode_bver(v11, supports_battery=False)
+new_on_new = decode_bver(v11, supports_battery=True)
+assert legacy_on_legacy["device_id"] == 298
+assert new_on_legacy["battery_percent"] is None
+assert legacy_on_new["temperature_tenths"] == 215
+assert legacy_on_new["unknown_fields_skipped"] == 1
+assert new_on_new["battery_percent"] == 100
+
+
+def reject(data, supports_battery=False):
+    try:
+        decode_bver(data, supports_battery)
+    except (ValueError, TypeError):
+        return
+    raise AssertionError("invalid record was accepted")
+
+reject(v11[:-1])  # truncated optional field
+reject(v11 + b"\x00")  # extra byte after declared TLV region
+reject(v11[:4] + b"\x02" + v11[5:])  # unsupported major
+reject(v11[:8] + b"\x00\x01" + v11[10:])  # unknown required-feature bit
+
+# Append new critical field 5, with length 1 and value 1.
+critical = bytearray(v11)
+critical[6:8] = (14).to_bytes(2, "big")
+critical.extend(b"\x85\x01\x01")
+reject(bytes(critical))
+reject(bytes(critical), supports_battery=True)
+
+# Known field cannot be duplicated, even after the earlier valid fields.
+duplicate = bytearray(v11)
+duplicate[6:8] = (14).to_bytes(2, "big")
+duplicate.extend(b"\x04\x01\x64")
+reject(bytes(duplicate), supports_battery=True)
+
+# A future minor is syntactically allowable under the defined extension rule.
+future_minor = v11[:5] + b"\x02" + v11[6:]
+assert decode_bver(future_minor, supports_battery=False)["device_id"] == 298
+
+print("BVER compatibility, exact-byte, and rejection tests passed")
+</code></pre>
+<p>Note the deliberately narrow success criterion: the old decoder can <strong>read</strong> the new optional field's record without misinterpreting the established fields. That decoder discards the unknown tag during interpretation. It must not be used as an unqualified read–modify–write component if the system requires unknown-field preservation. Conversely, rejecting a new critical field is a passing result in the tests because rejection is the specified safe behavior for an unsupported required change.</p>
+</section><section aria-labelledby="heading-powershell-51-inspecting-a-versioned-binary-record" id="powershell-51-inspecting-a-versioned-binary-record"><h2 id="heading-powershell-51-inspecting-a-versioned-binary-record">PowerShell 5.1: Inspecting a Versioned Binary Record</h2>
+<p>Windows PowerShell 5.1 can inspect a byte sequence without relying on a later PowerShell runtime or assuming the host computer's byte ordering. The following example uses the exact 21-byte version-1.1 record. It demonstrates read-only interpretation of the ten-byte header and controlled TLV traversal. The code does not execute any embedded content. It interprets unknown noncritical fields as uninterpreted data and rejects unknown critical tags; its validation is intentionally scoped to the example grammar and should not replace a complete production parser.</p>
+<pre><code class="language-powershell">$hex = '42 56 45 52 01 01 00 0B 00 00 01 02 01 2A 02 02 00 D7 04 01 64'
+[byte[]]$record = $hex.Split(' ') | ForEach-Object {
+    [Convert]::ToByte($_, 16)
+}
+
+if ($record.Length -lt 10) { throw 'Record too short' }
+if ([Text.Encoding]::ASCII.GetString($record, 0, 4) -ne 'BVER') {
+    throw 'Wrong format signature'
+}
+if ($record[4] -ne 1) { throw 'Unsupported major version' }
+$length = (([int]$record[6] -shl 8) -bor [int]$record[7])
+$features = (([int]$record[8] -shl 8) -bor [int]$record[9])
+if ($length -gt 4096 -or $record.Length -ne (10 + $length)) {
+    throw 'Record length violates contract'
+}
+if ($features -ne 0) { throw 'Unknown required feature' }
+
+$position = 10
+$previousId = 0
+$deviceId = $null
+$temperature = $null
+while ($position -lt $record.Length) {
+    if (($record.Length - $position) -lt 2) { throw 'Truncated TLV header' }
+    $tag = [int]$record[$position]
+    $size = [int]$record[$position + 1]
+    $position += 2
+    $id = $tag -band 0x7F
+    $critical = ($tag -band 0x80) -ne 0
+    if ($id -eq 0 -or $id -le $previousId) { throw 'Bad tag ordering' }
+    $previousId = $id
+    if ($size -gt ($record.Length - $position)) { throw 'Truncated TLV value' }
+
+    if ($id -eq 1 -or $id -eq 2) {
+        if ($size -ne 2) { throw 'Wrong numeric field size' }
+        $number = (([int]$record[$position] -shl 8) -bor
+                    [int]$record[$position + 1])
+        if ($id -eq 1) { $deviceId = $number }
+        else {
+            if ($number -ge 32768) { $number -= 65536 }
+            $temperature = $number / 10.0
+        }
+    }
+    elseif ($critical) {
+        throw ('Unknown critical field: ' + $id)
+    }
+    $position += $size
+}
+if ($null -eq $deviceId -or $null -eq $temperature) {
+    throw 'Missing required field'
+}
+Write-Output ('Device=' + $deviceId + '; TemperatureC=' + $temperature)
+</code></pre>
+<p>The code deliberately models the <strong>1.0 reader</strong>: it does not recognize tag <code>04</code>, so it skips the optional battery percentage after validating its length. In a version-1.1 application, the battery field should receive an explicit parser branch with a one-byte width check and a <code>0..100</code> range check. PowerShell's integer arithmetic makes manual big-endian decoding easy to follow in this teaching range. For production parsing, define reusable exact-size reading functions, return structured error types, and test the code on the supported deployment platform.</p>
+</section><section aria-labelledby="heading-the-round-trip-preservation-problem" id="the-round-trip-preservation-problem"><h2 id="heading-the-round-trip-preservation-problem">The Round-Trip Preservation Problem</h2>
+<p>A common hidden compatibility failure occurs between <strong>decoding</strong> and <strong>re-encoding</strong>. A version-1.0 reader may correctly ignore tag <code>04</code> from a version-1.1 record, then construct a fresh message using only tags <code>01</code> and <code>02</code>. The new output is syntactically valid but has lost the battery measurement. If the component is a database adapter, a service proxy, or a format conversion pipeline, that loss may be unacceptable even though neither individual operation reported an error.</p>
+<p>There are three broad strategies. A read-only client can consume known fields while committing not to rewrite the record. A passthrough component can copy the <strong>original bytes</strong> when no semantic transformation is necessary. An evolution-aware decoder can retain unrecognized fields as opaque, bounded data and re-emit them according to the format's rules. The third strategy requires care with ordering, duplicate fields, checksums, cryptographic signatures, and changing values of known fields; preserving an opaque extension does not establish that it remains semantically valid after other parts of a message are modified.</p>
+<p>In <code>BVER</code>, the sample <code>decode_bver</code> function returns interpreted values and a count of ignored fields; it does not retain their original tag–length–value bytes. It is therefore suitable as a teaching <strong>read</strong> operation, not as a lossless relay. An implementation that needs safe preservation should explicitly record unknown-field spans and define a policy for reserialization and critical flags. When a message is cryptographically signed over its original serialized bytes, any rewriting requires additional signature-aware handling rather than an assumption that semantically equivalent fields produce identical encodings.</p>
+</section><section aria-labelledby="heading-protocol-buffers-field-numbers-and-unknown-data" id="protocol-buffers-field-numbers-and-unknown-data"><h2 id="heading-protocol-buffers-field-numbers-and-unknown-data">Protocol Buffers: Field Numbers and Unknown Data</h2>
+<p>Google's <a href="https://protobuf.dev/programming-guides/proto3/">Protocol Buffers language guidance</a> illustrates tagged-field evolution at scale. Binary Protobuf field identifiers are <strong>field numbers</strong> that participate in the wire format. Changing a source-code field name may be much less disruptive to binary readers than reusing the same field number with an incompatible meaning. Protobuf recommends preserving field numbers and reserving the numbers of removed fields so that future maintainers cannot accidentally reuse them. Its <a href="https://protobuf.dev/best-practices/dos-donts/">best-practice guidance</a> also cautions against unnecessary field-type changes and required-field designs that make gradual rollout difficult.</p>
+<p>Protobuf's evolution rules are not simply identical to <code>BVER</code>. Protobuf encodes a tag containing field number and wire type, and its wire-type grammar determines how unknown fields can be skipped. The availability and behavior of field presence depend on syntax, edition, and field type. Proto3 and editions runtimes support preservation of unknown fields in binary parse–serialize flows, but intermediate transformations—particularly conversions to other representations, application-specific object reconstruction, or explicit field clearing—may lose that information. A format owner's compatibility test must include the actual transformations performed in its system, not only the serializer library's advertised support.</p>
+<pre><code class="language-protobuf">syntax = "proto3";
+message Reading {
+  uint32 device_id = 1;
+  sint32 temperature_tenths = 2;
+  optional uint32 battery_percent = 4;
+  reserved 3;   // previously used identifier; do not repurpose
+}
+</code></pre>
+<p>The schema above is illustrative and uses Protobuf's <code>sint32</code> signed encoding; it is <strong>not</strong> byte-identical to the fictional <code>BVER</code> format, which stores a signed 16-bit fixed-width integer. The optional qualifier makes presence of <code>battery_percent</code> observable in a proto3 schema that supports explicit presence. The number <code>3</code> is reserved to demonstrate the rule against reuse; it does not assert that <code>BVER</code> itself once allocated tag 3. Protobuf implementation details should always be checked against the version of its specification and runtime actually deployed.</p>
+</section><section aria-labelledby="heading-apache-avro-writer-and-reader-schema-resolution" id="apache-avro-writer-and-reader-schema-resolution"><h2 id="heading-apache-avro-writer-and-reader-schema-resolution">Apache Avro: Writer and Reader Schema Resolution</h2>
+<p><a href="https://avro.apache.org/docs/1.12.0/specification/">Apache Avro's specification</a> presents compatibility as a relationship between <strong>writer schema</strong> and <strong>reader schema</strong>. The reader needs to know how the writer encoded the value. During schema resolution, a reader may ignore writer fields it does not use, and may supply a reader-side default for a field absent from the writer schema when the rules permit it. This is not the same model as treating the serialized bytes as a free-standing string of TLV entries; Avro's binary representation relies on schema knowledge, and Avro object container files can carry relevant schema metadata.</p>
+<table>
+<thead>
+<tr>
+<th>Writer schema</th>
+<th>Reader schema</th>
+<th>Typical resolution implication</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Old record lacks <code>battery_percent</code></td>
+<td>New reader adds it with a valid default</td>
+<td>Reader can fill absent field from its schema</td>
+</tr>
+<tr>
+<td>New writer has additional <code>battery_percent</code></td>
+<td>Old reader lacks the field</td>
+<td>Reader can ignore writer's additional field</td>
+</tr>
+<tr>
+<td>Writer changes an incompatible type</td>
+<td>Reader expects old type</td>
+<td>Resolution can fail</td>
+</tr>
+<tr>
+<td>Field renamed without compatible alias strategy</td>
+<td>Reader expects original name</td>
+<td>Matching may fail despite identical field position</td>
+</tr>
+<tr>
+<td>Reader adds a field without a suitable default</td>
+<td>Old writer lacks the field</td>
+<td>Reader may have no way to supply required data</td>
+</tr>
+</tbody>
+</table>
+<p>Avro defaults apply according to schema-resolution rules; they are not necessarily bytes written into every old record. Avro also supports certain type promotions and aliases, with precise conditions. These features should not be generalized into a rule that <em>all</em> type changes or renamings are safe. A reliable deployment should test the exact writer and reader schemas in both directions using the current library, plus representative historical serialized bytes. See also the <a href="https://avro.apache.org/docs/1.12.0/specification/#schema-resolution">Avro schema-resolution section</a>.</p>
+</section><section aria-labelledby="heading-flatbuffers-table-evolution-and-deprecated-fields" id="flatbuffers-table-evolution-and-deprecated-fields"><h2 id="heading-flatbuffers-table-evolution-and-deprecated-fields">FlatBuffers: Table Evolution and Deprecated Fields</h2>
+<p><a href="https://flatbuffers.dev/evolution/">FlatBuffers' schema-evolution guidance</a> demonstrates a different design: table fields may be added under defined rules, optional/absent entries can be handled through the table encoding, and deprecated fields can be retained in the schema without continued use. Field positions and identifiers must be managed carefully; depending on the schema strategy, explicitly assigned IDs and the order of additions matter. A new field is not automatically compatible if its type and default behavior change the expectations of an older consumer.</p>
+<p>FlatBuffers also distinguishes <strong>tables</strong> from <strong>structs</strong>. Structs are intended for compact fixed layouts and do not offer the same flexible schema evolution as tables. A developer who chooses structs for everything because they look simpler may accidentally create a format that cannot grow without breaking historical data. For long-lived content, the schema style should reflect anticipated changes rather than only present-day encoding cost.</p>
+<p>The examples across Protobuf, Avro, and FlatBuffers should not be conflated. Their encodings, unknown-field behavior, default semantics, and schema resolution mechanisms differ. What transfers between them is the engineering discipline: stable identifiers, explicit absence rules, compatible type transitions, and cross-version testing.</p>
+</section><section aria-labelledby="heading-cbor-and-extensible-data-models" id="cbor-and-extensible-data-models"><h2 id="heading-cbor-and-extensible-data-models">CBOR and Extensible Data Models</h2>
+<p>The <a href="https://www.rfc-editor.org/rfc/rfc8949">Concise Binary Object Representation (CBOR), RFC 8949</a>, is a general binary data representation capable of encoding integers, byte strings, text, arrays, maps, tags, and other values. A decoder can often process an unfamiliar <strong>application-level map key</strong> without knowing what that key means, provided it can parse the CBOR value's syntax. The surrounding application protocol must still define whether unknown keys may be ignored, how duplicate keys are treated, what a given tagged value means, and which extensions are critical.</p>
+<p>CBOR itself does not guarantee that a program using its map encoding is semantically forward-compatible. A producer could add a new key that changes the interpretation of an older key; an old reader may parse the bytes and still produce an incorrect decision. Nor does every valid CBOR serialization have unique bytes for the same conceptual data item. Systems that compare hashes or signatures over encoded CBOR may need a specified <strong>deterministic encoding profile</strong> and appropriate canonicalization rules. The RFC distinguishes deterministic-encoding requirements from informal claims of canonical equivalence.</p>
+<p>These examples underscore why the term <em>self-describing</em> must be used cautiously. A representation may be self-delimiting, identify low-level value types, or carry schema metadata without fully describing the business semantics required for safe interpretation. The code that interprets meaning remains governed by a versioned application contract.</p>
+</section><section aria-labelledby="heading-version-metadata-and-schema-registries" id="version-metadata-and-schema-registries"><h2 id="heading-version-metadata-and-schema-registries">Version Metadata and Schema Registries</h2>
+<p>A production format may identify its schema by an immutable schema ID, hash, registered version, or application-level type identifier. A schema registry can maintain the history of accepted definitions, compare proposed changes against policies, and supply the writer schema needed for decoding. This makes format changes reviewable rather than dependent on oral knowledge among engineers. Registry availability, schema retention, caching rules, and trust in schema sources become part of the operational design.</p>
+<p>The schema fingerprint or ID must be defined precisely. If a hash is computed over textual schema documents, whitespace or field ordering may matter unless the format specifies a normalization procedure. If the registry assigns numeric IDs, independently operated registries may assign the same number to different schemas unless their namespace is explicit. A decoder should not fetch arbitrary, untrusted schema URLs and execute or instantiate unrestricted types. Instead, it should bind records to an approved schema set and resource-limited parser.</p>
+<p>A compatible schema change may still be incompatible with a particular application. For example, adding an optional field may pass structural checks but cause a downstream database's uniqueness rule to change or make an accounting report calculate a different amount. Automated checkers should be treated as valuable screening controls, followed by semantic review and realistic integration tests.</p>
+</section><section aria-labelledby="heading-data-migration-versus-on-the-fly-decoding" id="data-migration-versus-on-the-fly-decoding"><h2 id="heading-data-migration-versus-on-the-fly-decoding">Data Migration Versus On-the-Fly Decoding</h2>
+<p>There are two common responses when a format evolves. <strong>On-the-fly decoding</strong> keeps historical bytes and provides version-specific readers or adapters; <strong>migration</strong> rewrites data into a newer approved representation. On-the-fly decoding preserves original evidence and can simplify rollback but increases maintenance obligations and may complicate queries. Migration can consolidate the operational format and remove dependency on obsolete decoders, but it can be expensive and can irreversibly discard information if the conversion was incomplete or mistaken.</p>
+<p>A disciplined migration defines a source and target contract, an exact transformation, a validation procedure, a rollback path, and a record of what could not be represented. It does not merely load each old file and save it using a new serializer. That simplistic operation may drop unknown fields, change defaults, normalize text unexpectedly, change precision, or rewrite timestamps in a different unit. Both source and destination must be examined in byte-level and semantic terms; where legally or scientifically necessary, immutable originals should remain available.</p>
+<p>A useful migration strategy is <strong>expand → coexist → contract</strong>. First deploy readers capable of interpreting old and new data. Next deploy writers that use the new optional fields while older consumers still coexist. Finally, after verifying actual usage and retention constraints, retire obsolete writers or fields. This sequence reduces the odds that a new producer generates messages older essential readers cannot handle. In data stores, it may be accompanied by dual-reading, temporary dual-writing, or background conversion, each with its own risks of divergence and resource use.</p>
+</section><section aria-labelledby="heading-mixed-version-rollouts-and-rollbacks" id="mixed-version-rollouts-and-rollbacks"><h2 id="heading-mixed-version-rollouts-and-rollbacks">Mixed-Version Rollouts and Rollbacks</h2>
+<p>Distributed upgrades rarely occur atomically. An application update can reach one web service before its queues, workers, caches, mobile clients, or backup restorers are upgraded. A new deployment must therefore support a period of mixed versions, and the format owner should calculate which reader–writer combinations will actually occur in production. During the transition, a shared producer may have to constrain itself to the lowest common feature set until consumers signal readiness.</p>
+<p>Rollback is a separate compatibility test. A program may successfully read old files and write a new revision, then be rolled back after an unrelated software incident. If the previous release cannot read the newly written files, the rollback is ineffective unless a safe reverse migration exists. Operational plans should record <strong>the oldest permitted reader</strong> and <strong>the newest permitted writer</strong> at every phase. A version marker without a documented rollback strategy does not protect availability.</p>
+<table>
+<thead>
+<tr>
+<th>Deployment phase</th>
+<th>Reader capability</th>
+<th>Writer behavior</th>
+<th>Required control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>Only 1.0 readers</td>
+<td>Write 1.0 records</td>
+<td>Preserve original contract</td>
+</tr>
+<tr>
+<td>Reader expansion</td>
+<td>Mix of 1.0 and 1.1 readers</td>
+<td>Continue writing 1.0</td>
+<td>Verify old data on new readers</td>
+</tr>
+<tr>
+<td>Optional extension</td>
+<td>Mix of readers</td>
+<td>Write 1.1 optional battery field</td>
+<td>Verify 1.0 can safely skip it</td>
+</tr>
+<tr>
+<td>Critical feature introduction</td>
+<td>Readers upgraded to understand feature</td>
+<td>Enable critical field only for capable recipients</td>
+<td>Negotiate/segment or require new major contract</td>
+</tr>
+<tr>
+<td>Retirement</td>
+<td>Old readers removed under policy</td>
+<td>Stop generating obsolete representations</td>
+<td>Preserve archived access and rollback options</td>
+</tr>
+</tbody>
+</table>
+<p>When a deployment mixes queues and persisted messages, the oldest reader may reappear unexpectedly when an old backlog is replayed. Use measurable readiness criteria: inventory all consumers, inspect message ages, track unsupported-version events, and test restoration from older backups. Avoid assuming that a quiet error dashboard proves no incompatible messages were ever lost.</p>
+</section><section aria-labelledby="heading-archival-durability-provenance-and-reproducibility" id="archival-durability-provenance-and-reproducibility"><h2 id="heading-archival-durability-provenance-and-reproducibility">Archival Durability, Provenance, and Reproducibility</h2>
+<p>Long-lived scientific, governmental, and institutional records impose requirements beyond ordinary application interoperability. A format that remains technically parseable may become practically unusable if the original schema, units, reference tables, calibration assumptions, or historical software behavior are no longer documented. Archival preservation therefore requires a <strong>format specification</strong>, examples of valid files, schema history, any required external dictionaries, and a record of how records were produced. A version number is useful only if a curator can map it to an unambiguous contract.</p>
+<p>When migrating an archive, record the source file identity, date and tool version of transformation, source and destination hashes, conversion warnings, and an independent validation result. Keep a provenance ledger that distinguishes byte-preserving copies from transformed derivatives. Hashes can verify that the preserved original has not changed, but they do not certify that the values inside it were correct when recorded. The identity and reliability of the original creator remain separate provenance questions.</p>
+<p>For a format such as <code>BVER</code>, a durable repository would preserve the definition of the two-byte signed temperature field and its tenths-of-Celsius unit; it would also record that the battery field was introduced as optional and absent historical battery values mean “not measured.” Those semantic facts are just as necessary as the header layout. Reopening a 1.0 file with a current parser should not retroactively invent a battery reading.</p>
+</section><section aria-labelledby="heading-security-strict-parsing-version-downgrades-and-resource-limits" id="security-strict-parsing-version-downgrades-and-resource-limits"><h2 id="heading-security-strict-parsing-version-downgrades-and-resource-limits">Security: Strict Parsing, Version Downgrades, and Resource Limits</h2>
+<p>Version handling creates an additional trust boundary because the input itself can select code paths. An attacker can choose an obsolete format marker to reach a less-tested parser, can forge an enormous extension length, or can combine duplicate tags to exploit disagreement between validating and consuming components. The implementation must therefore enforce a maximum record size, validate field boundaries before reads and allocations, reject invalid duplicate or ordering patterns when the format requires it, and centralize version-selection policy. Obsolete decoders should be isolated, tested, and retired when support commitments permit.</p>
+<p><strong>Downgrade attacks</strong> matter when two peers negotiate security-sensitive features. If a network attacker can remove a supported authentication feature from an unauthenticated negotiation, the peers may fall back to a weaker mode without realizing that the offered capabilities were modified. Critical-field and version-number checks help detect unsupported semantics; they do not themselves authenticate the negotiation. Security-sensitive protocols require a suitable authenticated transcript, a policy that forbids weak fallback where appropriate, and explicit failure when required protections are absent. <code>BVER</code> demonstrates rejection rules but does not claim to solve authenticated negotiation.</p>
+<p>Version-specific parsers must also avoid permissive “try every known decoder until one succeeds” behavior on untrusted data when that permits ambiguous interpretations. Prefer an unambiguous magic value and explicit version dispatch, with failure messages that identify unsupported format versus invalid content without disclosing sensitive payloads. Fuzzing should target both known versions and transitions among them. A format upgrade that adds compression or encryption expands the attack surface to decompression limits, key identifiers, nonces, authenticated data, and algorithm-support policy; it is not merely a new field in the table.</p>
+</section><section aria-labelledby="heading-size-performance-and-compatibility-tradeoffs" id="size-performance-and-compatibility-tradeoffs"><h2 id="heading-size-performance-and-compatibility-tradeoffs">Size, Performance, and Compatibility Tradeoffs</h2>
+<p>Extensibility costs some bytes and processing. Tagged formats may store an identifier and a length beside every value. Keeping old fields and redundant representations during transition can increase disk, network, and memory costs. On the other hand, a rigid format that forces a full rewrite of an archive every time a field is added may create far higher operational expense than a few extra bytes per record. The appropriate choice depends on write volume, file retention, embedded-device constraints, query patterns, and how independently producers and consumers evolve.</p>
+<p>The baseline <code>BVER</code> record contains a ten-byte header and eight TLV bytes to represent four underlying bytes of numeric content. The compatible battery extension increases that record from 18 to 21 bytes, a three-byte increment for one byte of information. This proportion is inefficient for a single tiny record, yet may be acceptable for an explanatory or low-volume interchange format. Batching, compact variable-length encoding, schema-indexed columns, or compression can improve density, but such techniques require their own versioning and limits. Performance benchmarks should compare complete end-to-end behavior—including decoding, validation, migration, and recovery—not just the size of the payload.</p>
+<p>Version design also influences operational metrics. Instrument the rate of unknown noncritical fields, unsupported major versions, rejected critical fields, data migrations, and failed round-trip checks. These indicators can reveal future compatibility risks before data loss becomes visible. Avoid logging full binary payloads when doing so would expose private or confidential data; record error categories, schema IDs, safe field positions, and anonymized counts instead.</p>
+</section><section aria-labelledby="heading-compatibility-test-matrix-and-release-gate" id="compatibility-test-matrix-and-release-gate"><h2 id="heading-compatibility-test-matrix-and-release-gate">Compatibility Test Matrix and Release Gate</h2>
+<p>Tests must represent historical and future-facing cases as distinct obligations. For each supported writer version, save <strong>golden byte fixtures</strong> produced independently or captured from a known-good implementation. Run every supported reader against the fixtures, compare actual interpreted values with documented expectations, and separately test whether a reader is authorized to rewrite the record. Include a fixture containing an unknown noncritical extension, a fixture containing an unknown critical extension, and malformed records designed to challenge every length and boundary assumption.</p>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Expected outcome for the example</th>
+<th>Failure it prevents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.0 writer → 1.0 reader</td>
+<td>Accept, correct device and temperature</td>
+<td>Baseline regression</td>
+</tr>
+<tr>
+<td>1.0 writer → 1.1 reader</td>
+<td>Accept; battery unknown</td>
+<td>Lost backward compatibility</td>
+</tr>
+<tr>
+<td>1.1 writer → 1.0 reader</td>
+<td>Accept; battery skipped</td>
+<td>Failed optional forward compatibility</td>
+</tr>
+<tr>
+<td>1.1 writer → 1.1 reader</td>
+<td>Accept; battery 100%</td>
+<td>New field not interpreted</td>
+</tr>
+<tr>
+<td>Unknown critical tag</td>
+<td>Reject</td>
+<td>Silent semantic misinterpretation</td>
+</tr>
+<tr>
+<td>Nonzero unknown required-feature mask</td>
+<td>Reject</td>
+<td>Unsupported required behavior</td>
+</tr>
+<tr>
+<td>Major version 2</td>
+<td>Reject under version-1 readers</td>
+<td>Unsafe grammar fallback</td>
+</tr>
+<tr>
+<td>Duplicate or unsorted tags</td>
+<td>Reject in <code>BVER</code></td>
+<td>Ambiguous field precedence</td>
+</tr>
+<tr>
+<td>Truncated field or trailing garbage</td>
+<td>Reject</td>
+<td>Out-of-bounds read or desynchronization</td>
+</tr>
+<tr>
+<td>Excessive declared payload length</td>
+<td>Reject before allocating</td>
+<td>Resource exhaustion</td>
+</tr>
+<tr>
+<td>Old-reader read–modify–write</td>
+<td>Reject claim of lossless preservation unless implemented</td>
+<td>Destruction of unknown fields</td>
+</tr>
+<tr>
+<td>Historical absent battery</td>
+<td>Report unknown, not zero</td>
+<td>Invented archive data</td>
+</tr>
+</tbody>
+</table>
+<p>The release gate should also include schema-compatibility review, historical file corpus tests, fuzzing, integration with actual queue or storage systems, and a rollback rehearsal. Error messages should be stable enough for operations without exposing record contents. A test that passes only when every component runs the newest version does not satisfy the mixed-version requirement.</p>
+</section><section aria-labelledby="heading-an-editorial-decision-framework-for-format-changes" id="an-editorial-decision-framework-for-format-changes"><h2 id="heading-an-editorial-decision-framework-for-format-changes">An Editorial Decision Framework for Format Changes</h2>
+<p>A proposed change can be evaluated in a short sequence. Begin by naming the writer populations, reader populations, and retention period. Identify the exact affected bytes and semantics. Then ask whether old readers can locate and skip the changed material; whether new readers can recover values from old records; whether anyone edits and resaves records; and whether the new information is necessary to interpret, authorize, or protect the old fields. If the feature is required rather than optional, do not label it compatible merely because a parser can skip it.</p>
+<p>Next choose a transition method: reuse the existing format with a new optional tag, introduce a negotiated critical feature, allocate a new record type or major version, or perform an explicit migration. Document absent-value behavior and permanent reservations of retired field identifiers. Write a compatibility matrix covering each deployed reader and writer. Test real historical fixtures, not only synthetic new examples. Finally, publish the migration and rollback policy together with the updated format contract, so that an operator can make a deployment decision without reverse-engineering implementation details.</p>
+<p>This framework is intentionally format-neutral. Avro schema resolution, Protobuf tag discipline, FlatBuffers table evolution, and a hand-designed TLV record implement different mechanisms, but each still requires the same answers about meaning, scope, and controlled coexistence.</p>
+</section><section aria-labelledby="heading-common-failures-and-troubleshooting-patterns" id="common-failures-and-troubleshooting-patterns"><h2 id="heading-common-failures-and-troubleshooting-patterns">Common Failures and Troubleshooting Patterns</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely explanation</th>
+<th>Investigation and correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New software rejects historical records</td>
+<td>Removed reader, changed field rule, or unsupported old version</td>
+<td>Inspect version marker; use archived fixtures; restore old-version adapter</td>
+</tr>
+<tr>
+<td>Old software parses new data but results change</td>
+<td>Reused tag, changed units, or changed default</td>
+<td>Compare schema history and semantic contract; introduce explicit version barrier</td>
+</tr>
+<tr>
+<td>Unknown fields disappear after a service hop</td>
+<td>Intermediate reader reconstructs only known fields</td>
+<td>Preserve raw record or implement bounded unknown-field passthrough</td>
+</tr>
+<tr>
+<td>A record parses on one platform only</td>
+<td>Native padding, endianness, or width assumption</td>
+<td>Replace native-memory layout with explicit wire definitions</td>
+</tr>
+<tr>
+<td>Reader allocates excessively on tiny input</td>
+<td>Untrusted declared length not bounded</td>
+<td>Enforce total and nested limits before allocating</td>
+</tr>
+<tr>
+<td>Checksum remains valid but data means something new</td>
+<td>Semantic change or attacker can recompute checksum</td>
+<td>Evaluate field meaning separately; use authentication where needed</td>
+</tr>
+<tr>
+<td>Upgrade succeeds but rollback fails</td>
+<td>New writer created older-reader-incompatible data</td>
+<td>Rehearse old-reader test before enabling new writer</td>
+</tr>
+<tr>
+<td>Reader accepts unsupported security flag</td>
+<td>Unknown feature bits silently ignored</td>
+<td>Reject unknown required bits and authenticate negotiation as needed</td>
+</tr>
+</tbody>
+</table>
+<p>The right troubleshooting order starts with evidence. Preserve the original bytes, document the exact reader and schema versions, confirm the signature and lengths, identify the claimed field interpretation, and reproduce the failure using a minimal fixture. Avoid repairing a purportedly corrupt file by hand before establishing whether the failure is caused by an outdated reader. A format-version problem is not the same as random bit corruption, even when the first symptom is that a decoder fails.</p>
+</section><section aria-labelledby="heading-worked-review-questions-and-exercises" id="worked-review-questions-and-exercises"><h2 id="heading-worked-review-questions-and-exercises">Worked Review Questions and Exercises</h2>
+<ol>
+<li>Define backward and forward compatibility in terms of <strong>reader and writer versions</strong>. Explain why the direction matters.</li>
+<li>A new writer appends two bytes to fixed-size records. What must the old reader's framing contract say for this to be safe?</li>
+<li>Explain why changing a measurement's unit can break compatibility without changing the byte encoding.</li>
+<li>Write the complete 18-byte <code>BVER</code> version-1.0 record and identify the exact length and version offsets.</li>
+<li>Identify which three bytes version 1.1 adds, and explain why a version-1.0 reader can skip them.</li>
+<li>What should a version-1.0 reader do with unknown tag <code>0x85</code>? Explain the critical bit and field identifier.</li>
+<li>Explain why a reader that skips unknown fields might still be unsafe as a read–modify–write gateway.</li>
+<li>Design a test that detects an incorrect assumption that a missing battery field means zero percent.</li>
+<li>Compare how Protobuf field numbers, Avro reader/writer schema resolution, and FlatBuffers table evolution support controlled change.</li>
+<li>Give one reason a schema registry's compatibility check cannot independently prove semantic safety.</li>
+<li>Outline an upgrade and rollback plan for a system with one new producer and three independently deployed consumers.</li>
+<li>Explain why neither a version marker nor a CRC can authenticate an untrusted producer.</li>
+</ol>
+<p><strong>Application exercise:</strong> Design a version-1.2 extension for <code>BVER</code> that records a two-byte pressure measurement. Choose an unused base identifier, unit and range, describe its absence semantics, and state whether older readers can safely skip it. Then create golden hex fixtures and add test assertions to the Python program. For a second exercise, design a genuinely <strong>critical</strong> extension that changes interpretation of temperature and demonstrate why the old reader must reject it. Treat the new contract as hypothetical and do not silently change the meaning of tag <code>02</code>.</p>
+</section><section aria-labelledby="heading-key-terms" id="key-terms"><h2 id="heading-key-terms">Key Terms</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backward compatibility</td>
+<td>New reader can handle supported older writer data</td>
+</tr>
+<tr>
+<td>Forward compatibility</td>
+<td>Older reader can handle constrained newer writer data</td>
+</tr>
+<tr>
+<td>Wire format</td>
+<td>Exact byte-level grammar used for interchange or storage</td>
+</tr>
+<tr>
+<td>Schema evolution</td>
+<td>Controlled change to named/numbered fields and their rules</td>
+</tr>
+<tr>
+<td>Major version</td>
+<td>Contract label often reserved for incompatible grammar/semantics</td>
+</tr>
+<tr>
+<td>Minor version</td>
+<td>Contract label often used for permitted incremental evolution</td>
+</tr>
+<tr>
+<td>TLV</td>
+<td>Type/tag, length, value encoding that can delimit fields</td>
+</tr>
+<tr>
+<td>Critical extension</td>
+<td>Required new semantics that must not be silently ignored</td>
+</tr>
+<tr>
+<td>Unknown-field preservation</td>
+<td>Retaining uninterpreted fields through a transformation</td>
+</tr>
+<tr>
+<td>Round-trip loss</td>
+<td>Information disappearing during decode/re-encode</td>
+</tr>
+<tr>
+<td>Schema resolution</td>
+<td>Rules relating writer representation to reader expectations</td>
+</tr>
+<tr>
+<td>Golden fixture</td>
+<td>Exact serialized example with independently documented meaning</td>
+</tr>
+<tr>
+<td>Downgrade</td>
+<td>Selection or forcing of an older format or weaker feature set</td>
+</tr>
+<tr>
+<td>Migration</td>
+<td>Deliberate transformation of historical data into a new format</td>
+</tr>
+<tr>
+<td>Provenance</td>
+<td>Evidence of origin, handling, transformations, and context</td>
+</tr>
+</tbody>
+</table>
+</section><section aria-labelledby="heading-related-encyclopedia-topics" id="related-encyclopedia-topics"><h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>The following pages are <strong>related readings</strong>, not subordinate children of this specialist article. Their scopes should remain distinct within the MGU hierarchy.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-serialization-and-schema-contracts">Binary Serialization and Schema Contracts</a> — Encoding contracts, field identifiers, and deserializers.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-file-headers-and-magic-numbers">Binary File Headers and Magic Numbers</a> — Recognition, version markers, and file structure.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-input-validation-and-safe-parsing">Binary Input Validation and Safe Parsing</a> — Adversarial input, bounds checks, and parser design.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/length-prefixes-delimiters-and-record-framing">Length Prefixes, Delimiters, and Record Framing</a> — Record boundaries and incremental reading.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/binary-checksums-crcs-and-integrity-checks">Binary Checksums, CRCs, and Integrity Checks</a> — Accidental corruption detection and authentication distinctions.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-modeling">Data Modeling</a> — Data semantics and logical representation.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a> — Pipelines, migration, and durable data operations.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/information-retrieval">Information Retrieval</a> — Index changes and search-system compatibility considerations.</li>
+</ul>
+</section><section aria-labelledby="heading-technical-references-and-further-reading" id="technical-references-and-further-reading"><h2 id="heading-technical-references-and-further-reading">Technical References and Further Reading</h2>
+<ol>
+<li>Google, <strong>Protocol Buffers: Language Guide (proto3)</strong>, <a href="https://protobuf.dev/programming-guides/proto3/">protobuf.dev/programming-guides/proto3/</a>. Field-number requirements, field presence, unknown fields, and compatibility considerations.</li>
+<li>Google, <strong>Protocol Buffers: Proto Best Practices</strong>, <a href="https://protobuf.dev/best-practices/dos-donts/">protobuf.dev/best-practices/dos-donts/</a>. Conservative field-evolution recommendations and reserved numbers.</li>
+<li>Google, <strong>Protocol Buffers: Language Guide (editions)</strong>, <a href="https://protobuf.dev/programming-guides/editions/">protobuf.dev/programming-guides/editions/</a>. Edition-specific declarations and compatibility rules.</li>
+<li>Apache Software Foundation, <strong>Apache Avro Specification</strong>, version 1.12.0, <a href="https://avro.apache.org/docs/1.12.0/specification/">avro.apache.org/docs/1.12.0/specification/</a>. Writer/reader schema resolution, defaults, aliases, and binary representation.</li>
+<li>Google, <strong>FlatBuffers: Schema Evolution</strong>, <a href="https://flatbuffers.dev/evolution/">flatbuffers.dev/evolution/</a>. Rules for adding, deprecating, and maintaining table fields.</li>
+<li>Bormann, C., and P. Hoffman, <strong>RFC 8949: Concise Binary Object Representation (CBOR)</strong>, IETF, December 2020, <a href="https://www.rfc-editor.org/rfc/rfc8949">rfc-editor.org/rfc/rfc8949</a>. General binary representation and deterministic encoding considerations.</li>
+<li><a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning 2.0.0</a>. A widely used software-version labeling convention; not a substitute for file-format compatibility specifications.</li>
+<li>Malone Global University Encyclopedia, <a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data</a> and the <a href="/library/encyclopedia/computer-science/data-systems/binary-data-articles/">Binary Data specialist directory</a>. Local foundational context and companion topics.</li>
+</ol>
+</section><section aria-labelledby="heading-concluding-principle-preserve-meaning-across-releases" id="concluding-principle-preserve-meaning-across-releases"><h2 id="heading-concluding-principle-preserve-meaning-across-releases">Concluding Principle: Preserve Meaning Across Releases</h2>
+<p>A successful binary-format evolution preserves <strong>meaning</strong>, not merely the ability of a parser to step through bytes. Stable field identifiers, explicit lengths, safe handling of unknown material, disciplined version barriers, and cross-version tests make compatible change possible. Equally important are defaults that do not invent historical facts, preservation rules that do not silently erase unknown data, and an operational rollout that recognizes independently updated readers and writers.</p>
+<p>The durable engineering principle is to make compatibility a deliberate contract with observable tests and an explicit failure mode. New optional fields may be safely skipped when the old interpretation remains complete; unknown required semantics must be rejected or negotiated. When change cannot be expressed within that contract, introduce a new version or migrate data with preserved provenance. Those rules turn binary files from fragile implementation artifacts into trustworthy records that can survive changing software.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== SHARED FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>
