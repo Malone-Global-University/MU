@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fixed-Point and Floating-Point Representation | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Detailed specialist guide to signed integers, Q-format fixed point, IEEE 754 binary32/binary64, scaling, rounding, underflow, overflow, numerical error, and engineering format selection.">
+<meta name="keywords" content="fixed point, floating point, IEEE 754, binary32, binary64, Q1.15, Q8.8, rounding, saturation, two's complement, significand, exponent, NaN, subnormal, numeric stability, quantization, overflow">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/fixed-point-and-floating-point-representation">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fixed-Point and Floating-Point Representation | MGU Encyclopedia">
+<meta property="og:description" content="Finite-precision numeric representation, roundoff, bit layouts and applied fixed-versus-floating design trade-offs.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/fixed-point-and-floating-point-representation">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero"><h1>Fixed-Point and Floating-Point Representation</h1>
+<p class="subtitle">Finite binary numbers in practice: integer scaling, Q formats, IEEE 754, precision, range, and numerically trustworthy computation.</p></section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#finite-word-computation-is-not-real-number-arithmetic">Finite-Word Computation Is Not Real-Number Arithmetic</a></li>
+<li><a href="#position-in-the-sixteen-article-unit">Position in the Sixteen-Article Unit</a></li>
+<li><a href="#the-representation-contract">The Representation Contract</a></li>
+<li><a href="#a-finite-set-cannot-store-every-real-number">A Finite Set Cannot Store Every Real Number</a></li>
+<li><a href="#unsigned-and-two-s-complement-integers">Unsigned and Two’s-Complement Integers</a></li>
+<li><a href="#integer-overflow-policies-are-language-and-machine-contracts">Integer Overflow Policies Are Language and Machine Contracts</a></li>
+<li><a href="#fixed-point-numbers-stored-codes-and-scale">Fixed-Point Numbers: Stored Codes and Scale</a></li>
+<li><a href="#q-format-conventions-must-be-declared">Q-Format Conventions Must Be Declared</a></li>
+<li><a href="#a-complete-q1-15-bit-level-example">A Complete Q1.15 Bit-Level Example</a></li>
+<li><a href="#encoding-fixed-point-values-and-rounding">Encoding Fixed-Point Values and Rounding</a></li>
+<li><a href="#uniform-spacing-resolution-and-relative-error">Uniform Spacing, Resolution, and Relative Error</a></li>
+<li><a href="#fixed-point-addition-and-subtraction">Fixed-Point Addition and Subtraction</a></li>
+<li><a href="#fixed-point-multiplication-and-scale-restoration">Fixed-Point Multiplication and Scale Restoration</a></li>
+<li><a href="#fixed-point-division-and-rescaling">Fixed-Point Division and Rescaling</a></li>
+<li><a href="#guard-bits-and-wide-accumulators">Guard Bits and Wide Accumulators</a></li>
+<li><a href="#saturation-wraparound-and-clipping-detection">Saturation, Wraparound, and Clipping Detection</a></li>
+<li><a href="#rounding-modes-and-negative-numbers">Rounding Modes and Negative Numbers</a></li>
+<li><a href="#quantization-bias-in-repeated-fixed-point-operations">Quantization Bias in Repeated Fixed-Point Operations</a></li>
+<li><a href="#range-resolution-allocation-for-a-fixed-word">Range–Resolution Allocation for a Fixed Word</a></li>
+<li><a href="#fixed-point-format-selection-procedure">Fixed-Point Format Selection Procedure</a></li>
+<li><a href="#why-floating-point-uses-a-movable-exponent">Why Floating-Point Uses a Movable Exponent</a></li>
+<li><a href="#the-ieee-754-binary-interchange-formats">The IEEE 754 Binary Interchange Formats</a></li>
+<li><a href="#exponent-bias-and-normal-number-decoding">Exponent Bias and Normal-Number Decoding</a></li>
+<li><a href="#an-explicit-binary32-encoding-walkthrough">An Explicit Binary32 Encoding Walkthrough</a></li>
+<li><a href="#binary64-precision-and-large-integers">Binary64 Precision and Large Integers</a></li>
+<li><a href="#subnormal-numbers-and-gradual-underflow">Subnormal Numbers and Gradual Underflow</a></li>
+<li><a href="#signed-zero-infinities-and-nans">Signed Zero, Infinities, and NaNs</a></li>
+<li><a href="#a-decimal-one-tenth-in-binary32-and-binary64">A Decimal One-Tenth in Binary32 and Binary64</a></li>
+<li><a href="#ulps-spacing-and-units-of-error">ULPs, Spacing, and Units of Error</a></li>
+<li><a href="#machine-epsilon-versus-unit-roundoff">Machine Epsilon Versus Unit Roundoff</a></li>
+<li><a href="#rounding-to-nearest-ties-to-even-in-binary-floating-point">Rounding-to-Nearest, Ties-to-Even in Binary Floating Point</a></li>
+<li><a href="#floating-point-overflow-and-directed-rounding">Floating-Point Overflow and Directed Rounding</a></li>
+<li><a href="#five-ieee-exception-categories">Five IEEE Exception Categories</a></li>
+<li><a href="#floating-point-addition-alignment-and-absorption">Floating-Point Addition, Alignment, and Absorption</a></li>
+<li><a href="#floating-point-arithmetic-is-not-generally-associative">Floating-Point Arithmetic Is Not Generally Associative</a></li>
+<li><a href="#accumulating-tenths-a-repeated-operation-example">Accumulating Tenths: A Repeated-Operation Example</a></li>
+<li><a href="#catastrophic-cancellation-and-significant-digits">Catastrophic Cancellation and Significant Digits</a></li>
+<li><a href="#conditioning-is-not-the-same-as-numerical-stability">Conditioning Is Not the Same as Numerical Stability</a></li>
+<li><a href="#summation-order-pairwise-addition-and-math-fsum">Summation Order, Pairwise Addition, and math.fsum</a></li>
+<li><a href="#compensated-summation-and-kahan-s-method">Compensated Summation and Kahan’s Method</a></li>
+<li><a href="#fused-multiply-add-and-intermediate-rounding">Fused Multiply–Add and Intermediate Rounding</a></li>
+<li><a href="#floating-point-comparisons-and-decision-boundaries">Floating-Point Comparisons and Decision Boundaries</a></li>
+<li><a href="#decimal-fixed-point-and-decimal-floating-point">Decimal Fixed-Point and Decimal Floating-Point</a></li>
+<li><a href="#converting-between-formats-and-double-rounding">Converting Between Formats and Double Rounding</a></li>
+<li><a href="#mixed-precision-and-block-floating-point">Mixed Precision and Block Floating Point</a></li>
+<li><a href="#performance-and-power-are-architecture-dependent">Performance and Power Are Architecture-Dependent</a></li>
+<li><a href="#determinism-reproducibility-and-portability">Determinism, Reproducibility, and Portability</a></li>
+<li><a href="#numerical-error-budget-and-physical-measurement">Numerical Error Budget and Physical Measurement</a></li>
+<li><a href="#a-representation-selection-matrix">A Representation Selection Matrix</a></li>
+<li><a href="#testing-strategy-for-numeric-formats">Testing Strategy for Numeric Formats</a></li>
+<li><a href="#worked-investigation-1-selecting-a-temperature-controller-format">Worked Investigation 1: Selecting a Temperature-Controller Format</a></li>
+<li><a href="#worked-investigation-2-an-exact-currency-ledger">Worked Investigation 2: An Exact Currency Ledger</a></li>
+<li><a href="#worked-investigation-3-q1-15-audio-mixing-and-clipping">Worked Investigation 3: Q1.15 Audio Mixing and Clipping</a></li>
+<li><a href="#worked-investigation-4-a-large-integer-converted-to-binary32">Worked Investigation 4: A Large Integer Converted to Binary32</a></li>
+<li><a href="#worked-investigation-5-cancellation-in-a-scientific-sum">Worked Investigation 5: Cancellation in a Scientific Sum</a></li>
+<li><a href="#worked-investigation-6-a-control-threshold-near-unity">Worked Investigation 6: A Control Threshold Near Unity</a></li>
+<li><a href="#worked-investigation-7-subnormal-sensitivity">Worked Investigation 7: Subnormal Sensitivity</a></li>
+<li><a href="#worked-investigation-8-fixed-point-dot-products-and-widened-sums">Worked Investigation 8: Fixed-Point Dot Products and Widened Sums</a></li>
+<li><a href="#integrated-numerical-representation-decision-framework">Integrated Numerical Representation Decision Framework</a></li>
+<li><a href="#common-failure-modes-and-their-corrections">Common Failure Modes and Their Corrections</a></li>
+<li><a href="#review-questions">Review Questions</a></li>
+<li><a href="#review-questions-and-model-answers">Review Questions and Model Answers</a></li>
+<li><a href="#glossary-of-numerical-representation">Glossary of Numerical Representation</a></li>
+<li><a href="#other-specialist-articles-in-analog-and-digital-computation">Other Specialist Articles in Analog and Digital Computation</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#references-and-further-reading">References and Further Reading</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="finite-word-computation-is-not-real-number-arithmetic" aria-labelledby="heading-finite-word-computation-is-not-real-number-arithmetic">
+<h2 id="heading-finite-word-computation-is-not-real-number-arithmetic">Finite-Word Computation Is Not Real-Number Arithmetic</h2>
+<p>A physical computer stores a finite string of bits. The mathematical number intended by that string depends on an encoding rule, a scale, an exponent convention, and the operation being performed. The same sixteen bits can be interpreted as an unsigned count, a signed integer, a Q-format fractional value, or part of a floating-point word. None of those interpretations changes the storage cells themselves; it changes what operations and numerical claims are valid.</p>
+<p><strong>Fixed-point representation</strong> maps an integer code to a value using a declared scale, producing uniformly spaced representable values within a bounded interval. <strong>Floating-point representation</strong> stores an exponent and a significand, concentrating representable values near zero and spacing them farther apart at larger magnitudes. Signed integers are a third important baseline. This article compares their range, granularity, overflow, rounding, arithmetic and error behavior rather than treating one type as inherently accurate or universally faster.</p>
+<p>Readers should distinguish three levels: a real-world physical quantity, the mathematical or statistical model chosen for it, and the stored numerical approximation. Selecting binary64 rather than binary32 can reduce one source of arithmetic error, but it cannot repair a biased sensor, a missing calibration constant, or an incorrect mathematical model.</p>
+</section>
+<section id="position-in-the-sixteen-article-unit" aria-labelledby="heading-position-in-the-sixteen-article-unit">
+<h2 id="heading-position-in-the-sixteen-article-unit">Position in the Sixteen-Article Unit</h2>
+<p>This is <strong>article 6 of 16</strong> under <a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/">Analog and Digital Computation — Sub-Articles</a> within <a href="/library/encyclopedia/computer-science/computational-foundations/">Computational Foundations</a>. The preceding <a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/digital-switching-and-state-representation">Digital Switching and State Representation</a> discusses how physical voltage levels become reliably stored bits. This article asks what those bits mean as numbers and what changes when arithmetic manipulates them.</p>
+<p>The next article, <a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/sampling-theory-and-aliasing">Sampling Theory and Aliasing</a>, treats temporal sampling. Later articles address ADCs, DACs, quantization noise and calibration. The broader <a href="/library/encyclopedia/computer-science/computational-foundations/data-representation">Data Representation</a> unit owns general serialization and cross-media representation; the present specialist's distinct responsibility is <em>numerical consequences</em>—not a general inventory of data types. Code here is illustrative Python with explicit assumptions, not a claim that arbitrary target DSP hardware uses Python's overflow or rounding rules.</p>
+</section>
+<section id="the-representation-contract" aria-labelledby="heading-the-representation-contract">
+<h2 id="heading-the-representation-contract">The Representation Contract</h2>
+<p>Before selecting a number format, specify the quantity's unit, minimum and maximum allowed values, smallest meaningful change, mathematical operations, error tolerance, overflow policy, and transfer or storage ABI. Without these properties, a statement such as “use a 16-bit value” is incomplete: sixteen bits might store the integer range −32,768 through 32,767, the Q1.15 fractional interval −1 through almost +1, or a binary16 floating-point word with very different spacing.</p>
+<p>For a telemetry counter, exact integer increment and wrap policy may dominate. For audio samples, fractional fixed-point codes may match the converter and DSP datapath. For a scientific solver whose state spans orders of magnitude, floating-point dynamic range may dominate. A rigorous design review documents both <em>representation invariants</em> (the mapping from bits to value) and <em>operational invariants</em> (how arithmetic handles an out-of-range or nonexact result).</p>
+<table><caption>High-level representation contracts; operations and available hardware vary.</caption><thead><tr><th scope="col">Question</th><th scope="col">Fixed-point answer</th><th scope="col">Floating-point answer</th></tr></thead><tbody><tr><td>How are bits interpreted?</td><td>Integer code multiplied by a fixed scale</td><td>Sign, biased exponent and significand</td></tr><tr><td>How does spacing vary?</td><td>Constant quantum, away from clipping</td><td>Exponent-dependent; constant relative scale for normals</td></tr><tr><td>What is the dominant range issue?</td><td>Declared endpoints and overflow</td><td>Exponent range, infinity and underflow</td></tr><tr><td>What must be specified?</td><td>Word width, signedness, scale, rounding and overflow</td><td>Format, rounding mode, handling of exceptional values</td></tr></tbody></table>
+</section>
+<section id="a-finite-set-cannot-store-every-real-number" aria-labelledby="heading-a-finite-set-cannot-store-every-real-number">
+<h2 id="heading-a-finite-set-cannot-store-every-real-number">A Finite Set Cannot Store Every Real Number</h2>
+<p>A w-bit word has at most 2<sup>w</sup> distinct bit patterns. An unbounded continuum of real values therefore cannot be represented one-to-one by any finite word. The representation designer allocates those patterns to a finite set of values and sometimes to special states such as not-a-number. A numerical calculation whose exact result is between representable values must choose an approximation by a specified rounding rule or retain a wider intermediate.</p>
+<p>Two distinct issues follow. <strong>Quantization error</strong> is introduced when a value is mapped into a finite grid. <strong>Arithmetic rounding error</strong> occurs when an operation's exact mathematical result cannot be stored in the destination format. These errors can interact with conditioning, feedback and repeated steps. A format with finer spacing does not automatically guarantee the accuracy of a whole algorithm; the arrangement of operations also matters.</p>
+</section>
+<section id="unsigned-and-two-s-complement-integers" aria-labelledby="heading-unsigned-and-two-s-complement-integers">
+<h2 id="heading-unsigned-and-two-s-complement-integers">Unsigned and Two’s-Complement Integers</h2>
+<p>A w-bit unsigned integer represents 0 through 2<sup>w</sup>−1. A conventional w-bit two’s-complement signed integer represents −2<sup>w−1</sup> through 2<sup>w−1</sup>−1. The leading bit participates in the weighted two’s-complement encoding and is not a detached sign bit in the sign-magnitude sense. The bit string <code>11111111</code> represents 255 as unsigned 8-bit or −1 as signed 8-bit.</p>
+<p>A signed word still contains only integers. It can encode fractional measurements <em>if</em> their units are scaled, such as storing cents rather than dollars or microseconds rather than seconds. Once a scale is adopted, the interpretation becomes fixed-point. The integer arithmetic hardware often remains the same, but multiplication and division must account for scale, and two’s-complement wrap is not always the correct application-level overflow policy.</p>
+<pre><code class="language-python">def signed_twos_complement(raw, width):
+    raw &amp;= (1 &lt;&lt; width) - 1
+    return raw - (1 &lt;&lt; width) if raw &amp; (1 &lt;&lt; (width-1)) else raw
+assert signed_twos_complement(0b11111111, 8) == -1
+assert signed_twos_complement(0b01111111, 8) == 127
+assert signed_twos_complement(0b10000000, 8) == -128</code></pre>
+</section>
+<section id="integer-overflow-policies-are-language-and-machine-contracts" aria-labelledby="heading-integer-overflow-policies-are-language-and-machine-contracts">
+<h2 id="heading-integer-overflow-policies-are-language-and-machine-contracts">Integer Overflow Policies Are Language and Machine Contracts</h2>
+<p>If an exact addition falls outside the destination integer range, an implementation must specify what happens. Hardware may retain only low bits, producing modular <em>wraparound</em>. A saturating arithmetic instruction instead clamps to the range limit. Checked arithmetic returns an error or traps. A widening operation may produce a correct result in a larger representation. These are semantically different policies, not interchangeable implementations of the same mathematical addition.</p>
+<p>For an 8-bit signed word, 127+1 wraps to −128 under two’s-complement modular interpretation, saturates to +127 under signed saturation, and is rejected by a checked operation. Languages also differ: Python integers grow as needed, while C signed overflow has undefined behavior. Never import an overflow rule from a demonstration language into a hardware interface or control-system safety case without checking the target specification.</p>
+<pre><code class="language-python">def wrap_signed(x, width):
+    mask = (1 &lt;&lt; width) - 1
+    raw = x &amp; mask
+    return raw - (1 &lt;&lt; width) if raw &gt;= (1 &lt;&lt; (width-1)) else raw
+def saturate_signed(x, width):
+    lo, hi = -(1 &lt;&lt; (width-1)), (1 &lt;&lt; (width-1))-1
+    return min(hi, max(lo, x))
+assert wrap_signed(128, 8) == -128
+assert saturate_signed(128, 8) == 127</code></pre>
+</section>
+<section id="fixed-point-numbers-stored-codes-and-scale" aria-labelledby="heading-fixed-point-numbers-stored-codes-and-scale">
+<h2 id="heading-fixed-point-numbers-stored-codes-and-scale">Fixed-Point Numbers: Stored Codes and Scale</h2>
+<p>Let q be a signed or unsigned integer code and let Δ be a positive scale. The decoded value is <code>x = q × Δ</code>. For a binary fractional format with f fractional bits, Δ = 2<sup>−f</sup>. For a decimal fixed-point representation of cents, Δ = 0.01 dollar. A binary point is generally <em>implied</em> by a contract; it does not occupy a storage bit. The same stored code decoded with another Δ means another physical or mathematical value.</p>
+<p>A fixed point stores a uniform value grid in its declared interval. If a signed sixteen-bit code is scaled by 1/256, the spacing is exactly 1/256 and the representable range is −128 through 127+255/256. If that same code were decoded with scale 1/32768, the interval would instead be −1 through 1−1/32768. This tradeoff is deliberate: each fractional bit doubles fractional resolution but halves the magnitude range for fixed word width.</p>
+<pre><code class="language-python">def decode_fixed(q, fractional_bits):
+    return q / (1 &lt;&lt; fractional_bits)
+assert decode_fixed(384,8) == 1.5
+assert decode_fixed(-128,8) == -0.5
+assert decode_fixed(384,15) != 1.5</code></pre>
+</section>
+<section id="q-format-conventions-must-be-declared" aria-labelledby="heading-q-format-conventions-must-be-declared">
+<h2 id="heading-q-format-conventions-must-be-declared">Q-Format Conventions Must Be Declared</h2>
+<p>The notation Qm.n is common in digital signal processing but not entirely uniform. Under one convention, m counts all integer-side bits including the sign bit, and n counts fractional bits; then a signed Q1.15 word has sixteen bits total. Other references exclude the sign bit from m. Unqualified phrases such as “Q15” can refer to a particular 16-bit fractional storage convention. Thus, always document <em>total width, signedness, fractional bits, scale and endpoints</em>, even when a familiar Q label is used.</p>
+<p>In the signed 16-bit, 15-fractional-bit convention, value = signed_code/32768. The minimum code −32768 encodes exactly −1 and the maximum +32767 encodes 0.999969482421875. There is no positive +1 value in that format. Forgetting this asymmetry can cause saturation or sign errors in mixers, controllers and coefficient normalization.</p>
+<pre><code class="language-python">q15_min, q15_max = -(1&lt;&lt;15), (1&lt;&lt;15)-1
+assert q15_min/(1&lt;&lt;15) == -1
+assert q15_max/(1&lt;&lt;15) == 1 - 2**-15
+assert 16384/(1&lt;&lt;15) == 0.5</code></pre>
+</section>
+<section id="a-complete-q1-15-bit-level-example" aria-labelledby="heading-a-complete-q1-15-bit-level-example">
+<h2 id="heading-a-complete-q1-15-bit-level-example">A Complete Q1.15 Bit-Level Example</h2>
+<p>Consider the real value 0.75. Multiplying by 2<sup>15</sup> gives integer code 24,576, or hexadecimal <code>0x6000</code>. The 16-bit binary pattern <code>0110 0000 0000 0000</code> thus decodes exactly to 24,576/32,768=0.75. The negative value −0.5 corresponds to signed code −16,384 and the 16-bit two’s-complement pattern <code>1100 0000 0000 0000</code>, hexadecimal <code>0xC000</code>.</p>
+<p>These examples show why a bit dump without a type contract is insufficient: the bit pattern 0xC000 means 49,152 as unsigned, −16,384 as two’s-complement signed, or −0.5 when additionally scaled by 2<sup>−15</sup>. For data exchange, publish byte order and field width separately from the numerical scale. An endian conversion changes byte arrangement, not the underlying mathematical encoding.</p>
+<pre><code class="language-python">q_pos = round(0.75 * (1&lt;&lt;15))
+q_neg = round(-0.5 * (1&lt;&lt;15))
+assert (q_pos, hex(q_pos)) == (24576, &#x27;0x6000&#x27;)
+assert (q_neg, hex(q_neg &amp; 0xFFFF)) == (-16384, &#x27;0xc000&#x27;)</code></pre>
+</section>
+<section id="encoding-fixed-point-values-and-rounding" aria-labelledby="heading-encoding-fixed-point-values-and-rounding">
+<h2 id="heading-encoding-fixed-point-values-and-rounding">Encoding Fixed-Point Values and Rounding</h2>
+<p>To encode a real x using quantum Δ, compute the ideal integer code x/Δ and choose a neighboring integer using the rounding rule. Under round-to-nearest, ties-to-even, the selected integer is the nearer code, with exact halfway cases selecting an even code. The signed word must then be checked against its representable endpoints. Simply calling a cast to integer is not necessarily correct: integer conversion commonly truncates toward zero, which introduces a different signed error pattern.</p>
+<p>For values within range and away from other exceptional conditions, nearest rounding yields an absolute representation error no larger than Δ/2. This bound applies to a single conversion, not automatically to a long signal-processing chain. Clipping and saturation can produce errors much larger than Δ/2, and repeated biased truncation can accumulate a systematic shift. Ties-to-even minimizes one common tie bias but does not guarantee every data distribution has zero mean error.</p>
+<pre><code class="language-python">def encode_fixed_nearest(x, f, width=16):
+    code = round(x * (1&lt;&lt;f))
+    lower, upper = -(1&lt;&lt;(width-1)), (1&lt;&lt;(width-1))-1
+    if code &lt; lower or code &gt; upper:
+        raise OverflowError(&#x27;fixed-point value out of range&#x27;)
+    return code
+assert encode_fixed_nearest(0.75,15)==24576
+assert encode_fixed_nearest(-0.5,15)==-16384
+assert abs(encode_fixed_nearest(.3,15)/(1&lt;&lt;15)-.3)&lt;=2**-16</code></pre>
+</section>
+<section id="uniform-spacing-resolution-and-relative-error" aria-labelledby="heading-uniform-spacing-resolution-and-relative-error">
+<h2 id="heading-uniform-spacing-resolution-and-relative-error">Uniform Spacing, Resolution, and Relative Error</h2>
+<p>For a fixed scale Δ, every pair of adjacent codes is separated by Δ throughout the nominal range. Consequently, fixed-point representation offers a uniform <em>absolute</em> resolution. Its <em>relative</em> error can nevertheless grow when the true value is small: an error of one-half a quantum is a tiny percentage of a large input but potentially a large percentage of a value near zero. At exactly zero, relative error based on division by the true value is not defined.</p>
+<p>This property may be desirable when the engineering contract states an absolute accuracy tolerance, such as a specified distance increment or currency subunit. It may be a poor match when the task must preserve an approximately constant number of meaningful digits over an enormous magnitude range. The design question is not whether fixed-point is precise; it is whether its chosen Δ is fine enough at the smallest important signal while its range remains large enough for peak values and transients.</p>
+<pre><code class="language-python">step=2**-8
+assert step==1/256
+for raw in (-100,0,100):
+    assert (raw+1)*step - raw*step == step</code></pre>
+</section>
+<section id="fixed-point-addition-and-subtraction" aria-labelledby="heading-fixed-point-addition-and-subtraction">
+<h2 id="heading-fixed-point-addition-and-subtraction">Fixed-Point Addition and Subtraction</h2>
+<p>When two operands use the same scale Δ, adding their stored integer codes and decoding preserves the same scale: (q<sub>a</sub>+q<sub>b</sub>)Δ = a+b. No rescaling is needed, although an extra carry bit may be necessary. When scales differ, convert one operand into the other's scale or promote both to a common wider format. Combining 16-bit raw codes from different Q formats as if they represented the same unit can silently corrupt a result without any arithmetic exception.</p>
+<p>For 16-bit signed Q1.15, the sum of 0.75 and 0.5 is 1.25, which cannot be stored even though the mathematical addition is uncomplicated. A saturation policy produces 0.999969…; modular wrap instead produces −0.75. Widening to a 17-bit or otherwise larger accumulator can retain the exact combined raw code. The correct policy depends on downstream numerical guarantees and whether clipping is semantically acceptable.</p>
+<pre><code class="language-python">a,b = 24576,16384  # Q1.15 -&gt; .75 and .5
+wide_sum = a+b
+assert wide_sum==40960 and wide_sum/(1&lt;&lt;15)==1.25
+assert wrap_signed(wide_sum,16)/(1&lt;&lt;15)==-0.75
+assert saturate_signed(wide_sum,16)==32767</code></pre>
+</section>
+<section id="fixed-point-multiplication-and-scale-restoration" aria-labelledby="heading-fixed-point-multiplication-and-scale-restoration">
+<h2 id="heading-fixed-point-multiplication-and-scale-restoration">Fixed-Point Multiplication and Scale Restoration</h2>
+<p>If a=q<sub>a</sub>2<sup>−f</sup> and b=q<sub>b</sub>2<sup>−f</sup>, then ab=(q<sub>a</sub>q<sub>b</sub>)2<sup>−2f</sup>. The raw integer product therefore has <em>twice</em> the fractional-bit count before rescaling. To return to the original format, round or shift the double-width product by f bits and then check the output range. Throwing away the lower bits without a stated rule is equivalent to committing to a particular rounding bias.</p>
+<p>For instance, 0.5 in Q1.15 has code 16,384 and −0.25 has code −8,192. Their raw product is −134,217,728; division by 32,768 yields the destination code −4,096, decoding to −0.125. Signed multiplication must use a wide enough intermediate to hold the full product. Optimized DSP multiply-accumulate instructions may offer special rounding or saturation; consult the actual ISA rather than treating all variants as equivalent.</p>
+<pre><code class="language-python">qa,qb = 16384,-8192
+product_wide = qa*qb
+result = product_wide//(1&lt;&lt;15)  # exact shift in this example
+assert (product_wide, result) == (-134217728,-4096)
+assert result/(1&lt;&lt;15)==-0.125</code></pre>
+</section>
+<section id="fixed-point-division-and-rescaling" aria-labelledby="heading-fixed-point-division-and-rescaling">
+<h2 id="heading-fixed-point-division-and-rescaling">Fixed-Point Division and Rescaling</h2>
+<p>Fixed-point division requires both overflow and precision planning. With operands in the same scale and desired result in that scale, a typical integer construction computes the numerator q<sub>a</sub>×2<sup>f</sup>, divides by q<sub>b</sub>, then rounds to the chosen destination code. The numerator must be wide enough to prevent overflow before the division. The implementation also needs a policy for a zero denominator, signed minimum divided by −1, and a quotient that exceeds the result range.</p>
+<p>A division routine based on truncation toward zero will differ from a mathematically nearest-rounding implementation for non-integral quotients. Signed integer division in Python uses <code>//</code> for floor, not truncation toward zero, and an arithmetic right shift on negative values has similar directional implications. Specify rounding in mathematical terms before choosing an instruction sequence. Tests should include positive and negative half cases, near-zero denominators and the representable endpoints.</p>
+<pre><code class="language-python">from fractions import Fraction
+a,b=8192,16384   # 0.25 and 0.5 as Q1.15
+quotient_code=round(Fraction(a*(1&lt;&lt;15),b))
+assert quotient_code==16384
+assert quotient_code/(1&lt;&lt;15)==0.5</code></pre>
+</section>
+<section id="guard-bits-and-wide-accumulators" aria-labelledby="heading-guard-bits-and-wide-accumulators">
+<h2 id="heading-guard-bits-and-wide-accumulators">Guard Bits and Wide Accumulators</h2>
+<p>Multiply-accumulate filters often require much more headroom than any single input. A sequence of N same-sign Q1.15 products can sum to a magnitude roughly N times one product, depending on coefficients and signals. Accumulating in the destination word and clipping after every addition discards information and can cause strong nonlinear distortion. A common design instead uses a wide accumulator, delays rounding and applies one final, documented conversion at the output boundary.</p>
+<p>For signed integers, a sum of N bounded positive terms may require approximately ⌈log<sub>2</sub>N⌉ additional magnitude bits beyond the per-term bound, plus attention to signs and intermediate products. That bit-count is only a coarse design starting point: coefficient gains, input correlation, transient conditions and feedback stability determine the real peak. A safe fixed-point signal path establishes worst-case or defensible probabilistic bounds for every intermediate, not only for the final result.</p>
+<pre><code class="language-python"># Four products can exceed signed 16-bit code range, but wide accumulation preserves them.
+partials=[20000,20000,20000,20000]
+wide=sum(partials)
+assert wide==80000 and wide&gt;32767
+assert saturate_signed(wide,16)==32767</code></pre>
+</section>
+<section id="saturation-wraparound-and-clipping-detection" aria-labelledby="heading-saturation-wraparound-and-clipping-detection">
+<h2 id="heading-saturation-wraparound-and-clipping-detection">Saturation, Wraparound, and Clipping Detection</h2>
+<p>For control and signal chains, saturation can be safer and more intuitive than modular wrap, because a positive physical quantity does not suddenly become negative after reaching the maximum code. Yet saturation is nonlinear: it introduces distortion, can invalidate conservation relationships, and may drive feedback loops into prolonged limit behavior. Wrap can be appropriate for modular counters or cryptographic primitives but often unacceptable for audio amplitude, motor torque or an actuator command.</p>
+<p>A design should record whether overflow is <em>prevented</em>, <em>detected</em>, <em>saturated</em>, or <em>wrapped</em>, and identify the point in the pipeline at which the policy applies. A status flag or counter for saturation events can be operationally useful because output clipping may otherwise masquerade as a valid but flattened signal. If a safety-critical output is bounded, the bound needs a physical-units interpretation rather than an unexplained raw integer threshold.</p>
+</section>
+<section id="rounding-modes-and-negative-numbers" aria-labelledby="heading-rounding-modes-and-negative-numbers">
+<h2 id="heading-rounding-modes-and-negative-numbers">Rounding Modes and Negative Numbers</h2>
+<p>Arithmetic implementations commonly distinguish nearest-even, nearest-away, toward zero, toward positive infinity and toward negative infinity. For a fixed quantum, these determine which code is selected from adjacent candidates. Negative values are especially revealing: floor(−1.2)=−2, truncation toward zero gives −1, and round-to-nearest gives −1 for this value. Exact ties such as −1.5 require a tie rule; nearest-even gives −2 while ties-away-from-zero also gives −2 here, but the rules differ at −2.5.</p>
+<p>Never assume an arithmetic shift or signed division automatically implements nearest rounding. In many two’s-complement machines a right shift replicates the sign bit and acts like floor division by a power of two. A conversion chosen merely for speed may produce a measurable systematic error in repeated calculations. Tests of a rounding routine should include zero, positive and negative values, both sides of half-integers, and extreme codes.</p>
+<pre><code class="language-python">import math
+assert math.floor(-1.2)==-2
+assert math.trunc(-1.2)==-1
+assert round(-2.5)==-2
+assert round(-1.5)==-2
+assert -3//2 == -2  # floor, not truncate toward zero</code></pre>
+</section>
+<section id="quantization-bias-in-repeated-fixed-point-operations" aria-labelledby="heading-quantization-bias-in-repeated-fixed-point-operations">
+<h2 id="heading-quantization-bias-in-repeated-fixed-point-operations">Quantization Bias in Repeated Fixed-Point Operations</h2>
+<p>Suppose a control increment is 0.003 in physical units and a fixed-point accumulator uses Δ=1/256≈0.00390625. Rounding the increment once to one quantum gives 0.00390625; after a thousand repetitions, the stored trajectory advances about 3.90625 instead of the ideal 3.00000 if the same rounded increment is added each time. The discrepancy is not the same as independently rounding a final sum only once. This illustrates <em>systematic per-step bias</em>, not an inevitable property of all fixed-point implementations.</p>
+<p>Mitigations include using finer internal scale, retaining fractional residue, deriving the accumulated state from a higher-precision reference, or choosing a numerically stable discretization. Stochastic rounding is another technique in selected low-precision settings, but changes reproducibility and error statistics. A designer should inspect the entire recurrence and its stability, not rely on the fact that each individual conversion had less than half a quantum of error.</p>
+<pre><code class="language-python">step=1/256
+per_step=round(.003/step)*step
+approx_total=1000*per_step
+ideal_total=1000*.003
+assert abs(approx_total-ideal_total-0.90625)&lt;1e-12</code></pre>
+</section>
+<section id="range-resolution-allocation-for-a-fixed-word" aria-labelledby="heading-range-resolution-allocation-for-a-fixed-word">
+<h2 id="heading-range-resolution-allocation-for-a-fixed-word">Range–Resolution Allocation for a Fixed Word</h2>
+<p>For signed w-bit two’s-complement storage with f fractional bits, the minimum is −2<sup>w−1−f</sup>, the maximum is 2<sup>w−1−f</sup>−2<sup>−f</sup>, and the grid spacing is 2<sup>−f</sup>. Choosing more fractional bits improves the absolute quantum while reducing the unscaled magnitude range. For example, 16-bit signed Q8.8 has scale 1/256 and range [−128, 127.99609375], whereas Q1.15 has much finer scale 1/32768 but only the [−1, nearly +1] interval.</p>
+<p>When selecting f, first bound peak and transient magnitudes, then reserve an explicit margin rather than choosing the narrowest range that holds nominal data. Next check whether the resulting step is small enough at the low end of the meaningful signal. If both requirements cannot be satisfied in the word width, a wider format, block scaling, floating-point format, or algorithmic reformulation is required. Scaling cannot conjure more distinct representations from the same number of codes.</p>
+<table><caption>Examples use 16-bit two’s-complement codes and count the sign bit in the integer-side width.</caption><thead><tr><th scope="col">Signed 16-bit format</th><th scope="col">Scale</th><th scope="col">Minimum</th><th scope="col">Maximum</th><th scope="col">Quantum</th></tr></thead><tbody><tr><td>Integer (f=0)</td><td>1</td><td>−32768</td><td>32767</td><td>1</td></tr><tr><td>Q8.8 (f=8)</td><td>2<sup>−8</sup></td><td>−128</td><td>127.99609375</td><td>0.00390625</td></tr><tr><td>Q1.15 (f=15)</td><td>2<sup>−15</sup></td><td>−1</td><td>0.999969482421875</td><td>0.000030517578125</td></tr></tbody></table>
+</section>
+<section id="fixed-point-format-selection-procedure" aria-labelledby="heading-fixed-point-format-selection-procedure">
+<h2 id="heading-fixed-point-format-selection-procedure">Fixed-Point Format Selection Procedure</h2>
+<p>A repeatable selection procedure begins with units and required physical range, including fault transients and start-up states. Determine the maximum tolerable absolute quantization error, not merely a vague number of decimal digits. Under nearest rounding, Δ/2 is a useful conversion bound when there is no clipping. Then calculate the word width needed to satisfy both range and resolution with margin; a wider intermediate may still be needed for multiplications, sums or state updates.</p>
+<p>Finally specify rounding, saturation, ABI, test vectors and how conversion error enters the application error budget. Evaluate the worst-case signal path and the typical workload separately. If precision requirements vary dramatically with magnitude, floating-point may reduce engineering complexity. If the desired unit quantum is decimal, a decimal fixed-point integer in cents or thousandths can be clearer than a binary fractional Q-format, provided it has sufficient range and reliable decimal conversion.</p>
+</section>
+<section id="why-floating-point-uses-a-movable-exponent" aria-labelledby="heading-why-floating-point-uses-a-movable-exponent">
+<h2 id="heading-why-floating-point-uses-a-movable-exponent">Why Floating-Point Uses a Movable Exponent</h2>
+<p>A floating-point number uses a sign, a significand and a scale determined by an exponent. In a conceptual binary format, a nonzero normal value has the form (−1)<sup>s</sup> × (1.fraction)<sub>2</sub> × 2<sup>e</sup>. The significand contributes a fixed number of precision bits, while the exponent shifts the effective binary point. Nearby values have spacing determined by their exponent range rather than one global quantum.</p>
+<p>This is why a floating format can represent tiny and enormous values with the same word width, yet cannot necessarily distinguish small increments added to very large values. Floating point typically maintains a roughly fixed <em>relative</em> precision for normal values but not a fixed absolute precision. It also reserves bit patterns for zero, subnormal values, infinities and NaNs. Engineering reasoning must account for all these categories rather than assuming every bit pattern denotes an ordinary finite real number.</p>
+</section>
+<section id="the-ieee-754-binary-interchange-formats" aria-labelledby="heading-the-ieee-754-binary-interchange-formats">
+<h2 id="heading-the-ieee-754-binary-interchange-formats">The IEEE 754 Binary Interchange Formats</h2>
+<p>IEEE 754 defines widely used binary interchange formats. <strong>binary32</strong> contains 1 sign bit, 8 exponent bits and 23 stored trailing significand bits. Its normal significand has 24 bits of precision because the leading 1 is implicit. <strong>binary64</strong> contains 1 sign bit, 11 exponent bits and 52 stored trailing significand bits, providing 53 bits of normal precision. These are the standard binary32 and binary64 <em>storage encodings</em>; other formats and extended computational environments exist.</p>
+<p>The term “single precision” ordinarily refers to binary32 and “double precision” to binary64 in modern programming discussions, but a language's type semantics can have platform-specific details. In particular, Python's built-in float maps to an IEEE binary64 value on most mainstream platforms. A C float typically uses binary32 and C double typically binary64, but a specification or ABI should be consulted. Python code below uses <code>struct.pack</code> to construct binary32 encodings explicitly instead of pretending native Python float operations round to binary32 after every operation.</p>
+<table><caption>Interchange encodings as defined by IEEE 754; decimal approximations are intentionally not substitutes for the exact powers.</caption><thead><tr><th scope="col">Property</th><th scope="col">IEEE binary32</th><th scope="col">IEEE binary64</th></tr></thead><tbody><tr><td>Total bits</td><td>32</td><td>64</td></tr><tr><td>Sign/exponent/fraction field bits</td><td>1 / 8 / 23</td><td>1 / 11 / 52</td></tr><tr><td>Normal significand precision</td><td>24 bits</td><td>53 bits</td></tr><tr><td>Exponent bias</td><td>127</td><td>1023</td></tr><tr><td>Smallest positive normal</td><td>2<sup>−126</sup></td><td>2<sup>−1022</sup></td></tr><tr><td>Smallest positive subnormal</td><td>2<sup>−149</sup></td><td>2<sup>−1074</sup></td></tr><tr><td>Largest finite normal</td><td>(2 − 2<sup>−23</sup>) × 2<sup>127</sup></td><td>(2 − 2<sup>−52</sup>) × 2<sup>1023</sup></td></tr></tbody></table>
+</section>
+<section id="exponent-bias-and-normal-number-decoding" aria-labelledby="heading-exponent-bias-and-normal-number-decoding">
+<h2 id="heading-exponent-bias-and-normal-number-decoding">Exponent Bias and Normal-Number Decoding</h2>
+<p>Let E be the integer interpreted from the exponent field and F the integer from the stored fraction field. For binary32, normal exponents have 1 ≤ E ≤ 254. Their unbiased exponent is e=E−127, and the decoded value is (−1)<sup>s</sup> × (1+F/2<sup>23</sup>) × 2<sup>E−127</sup>. For binary64, normal E ranges from 1 to 2046, its bias is 1023, and the fraction denominator is 2<sup>52</sup>.</p>
+<p>A stored fraction field of all zeros represents an exact power of two for a normal number; the implicit leading 1 is what makes that interpretation possible. The exponent field at all zeros and all ones is reserved for special decoding cases. A raw bit-mask decoder must test these fields before applying the normal formula. Using the biased exponent unadjusted in a scaling formula produces errors of many orders of magnitude.</p>
+<pre><code class="language-python">def decode_normal_binary32_bits(bits):
+    sign, exponent = bits&gt;&gt;31, (bits&gt;&gt;23)&amp;255
+    fraction = bits&amp;((1&lt;&lt;23)-1)
+    if not 1&lt;=exponent&lt;=254:
+        raise ValueError(&#x27;not a normal binary32 encoding&#x27;)
+    return (-1)**sign * (1+fraction/(1&lt;&lt;23))*2**(exponent-127)
+assert decode_normal_binary32_bits(0x3f800000)==1.0
+assert decode_normal_binary32_bits(0x40000000)==2.0
+assert decode_normal_binary32_bits(0xbf400000)==-0.75</code></pre>
+</section>
+<section id="an-explicit-binary32-encoding-walkthrough" aria-labelledby="heading-an-explicit-binary32-encoding-walkthrough">
+<h2 id="heading-an-explicit-binary32-encoding-walkthrough">An Explicit Binary32 Encoding Walkthrough</h2>
+<p>The number +1.5 is binary 1.1₂×2⁰. It has sign bit 0, biased exponent 127 (the eight-bit pattern 01111111), and fractional field beginning with 1 followed by zeros. The combined bit sequence is <code>0 01111111 10000000000000000000000</code>, or hexadecimal <code>0x3FC00000</code>. The implicit leading 1 is not stored; the first stored fractional 1 accounts for the +0.5.</p>
+<p>For −0.75, write −1.1₂×2<sup>−1</sup>. The sign bit becomes 1, the exponent field is 126 and the fraction field again represents +0.5. That encoding is <code>0xBF400000</code>. These are exact binary fractions. By contrast, the decimal number one tenth repeats forever in base two and cannot be represented exactly with finitely many binary significand bits.</p>
+<pre><code class="language-python">def binary32_hex(value):
+    return hex(struct.unpack(&#x27;&gt;I&#x27;,struct.pack(&#x27;&gt;f&#x27;,value))[0])
+assert binary32_hex(1.5)==&#x27;0x3fc00000&#x27;
+assert binary32_hex(-0.75)==&#x27;0xbf400000&#x27;
+assert binary32_hex(0.1)==&#x27;0x3dcccccd&#x27;</code></pre>
+</section>
+<section id="binary64-precision-and-large-integers" aria-labelledby="heading-binary64-precision-and-large-integers">
+<h2 id="heading-binary64-precision-and-large-integers">Binary64 Precision and Large Integers</h2>
+<p>The 53-bit significand of binary64 can represent every integer exactly in the interval [−2<sup>53</sup>, 2<sup>53</sup>]. Beyond that point, adjacent integers may map to the same floating-point value because the gap between representable values grows. For instance, 2<sup>53</sup>+1 is not exactly representable as binary64, and converting that integer to float can round it to 2<sup>53</sup>. This matters for identifiers, sequence counters, timestamps and monetary totals.</p>
+<p>A floating-point format should not be used as an exact identifier merely because its maximum finite magnitude is large. “Range” and “integer exactness” are different. A 64-bit unsigned identifier may require 64 significant bits; storing it in binary64 can lose low bits even though no overflow or infinity occurs. Use a suitable integer or textual representation for exact codes, and do not use an approximate floating value as a database primary key.</p>
+<pre><code class="language-python">n=2**53
+assert float(n)==float(n+1)
+assert float(n+2)!=float(n)
+assert int(float(n+1))!=n+1</code></pre>
+</section>
+<section id="subnormal-numbers-and-gradual-underflow" aria-labelledby="heading-subnormal-numbers-and-gradual-underflow">
+<h2 id="heading-subnormal-numbers-and-gradual-underflow">Subnormal Numbers and Gradual Underflow</h2>
+<p>When E=0 and F≠0, the binary format uses a <strong>subnormal</strong> value with no implicit leading 1. In binary32, its value is (−1)<sup>s</sup> × (F/2<sup>23</sup>) × 2<sup>−126</sup>. The smallest positive subnormal is 2<sup>−149</sup>. Binary64 similarly uses exponent −1022 with a 52-bit fraction, giving smallest positive subnormal 2<sup>−1074</sup>. These values fill the gap between the smallest normal magnitude and zero at reduced significant precision.</p>
+<p>Gradual underflow makes many small results behave more smoothly than an abrupt jump to zero. Yet relative error can become very large in the subnormal region because the quantum remains fixed while the value approaches zero. Some processors or performance modes treat subnormals specially or may flush them to zero; those behaviors must be documented when they affect the numeric contract. A software test for tiny numbers should not assume every execution mode preserves every subnormal without verification.</p>
+<pre><code class="language-python">min_subnormal=math.ldexp(1.0,-1074)
+min_normal=math.ldexp(1.0,-1022)
+assert min_subnormal&gt;0 and min_subnormal&lt;min_normal
+assert min_subnormal/2==0.0  # rounding underflows to zero</code></pre>
+</section>
+<section id="signed-zero-infinities-and-nans" aria-labelledby="heading-signed-zero-infinities-and-nans">
+<h2 id="heading-signed-zero-infinities-and-nans">Signed Zero, Infinities, and NaNs</h2>
+<p>IEEE binary floating-point formats encode positive zero and negative zero separately. They compare equal numerically, but the sign can affect functions such as reciprocal and certain directional limits in a fully IEEE-compliant arithmetic environment. Positive and negative infinity encode results or inputs outside the finite range under appropriate operations and modes. <strong>NaN</strong>, or not-a-number, encodes an invalid or unavailable numerical result; ordinary comparisons involving a quiet NaN, including equality to itself, are false.</p>
+<p>These special values are not interchangeable with application missing-data semantics. A NaN used as an optional-field marker can propagate through arithmetic and complicate comparison, hashing or ordering. Language handling also differs: Python's <code>1.0/0.0</code> raises ZeroDivisionError rather than silently returning an IEEE infinity, while a sufficiently large finite float multiplication can produce infinity. Avoid assuming that an IEEE storage encoding alone dictates a language's exception API or an entire runtime's behavior.</p>
+<pre><code class="language-python">negzero=-0.0
+assert negzero==0.0
+assert math.copysign(1.0,negzero)==-1.0
+nan=float(&#x27;nan&#x27;)
+assert nan!=nan
+assert math.isinf(1e308*1e308)</code></pre>
+</section>
+<section id="a-decimal-one-tenth-in-binary32-and-binary64" aria-labelledby="heading-a-decimal-one-tenth-in-binary32-and-binary64">
+<h2 id="heading-a-decimal-one-tenth-in-binary32-and-binary64">A Decimal One-Tenth in Binary32 and Binary64</h2>
+<p>Decimal 0.1 equals 1/10, whose binary expansion is recurring, so neither binary32 nor binary64 can encode it exactly. In binary32 the nearest representable value has bits <code>0x3DCCCCCD</code> and is approximately 0.10000000149011612. In binary64 the corresponding encoding is <code>0x3FB999999999999A</code> and is approximately 0.10000000000000000555. The familiar Python display <code>0.1</code> is the shortest decimal text that rounds back to that stored binary64 value, not proof of exact decimal storage.</p>
+<p>As a result, <code>0.1 + 0.2 == 0.3</code> is normally false with Python binary floats. This is not a Python defect: it follows from finite binary representation combined with rounded arithmetic. It also does not mean every decimal fraction is inexact—0.5, 0.25 and 0.125 are exact powers-of-two fractions. Decimal exactness, binary exactness and human-readable decimal formatting are distinct properties.</p>
+<pre><code class="language-python">bits64=struct.unpack(&#x27;&gt;Q&#x27;,struct.pack(&#x27;&gt;d&#x27;,0.1))[0]
+assert bits64==0x3fb999999999999a
+assert struct.unpack(&#x27;&gt;I&#x27;,struct.pack(&#x27;&gt;f&#x27;,0.1))[0]==0x3dcccccd
+assert 0.1+0.2!=0.3
+assert 0.125+0.25==0.375</code></pre>
+</section>
+<section id="ulps-spacing-and-units-of-error" aria-labelledby="heading-ulps-spacing-and-units-of-error">
+<h2 id="heading-ulps-spacing-and-units-of-error">ULPs, Spacing, and Units of Error</h2>
+<p>An <strong>ulp</strong>, or unit in the last place, is used to describe the local spacing of floating-point values, although careful definitions differ at exponent-bin boundaries and under some mathematical conventions. For normal binary64 numbers in [1,2), the upward spacing is 2<sup>−52</sup>; for numbers in [2,4), the spacing is 2<sup>−51</sup>. In binary32, the corresponding gaps are 2<sup>−23</sup> and 2<sup>−22</sup>. Spacing doubles when the exponent increases by one.</p>
+<p>For normal, correctly rounded operations with round-to-nearest, the rounding error is at most half the neighboring gap in an ordinary local ulp interpretation. This absolute statement is not a blanket relative-error guarantee near underflow, at infinities or after overflow. APIs such as Python <code>math.ulp()</code> and <code>math.nextafter()</code> are useful for inspecting representability, while error bounds for whole algorithms must still consider their mathematical condition and sequence of operations.</p>
+<pre><code class="language-python">assert math.ulp(1.0)==2**-52
+assert math.ulp(2.0)==2**-51
+assert math.nextafter(1.0,math.inf)-1.0==2**-52
+assert 1.0-math.nextafter(1.0,-math.inf)==2**-53</code></pre>
+</section>
+<section id="machine-epsilon-versus-unit-roundoff" aria-labelledby="heading-machine-epsilon-versus-unit-roundoff">
+<h2 id="heading-machine-epsilon-versus-unit-roundoff">Machine Epsilon Versus Unit Roundoff</h2>
+<p>In the common C/Python numerical convention, <strong>machine epsilon</strong> is the difference between 1 and the next larger representable number. For binary64, ε=2<sup>−52</sup>; for binary32, ε=2<sup>−23</sup>. Numerical-error analysis often uses the <strong>unit roundoff</strong> u=ε/2 for round-to-nearest, so u=2<sup>−53</sup> and 2<sup>−24</sup> respectively. Some texts use the word epsilon for u instead; quote the definition, not just the symbol.</p>
+<p>The frequently used relative model <code>fl(a ⊙ b)=(a ⊙ b)(1+δ)</code>, with |δ|≤u, needs assumptions: the result must be in a suitable normal range and the operation must be correctly rounded, among other conditions. It fails as a universal statement when the exact result is zero, subnormal, infinite or subject to other special handling. An analysis that overlooks those conditions can claim a relative bound exactly where the computation is least reliable.</p>
+<pre><code class="language-python">eps=sys.float_info.epsilon
+assert eps==2**-52
+unit_roundoff=eps/2
+assert unit_roundoff==2**-53</code></pre>
+</section>
+<section id="rounding-to-nearest-ties-to-even-in-binary-floating-point" aria-labelledby="heading-rounding-to-nearest-ties-to-even-in-binary-floating-point">
+<h2 id="heading-rounding-to-nearest-ties-to-even-in-binary-floating-point">Rounding-to-Nearest, Ties-to-Even in Binary Floating Point</h2>
+<p>The usual IEEE default rounding direction is <strong>round-to-nearest, ties-to-even</strong>. Of two neighboring representable values, choose the closer; if the exact result lies halfway between them, choose the value whose retained least-significant significand bit is even. Alternative directed modes include toward zero, positive infinity and negative infinity; IEEE 754-2019 also specifies ties-away as a rounding-direction attribute in applicable contexts. Availability of each mode to a particular language may vary.</p>
+<p>For example, the numbers immediately above 1.0 in binary64 are separated by 2<sup>−52</sup>. The exact mathematical midpoint 1+2<sup>−53</sup> rounds to 1.0 under ties-to-even because the least-significant retained bit for 1.0 is even. Constructing that midpoint in an already rounded binary64 expression is dangerous: the expression may round before a test inspects it. Exact fractions or integer arithmetic make the proof transparent.</p>
+<pre><code class="language-python">from fractions import Fraction
+one=Fraction(1,1)
+mid=one+Fraction(1,2**53)
+assert mid &gt; one and mid &lt; one+Fraction(1,2**52)
+assert float(mid)==1.0  # correctly rounded halfway tie to even</code></pre>
+</section>
+<section id="floating-point-overflow-and-directed-rounding" aria-labelledby="heading-floating-point-overflow-and-directed-rounding">
+<h2 id="heading-floating-point-overflow-and-directed-rounding">Floating-Point Overflow and Directed Rounding</h2>
+<p>A floating-point exponent allows a large dynamic range, but a finite upper magnitude remains. The largest finite binary32 value is (2−2<sup>−23</sup>)×2<sup>127</sup>; the largest binary64 value is (2−2<sup>−52</sup>)×2<sup>1023</sup>. Under round-to-nearest, an overflowing positive result generally becomes +infinity, while directed rounding can instead select the largest finite representable value in the appropriate direction. A returned infinity is not the same as a physically justified unbounded measurement.</p>
+<p>Overflow can be caused by an unstable algorithm even when the mathematical final answer would fit. For example, an expression that multiplies two huge values before dividing may overflow in the intermediate product, whereas algebraically rearranging the expression can keep all intermediates in range. Such rewrites must still be checked for changes in rounding and cancellation. For high-consequence systems, monitor finiteness and input range explicitly rather than allowing an infinity to silently contaminate later computations.</p>
+<pre><code class="language-python">large=1e308
+assert math.isinf(large*large)
+assert math.isfinite((large/large)*large)
+assert (large/large)*large==large</code></pre>
+</section>
+<section id="five-ieee-exception-categories" aria-labelledby="heading-five-ieee-exception-categories">
+<h2 id="heading-five-ieee-exception-categories">Five IEEE Exception Categories</h2>
+<p>The IEEE floating-point model recognizes five major exception conditions: invalid operation, division by zero, overflow, underflow and inexact. These are distinct from a programming language raising an exception object. For instance, an inexact result is exceedingly common and need not halt execution; a library may expose status flags, traps, or neither directly. Underflow signaling has subtleties involving tininess and inexactness; not every subnormal value by itself constitutes a reported underflow exception.</p>
+<p>Numerical applications should decide which conditions indicate an error in the physical domain, an expected boundary, or a reason to change strategy. A NaN may signal a failed root or undefined branch; infinity may indicate divergence or unintended division; underflow may erase a necessary small probability. Monitoring should log relevant inputs, rounding modes and computation context. Simply replacing every NaN with zero can conceal a serious failure and violate an algorithm's invariants.</p>
+<table><thead><tr><th scope="col">Condition</th><th scope="col">Typical mathematical trigger</th><th scope="col">Engineering question</th></tr></thead><tbody><tr><td>Invalid</td><td>0/0 or ∞−∞</td><td>Can inputs reach an undefined domain?</td></tr><tr><td>Divide by zero</td><td>Nonzero finite divided by zero in IEEE arithmetic</td><td>Should a pole be represented or trapped?</td></tr><tr><td>Overflow</td><td>Magnitude outside finite result range</td><td>Can an intermediate be rescaled?</td></tr><tr><td>Underflow</td><td>Tiny inexact result under applicable tininess rule</td><td>Is loss of small magnitude acceptable?</td></tr><tr><td>Inexact</td><td>Exact result not representable</td><td>Is rounding within error budget?</td></tr></tbody></table>
+</section>
+<section id="floating-point-addition-alignment-and-absorption" aria-labelledby="heading-floating-point-addition-alignment-and-absorption">
+<h2 id="heading-floating-point-addition-alignment-and-absorption">Floating-Point Addition, Alignment, and Absorption</h2>
+<p>To add floating-point numbers, the hardware conceptually aligns their exponents, combines significands, normalizes and rounds the result. If one operand is much smaller than the other, its low bits can be shifted beyond the available significand precision. Then <code>large + tiny</code> may equal <code>large</code> exactly in the destination format despite the tiny operand being nonzero. The mathematical sum exists; the stored result cannot resolve the difference at that magnitude.</p>
+<p>For binary64, adding 1 to 10<sup>16</sup> does not change the stored number because the local spacing around 10<sup>16</sup> is 2. This matters for high-base timestamps plus tiny durations and for aggregating small adjustments into very large totals. A more suitable origin, unit scale, accumulation strategy or integer representation may preserve the needed increment. Merely printing more decimal digits cannot restore information already lost during arithmetic.</p>
+<pre><code class="language-python">assert 1e16+1.0==1e16
+assert math.ulp(1e16)==2.0
+assert (1e16+2.0)-1e16==2.0</code></pre>
+</section>
+<section id="floating-point-arithmetic-is-not-generally-associative" aria-labelledby="heading-floating-point-arithmetic-is-not-generally-associative">
+<h2 id="heading-floating-point-arithmetic-is-not-generally-associative">Floating-Point Arithmetic Is Not Generally Associative</h2>
+<p>Real-number addition is associative, but finite-precision floating addition generally is not. Consider <code>(10<sup>16</sup> + (−10<sup>16</sup>)) + 1</code>, which yields 1 in binary64, compared with <code>10<sup>16</sup> + ((−10<sup>16</sup>) + 1)</code>, which yields 0 because the inner addition loses the unit increment. Both expressions have the same exact real sum; their finite sequences of rounding differ.</p>
+<p>Compilers or parallel reduction algorithms may reorder work under certain flags or execution strategies, potentially changing the low bits or much more when cancellation is severe. “Parallel nondeterminism” is not automatically a bug, but a reproducibility requirement should specify the reduction tree, math flags, rounding environment and tolerance. Floating-point tests that compare only a small example should not assume the result remains bit-identical under a different processor count.</p>
+<pre><code class="language-python">a,b,c=1e16,-1e16,1.0
+assert ((a+b)+c)==1.0
+assert (a+(b+c))==0.0</code></pre>
+</section>
+<section id="accumulating-tenths-a-repeated-operation-example" aria-labelledby="heading-accumulating-tenths-a-repeated-operation-example">
+<h2 id="heading-accumulating-tenths-a-repeated-operation-example">Accumulating Tenths: A Repeated-Operation Example</h2>
+<p>Repeated additions of an inexact binary fraction accumulate rounding in ways that depend on order and magnitude. In Python, summing 0.1 ten times with an ordinary loop can yield a result distinguishable from 1.0 by exact equality, even though it prints close to one. The error should be analyzed as the outcome of representation plus every rounded addition, not merely as “0.1 has a tiny error.” Different summation order and methods can produce different final roundings.</p>
+<p>The correct mitigation depends on the contract. Counting integer tenths and dividing only for display can be exact for the counter. Decimal arithmetic can represent 0.1 exactly at the specified decimal precision. Compensated or accurately rounded summation can reduce binary-float accumulation error, but does not change the exactness of the underlying 0.1 value. Always distinguish an algorithm that improves summation from one that changes the representation base.</p>
+<pre><code class="language-python">acc=0.0
+for _ in range(10):acc+=0.1
+assert acc!=1.0
+assert math.fsum([0.1]*10)==1.0
+assert sum([1]*10)/10==1.0</code></pre>
+</section>
+<section id="catastrophic-cancellation-and-significant-digits" aria-labelledby="heading-catastrophic-cancellation-and-significant-digits">
+<h2 id="heading-catastrophic-cancellation-and-significant-digits">Catastrophic Cancellation and Significant Digits</h2>
+<p>Subtracting nearly equal numbers can produce a small result whose leading significant digits depend on small errors in the operands. For example, under binary64, <code>(1 + 10<sup>−16</sup>) − 1</code> evaluates to zero, even though the exact expression equals 10<sup>−16</sup>, because the increment vanished when 1+10<sup>−16</sup> was rounded. Cancellation does not invariably cause error: subtracting two exactly represented values can be exact. The vulnerability lies in subtracting quantities that already carry meaningful relative error.</p>
+<p>A stable reformulation can avoid cancellation when a known identity is available. For small x, <code>sqrt(1+x)−1</code> loses precision; writing it as <code>x/(sqrt(1+x)+1)</code> retains the small numerator. Many mathematical libraries also expose functions such as <code>expm1(x)</code> and <code>log1p(x)</code> specifically to preserve precision near zero. Their benefit arises from numerical analysis and implementation, not from increasing the stored word length.</p>
+<pre><code class="language-python">x=1e-16
+naive=math.sqrt(1+x)-1
+stable=x/(math.sqrt(1+x)+1)
+assert naive==0.0
+assert math.isclose(stable,x/2,rel_tol=1e-12)</code></pre>
+</section>
+<section id="conditioning-is-not-the-same-as-numerical-stability" aria-labelledby="heading-conditioning-is-not-the-same-as-numerical-stability">
+<h2 id="heading-conditioning-is-not-the-same-as-numerical-stability">Conditioning Is Not the Same as Numerical Stability</h2>
+<p><strong>Conditioning</strong> concerns how sensitive a mathematical problem's true answer is to perturbations of its inputs. <strong>Numerical stability</strong> concerns how the chosen algorithm responds to finite-precision operations. A well-conditioned problem can be solved unstably; a badly conditioned problem cannot generally be made fully insensitive by changing the algorithm alone. The distinction determines whether to reformulate an algorithm, increase precision, obtain better input data, or change the problem specification.</p>
+<p>For a difference x−y where x and y are nearly equal, the result can be highly sensitive to relative perturbations of the operands when the intended quantity is small. In contrast, a well-designed algorithm may be backward stable: its computed result matches the exact result for nearby data. Such guarantees are more informative than a universal promise of “sixteen digits of accuracy” from binary64. The relevant error measure must correspond to the physical or decision threshold.</p>
+</section>
+<section id="summation-order-pairwise-addition-and-math-fsum" aria-labelledby="heading-summation-order-pairwise-addition-and-math-fsum">
+<h2 id="heading-summation-order-pairwise-addition-and-math-fsum">Summation Order, Pairwise Addition, and math.fsum</h2>
+<p>For a collection of floating values, ordinary left-to-right summation performs a rounding at each addition. Pairwise summation combines values in a more balanced tree and frequently reduces error growth, while <code>math.fsum</code> in Python uses a high-accuracy summation strategy to avoid many simple cancellation pitfalls. Neither tool makes an ill-conditioned mathematical sum intrinsically well conditioned, and exact behavior of alternatives should be tested on the target implementation.</p>
+<p>A practical example is the sequence [10<sup>16</sup>, 1, −10<sup>16</sup>]. The exact mathematical sum is 1, yet explicit left-to-right floating addition yields 0. An accurately summed result is 1. In finance or safety accounting, even a highly accurate binary-float reduction may be less appropriate than integer subunits or decimal arithmetic because the value contract may require exact cents rather than a small numerical tolerance.</p>
+<pre><code class="language-python">data=[1e16,1.0,-1e16]
+sequential=0.0
+for value in data:
+    sequential+=value
+assert sequential==0.0
+assert math.fsum(data)==1.0</code></pre>
+</section>
+<section id="compensated-summation-and-kahan-s-method" aria-labelledby="heading-compensated-summation-and-kahan-s-method">
+<h2 id="heading-compensated-summation-and-kahan-s-method">Compensated Summation and Kahan’s Method</h2>
+<p>Kahan summation stores a compensation term to track some low-order contributions lost when a small value is added to a much larger running sum. A simple version computes a corrected increment, updates the total and then updates the compensation based on the rounding that occurred. It often substantially improves a long sequential sum at small additional storage cost. Nevertheless, its accuracy can depend on the summation order, intermediate precision and compiler transformations; it is not an unconditional correctly rounded exact sum.</p>
+<p>A demonstration with many identical small terms can make the improvement visible. In a production implementation, compare Kahan's method with pairwise reduction, wider accumulation and established language routines such as <code>math.fsum</code>. Choose based on accuracy requirements, speed, parallelization and reproducibility. Test against a higher-precision reference and include adversarial cancellation-heavy sequences rather than relying only on uniformly positive random data.</p>
+<pre><code class="language-python">def kahan_sum(values):
+    total=0.0; correction=0.0
+    for x in values:
+        y=x-correction
+        temp=total+y
+        correction=(temp-total)-y
+        total=temp
+    return total
+values=[0.1]*10000
+assert abs(kahan_sum(values)-1000.0)&lt;1e-12
+assert abs(kahan_sum(values)-1000.0)&lt;=abs(sum(values)-1000.0)</code></pre>
+</section>
+<section id="fused-multiply-add-and-intermediate-rounding" aria-labelledby="heading-fused-multiply-add-and-intermediate-rounding">
+<h2 id="heading-fused-multiply-add-and-intermediate-rounding">Fused Multiply–Add and Intermediate Rounding</h2>
+<p>A <strong>fused multiply–add</strong> (FMA) operation computes a×b+c as though the product and addition were evaluated with infinite precision, then rounds once into the specified destination. Separate multiplication and addition usually round the product before adding c, potentially producing a different result. FMA can improve dot-product and polynomial calculations, especially when a large product nearly cancels another term. Its numerical benefit should not be confused with any universal promise that every expression becomes exact.</p>
+<p>Whether a language provides a hardware-backed FMA, whether a compiler contracts operations into FMA, and whether the compiler permits reassociation vary. Python environments may expose <code>math.fma</code> depending on version and platform, while the example here deliberately illustrates the mathematical distinction without requiring that API. For reproducible computation, document the contraction policy and arithmetic execution environment. A faster FMA path may change the last bits relative to a non-fused reference, and that difference may be mathematically more accurate rather than a regression.</p>
+</section>
+<section id="floating-point-comparisons-and-decision-boundaries" aria-labelledby="heading-floating-point-comparisons-and-decision-boundaries">
+<h2 id="heading-floating-point-comparisons-and-decision-boundaries">Floating-Point Comparisons and Decision Boundaries</h2>
+<p>Exact floating equality is correct when the question is about identical stored values, sentinel patterns or a genuinely exact invariant. It is often inappropriate when checking whether two independently rounded calculations represent the same real-world quantity. A tolerance rule should define absolute and relative terms for the application's scale. For example, <code>|a−b| ≤ max(abs_tol, rel_tol × max(|a|,|b|))</code> is a common pattern, but tolerances are not a universal substitute for analysis.</p>
+<p>Near zero, a pure relative tolerance provides little useful room; an application-specific absolute tolerance is needed. Near a safety threshold, broad tolerance may accidentally approve an unacceptable result. NaNs and infinities require separate explicit policy. A comparison based on an arbitrary number of ulps can be useful for local arithmetic validation but less useful when inputs are measured, correlated or carry model error. Test decision-boundary behavior under the exact production tolerance.</p>
+<pre><code class="language-python">assert not (0.1+0.2==0.3)
+assert math.isclose(0.1+0.2,0.3,rel_tol=1e-14,abs_tol=0)
+assert not math.isclose(1e-8,0,rel_tol=1e-9,abs_tol=0)
+assert math.isclose(1e-8,0,rel_tol=0,abs_tol=1e-7)</code></pre>
+</section>
+<section id="decimal-fixed-point-and-decimal-floating-point" aria-labelledby="heading-decimal-fixed-point-and-decimal-floating-point">
+<h2 id="heading-decimal-fixed-point-and-decimal-floating-point">Decimal Fixed-Point and Decimal Floating-Point</h2>
+<p>Binary arithmetic is not the only finite-precision choice. A value such as 12.34 dollars can be stored exactly as the integer 1,234 cents. Alternatively, decimal floating-point arithmetic uses powers of ten and a finite decimal significand, so 0.1 is exactly representable in an adequately configured decimal format. Python's <code>decimal.Decimal</code> supports decimal arithmetic with explicit contexts, precision and rounding; string-based construction is essential when exact decimal intent matters.</p>
+<p>Decimal storage does not eliminate all rounding: 1/3 still repeats in base ten, and precision limits remain. The goal is agreement with a domain's declared rounding and unit contract. For money, consider integer minor units or decimal arithmetic with prescribed rounding at legally or contractually defined boundaries. Avoid constructing Decimal from an already rounded binary float if the intent is the original decimal input; <code>Decimal('0.1')</code> and <code>Decimal(0.1)</code> encode different exact decimal values.</p>
+<pre><code class="language-python">from decimal import Decimal, ROUND_HALF_EVEN
+assert Decimal(&#x27;0.1&#x27;)+Decimal(&#x27;0.2&#x27;)==Decimal(&#x27;0.3&#x27;)
+assert Decimal(&#x27;0.1&#x27;)!=Decimal.from_float(0.1)
+assert Decimal(&#x27;2.345&#x27;).quantize(Decimal(&#x27;0.01&#x27;),rounding=ROUND_HALF_EVEN)==Decimal(&#x27;2.34&#x27;)</code></pre>
+</section>
+<section id="converting-between-formats-and-double-rounding" aria-labelledby="heading-converting-between-formats-and-double-rounding">
+<h2 id="heading-converting-between-formats-and-double-rounding">Converting Between Formats and Double Rounding</h2>
+<p>Converting a value from fixed-point to floating-point, or from binary64 to binary32, involves a rounding decision unless the source value lies exactly in the destination set. Converting back normally does not recover lost information. For instance, encoding 0.1 in binary32 and widening the stored value to binary64 preserves the binary32 approximation precisely; it does not recreate the original real decimal 0.1. Similarly, converting a fractional float to an integer may truncate rather than round to nearest depending on the language operation.</p>
+<p>Double rounding can occur when a value is rounded first to one intermediate precision and then to a narrower precision rather than rounded directly to the final format. Under certain combinations of values and rounding rules, the result differs from direct rounding. A precision pipeline must document intermediate widths and rounding points, especially for DSP accumulators, numeric file interchange, intermediate compiler registers and decimal parsing. Avoid claiming that intermediate widening automatically makes final conversion exact.</p>
+<pre><code class="language-python">stored32=struct.unpack(&#x27;&gt;f&#x27;,struct.pack(&#x27;&gt;f&#x27;,0.1))[0]
+assert stored32!=0.1
+assert struct.unpack(&#x27;&gt;f&#x27;,struct.pack(&#x27;&gt;f&#x27;,stored32))[0]==stored32
+assert abs(stored32-0.1)&gt;0</code></pre>
+</section>
+<section id="mixed-precision-and-block-floating-point" aria-labelledby="heading-mixed-precision-and-block-floating-point">
+<h2 id="heading-mixed-precision-and-block-floating-point">Mixed Precision and Block Floating Point</h2>
+<p>Systems sometimes store data in a narrow format but compute or accumulate in a wider format. For example, coefficients or activations may be binary16 or binary32, while partial sums use binary32 or binary64. This can reduce memory traffic yet preserve additional guard precision where error is most likely to grow. The effectiveness depends on data distribution, hardware capabilities and the algorithm's conditioning. It should be demonstrated empirically and checked against an adequate reference.</p>
+<p><strong>Block floating point</strong> shares an exponent across a group of values while storing individual signed significands, exchanging some precision flexibility for simpler computation and compact storage. It resembles fixed-point arithmetic with a periodically adjusted common scale. Scaling can reduce overflow risk, but small values relative to the block maximum may lose significant digits. This format illustrates that the fixed-versus-floating dichotomy is a spectrum of representation designs, not an absolute hardware boundary.</p>
+</section>
+<section id="performance-and-power-are-architecture-dependent" aria-labelledby="heading-performance-and-power-are-architecture-dependent">
+<h2 id="heading-performance-and-power-are-architecture-dependent">Performance and Power Are Architecture-Dependent</h2>
+<p>Fixed-point arithmetic can be efficient on embedded processors with integer DSP instructions and limited floating-point hardware, and it can provide predictable bit-level overflow behavior when engineered carefully. Floating-point is often highly efficient on modern desktop CPUs, GPUs and dedicated accelerators. On some devices an integer division may be slower than a floating multiply; on others fixed-point vector operations dominate. Therefore, claims that fixed-point is always faster or floating-point is always wasteful are technically unsound.</p>
+<p>Compare implementations under the target instruction set, compiler flags, vector width, memory format, clock rate and energy budget. Include the cost of scale conversions, saturating operations and extended accumulators. A nominally cheap 16-bit fixed operation may require multiple wide instructions for correct rounding, while a supported 32-bit floating operation may be native. The format choice is an end-to-end resource decision, not a count of arithmetic operators in source code.</p>
+</section>
+<section id="determinism-reproducibility-and-portability" aria-labelledby="heading-determinism-reproducibility-and-portability">
+<h2 id="heading-determinism-reproducibility-and-portability">Determinism, Reproducibility, and Portability</h2>
+<p>Integer and well-specified fixed-point computations can support exact bitwise reproducibility if word widths, signedness, rounding, overflow and intermediate operations are all fixed. Floating-point operations can also be reproducible under defined formats and ordering, but differences in reduction trees, compiler fast-math options, fused operations, extended precision, math libraries and subnormal handling can change results. A standard format alone is not a promise that two entire programs have identical output bits.</p>
+<p>For regulated or scientific systems, specify expected tolerance or exact reproducibility, establish reference vectors and test the target architectures. Serialized numeric values need documented byte order, versioning and interpretation; an endian swap does not imply any rounding, but a cast between float formats does. Test NaN and signed-zero policies where these can cross database, language or network boundaries. Report software version and compiler settings when comparing numerical experiments.</p>
+</section>
+<section id="numerical-error-budget-and-physical-measurement" aria-labelledby="heading-numerical-error-budget-and-physical-measurement">
+<h2 id="heading-numerical-error-budget-and-physical-measurement">Numerical Error Budget and Physical Measurement</h2>
+<p>A measured physical value may already have error from sensing, calibration, analog noise, drift, sampling and environmental effects. Digitization adds conversion and quantization effects; subsequent computation adds rounding and algorithmic approximation. These error sources are not interchangeable and need not be statistically independent. The storage spacing of a binary64 value may be vastly finer than the actual uncertainty of the sensor signal. Quoting the full binary64 decimal representation as physical accuracy is false precision.</p>
+<p>A defensible error budget expresses tolerances in physical units, identifies systematic versus random contributions, and states how uncertainties propagate through transformations. Correlated bias does not vanish merely by averaging, and saturation violates small-error linear approximations. Choosing a wider format is useful when computational error threatens the budget, but a calibration problem requires calibration. For details of converter effective resolution, see the unit's <a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/quantization-noise-and-effective-resolution">Quantization Noise and Effective Resolution</a> and <a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/computational-error-budgets-and-calibration">Computational Error Budgets and Calibration</a>.</p>
+</section>
+<section id="a-representation-selection-matrix" aria-labelledby="heading-a-representation-selection-matrix">
+<h2 id="heading-a-representation-selection-matrix">A Representation Selection Matrix</h2>
+<p>An algorithm's data range, accuracy contract and required operations should determine its representation. Exact counts and identifiers belong in sufficiently wide integer types. Bounded fractional signals on a DSP can suit fixed-point with explicit scales and accumulators. Scientific values spanning large exponent ranges can suit floating point, with careful conditioning and exception handling. Exact decimal monetary amounts often suit integer minor units or decimal formats. Approximate numerical machine-learning workloads may use deliberately reduced precision with wider accumulation.</p>
+<p>None of these selections bypasses validation. For an embedded control loop, fixed-point may minimize power but creates scaling and saturation risks. For a simulation, binary64 may be easier to use but does not make the numerical integrator stable at any time step. For a database key, binary64's large numeric range does not ensure exact storage of a 64-bit identifier. The choice should be justified by a measured or proven end-to-end error and resource budget, not by a generic “more bits is better” rule.</p>
+<table><thead><tr><th scope="col">Use case</th><th scope="col">Likely starting choice</th><th scope="col">Primary validation obligation</th></tr></thead><tbody><tr><td>Exact counters and sequence IDs</td><td>Integer with explicit width</td><td>No silent overflow; exact equality</td></tr><tr><td>Money in fixed minor units</td><td>Integer cents or decimal</td><td>Contractual rounding and currency scale</td></tr><tr><td>Bounded audio/DSP signal</td><td>Q-format fixed-point or hardware float</td><td>Headroom, scaling and clipping</td></tr><tr><td>Wide-range scientific computation</td><td>binary64 or suitable higher precision</td><td>Conditioning, stability, exceptional results</td></tr><tr><td>Accelerator inference</td><td>Reduced-precision float or integer</td><td>Measured task-level error and accumulators</td></tr><tr><td>High-resolution timestamp</td><td>Integer ticks with defined epoch</td><td>Exactness, duration arithmetic, wrap policy</td></tr></tbody></table>
+</section>
+<section id="testing-strategy-for-numeric-formats" aria-labelledby="heading-testing-strategy-for-numeric-formats">
+<h2 id="heading-testing-strategy-for-numeric-formats">Testing Strategy for Numeric Formats</h2>
+<p>A proper test matrix includes both nominal values and difficult boundaries. For fixed-point, test minimum and maximum codes, half-quantum ties, negative rounding, scale mismatches, wide products, saturation, repeated increments and all-zero signals. For floating-point, test representable powers of two, 0.1, values near exponent transitions, subnormals, signed zeros, infinities, NaNs, cancellation, widely separated magnitudes and alternative summation orders.</p>
+<p>A reference oracle may use rational arithmetic for exact finite examples, a higher-precision library for analysis, or known standard test vectors. Random inputs alone are insufficient because many critical cases occupy a tiny portion of the possible bit patterns. Record the rounding environment and the meaning of acceptable error, then verify metamorphic relationships where relevant. Keep hardware validation distinct from mathematical-model validation: a passing software assertion cannot prove analog sensor accuracy or device power integrity.</p>
+<pre><code class="language-python">import random
+rng=random.Random(754)
+for _ in range(200):
+    n=rng.randrange(-32768,32768)
+    x=n/32768
+    assert encode_fixed_nearest(x,15)==n
+assert math.isnan(float(&#x27;nan&#x27;))
+assert math.isfinite(1.0)
+assert not math.isfinite(float(&#x27;inf&#x27;))</code></pre>
+</section>
+<section id="worked-investigation-1-selecting-a-temperature-controller-format" aria-labelledby="heading-worked-investigation-1-selecting-a-temperature-controller-format">
+<h2 id="heading-worked-investigation-1-selecting-a-temperature-controller-format">Worked Investigation 1: Selecting a Temperature-Controller Format</h2>
+<p>A controller represents calibrated temperatures between −80 °C and +80 °C and requires a code spacing no worse than 0.01 °C. A signed 16-bit fixed-point representation with f=10 fractional bits has Δ=1/1024≈0.0009766 °C, but its range is only [−32, 31.999…] °C, so it fails the range requirement. Choosing f=8 instead gives Δ=1/256≈0.00390625 °C and range [−128, 127.996…] °C, satisfying both stated requirements with room to spare.</p>
+<p>A controller must still check whether its <em>intermediate</em> computations remain in range. A difference of −80 and +80 is −160 °C, which cannot fit the same signed Q8.8 representation even though each operand fits. A widened difference or a separately specified temperature-delta format is required. This is a common design error: selecting a representation by individual signal bounds and overlooking arithmetic involving two extreme inputs.</p>
+<pre><code class="language-python">width=16; f=8
+quantum=2**-f
+minimum=-(1&lt;&lt;(width-1))*quantum
+maximum=((1&lt;&lt;(width-1))-1)*quantum
+assert minimum&lt;=-80 and maximum&gt;=80 and quantum&lt;=.01
+assert -160&lt;minimum  # difference requires a wider representation</code></pre>
+</section>
+<section id="worked-investigation-2-an-exact-currency-ledger" aria-labelledby="heading-worked-investigation-2-an-exact-currency-ledger">
+<h2 id="heading-worked-investigation-2-an-exact-currency-ledger">Worked Investigation 2: An Exact Currency Ledger</h2>
+<p>A ledger receives two payments, $12.34 and $0.66. Using signed integer cents produces 1,234+66=1,300 cents, exactly $13.00, with no binary-fraction rounding. Representing each dollar amount in binary64 instead produces approximations of the decimal inputs. This may or may not affect a displayed result in a simple example, but the numerical contract is different from exact minor-unit accounting.</p>
+<p>The ledger should specify currency, unit, rounding at exchange-rate and tax boundaries, and overflow controls for the maximum total. Exact cents are not sufficient to represent every type of interest or exchange-rate calculation; a higher-precision internal decimal or rational calculation may be needed before rounding at a prescribed settlement boundary. Never assume that switching from binary float to integer cents removes the need to define when and how rounding occurs.</p>
+<pre><code class="language-python">cents = 1234 + 66
+assert cents == 1300
+assert f&#x27;{cents//100}.{cents%100:02d}&#x27;==&#x27;13.00&#x27;
+assert Decimal(&#x27;12.34&#x27;)+Decimal(&#x27;0.66&#x27;)==Decimal(&#x27;13.00&#x27;)</code></pre>
+</section>
+<section id="worked-investigation-3-q1-15-audio-mixing-and-clipping" aria-labelledby="heading-worked-investigation-3-q1-15-audio-mixing-and-clipping">
+<h2 id="heading-worked-investigation-3-q1-15-audio-mixing-and-clipping">Worked Investigation 3: Q1.15 Audio Mixing and Clipping</h2>
+<p>Two signals have instantaneous sample amplitudes 0.9 and 0.4. If both are encoded as signed Q1.15, their respective nearest-even codes are 29,491 and 13,107. The wide sum is 42,598, representing approximately 1.3 and exceeding the maximum signed Q1.15 code of 32,767. Saturating the sum produces almost +1; wrapping it yields a negative code, producing a dramatically different waveform. Neither policy recreates the unclipped real amplitude.</p>
+<p>An audio designer may prevent clipping by scaling the input mix, using a wider processing format, or dynamically controlling gain before the final output conversion. The correct choice depends on headroom, noise floor, allowed distortion and signal statistics. If the system claims no clipping, it must measure or bound peaks rather than merely showing the mean sample magnitude is modest.</p>
+<pre><code class="language-python">qa=encode_fixed_nearest(.9,15)
+qb=encode_fixed_nearest(.4,15)
+wide=qa+qb
+assert (qa,qb,wide)==(29491,13107,42598)
+assert saturate_signed(wide,16)==32767
+assert wrap_signed(wide,16)&lt;0</code></pre>
+</section>
+<section id="worked-investigation-4-a-large-integer-converted-to-binary32" aria-labelledby="heading-worked-investigation-4-a-large-integer-converted-to-binary32">
+<h2 id="heading-worked-investigation-4-a-large-integer-converted-to-binary32">Worked Investigation 4: A Large Integer Converted to Binary32</h2>
+<p>A data logger stores a count of 16,777,217 events. This is 2<sup>24</sup>+1, one beyond the contiguous integer-exactness range of binary32. When converted to binary32 with ties-to-even, the value rounds to 16,777,216. Another adjacent integer can represent a different actual count yet map to the same stored float. A display or API based on this approximate representation may silently misstate event totals.</p>
+<p>The remedy is not necessarily binary64 if a 64-bit unsigned counter will eventually exceed its contiguous precision bound as well. Use an integer format that covers the full count, declare wrap semantics and avoid converting through a narrower floating format for serialization or user-interface display. Unit tests should include neighboring integers around powers-of-two precision boundaries.</p>
+<pre><code class="language-python">count=2**24+1
+stored=struct.unpack(&#x27;&gt;f&#x27;,struct.pack(&#x27;&gt;f&#x27;,count))[0]
+assert stored==2**24
+assert stored!=count</code></pre>
+</section>
+<section id="worked-investigation-5-cancellation-in-a-scientific-sum" aria-labelledby="heading-worked-investigation-5-cancellation-in-a-scientific-sum">
+<h2 id="heading-worked-investigation-5-cancellation-in-a-scientific-sum">Worked Investigation 5: Cancellation in a Scientific Sum</h2>
+<p>A simulation sums three contributions: +10<sup>16</sup>, +1 and −10<sup>16</sup>. The exact total is 1, but sequential binary64 addition in that order produces 0 because the intermediate <code>10<sup>16</sup>+1</code> rounds to 10<sup>16</sup>. Reordering the first and last terms first produces 1. An accurately rounded summation utility also recovers 1 for this set. The discrepancy is not an argument to choose a physically implausible precision target without analysis; it reveals a vulnerable accumulation pattern.</p>
+<p>If the simulation genuinely needs to detect unit-level residuals beneath quantities of magnitude 10<sup>16</sup>, its algorithm and data acquisition must preserve those distinctions. Pairwise summation, compensation, scaling, or higher precision may help. If the input measurements themselves are only accurate to one part in a thousand, the unit residual has no reliable physical meaning regardless of the arithmetic representation.</p>
+<pre><code class="language-python">terms=[1e16,1.,-1e16]
+sequential=0.0
+for value in terms:
+    sequential+=value
+assert sequential==0.
+assert sum([terms[0],terms[2],terms[1]])==1.
+assert math.fsum(terms)==1.</code></pre>
+</section>
+<section id="worked-investigation-6-a-control-threshold-near-unity" aria-labelledby="heading-worked-investigation-6-a-control-threshold-near-unity">
+<h2 id="heading-worked-investigation-6-a-control-threshold-near-unity">Worked Investigation 6: A Control Threshold Near Unity</h2>
+<p>Suppose a controller enters an alarm state when a computed normalized signal exceeds 1.0. If the intended signal is 1+10<sup>−16</sup>, converting it to binary64 rounds to 1.0, so a strict <code>value &gt; 1.0</code> comparison is false. Whether that is acceptable depends on the physical interpretation of the threshold and the acquisition accuracy. A generic tolerance function can change which signals trigger the alarm, and may be inappropriate when the requirement is deliberately strict.</p>
+<p>One design might use a fixed-point format with explicit quantum smaller than the critical difference; another might compute a more stable comparison using exact integer sensor codes, or revise the alarm's hysteresis based on measured noise. A threshold's unit, uncertainty, response delay and fail-safe behavior should be specified before numerical tuning. Merely switching to “approximate equality” cannot supply a missing physical safety requirement.</p>
+<pre><code class="language-python">computed=1.0+1e-16
+assert computed==1.0
+assert not (computed&gt;1.0)
+assert 1.0+1e-15&gt;1.0</code></pre>
+</section>
+<section id="worked-investigation-7-subnormal-sensitivity" aria-labelledby="heading-worked-investigation-7-subnormal-sensitivity">
+<h2 id="heading-worked-investigation-7-subnormal-sensitivity">Worked Investigation 7: Subnormal Sensitivity</h2>
+<p>A numerical model produces the binary64 value 2<sup>−1074</sup>, the smallest positive subnormal. It is distinguishable from zero in a conforming binary64 representation, but halving it and rounding to binary64 yields zero. A simulation that depends on this residual may therefore change behavior at the subnormal boundary. The corresponding relative error of this halving operation is 100 percent, even though its absolute error is extraordinarily small.</p>
+<p>Before increasing precision, determine whether this tiny quantity is important to the physical or probabilistic model. For products of many probabilities, logarithmic representations can avoid premature underflow. For low-amplitude DSP processing, appropriate scaling can improve retained significance. For execution modes that flush subnormals, actual hardware behavior must also be checked and documented; a mathematical IEEE example is not a substitute for runtime characterization.</p>
+<pre><code class="language-python">tiny=math.ldexp(1.,-1074)
+assert tiny&gt;0.0
+assert tiny/2==0.0
+assert tiny*2&gt;tiny</code></pre>
+</section>
+<section id="worked-investigation-8-fixed-point-dot-products-and-widened-sums" aria-labelledby="heading-worked-investigation-8-fixed-point-dot-products-and-widened-sums">
+<h2 id="heading-worked-investigation-8-fixed-point-dot-products-and-widened-sums">Worked Investigation 8: Fixed-Point Dot Products and Widened Sums</h2>
+<p>Consider two short Q1.15 vectors whose elements are 0.5 and 0.25, and 0.5 and −0.25. Their mathematical dot product is 0.5×0.5 + 0.25×(−0.25)=0.1875. The stored code pairs are [16,384, 8,192] and [16,384, −8,192]. Multiplying codes creates products on the 2<sup>−30</sup> scale. Summing those wide products first and shifting once yields the exact Q1.15 code 6,144 for this example.</p>
+<p>In more general vectors, an accumulator must have enough width for the largest possible sum of products, and the final shift must use the declared rounding rule. Rounding each product individually before the sum can give a different result from rounding once after accumulation. This motivates widened MAC instructions and explicit bit-growth analysis in fixed-point filters and neural-network accelerators.</p>
+<pre><code class="language-python">u=[16384,8192]
+v=[16384,-8192]
+acc=sum(a*b for a,b in zip(u,v))
+code=acc//(1&lt;&lt;15)  # exact division for this example
+assert acc==201326592
+assert code==6144
+assert code/(1&lt;&lt;15)==0.1875</code></pre>
+</section>
+<section id="integrated-numerical-representation-decision-framework" aria-labelledby="heading-integrated-numerical-representation-decision-framework">
+<h2 id="heading-integrated-numerical-representation-decision-framework">Integrated Numerical Representation Decision Framework</h2>
+<p>Apply five gates in order. <strong>Meaning:</strong> specify units and whether the value must be exact. <strong>Range:</strong> bound inputs, transients, intermediates and outputs. <strong>Error:</strong> allocate acceptable absolute, relative and application-level error, noting the difference between measurement and computation. <strong>Execution:</strong> identify hardware arithmetic, memory, power, latency and interoperability constraints. <strong>Verification:</strong> test exact endpoints, exceptional values, repeated operations and portability.</p>
+<p>The result should be a documented format contract—such as “signed 16-bit, f=8, nearest-even conversion, widened multiply, saturated output” or “IEEE binary64, round-to-nearest, detect nonfinite values, pairwise reduction and 10<sup>−9</sup> domain tolerance.” A format name without these operational details is an incomplete specification. Revisit the choice if the quantity range, physical calibration, processor or acceptable error changes.</p>
+<ol><li>Specify units, exactness and physical measurement uncertainty.</li><li>Derive worst-case input and intermediate magnitudes.</li><li>Choose width, scale or floating format to meet error and range requirements.</li><li>Define overflow, rounding, special-value and serialization semantics.</li><li>Evaluate cost on target hardware and compare with independent references.</li><li>Record boundary tests and monitor deployed error or saturation.</li></ol>
+</section>
+<section id="common-failure-modes-and-their-corrections" aria-labelledby="heading-common-failure-modes-and-their-corrections">
+<h2 id="heading-common-failure-modes-and-their-corrections">Common Failure Modes and Their Corrections</h2>
+<p>Several recurring errors deserve explicit rejection: interpreting raw integer codes without scale, confusing Q-format conventions, relying on signed integer wrap in a controller, shifting a signed negative product without acknowledging floor behavior, and calling machine epsilon the same thing as unit roundoff without stating definitions. On the floating side, “binary64 has sixteen accurate decimal digits” is not a guarantee for arbitrary unstable algorithms, and exact displayed decimal formatting is not evidence of exact underlying storage.</p>
+<p>Likewise, using exact float equality for an approximate physical decision may be fragile, but replacing every comparison with an arbitrary tolerance can be equally wrong. Treating a NaN as ordinary missing data can hide invalid operations, while automatically converting infinity to a maximum finite code can conceal overflow. The correction is a full numeric contract, explicit bound calculations, careful operation ordering and reference tests that cover problematic bit patterns.</p>
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions">
+<h2 id="heading-review-questions">Review Questions</h2>
+<p>The following questions are intended to test representational reasoning, not memorization of one hardware platform's typical behavior. They distinguish what follows from a stated format from what still requires an implementation or application contract.</p>
+</section>
+<section id="review-questions-and-model-answers" aria-labelledby="heading-review-questions-and-model-answers">
+<h2 id="heading-review-questions-and-model-answers">Review Questions and Model Answers</h2>
+<p>Questions are followed by brief answers. A full technical solution should cite the particular width, scale or rounding mode being assumed whenever a different format would change the answer.</p>
+<ol><li><strong>Why can a finite word not represent every real number?</strong> It has finitely many codes while real numbers contain infinitely many distinct values.</li><li><strong>What converts a signed integer into a binary fixed-point quantity?</strong> A specified scale, often 2 raised to the negative number of fractional bits.</li><li><strong>What does 0xC000 represent in signed 16-bit Q1.15?</strong> Code −16384, representing −0.5.</li><li><strong>What is the largest signed Q1.15 value?</strong> 32767/32768, or 0.999969482421875.</li><li><strong>What is the quantum in signed Q8.8?</strong> 1/256, or 0.00390625.</li><li><strong>Why must a Q1.15 product use a wider intermediate?</strong> Multiplication produces a code scaled by 2^-30 and can need up to twice the operand width.</li><li><strong>What are two distinct responses to fixed-point overflow?</strong> Saturation and modular wrap, among others such as checked errors and widening.</li><li><strong>Why may a signed arithmetic right shift create rounding bias?</strong> For negative values it commonly rounds downward rather than truncating toward zero or nearest.</li><li><strong>What are the field widths of binary32?</strong> One sign bit, eight exponent bits and 23 stored fraction bits.</li><li><strong>What are the normal significand precision and bias of binary64?</strong> 53 binary precision bits and exponent bias 1023.</li><li><strong>How does floating spacing change with magnitude?</strong> For normal values, the spacing generally doubles when the exponent increases by one.</li><li><strong>How is a subnormal decoded differently from a normal?</strong> It has no implicit leading 1 and uses the minimum normal exponent with a fractional significand.</li><li><strong>What is the smallest positive binary32 subnormal?</strong> 2^-149.</li><li><strong>Does binary64 represent decimal 0.1 exactly?</strong> No; its binary expansion repeats and is rounded into the nearest binary64 value.</li><li><strong>What is the local upward ulp of binary64 at 1?</strong> 2^-52.</li><li><strong>How is unit roundoff related to binary64 machine epsilon under round-to-nearest?</strong> Unit roundoff 2^-53 is half the usual epsilon 2^-52.</li><li><strong>Why can an exact integer lose information when converted to binary64?</strong> Integers beyond its 53-bit contiguous exactness range may round to the same floating value.</li><li><strong>Why can 1e16 + 1 equal 1e16 in binary64?</strong> The local representable gap exceeds one, so the addition rounds back to 1e16.</li><li><strong>What is catastrophic cancellation?</strong> Loss of meaningful significant digits when subtracting close quantities carrying prior approximation error.</li><li><strong>What is the distinction between condition and stability?</strong> Condition concerns problem sensitivity; stability concerns the algorithm’s numerical behavior.</li><li><strong>What can compensated summation improve?</strong> It can recover contributions lost through repeated rounding in ordinary summation.</li><li><strong>Does math.fsum make decimal 0.1 exactly representable?</strong> No; it improves summation but the input binary-float 0.1 remains approximate.</li><li><strong>What is the benefit of fused multiply–add?</strong> A product and sum are rounded once rather than at separate intermediate steps.</li><li><strong>Why are near-zero comparisons often given an absolute tolerance?</strong> A relative-only tolerance scales to almost zero around zero.</li><li><strong>What happens when a positive subnormal is halved below the minimum quantum?</strong> It may round to positive zero.</li><li><strong>Why is an IEEE infinity not interchangeable with an unbounded physical measurement?</strong> Infinity is a numeric special value and may reflect overflow or invalid assumptions, not physical truth.</li><li><strong>When might exact integer cents be preferable to binary floating dollars?</strong> When exact minor-unit ledger accounting and specified decimal settlement rules are required.</li><li><strong>What must a format decision record besides word width?</strong> Units, signedness, scale or float encoding, rounding, overflow, intermediate widths, special cases and tests.</li></ol>
+</section>
+<section id="glossary-of-numerical-representation" aria-labelledby="heading-glossary-of-numerical-representation">
+<h2 id="heading-glossary-of-numerical-representation">Glossary of Numerical Representation</h2>
+<p>The definitions below are specific to the finite-precision and algorithmic setting. A term such as “resolution” can have different meanings in sensors, converters and storage; the local meaning should always be specified.</p>
+<table><caption>Terminology for encoding, arithmetic, error and implementation contracts.</caption><thead><tr><th scope="col">Term</th><th scope="col">Definition</th></tr></thead><tbody><tr><td>Absolute error</td><td>Magnitude of the difference between computed and reference values in the original units.</td></tr><tr><td>Accumulator</td><td>Register or value holding a running combination of arithmetic results.</td></tr><tr><td>Alignment</td><td>Shifting floating significands to a compatible exponent for addition.</td></tr><tr><td>Arithmetic shift</td><td>Bit shift that commonly replicates the sign bit in two’s-complement signed arithmetic.</td></tr><tr><td>Backward stability</td><td>Computed result corresponds to exact result for nearby input data under an appropriate model.</td></tr><tr><td>Bias</td><td>Systematic tendency for approximation error to favor one direction.</td></tr><tr><td>Binary point</td><td>Conceptual location separating integer and fractional powers of two.</td></tr><tr><td>Binary32</td><td>IEEE 754 binary interchange format with 32 total bits and 24-bit normal significand precision.</td></tr><tr><td>Binary64</td><td>IEEE 754 binary interchange format with 64 total bits and 53-bit normal significand precision.</td></tr><tr><td>Block floating point</td><td>Representation in which multiple values share an exponent.</td></tr><tr><td>Cancellation</td><td>Subtraction of nearby quantities, potentially exposing previous rounding error.</td></tr><tr><td>Checked arithmetic</td><td>Arithmetic that detects an unrepresentable result rather than silently wrapping.</td></tr><tr><td>Clipping</td><td>Limiting an out-of-range value to the destination range.</td></tr><tr><td>Condition number</td><td>Measure of sensitivity of a mathematical result to small input changes.</td></tr><tr><td>Conversion</td><td>Mapping a numeric value from one representation into another.</td></tr><tr><td>Decimal floating point</td><td>Finite-precision floating arithmetic whose significand uses base ten.</td></tr><tr><td>Denormalized number</td><td>Older common name for a subnormal floating-point number.</td></tr><tr><td>Double rounding</td><td>Successive rounding to an intermediate then a narrower format.</td></tr><tr><td>Dynamic range</td><td>Interval of magnitudes representable in a chosen format.</td></tr><tr><td>Endianness</td><td>Order of constituent bytes in a multibyte storage or transfer representation.</td></tr><tr><td>Exception flag</td><td>Status recording a floating-point exceptional arithmetic condition.</td></tr><tr><td>Exponent</td><td>Floating scale field controlling the magnitude of the significand.</td></tr><tr><td>Exponent bias</td><td>Offset used to encode signed exponent values in an unsigned field.</td></tr><tr><td>FMA</td><td>Fused multiply–add operation that rounds a product-plus-sum once.</td></tr><tr><td>Fixed point</td><td>Numeric representation with fixed scale between stored codes and values.</td></tr><tr><td>Float-to-integer conversion</td><td>Mapping a floating value into an integer according to a stated rounding policy.</td></tr><tr><td>Floating-point format</td><td>Finite representation with sign, significand and varying power-of-base scale.</td></tr><tr><td>Fraction field</td><td>Stored low-order significand bits in IEEE binary encodings.</td></tr><tr><td>Gradual underflow</td><td>Preservation of subnormal values below the normal range instead of abrupt zeroing.</td></tr><tr><td>Guard bits</td><td>Extra intermediate precision used before rounding a result.</td></tr><tr><td>Halfway tie</td><td>Exact value equidistant between adjacent representable values.</td></tr><tr><td>Headroom</td><td>Reserved value range to tolerate peaks and intermediates without overflow.</td></tr><tr><td>Inexact exception</td><td>IEEE condition when a rounded result differs from the exact result.</td></tr><tr><td>Infinity</td><td>IEEE special value representing positive or negative infinite numerical results.</td></tr><tr><td>Integer exactness</td><td>Ability of a format to distinguish an intended set of consecutive integers.</td></tr><tr><td>Intermediate precision</td><td>Precision used for a temporary result before conversion to final storage.</td></tr><tr><td>Kahan summation</td><td>Compensated running-sum technique that tracks lost low-order contributions.</td></tr><tr><td>Machine epsilon</td><td>Often defined as the gap from 1 to the next higher representable value.</td></tr><tr><td>Magnitude scaling</td><td>Choice of numerical unit or scale to keep values in a representable range.</td></tr><tr><td>Mixed precision</td><td>Use of multiple numeric precisions within one computation.</td></tr><tr><td>NaN</td><td>Not-a-number floating special value for invalid or unavailable numerical results.</td></tr><tr><td>Nearest-even</td><td>Round to nearer code and use even retained least-significant bit on ties.</td></tr><tr><td>Normal number</td><td>Floating finite nonzero value with implicit leading significand one in binary IEEE formats.</td></tr><tr><td>Numerical error budget</td><td>Allocation of allowable errors across measurement, representation and algorithm stages.</td></tr><tr><td>Overflow</td><td>Exact result lies outside representable finite range.</td></tr><tr><td>Pairwise summation</td><td>Balanced-tree aggregation that can reduce summation error relative to some orders.</td></tr><tr><td>Q-format</td><td>Notation for fixed-point fractional-bit allocation that requires a documented convention.</td></tr><tr><td>Quantization</td><td>Mapping an original value onto a finite set of representable values.</td></tr><tr><td>Quantum</td><td>Spacing between adjacent codes in fixed-point representation.</td></tr><tr><td>Range</td><td>Minimum and maximum values or magnitudes accessible to a representation.</td></tr><tr><td>Relative error</td><td>Error magnitude expressed relative to a reference value when nonzero.</td></tr><tr><td>Round toward zero</td><td>Rounding direction that discards fractional magnitude.</td></tr><tr><td>Roundoff</td><td>Error introduced by approximating an exact arithmetic result.</td></tr><tr><td>SIMD</td><td>Single instruction applied to several data lanes.</td></tr><tr><td>Saturation</td><td>Clamping a result to the representable endpoint instead of wrapping.</td></tr><tr><td>Scale factor</td><td>Multiplier connecting stored integer code to its represented value.</td></tr><tr><td>Sign bit</td><td>Bit encoding sign in a floating interchange format.</td></tr><tr><td>Signal-to-noise ratio</td><td>Signal magnitude relative to noise, not equivalent to numeric word resolution.</td></tr><tr><td>Signed zero</td><td>IEEE floating-point positive and negative zero values.</td></tr><tr><td>Significand</td><td>Digits carrying a floating-point value’s precision.</td></tr><tr><td>Stability</td><td>Sensitivity of an implemented algorithm to arithmetic and input perturbations.</td></tr><tr><td>Stochastic rounding</td><td>Randomized choice of adjacent representable values under a defined probability rule.</td></tr><tr><td>Subnormal</td><td>Nonzero floating value encoded below the normal exponent range with reduced precision.</td></tr><tr><td>Ties-to-even</td><td>Halfway rounding rule preferring an even retained low-order significand or code.</td></tr><tr><td>Truncation</td><td>Removal of fractional digits or bits under a specified directional convention.</td></tr><tr><td>Two’s complement</td><td>Common signed binary integer encoding with modulo-bit behavior.</td></tr><tr><td>ULP</td><td>Unit in the last place, a local floating spacing or error unit under a stated convention.</td></tr><tr><td>Underflow</td><td>Floating computation produces a tiny result where range and precision effects apply.</td></tr><tr><td>Unit roundoff</td><td>Typical bound for relative single-operation error under suitable normal round-to-nearest conditions.</td></tr><tr><td>Widened multiplication</td><td>Product computed with a larger intermediate width than the input operand width.</td></tr><tr><td>Word width</td><td>Number of bits dedicated to a stored value.</td></tr><tr><td>Wraparound</td><td>Modular handling of integer overflow, discarding bits beyond the word width.</td></tr><tr><td>Zero normalization</td><td>Mapping of an exact or rounded zero into one of the signed IEEE zero encodings.</td></tr></tbody></table>
+</section>
+<section id="other-specialist-articles-in-analog-and-digital-computation" aria-labelledby="heading-other-specialist-articles-in-analog-and-digital-computation">
+<h2 id="heading-other-specialist-articles-in-analog-and-digital-computation">Other Specialist Articles in Analog and Digital Computation</h2>
+<p>The following directory lists all sixteen prescribed Level 5 articles. Hyperlinks use their intended extensionless public destinations; a linked article may still await installation or publication. The directory is provided for curricular navigation, not as evidence of live deployment.</p>
+<ol><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/mechanical-analog-computation"><strong>Mechanical Analog Computation</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/electronic-analog-computer-circuits"><strong>Electronic Analog Computer Circuits</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/analog-integrators-and-differential-equations"><strong>Analog Integrators and Differential Equations</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/physical-scaling-in-analog-computation"><strong>Physical Scaling in Analog Computation</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/digital-switching-and-state-representation"><strong>Digital Switching and State Representation</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/fixed-point-and-floating-point-representation"><strong>Fixed-Point and Floating-Point Representation</strong></a> — this article</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/sampling-theory-and-aliasing"><strong>Sampling Theory and Aliasing</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/analog-to-digital-converters"><strong>Analog-to-Digital Converters</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/digital-to-analog-converters"><strong>Digital-to-Analog Converters</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/quantization-noise-and-effective-resolution"><strong>Quantization Noise and Effective Resolution</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/converter-clock-jitter-and-timing"><strong>Converter Clock Jitter and Timing</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/hybrid-analog-digital-computers"><strong>Hybrid Analog-Digital Computers</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/mixed-signal-embedded-system-design"><strong>Mixed-Signal Embedded System Design</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/analog-in-memory-computing"><strong>Analog In-Memory Computing</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/computational-error-budgets-and-calibration"><strong>Computational Error Budgets and Calibration</strong></a></li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/neuromorphic-analog-and-event-driven-circuits"><strong>Neuromorphic Analog and Event-Driven Circuits</strong></a></li></ol>
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>These are adjacent parent subjects or complementary specialist topics, not additional children of the present article. The distinctions help keep this article focused on arithmetic behavior of finite binary numbers.</p>
+<ul><li><a href="/library/encyclopedia/computer-science/computational-foundations/data-representation">Data Representation</a> — broader cross-media data type and bit-encoding contracts.</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/binary-logic">Binary Logic</a> — Boolean interpretation and gate-level logic.</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/algorithm-analysis">Algorithm Analysis</a> — mathematical and empirical costs of algorithms.</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/probability-and-statistics-for-computing">Probability and Statistics for Computing</a> — random error and uncertainty analysis.</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/digital-switching-and-state-representation">Digital Switching and State Representation</a> — physical thresholds and storage of bits.</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/analog-to-digital-converters">Analog-to-Digital Converters</a> — conversion of physical voltages into codes.</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/quantization-noise-and-effective-resolution">Quantization Noise and Effective Resolution</a> — spectral noise and converter performance.</li><li><a href="/library/encyclopedia/computer-science/computational-foundations/analog-and-digital-computation-articles/computational-error-budgets-and-calibration">Computational Error Budgets and Calibration</a> — physical measurement and total error accounting.</li></ul>
+</section>
+<section id="references-and-further-reading" aria-labelledby="heading-references-and-further-reading">
+<h2 id="heading-references-and-further-reading">References and Further Reading</h2>
+<p>The technical treatment is grounded in the IEEE binary arithmetic model, standard numerical-analysis references and official language/DSP documentation. The computations, control scenarios and sample bit patterns are constructed educational examples; they do not assert behavior for an unspecified device datasheet or safety case.</p>
+<ol><li>IEEE Standards Association, IEEE 754-2019, IEEE Standard for Floating-Point Arithmetic: binary interchange formats and required arithmetic behavior. <a href="https://standards.ieee.org/ieee/754/6210/">Reference</a>.</li><li>NIST Digital Library of Mathematical Functions, §3.1 Arithmetic and Error Measures: numerical representations, error and precision. <a href="https://dlmf.nist.gov/3.1">Reference</a>.</li><li>David Goldberg, What Every Computer Scientist Should Know About Floating-Point Arithmetic, ACM Computing Surveys 23(1), 1991; Oracle technical reprint. <a href="https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html">Reference</a>.</li><li>Python Software Foundation, Floating-Point Arithmetic: Issues and Limitations: binary representation, print conversion, comparisons and summation. <a href="https://docs.python.org/3/tutorial/floatingpoint.html">Reference</a>.</li><li>Python Software Foundation, math module: ulp, nextafter, fsum, isclose and machine-related numerical tools. <a href="https://docs.python.org/3/library/math.html">Reference</a>.</li><li>Python Software Foundation, decimal module: decimal floating arithmetic, contexts and rounding. <a href="https://docs.python.org/3/library/decimal.html">Reference</a>.</li><li>Arm, CMSIS-DSP Software Library: fixed-point data types, saturation and DSP arithmetic conventions. <a href="https://arm-software.github.io/CMSIS-DSP/latest/group__FIXED.html">Reference</a>.</li><li>MIPS Technologies, MIPS DSP Application-Specific Extension Reference: fractional formats, saturation and fixed-point instructions. <a href="https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00375-2B-MIPS64DSP-AFP-03.02.pdf">Reference</a>.</li></ol>
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope">
+<h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Editorial position:</strong> article 6 of 16 in the Analog and Digital Computation Level 5 specialist sequence. Physical filename: <code>computational-foundations\analog-and-digital-computation-articles\fixed-point-and-floating-point-representation.html</code>. Canonical URL omits the physical <code>.html</code> extension. The manuscript is prepared for MGU installation; creation of this file does not establish that it has been deployed on a live public website.</p>
+<p><strong>Specialist scope:</strong> finite-word numeric contracts, scaled integers, Q-format fixed-point arithmetic, IEEE binary32 and binary64 encoding, precision and special values, rounding, saturation, accumulators, cancellation, mixed precision, numerical selection and testing. Sensor conversion physics, analog noise spectra, and general database serialization remain with the distinct encyclopedia articles linked above.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) { pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`; }
+  });
+</script>
+</body>
+</html>

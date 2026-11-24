@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Load/Store Units and Memory Ordering | MGU Computer Science Encyclopedia | Malone Global University</title>
+<meta name="description" content="CPU load/store units and memory ordering: address generation, store forwarding, load and store queues, speculation, replay, TSO, RVWMO, Arm memory barriers, atomic synchronization, and LSU performance.">
+<meta name="keywords" content="load store unit, LSU, load queue, store queue, store forwarding, memory ordering, TSO, RVWMO, acquire release, memory fences, memory disambiguation, store buffer, cache coherence">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Load/Store Units and Memory Ordering | MGU Encyclopedia">
+<meta property="og:description" content="How CPUs execute loads and stores through queues, forwarding, speculation, ordering rules, fences, and architectural memory semantics.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero"><h1>Load/Store Units and Memory Ordering</h1><p class="subtitle">How CPUs execute loads and stores through queues, forwarding, speculation, ordering rules, fences, and architectural memory semantics.</p></section>
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol><li><a href="#scope-and-central-question">Scope and Central Question</a></li><li><a href="#learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</a></li><li><a href="#a-memory-instruction-is-more-than-an-address">A Memory Instruction Is More Than an Address</a></li><li><a href="#conceptual-lsu-dataflow">Conceptual LSU Dataflow</a></li><li><a href="#instruction-age-issue-completion-retirement-and-visibility">Instruction Age, Issue, Completion, Retirement, and Visibility</a></li><li><a href="#the-load-path-from-operands-to-value">The Load Path: From Operands to Value</a></li><li><a href="#the-store-path-address-data-and-commitment">The Store Path: Address, Data, and Commitment</a></li><li><a href="#address-generation-units">Address Generation Units</a></li><li><a href="#worked-example-base-plus-offset-addressing">Worked Example: Base-plus-Offset Addressing</a></li><li><a href="#address-translation-tlbs-and-permissions">Address Translation, TLBs, and Permissions</a></li><li><a href="#alignment-access-width-and-split-transactions">Alignment, Access Width, and Split Transactions</a></li><li><a href="#byte-lanes-and-write-masks">Byte Lanes and Write Masks</a></li><li><a href="#load-queues-and-store-queues">Load Queues and Store Queues</a></li><li><a href="#queue-capacity-and-backpressure">Queue Capacity and Backpressure</a></li><li><a href="#store-to-load-forwarding">Store-to-Load Forwarding</a></li><li><a href="#worked-example-youngest-older-store-wins">Worked Example: Youngest Older Store Wins</a></li><li><a href="#partial-overlap-and-forwarding-restrictions">Partial-Overlap and Forwarding Restrictions</a></li><li><a href="#memory-dependencies-raw-war-and-waw">Memory Dependencies: RAW, WAR, and WAW</a></li><li><a href="#why-unknown-store-addresses-matter">Why Unknown Store Addresses Matter</a></li><li><a href="#store-set-and-dependence-prediction">Store-Set and Dependence Prediction</a></li><li><a href="#an-illustrative-conservative-alias-test">An Illustrative Conservative Alias Test</a></li><li><a href="#speculative-loads-validation-and-replay">Speculative Loads, Validation, and Replay</a></li><li><a href="#demonstration-an-aliasing-violation-detector">Demonstration: An Aliasing Violation Detector</a></li><li><a href="#from-load-queue-to-architectural-retirement">From Load Queue to Architectural Retirement</a></li><li><a href="#store-commitment-and-the-store-buffer">Store Commitment and the Store Buffer</a></li><li><a href="#a-timeline-forwarded-data-versus-remote-visibility">A Timeline: Forwarded Data Versus Remote Visibility</a></li><li><a href="#memory-consistency-is-an-architectural-contract">Memory Consistency Is an Architectural Contract</a></li><li><a href="#sequential-consistency-as-a-baseline">Sequential Consistency as a Baseline</a></li><li><a href="#store-buffering-litmus-test">Store-Buffering Litmus Test</a></li><li><a href="#x86-64-tso-in-context">x86-64 TSO in Context</a></li><li><a href="#armv8-a-memory-ordering">Armv8-A Memory Ordering</a></li><li><a href="#risc-v-rvwmo-and-fences">RISC-V RVWMO and Fences</a></li><li><a href="#cross-architecture-comparison">Cross-Architecture Comparison</a></li><li><a href="#cache-coherence-versus-memory-consistency">Cache Coherence Versus Memory Consistency</a></li><li><a href="#atomicity-ordering-and-durability-are-different">Atomicity, Ordering, and Durability Are Different</a></li><li><a href="#acquire-release-and-happens-before">Acquire, Release, and Happens-Before</a></li><li><a href="#an-illustrative-message-passing-pattern">An Illustrative Message-Passing Pattern</a></li><li><a href="#why-fences-are-not-a-general-substitute-for-atomics">Why Fences Are Not a General Substitute for Atomics</a></li><li><a href="#atomic-read-modify-write-and-lsu-coordination">Atomic Read-Modify-Write and LSU Coordination</a></li><li><a href="#memory-mapped-io-and-device-memory">Memory-Mapped I/O and Device Memory</a></li><li><a href="#dma-io-coherence-and-ordering-domains">DMA, I/O Coherence, and Ordering Domains</a></li><li><a href="#speculation-side-effects-and-transient-information-leakage">Speculation, Side Effects, and Transient Information Leakage</a></li><li><a href="#memory-level-parallelism-and-nonblocking-loads">Memory-Level Parallelism and Nonblocking Loads</a></li><li><a href="#worked-example-dependent-versus-independent-loads">Worked Example: Dependent Versus Independent Loads</a></li><li><a href="#load-and-store-bandwidth-limits">Load and Store Bandwidth Limits</a></li><li><a href="#store-buffer-coalescing-and-write-combining">Store-Buffer Coalescing and Write Combining</a></li><li><a href="#false-sharing-and-inter-core-contention">False Sharing and Inter-Core Contention</a></li><li><a href="#prefetching-interactions-and-memory-order">Prefetching Interactions and Memory Order</a></li><li><a href="#performance-analysis-a-bottleneck-checklist">Performance Analysis: A Bottleneck Checklist</a></li><li><a href="#a-simple-queue-pressure-model">A Simple Queue-Pressure Model</a></li><li><a href="#correctness-invariants-for-the-lsu">Correctness Invariants for the LSU</a></li><li><a href="#ordering-and-value-selection-must-be-checked-separately">Ordering and Value Selection Must Be Checked Separately</a></li><li><a href="#formal-verification-and-litmus-testing">Formal Verification and Litmus Testing</a></li><li><a href="#test-matrix-for-an-lsu-implementation">Test Matrix for an LSU Implementation</a></li><li><a href="#applied-scenario-1-partial-store-forwarding-in-a-packet-parser">Applied Scenario 1 — Partial Store Forwarding in a Packet Parser</a></li><li><a href="#applied-scenario-2-the-store-queue-becomes-the-throughput-limit">Applied Scenario 2 — The Store Queue Becomes the Throughput Limit</a></li><li><a href="#applied-scenario-3-an-older-store-address-is-not-ready">Applied Scenario 3 — An Older Store Address Is Not Ready</a></li><li><a href="#applied-scenario-4-a-flag-publishes-a-data-structure">Applied Scenario 4 — A Flag Publishes a Data Structure</a></li><li><a href="#applied-scenario-5-a-device-doorbell-and-descriptor-ring">Applied Scenario 5 — A Device Doorbell and Descriptor Ring</a></li><li><a href="#applied-scenario-6-a-pointer-chasing-graph-traversal">Applied Scenario 6 — A Pointer-Chasing Graph Traversal</a></li><li><a href="#ten-gate-lsu-design-and-evaluation-framework">Ten-Gate LSU Design and Evaluation Framework</a></li><li><a href="#suggested-study-path-beginning-cpu-student">Suggested Study Path: Beginning CPU Student</a></li><li><a href="#suggested-study-path-processor-designer">Suggested Study Path: Processor Designer</a></li><li><a href="#suggested-study-path-systems-software-engineer">Suggested Study Path: Systems Software Engineer</a></li><li><a href="#guided-exercise-1-trace-a-load-from-older-stores">Guided Exercise 1 — Trace a Load From Older Stores</a></li><li><a href="#guided-exercise-2-predict-queue-pressure">Guided Exercise 2 — Predict Queue Pressure</a></li><li><a href="#guided-exercise-3-reason-about-store-buffering">Guided Exercise 3 — Reason About Store Buffering</a></li><li><a href="#guided-exercise-4-investigate-a-forwarding-stall">Guided Exercise 4 — Investigate a Forwarding Stall</a></li><li><a href="#guided-exercise-5-review-a-dma-descriptor-handoff">Guided Exercise 5 — Review a DMA Descriptor Handoff</a></li><li><a href="#review-questions">Review Questions</a></li><li><a href="#glossary">Glossary</a></li><li><a href="#complete-cpu-specialist-directory">Complete CPU Specialist Directory</a></li><li><a href="#related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</a></li><li><a href="#primary-documentation-and-further-reading">Primary Documentation and Further Reading</a></li><li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li></ol></section>
+<section id="scope-and-central-question" aria-labelledby="heading-scope-and-central-question"><h2 id="heading-scope-and-central-question">Scope and Central Question</h2>
+<p>The <strong>load/store unit (LSU)</strong> is the portion of a processor that turns load and store instructions into ordered, address-checked transactions with the memory system. Arithmetic pipelines mostly consume and produce register values; a memory pipeline must also determine <em>which bytes</em> a reference names, <em>which older stores</em> could supply those bytes, <em>whether the access is permitted</em>, and <em>when its effects may be exposed to another observer</em>. The central question is therefore more demanding than “how quickly can a cache return data?”: <strong>how can a processor execute memory requests aggressively while preserving the architectural memory semantics of the program?</strong></p>
+<p>This is Central Processing Unit specialist article <strong>14 of 24</strong>, in the Hardware Systems division of the MGU Computer Science Encyclopedia. It covers address generation, load and store pipelines, load queues and store queues, store-to-load forwarding, memory-dependence prediction, ordering, replay, store commitment, fences and atomic instructions, and practical validation. The main comparison is between the operations a processor <em>executes</em>, the results it <em>retires</em>, and the stores that become <em>observable</em>. Those events need not occur at the same time.</p>
+<p>The article uses an illustrative out-of-order core and limited software models to make the logic concrete. Actual CPUs differ in queue organization, cache policies, forwarding rules, fence implementation, and ISA guarantees. Nothing here should be read as the microarchitectural specification of every x86-64, AArch64, or RISC-V processor. <a href="https://docs.riscv.org/reference/isa/v20260120/unpriv/mm-eplan.html">RISC-V RVWMO</a>, <a href="https://support.arm.com/documentation/102336/0100/Memory-ordering">Arm memory ordering</a>, and <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Intel's developer manuals</a> are primary architectural references.</p>
+</section>
+<section id="learning-objectives-and-prerequisites" aria-labelledby="heading-learning-objectives-and-prerequisites"><h2 id="heading-learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</h2>
+<p>After studying this article, readers should be able to trace a load or store through address generation, address translation, the LSU, and the memory hierarchy; explain how queues track instruction age and outstanding memory work; calculate load-data values reconstructed from a byte mask and one or more older stores; and distinguish a speculative execution dependency from a permanent architectural dependency. They should also interpret basic memory-ordering litmus tests, explain why coherence does not define all legal cross-address outcomes, choose the correct synchronization abstraction, and investigate load/store stalls using measured evidence.</p>
+<p>Prerequisites include byte-addressed memory, virtual addresses, cache lines, pipeline stages, program order, instruction retirement, and a basic understanding of concurrency. For an introduction, first read <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>. For caches, see <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a>. The Python examples describe <strong>deliberately simplified mechanisms</strong>, not complete runnable CPU simulators.</p>
+</section>
+<section id="a-memory-instruction-is-more-than-an-address" aria-labelledby="heading-a-memory-instruction-is-more-than-an-address"><h2 id="heading-a-memory-instruction-is-more-than-an-address">A Memory Instruction Is More Than an Address</h2>
+<p>Consider <code>load r1, [r2 + 12]</code>. The decoder recognizes an architectural instruction; the address-generation unit combines a base register with the signed immediate; address translation resolves the resulting virtual address; the LSU decides when it may issue; the cache or an older buffered store supplies the bytes; hardware extends or transforms those bytes as required; and the destination register eventually receives the result. A page fault, protection violation, alignment exception, or ordering conflict can interrupt or replay this sequence.</p>
+<p>For <code>store [r2 + 12], r3</code>, there are at least two inputs: address and data. They can become ready in different cycles, and out-of-order cores often hold them separately until both are known. Even after a store is marked architecturally committed, it may reside in a store buffer before becoming visible to another core, subject to the memory model. Unlike an ordinary arithmetic instruction, a store could affect externally visible shared state; the processor must therefore regulate when that side effect is released.</p>
+</section>
+<section id="conceptual-lsu-dataflow" aria-labelledby="heading-conceptual-lsu-dataflow"><h2 id="heading-conceptual-lsu-dataflow">Conceptual LSU Dataflow</h2>
+<p>An LSU typically interfaces with operand-read logic, an address-generation unit (AGU), translation structures, a data cache, a load queue, a store queue, and a retirement/commit mechanism. Some architectures use dedicated load and store AGUs; others share integer execution hardware or split address and data pipelines. The diagram is a <em>logical map</em>, not a transistor-level or cycle-accurate implementation.</p>
+<figure>
+<svg viewBox="0 0 1250 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="lsu-fig-title lsu-fig-desc" style="display:block;max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px">
+<title id="lsu-fig-title">Illustrative load/store unit control and data paths</title>
+<desc id="lsu-fig-desc">Memory instructions enter address-generation and translation stages. The load queue tracks loads and the store queue tracks stores. A forwarding path can supply load bytes from older stores. Loads also consult the L1 data cache and lower memory hierarchy. Retirement authorizes stores that proceed through committed store buffering to the cache system.</desc>
+<defs><marker id="lsu-arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="currentColor"/></marker></defs>
+<g font-family="Arial, sans-serif" fill="none" stroke="currentColor" stroke-width="2">
+<rect x="42" y="48" width="222" height="72" rx="10"/><rect x="338" y="48" width="235" height="72" rx="10"/>
+<rect x="652" y="48" width="238" height="72" rx="10"/><rect x="972" y="48" width="220" height="72" rx="10"/>
+<rect x="260" y="212" width="245" height="74" rx="10"/><rect x="682" y="212" width="245" height="74" rx="10"/>
+<rect x="42" y="367" width="270" height="76" rx="10"/><rect x="410" y="367" width="285" height="76" rx="10"/>
+<rect x="824" y="367" width="355" height="76" rx="10"/>
+<path d="M264 84 H336" marker-end="url(#lsu-arrow)"/><path d="M573 84 H649" marker-end="url(#lsu-arrow)"/>
+<path d="M890 84 H969" marker-end="url(#lsu-arrow)"/>
+<path d="M460 120 V178 H382 V209" marker-end="url(#lsu-arrow)"/>
+<path d="M753 120 V209" marker-end="url(#lsu-arrow)"/>
+<path d="M505 249 H680" marker-end="url(#lsu-arrow)" stroke-dasharray="8 5"/>
+<path d="M382 286 V329 H545 V364" marker-end="url(#lsu-arrow)"/>
+<path d="M805 286 V329 H954 V364" marker-end="url(#lsu-arrow)"/>
+<path d="M312 405 H407" marker-end="url(#lsu-arrow)"/>
+<path d="M695 405 H821" marker-end="url(#lsu-arrow)"/>
+<path d="M1065 443 V498 H188 V445" marker-end="url(#lsu-arrow)" stroke-dasharray="8 6"/>
+</g>
+<g font-family="Arial, sans-serif" font-size="19" text-anchor="middle" fill="currentColor">
+<text x="153" y="77">Decoded memory</text><text x="153" y="100">operations</text>
+<text x="456" y="77">AGU / address</text><text x="456" y="100">calculation</text>
+<text x="771" y="77">DTLB / translation</text><text x="771" y="100">and checks</text>
+<text x="1082" y="78">Ordering and</text><text x="1082" y="101">replay control</text>
+<text x="383" y="241">Load queue</text><text x="383" y="265">(LQ)</text>
+<text x="804" y="241">Store queue</text><text x="804" y="265">(SQ)</text>
+<text x="178" y="396">Load result</text><text x="178" y="419">to execution</text>
+<text x="553" y="397">L1 data cache</text><text x="553" y="420">+ miss handling</text>
+<text x="1001" y="396">Retired stores / store buffer</text><text x="1001" y="419">downstream visibility path</text>
+</g>
+<g font-family="Arial, sans-serif" font-size="15" fill="currentColor"><text x="565" y="236">forwarding</text><text x="567" y="254">check</text><text x="453" y="322">load request</text><text x="894" y="322">committed store</text><text x="470" y="523">Illustrative control/data flows; actual queue topology and writeback differ by core.</text></g>
+</svg>
+<figcaption>Conceptual LSU. Solid arrows show representative work paths; dashed arrows emphasize forwarding and downstream memory effects. The drawing does not require all blocks to operate in that literal sequence.</figcaption>
+</figure>
+
+<p>The load response may come from an L1 data-cache hit, a store-forwarding path, a lower cache, DRAM, or a coherence response; the result can be forwarded to dependent instructions before those instructions retire. The store path must retain unresolved or uncommitted writes while protecting architectural correctness. Real implementations may allocate separate address/data queues, use a unified structure, or include additional miss-status handling registers and writeback buffers.</p>
+</section>
+<section id="instruction-age-issue-completion-retirement-and-visibility" aria-labelledby="heading-instruction-age-issue-completion-retirement-and-visibility"><h2 id="heading-instruction-age-issue-completion-retirement-and-visibility">Instruction Age, Issue, Completion, Retirement, and Visibility</h2>
+<p><strong>Program order</strong> is the order of architectural instructions in one thread. <strong>Issue order</strong> is the order in which micro-operations are selected for execution; <strong>completion</strong> means the particular operation produced its local result; <strong>retirement</strong> is the ordered point where the processor accepts its architectural effects; and <strong>visibility</strong> concerns when another observer can see a memory write. In an out-of-order design, a younger cache-hit load can complete before an older cache-miss load. Yet the younger instruction ordinarily cannot retire ahead of an older instruction that has not completed, if the implementation uses in-order retirement.</p>
+<p>A store typically can compute its address and data early, wait in an ordered structure, retire when safe, then drain from a store buffer according to its memory model and coherence machinery. One must not treat a trace showing “store executed” as proof that all other cores already see the value. Conversely, a processor may provide the new value to its <em>own</em> younger load through forwarding while the store is not yet globally visible. This distinction underlies store-buffering litmus tests.</p>
+</section>
+<section id="the-load-path-from-operands-to-value" aria-labelledby="heading-the-load-path-from-operands-to-value"><h2 id="heading-the-load-path-from-operands-to-value">The Load Path: From Operands to Value</h2>
+<p>A common load sequence is: decode and allocate bookkeeping → wait for base/index operands → compute effective virtual address → translate and check access → identify older overlapping stores → access a forwarding path or the cache hierarchy → extract, sign/zero extend, and deliver the value → confirm ordering and retire at the correct point. Implementations can overlap several of these operations and may start cache indexing in parallel with translation where the geometry permits.</p>
+<p>If the load misses in L1, the core may retain a miss-tracking entry while independent instructions continue. If it overlaps an older store whose address or data remains unknown, the core may wait or speculate according to its disambiguation policy. A load can also re-execute because of a coherence event, a detected ordering violation, a failed memory dependency prediction, or an exception. <strong>A ready value is not by itself proof that the load is architecturally safe to retire.</strong></p>
+</section>
+<section id="the-store-path-address-data-and-commitment" aria-labelledby="heading-the-store-path-address-data-and-commitment"><h2 id="heading-the-store-path-address-data-and-commitment">The Store Path: Address, Data, and Commitment</h2>
+<p>A store generally has to determine its address, identify the bytes to modify, and obtain the store data. On a little-endian system a four-byte store of <code>0x11223344</code> to address <code>A</code> places bytes <code>44 33 22 11</code> at <code>A..A+3</code>; byte order must be taken from the architecture and access width, not guessed from a diagram. An LSU can queue the address and payload separately until both are available, and it may format byte write masks before accessing cache or bus infrastructure.</p>
+<p>Stores cannot simply update the architectural memory hierarchy as soon as they execute if they might later be discovered to be on a mispredicted path or behind a faulting older instruction. They can instead wait until retirement authorizes their effects. The design then arranges visibility, buffering, and ordering in accordance with its contract. Some writes—particularly memory-mapped I/O and strongly ordered device traffic—follow more restrictive rules than ordinary cacheable memory.</p>
+</section>
+<section id="address-generation-units" aria-labelledby="heading-address-generation-units"><h2 id="heading-address-generation-units">Address Generation Units</h2>
+<p>An AGU calculates effective addresses, commonly by adding a register base, optional index or scale, and displacement. It is a hardware datapath; it need not know whether a pointer refers to a stack, heap, or file mapping. Address generation may be scheduled separately from the load-data return or store-data preparation. Multiple AGUs can permit several memory addresses to be generated per cycle, though cache ports, translation resources, and queue capacities may constrain sustainable throughput.</p>
+<p>A useful performance decomposition distinguishes <strong>address-generation throughput</strong>, <strong>load-data bandwidth</strong>, <strong>store-data bandwidth</strong>, and <strong>commit/drain capacity</strong>. A processor advertised as “two loads and one store per cycle” under a particular microbenchmark may achieve less on unaligned accesses, insufficiently translated addresses, cache misses, or read-modify-write sequences. The number of nominal ports does not establish application-level memory throughput without the instruction mix and operand availability.</p>
+</section>
+<section id="worked-example-base-plus-offset-addressing" aria-labelledby="heading-worked-example-base-plus-offset-addressing"><h2 id="heading-worked-example-base-plus-offset-addressing">Worked Example: Base-plus-Offset Addressing</h2>
+<p>For an illustrative 64-bit core, suppose a register contains <code>0x00001000</code> and the instruction encodes a signed immediate of <code>-24</code>. The computed effective address is <code>0x00000FE8</code>. This example illustrates arithmetic only; whether the resulting access is legal depends on address translation, permissions, alignment, and memory attributes.</p>
+<pre><code class="language-python">BASE = 0x1000
+IMM = -24
+MASK64 = (1 &lt;&lt; 64) - 1
+address = (BASE + IMM) &amp; MASK64
+assert address == 0xFE8
+print(hex(address))  # 0xfe8
+</code></pre>
+<p>The arithmetic wraparound here models an unsigned 64-bit address calculation. The legality and interpretation of such wraparound are ISA-specific, so this small Python snippet is <strong>not</strong> a general model of pointer validity or canonical-address checks.</p>
+</section>
+<section id="address-translation-tlbs-and-permissions" aria-labelledby="heading-address-translation-tlbs-and-permissions"><h2 id="heading-address-translation-tlbs-and-permissions">Address Translation, TLBs, and Permissions</h2>
+<p>Address translation is separate from the logical memory-ordering decision. A data TLB can translate a virtual address to a physical one; a miss may trigger a hardware page-table walk or an architecture-specific software-managed translation path. A translation failure can cause an architectural exception, and permission checks may depend on the operating mode and the type of access. Load and store operations can have different permission outcomes at the same virtual address.</p>
+<p>An access that straddles pages may require translation of both pages; one part may be accessible while the other is not. The system must ensure that fault handling and visible side effects comply with the ISA, especially for a store split across boundaries. Page-table update rules and TLB synchronization belong more fully to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a>. LSU designers must nevertheless coordinate translation status with replay, buffering, and precise exception reporting.</p>
+</section>
+<section id="alignment-access-width-and-split-transactions" aria-labelledby="heading-alignment-access-width-and-split-transactions"><h2 id="heading-alignment-access-width-and-split-transactions">Alignment, Access Width, and Split Transactions</h2>
+<p>An aligned eight-byte load at an address divisible by eight is often simpler to service than an eight-byte load crossing a cache-line boundary. A misaligned access may be supported directly, handled in multiple internal requests, or raise an exception depending on the ISA, memory type, and platform. If a line boundary or page boundary is crossed, two cache lines or translations may participate; such an access can consume additional queue and cache-port resources.</p>
+<p><strong>Atomicity is a separate question.</strong> A machine may accept a misaligned access without guaranteeing that another observer perceives the operation as indivisible. Do not infer atomic behavior merely from the fact that the instruction executes successfully. On certain platforms, split access to device registers can be incorrect even if the same access pattern works on ordinary RAM. Alignment, access size, and the documented memory-region attributes must be checked together.</p>
+</section>
+<section id="byte-lanes-and-write-masks" aria-labelledby="heading-byte-lanes-and-write-masks"><h2 id="heading-byte-lanes-and-write-masks">Byte Lanes and Write Masks</h2>
+<p>Stores often modify fewer bytes than a whole cache line. A byte write mask records which lanes should be replaced; a forwarding path can use similar masks to assemble a younger load's value. For example, a two-byte store to offsets 1 and 2 of a four-byte word changes those lanes but leaves offsets 0 and 3 unchanged. The byte lanes should be reasoned about in address order, and endianness applied only when converting the lane sequence to an integer.</p>
+<pre><code class="language-python">def apply_store(old: bytes, offset: int, payload: bytes) -&gt; bytes:
+    assert 0 &lt;= offset &lt;= len(old) - len(payload)
+    result = bytearray(old)
+    result[offset:offset + len(payload)] = payload
+    return bytes(result)
+
+original = bytes.fromhex('aa bb cc dd')
+assert apply_store(original, 1, bytes.fromhex('11 22')) == bytes.fromhex('aa 11 22 dd')
+print(apply_store(original, 1, bytes.fromhex('11 22')).hex())
+</code></pre>
+<p>This deterministic byte-array example illustrates masking, not a performance model. Real stores can be merged, buffered, split, or forwarded through structures with different internal granularity.</p>
+</section>
+<section id="load-queues-and-store-queues" aria-labelledby="heading-load-queues-and-store-queues"><h2 id="heading-load-queues-and-store-queues">Load Queues and Store Queues</h2>
+<p>An out-of-order core may allocate <strong>load queue (LQ)</strong> entries to track loads in flight and <strong>store queue (SQ)</strong> entries to track older stores whose addresses, data, or commitment status may not yet be resolved. These queues permit dependence checks, forwarding, exception tracking, replay detection, and retirement coordination. An LQ entry can record address, age, completion status, and information needed to check whether its earlier execution remained legal.</p>
+<p>The SQ is often searched by younger loads for matching older writes. A load must not take data from a <em>younger</em> store, even if that store executed first physically. The relevant comparison is instruction age. Some designs divide store-address and store-data storage or maintain a store buffer for retired stores distinct from the speculative SQ. The exact naming and placement vary; BOOM documents a concrete load/store design and its store-dependence mask mechanism at <a href="https://docs.boom-core.org/en/latest/sections/load-store-unit.html">BOOM LSU documentation</a>.</p>
+</section>
+<section id="queue-capacity-and-backpressure" aria-labelledby="heading-queue-capacity-and-backpressure"><h2 id="heading-queue-capacity-and-backpressure">Queue Capacity and Backpressure</h2>
+<p>Queues are finite. When no LQ or SQ slot is available, decode, rename, or dispatch may stall, even though arithmetic execution units are free. A load miss can occupy a queue entry long after its initial execution attempt, and a long-lived store awaiting address data or retirement may block younger memory operations. The queue-full condition becomes a front-end throughput limitation rather than a direct cache-hit-latency issue.</p>
+<p>A first-order capacity estimate is <strong>occupancy ≈ arrival rate × mean residence time</strong> under steady-state assumptions (Little's law). If, hypothetically, a core accepts 1.5 memory operations per cycle and an entry stays resident for 20 cycles, average occupancy approaches 30 entries. This does <strong>not</strong> establish a queue's required size: latency variability, bursts, load/store proportions, allocation rules, and backpressure require headroom. A design with inadequate entries can lose throughput even at a high cache hit rate.</p>
+<pre><code class="language-python">arrival_rate = 1.5  # illustrative memory operations per cycle
+mean_residence = 20  # illustrative cycles
+average_occupancy = arrival_rate * mean_residence
+assert average_occupancy == 30.0
+print('Approximate average occupancy:', average_occupancy)
+</code></pre>
+</section>
+<section id="store-to-load-forwarding" aria-labelledby="heading-store-to-load-forwarding"><h2 id="heading-store-to-load-forwarding">Store-to-Load Forwarding</h2>
+<p>A younger load should see the value of the youngest older store that covers each required byte, provided the architectural model allows the access and the store payload is available. <strong>Store-to-load forwarding</strong> supplies that data from buffered store entries without requiring the store to become globally visible first. This can save a round trip through a cache, and it is necessary for single-thread consistency when a load immediately follows an older store to the same location.</p>
+<p>Forwarding is not an unconditional cache-bypass guarantee. Exact-match and partial-overlap cases may require different hardware; some patterns stall until the store becomes drainable or are replayed. The cost depends on store width, load width, byte alignment, and available data. Most importantly, the forwarding choice must respect instruction age rather than the accidental order in which queue entries were examined.</p>
+</section>
+<section id="worked-example-youngest-older-store-wins" aria-labelledby="heading-worked-example-youngest-older-store-wins"><h2 id="heading-worked-example-youngest-older-store-wins">Worked Example: Youngest Older Store Wins</h2>
+<p>Suppose an older store writes <code>AA BB</code> at addresses 0–1, a later but still older store writes <code>22 33</code> at addresses 1–2, and a still younger load reads addresses 0–2. Its result in address order is <code>AA 22 33</code>, because the second store supersedes the first at address 1. The example below walks stores <strong>newest to oldest</strong> to reconstruct each byte, then consults a backing memory image for uncovered bytes.</p>
+<pre><code class="language-python">def forward_bytes(memory: bytes, stores, load_address: int, size: int, load_age: int):
+    out = []
+    older_stores = [s for s in stores if s['age'] &lt; load_age]
+    for addr in range(load_address, load_address + size):
+        byte = memory[addr]
+        for store in sorted(older_stores, key=lambda s: s['age'], reverse=True):
+            delta = addr - store['address']
+            if 0 &lt;= delta &lt; len(store['data']):
+                byte = store['data'][delta]
+                break
+        out.append(byte)
+    return bytes(out)
+
+memory = bytes.fromhex('00 00 00 00')
+stores = [
+    {'age': 2, 'address': 0, 'data': bytes.fromhex('aa bb')},
+    {'age': 5, 'address': 1, 'data': bytes.fromhex('22 33')},
+]
+assert forward_bytes(memory, stores, 0, 3, load_age=7) == bytes.fromhex('aa 22 33')
+assert forward_bytes(memory, stores, 0, 3, load_age=4) == bytes.fromhex('aa bb 00')
+print(forward_bytes(memory, stores, 0, 3, 7).hex())
+</code></pre>
+<p>The backing-memory fallback is valid only for this simplified single-thread snapshot, with no concurrent updates or unresolved store entries. A real load may need to stall rather than choose memory if an older store's address or data is unknown; the next sections explain why.</p>
+</section>
+<section id="partial-overlap-and-forwarding-restrictions" aria-labelledby="heading-partial-overlap-and-forwarding-restrictions"><h2 id="heading-partial-overlap-and-forwarding-restrictions">Partial-Overlap and Forwarding Restrictions</h2>
+<p>Consider a four-byte load overlapping only two bytes of an older store. A sufficiently flexible LSU can merge forwarded bytes with bytes obtained elsewhere; a narrower forwarding path may replay the load or wait for the store to enter the cache. This is a performance detail, not an excuse to return the wrong bytes. Designers must also account for multiple older stores, page splits, endianness, cache-line splits, atomic accesses, and the difference between natural-size and unusual access widths.</p>
+<p>For performance diagnosis, a high proportion of store-forwarding stalls can indicate awkward structure layout, mixed-width field accesses, or a pattern of stores followed too closely by partially overlapping loads. It does not necessarily mean the program has a data race. Investigate whether data sizes, alignments, and dependencies produce forwarding restrictions on the <em>specific</em> processor; never generalize a forwarding penalty from one CPU generation to all others.</p>
+</section>
+<section id="memory-dependencies-raw-war-and-waw" aria-labelledby="heading-memory-dependencies-raw-war-and-waw"><h2 id="heading-memory-dependencies-raw-war-and-waw">Memory Dependencies: RAW, WAR, and WAW</h2>
+<p><strong>Read-after-write (RAW)</strong> memory dependence is a genuine flow dependence: a younger load to the same overlapping bytes must observe an appropriate earlier store, not an older stale value. <strong>Write-after-read (WAR)</strong> and <strong>write-after-write (WAW)</strong> constraints concern the observable ordering of accesses; processors can overlap implementation work provided the ISA-prescribed behavior is maintained. Register renaming removes certain <em>register-name</em> hazards, but it cannot rename arbitrary memory addresses because aliasing is determined dynamically.</p>
+<p>Load/store dependence questions are hard because addresses can be computed late. Two instructions may use unrelated registers whose runtime addresses alias, and conversely two syntactically similar expressions may reference different objects. A legal microarchitectural schedule is determined by resolved addresses, access types, sizes, instruction age, and the memory model—not simply by what two assembly mnemonics look like.</p>
+</section>
+<section id="why-unknown-store-addresses-matter" aria-labelledby="heading-why-unknown-store-addresses-matter"><h2 id="heading-why-unknown-store-addresses-matter">Why Unknown Store Addresses Matter</h2>
+<p>Suppose a younger load is ready to read address <code>A</code>, but an older store has computed its data without yet computing its address. The older store might target <code>A</code>, in which case the load must not permanently use the pre-store value. One conservative core waits for all relevant older store addresses; a more aggressive core predicts independence and executes the load. Later resolution reveals whether that decision was correct.</p>
+<p>A prediction error calls for <strong>replay or recovery</strong>, not acceptance of an architecturally incorrect value. For example, a core can invalidate the younger load result, cancel dependent speculative work, and re-execute once the store is known. How broadly the core squashes instructions depends on its recovery machinery. Speculation can increase throughput when independent operations are common, but the correctness requirement survives any prediction accuracy claim.</p>
+</section>
+<section id="store-set-and-dependence-prediction" aria-labelledby="heading-store-set-and-dependence-prediction"><h2 id="heading-store-set-and-dependence-prediction">Store-Set and Dependence Prediction</h2>
+<p>A <strong>memory-dependence predictor</strong> attempts to infer whether a given load should wait for a particular older store. A store-set design associates program-counter histories with likely dependence relationships; other designs use different history tables or simpler conservative rules. Good prediction permits independent loads to proceed without waiting for unrelated store addresses while delaying loads likely to alias.</p>
+<p>Prediction state is a performance hint, not architectural authority. A predictor can generate false positives, which reduce parallelism, and false negatives, which require correction. Its correctness depends on a separate mechanism that detects problematic memory ordering and enforces replay when needed. The predictor itself does not create an exception to the ISA memory model. The general mechanism is explained in research on dynamic memory disambiguation and is illustrated by the BOOM LSU's store masks and ordering checks.</p>
+</section>
+<section id="an-illustrative-conservative-alias-test" aria-labelledby="heading-an-illustrative-conservative-alias-test"><h2 id="heading-an-illustrative-conservative-alias-test">An Illustrative Conservative Alias Test</h2>
+<p>If a load's byte interval overlaps the address interval of an <strong>older</strong> store, it may need to forward, stall, or be replayed depending on data readiness. A disjoint interval does not create same-location RAW dependence, though broader ordering rules may still constrain issue. The following interval check is deliberately independent of cache lines: sharing a cache line does not necessarily mean sharing accessed bytes.</p>
+<pre><code class="language-python">def overlaps(addr_a, size_a, addr_b, size_b):
+    assert size_a &gt; 0 and size_b &gt; 0
+    return addr_a &lt; addr_b + size_b and addr_b &lt; addr_a + size_a
+
+assert overlaps(0x1000, 8, 0x1006, 4)
+assert not overlaps(0x1000, 4, 0x1004, 4)
+assert overlaps(0x1000, 1, 0x1000, 1)
+print('Overlap tests passed')
+</code></pre>
+<p>This function assumes finite, nonwrapping address ranges. A physical LSU must also handle translation, wraparound, memory type, faulting accesses, and the granularity at which its internal comparisons operate.</p>
+</section>
+<section id="speculative-loads-validation-and-replay" aria-labelledby="heading-speculative-loads-validation-and-replay"><h2 id="heading-speculative-loads-validation-and-replay">Speculative Loads, Validation, and Replay</h2>
+<p>An early load may be marked complete while the core still tracks it in the load queue to detect a younger/older ordering problem. If a store's address resolves to overlap a younger load that incorrectly observed an earlier value, the machine needs a replay procedure. Some processors also monitor coherence probes or related events to enforce required load ordering across cores. These cases are distinct even though both can lead to a re-execution.</p>
+<p>Correct replay requires more than reissuing a load. Dependents that consumed the bad value must be invalidated or recomputed; speculative writes must not escape; branch outcomes based on the stale value must be corrected; and the retirement stream must remain consistent. The precise details vary. The central proof obligation is that <strong>the final retired behavior matches a legal architectural execution</strong>, despite temporary speculation or an initially wrong predictor guess.</p>
+</section>
+<section id="demonstration-an-aliasing-violation-detector" aria-labelledby="heading-demonstration-an-aliasing-violation-detector"><h2 id="heading-demonstration-an-aliasing-violation-detector">Demonstration: An Aliasing Violation Detector</h2>
+<p>This toy checker flags only one situation: a younger load executed before an older store's address became known and the two byte intervals overlap. It does not by itself decide whether the broader ISA memory model allows other reorderings.</p>
+<pre><code class="language-python">def needs_replay(older_store, younger_load):
+    if not older_store['address_resolved_after_load']:
+        return False
+    if older_store['age'] &gt;= younger_load['age']:
+        return False
+    return overlaps(older_store['address'], older_store['size'],
+                    younger_load['address'], younger_load['size'])
+
+store = {'age': 3, 'address': 100, 'size': 4, 'address_resolved_after_load': True}
+load = {'age': 7, 'address': 102, 'size': 2}
+assert needs_replay(store, load)
+assert not needs_replay({**store, 'address': 200}, load)
+print('Speculative overlap checks passed')
+</code></pre>
+</section>
+<section id="from-load-queue-to-architectural-retirement" aria-labelledby="heading-from-load-queue-to-architectural-retirement"><h2 id="heading-from-load-queue-to-architectural-retirement">From Load Queue to Architectural Retirement</h2>
+<p>A loaded value can be forwarded to dependent operations as soon as the core deems it tentatively usable; the load itself must still carry sufficient metadata for a fault or replay, and its architectural retirement remains age constrained. The machine must avoid retiring a younger instruction whose correctness depends on an unresolved older fault. Once the instruction is committed, software-visible registers and exceptions must reflect the legal program sequence.</p>
+<p>This is why a load's <em>execution-complete</em> bit and its <em>retirement-eligible</em> bit are different notions. A cache-hit load can execute quickly but wait behind a long-latency older instruction at the head of the reorder buffer. Conversely, slow memory may cause a front-end stall because queue entries remain allocated even while other execution pipes have capacity. These resource chains should be considered separately from “raw memory latency.”</p>
+</section>
+<section id="store-commitment-and-the-store-buffer" aria-labelledby="heading-store-commitment-and-the-store-buffer"><h2 id="heading-store-commitment-and-the-store-buffer">Store Commitment and the Store Buffer</h2>
+<p>Stores on a wrong path must not corrupt architectural memory. In a common out-of-order design, a store first resides in a speculative queue, becomes non-speculative when its instruction retires, and subsequently drains through a committed-store buffer into the memory hierarchy. Some cores use a single structure with committed/uncommitted regions; others have physically separate queues. The abstraction is <strong>speculative computation first, authorized side effect later</strong>.</p>
+<p>The store buffer can allow retirement to continue without waiting for external visibility of every individual store. This improves throughput but introduces memory-ordering subtleties. For ordinary coherent memory, other cores need not see all of the writer's buffered stores at the instant the writer retires them. Barriers, atomic release/acquire operations, and ordering policies impose the required constraints. A full store buffer can block retirement and create backpressure even when load processing is otherwise healthy.</p>
+</section>
+<section id="a-timeline-forwarded-data-versus-remote-visibility" aria-labelledby="heading-a-timeline-forwarded-data-versus-remote-visibility"><h2 id="heading-a-timeline-forwarded-data-versus-remote-visibility">A Timeline: Forwarded Data Versus Remote Visibility</h2>
+<p>Imagine core 0 executes <code>store x = 1</code>, then <code>load x</code>. The load can obtain <code>1</code> through store forwarding even if core 1 continues temporarily to see <code>0</code> in its coherent view, subject to the architecture's conditions. This is not a contradiction: forwarding is a same-core value-selection mechanism, while cross-core visibility is managed by cache coherence and ordering rules. Different cores' observations must still satisfy the ISA model.</p>
+<p>If core 0 then performs a release operation and core 1 performs a corresponding acquire that reads from it, the synchronization contract can establish that earlier data writes are visible to the acquiring thread under the relevant language and ISA rules. The presence of a cache line in both cores is not, by itself, such a contract. Distinguish <strong>coherence</strong>, <strong>ordering</strong>, <strong>synchronization</strong>, and <strong>compiler transformations</strong>; each controls a different part of the system.</p>
+</section>
+<section id="memory-consistency-is-an-architectural-contract" aria-labelledby="heading-memory-consistency-is-an-architectural-contract"><h2 id="heading-memory-consistency-is-an-architectural-contract">Memory Consistency Is an Architectural Contract</h2>
+<p>A <strong>memory consistency model</strong> defines which values and orders of memory accesses are permitted to be observed by interacting threads or agents. It does not require that every micro-operation execute literally in instruction order; instead, it constrains the <em>observable results</em> of those internal schedules. Different ISAs provide different guarantees, and software memory models impose an additional contract governing compiler transformations and data races.</p>
+<p><strong>Sequential consistency (SC)</strong> is a useful reference: all operations appear in some single total order that respects each thread's program order. Many practical systems permit more executions than SC while retaining particular same-address, dependency, or synchronization constraints. A processor that performs independent memory operations out of order can still meet its specification if the outcomes are legal. Therefore performance engineering and concurrency correctness require describing the particular ISA and the language-level synchronization, not a generic claim that “modern CPUs reorder memory.”</p>
+</section>
+<section id="sequential-consistency-as-a-baseline" aria-labelledby="heading-sequential-consistency-as-a-baseline"><h2 id="heading-sequential-consistency-as-a-baseline">Sequential Consistency as a Baseline</h2>
+<p>Under SC, if thread 0 does <code>x=1; r0=y</code> and thread 1 does <code>y=1; r1=x</code>, with both variables initially zero, the outcome <code>r0=0, r1=0</code> is impossible. For thread 0 to see <code>y=0</code>, its read would have to occur before thread 1's write to <code>y</code>; similarly, the other read would precede thread 0's write to <code>x</code>. Both threads also require their own store before their own load, producing an impossible ordering cycle.</p>
+<p>A weaker model such as x86-64's ordinary write-back-memory behavior can permit both loads to obtain zero because each core's load can effectively bypass its own older buffered store to a <em>different</em> address. This is the classic <strong>store-buffering (SB)</strong> litmus test. The distinction is not evidence of a faulty CPU; it explains why a program demanding cross-thread ordering needs proper synchronization. The litmus is best studied on <em>atomic</em> variables or in an ISA-level model, not by racing non-atomic C++ variables.</p>
+</section>
+<section id="store-buffering-litmus-test" aria-labelledby="heading-store-buffering-litmus-test"><h2 id="heading-store-buffering-litmus-test">Store-Buffering Litmus Test</h2>
+<table>
+<thead>
+<tr>
+  <th>Initial state</th>
+  <th>Thread 0</th>
+  <th>Thread 1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>x = 0</code>, <code>y = 0</code></td>
+  <td><code>store x = 1</code></td>
+  <td><code>store y = 1</code></td>
+</tr>
+<tr>
+  <td></td>
+  <td><code>r0 = load y</code></td>
+  <td><code>r1 = load x</code></td>
+</tr>
+</tbody>
+</table>
+<p>The key question is whether <code>r0 = 0</code> and <code>r1 = 0</code> can both occur. Under SC, no; under typical x86-64 TSO ordinary cacheable memory, yes. Under weaker hardware models, additional outcomes may be allowed for different litmus programs. <strong>This table is an ISA-style conceptual test</strong>, not directly valid C/C++ source with unsynchronized non-atomic shared variables.</p>
+<p>The following simulator enumerates only one simplified mechanism: two FIFO store buffers, stores enqueued in program order, and loads able to read the most recent buffered <em>same-address</em> store from their own thread or else shared memory. It therefore demonstrates the SB outcome but does not attempt to capture every feature of real TSO or device memory.</p>
+<pre><code class="language-python">from collections import deque
+
+def sb_outcome():
+    mem = {'x': 0, 'y': 0}
+    buffers = [deque(), deque()]
+    # Both stores are retired locally but have not drained to shared memory.
+    buffers[0].append(('x', 1))
+    buffers[1].append(('y', 1))
+    r0 = mem['y']  # No same-address forwarding from core 0's x store.
+    r1 = mem['x']  # No same-address forwarding from core 1's y store.
+    # Buffers may later drain in FIFO order per core.
+    for buf in buffers:
+        while buf:
+            key, value = buf.popleft()
+            mem[key] = value
+    return r0, r1, mem
+
+r0, r1, memory_after = sb_outcome()
+assert (r0, r1) == (0, 0)
+assert memory_after == {'x': 1, 'y': 1}
+print('SB outcome:', r0, r1)
+</code></pre>
+</section>
+<section id="x86-64-tso-in-context" aria-labelledby="heading-x86-64-tso-in-context"><h2 id="heading-x86-64-tso-in-context">x86-64 TSO in Context</h2>
+<p>For ordinary cacheable write-back memory, the x86-64 architectural model is commonly described by <strong>total store ordering (TSO)</strong>. It preserves a relatively strong ordering: loads remain ordered with other loads, stores remain ordered with other stores, and a store is not ordinarily reordered with an older load. The important relaxation is that a younger load to another location may be observed before its own core's older store has become globally visible. Forwarding maintains the same-core store-to-load relationship when addresses match.</p>
+<p>This simplified summary is insufficient for every instruction or memory type. Locked operations, fences, non-temporal stores, write-combining memory, I/O, and specialized operations have additional rules. Source code is also transformed by a compiler before it reaches hardware. Consult Intel's <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Software Developer's Manual</a> for the formal guarantees relevant to a target CPU and memory type. Do not assume that x86 TSO means every thread observes every recent store immediately.</p>
+</section>
+<section id="armv8-a-memory-ordering" aria-labelledby="heading-armv8-a-memory-ordering"><h2 id="heading-armv8-a-memory-ordering">Armv8-A Memory Ordering</h2>
+<p>Armv8-A uses a weaker ordering architecture than x86-64 for ordinary independent memory accesses. Ordering can arise from dependencies, explicit barrier instructions, atomic operations, or load-acquire and store-release instructions, according to the architectural rules and shareability domain. A program that works incidentally on a stronger-ordered processor may therefore require synchronization that makes its intended ordering explicit when ported to Arm hardware.</p>
+<p>Arm's <strong>DMB</strong> orders specified classes of memory accesses for specified observers; <strong>DSB</strong> also supplies completion constraints; <strong>ISB</strong> synchronizes instruction execution after relevant context changes. These barriers are not interchangeable, and an instruction-cache synchronization sequence is not a substitute for ordinary shared-memory acquire/release. Arm's architecture guides explain <a href="https://support.arm.com/documentation/102336/0100/Memory-ordering">memory-ordering constraints</a> and <a href="https://support.arm.com/documentation/102336/0101/Load-Acquire-and-Store-Release-instructions">acquire/release instructions</a>.</p>
+</section>
+<section id="risc-v-rvwmo-and-fences" aria-labelledby="heading-risc-v-rvwmo-and-fences"><h2 id="heading-risc-v-rvwmo-and-fences">RISC-V RVWMO and Fences</h2>
+<p>The default RISC-V weak memory ordering model (<strong>RVWMO</strong>) preserves selected program-order relationships, including specified dependencies and ordering constraints, rather than requiring every independent access to retain its original relative position in a global order. RISC-V's <code>FENCE</code> instruction orders nominated predecessor and successor classes of memory operations. Atomic instructions may carry <strong>acquire (<code>aq</code>)</strong> and/or <strong>release (<code>rl</code>)</strong> ordering bits. The exact rules, including address, data, and control dependencies, are defined by the ratified specification rather than informal slogans.</p>
+<p>A common mistake is to interpret <code>aq</code> as “block every earlier write” or <code>rl</code> as “force every later read to finish.” Acquire constrains certain <strong>later</strong> operations relative to the acquire; release constrains certain <strong>earlier</strong> operations relative to the release. Fences can provide broader orderings when needed. The official <a href="https://docs.riscv.org/reference/isa/v20260120/unpriv/mm-eplan.html">RVWMO explanatory material</a> supplies the precise examples, and the <a href="https://docs.riscv.org/reference/isa/_attachments/riscv-unprivileged.pdf">unprivileged ISA specification</a> defines the normative rules.</p>
+</section>
+<section id="cross-architecture-comparison" aria-labelledby="heading-cross-architecture-comparison"><h2 id="heading-cross-architecture-comparison">Cross-Architecture Comparison</h2>
+<table>
+<thead>
+<tr>
+  <th>Question</th>
+  <th>x86-64, ordinary write-back memory</th>
+  <th>Armv8-A</th>
+  <th>RISC-V RVWMO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Basic approach</td>
+  <td>Relatively strong ordering, often summarized as TSO</td>
+  <td>Weak ordering with dependencies and explicit synchronization</td>
+  <td>Weak ordering with preserved-program-order rules</td>
+</tr>
+<tr>
+  <td>Store then unrelated load</td>
+  <td>May allow store-buffering behavior</td>
+  <td>Ordering must be established when required</td>
+  <td>Ordering must be established when required</td>
+</tr>
+<tr>
+  <td>Same-address load after store</td>
+  <td>Respect architectural forwarding/value semantics</td>
+  <td>Respect architectural value and dependency rules</td>
+  <td>Respect RVWMO load-value constraints</td>
+</tr>
+<tr>
+  <td>Publish and consume data</td>
+  <td>Use appropriate atomic acquire/release or stronger operations</td>
+  <td>Acquire/release loads/stores and barriers</td>
+  <td><code>aq</code>/<code>rl</code> atomics and/or fences as specified</td>
+</tr>
+<tr>
+  <td>Safe porting rule</td>
+  <td>Use language-level atomics, not assumptions about TSO alone</td>
+  <td>Use language-level atomics</td>
+  <td>Use language-level atomics</td>
+</tr>
+</tbody>
+</table>
+<p>The table is intentionally conceptual. Some behaviors are specific to memory types, revisions, extensions, and the programming language. It is not a license to translate a fence mnemonic directly across ISAs or to treat the three memory models as interchangeable.</p>
+</section>
+<section id="cache-coherence-versus-memory-consistency" aria-labelledby="heading-cache-coherence-versus-memory-consistency"><h2 id="heading-cache-coherence-versus-memory-consistency">Cache Coherence Versus Memory Consistency</h2>
+<p><strong>Cache coherence</strong> answers a per-location question: how do cores obtain a consistent treatment of writes to the same coherence location, with ownership and invalidation or update protocols enforcing the required rules? <strong>Memory consistency</strong> answers a broader question: what orderings across multiple locations may different observers see? A coherent system may still permit the store-buffering litmus result because per-location agreement does not guarantee global sequential consistency across different locations.</p>
+<p>The LSU participates in both. It requests cache data, responds to relevant coherence events, tracks speculative loads, and ensures its committed behavior meets the memory model. The cache hierarchy and coherence fabric carry information among cores, while ordering logic and synchronization determine which execution sequences are legal. See <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a> for cache-line ownership, atomic read-modify-write, and coherence protocols.</p>
+</section>
+<section id="atomicity-ordering-and-durability-are-different" aria-labelledby="heading-atomicity-ordering-and-durability-are-different"><h2 id="heading-atomicity-ordering-and-durability-are-different">Atomicity, Ordering, and Durability Are Different</h2>
+<p>An <strong>atomic</strong> memory operation is indivisible with respect to the specified observers and granularity; <strong>ordering</strong> constrains its relationship with other operations; <strong>durability</strong> concerns whether data survives power failure or other persistence events. A processor can execute an atomic store without making it ordered relative to every unrelated access, and it can order writes without guaranteeing they have reached nonvolatile storage. Calling all three properties “committed” conceals important engineering obligations.</p>
+<p>Atomicity also depends on size and alignment guarantees. Hardware support for one natural-width atomic access does not imply atomicity for an arbitrarily large structure or a misaligned access crossing a cache line. Persistent-memory software may need cache-line flushes and persistence barriers beyond ordinary multicore fences. Those procedures are platform-specific and are not interchangeable with language-level synchronization for live threads.</p>
+</section>
+<section id="acquire-release-and-happens-before" aria-labelledby="heading-acquire-release-and-happens-before"><h2 id="heading-acquire-release-and-happens-before">Acquire, Release, and Happens-Before</h2>
+<p>The <strong>release–acquire</strong> pattern allows one thread to publish a data structure and another to observe it safely. For example, thread A initializes a payload and then performs a <em>release store</em> to a ready flag; thread B performs an <em>acquire load</em> of that same flag and, after reading the published value, accesses the payload. In a language such as C++, a successful acquire operation reading from the corresponding release sequence can establish a <strong>synchronizes-with</strong> relationship and thus a happens-before edge for the earlier writes.</p>
+<p>This is a <em>language-level contract</em> carried through compiler lowering and hardware instructions. A plain Python variable, C++ <code>volatile</code>, or ordinary unsynchronized load of a flag does not automatically provide those guarantees. Properly structured atomics are preferable to manually scattering raw fences through application code. Separate the <strong>data</strong> accesses from the <strong>publication</strong> access and document which atomic read establishes the intended synchronization.</p>
+</section>
+<section id="an-illustrative-message-passing-pattern" aria-labelledby="heading-an-illustrative-message-passing-pattern"><h2 id="heading-an-illustrative-message-passing-pattern">An Illustrative Message-Passing Pattern</h2>
+<p>The following snippet is conceptual <strong>C++11-style</strong> code; it is not meant to be executed as embedded Python. It emphasizes the synchronization edge rather than API setup or lifetime management.</p>
+<pre><code class="language-cpp">// Shared initialization: payload = 0; ready = false.
+int payload = 0;
+std::atomic&lt;bool&gt; ready{false};
+
+// Producer thread
+payload = 42;
+ready.store(true, std::memory_order_release);
+
+// Consumer thread
+if (ready.load(std::memory_order_acquire)) {
+    assert(payload == 42);
+}
+</code></pre>
+<p>Assumptions: one producer initializes the non-atomic payload, nobody concurrently modifies it afterward, and the consumer reads it only after the acquire load observes the publishing release. Those assumptions prevent a data race in this specific publication pattern. A different ownership or update pattern requires a different synchronization design. Compilers may implement the atomics differently on x86-64, Arm, and RISC-V while preserving the same language-level guarantee.</p>
+</section>
+<section id="why-fences-are-not-a-general-substitute-for-atomics" aria-labelledby="heading-why-fences-are-not-a-general-substitute-for-atomics"><h2 id="heading-why-fences-are-not-a-general-substitute-for-atomics">Why Fences Are Not a General Substitute for Atomics</h2>
+<p>A <strong>fence</strong> orders certain operations relative to others, but its effect is defined by the ISA or programming language and the surrounding accesses. A fence alone is not a magical lock, does not necessarily make a read-modify-write indivisible, and cannot repair an arbitrary data race in a high-level language. In C++, fence-based synchronization requires particular atomic operations and a defined relation between them; simply placing a fence before and after ordinary shared-variable access is insufficient.</p>
+<p>Use mutexes when a critical section protects complex invariants, atomic operations when a defined synchronization or lock-free algorithm genuinely requires them, and barriers only with a documented contract. At the hardware level, distinguish <em>ordering</em> from <em>completion</em>: Arm's <code>DMB</code>, <code>DSB</code>, and <code>ISB</code>, for example, serve different purposes. Over-fencing can reduce concurrency and pipeline throughput without improving correctness beyond an already sufficient synchronization scheme.</p>
+</section>
+<section id="atomic-read-modify-write-and-lsu-coordination" aria-labelledby="heading-atomic-read-modify-write-and-lsu-coordination"><h2 id="heading-atomic-read-modify-write-and-lsu-coordination">Atomic Read-Modify-Write and LSU Coordination</h2>
+<p>An atomic operation such as fetch-and-add, compare-and-swap, or load-reserved/store-conditional combines a read with an update under architectural indivisibility rules. It may use special cache-coherence permissions, reservation tracking, a locked instruction, or other hardware support depending on the ISA and implementation. It also has ordering semantics that may be relaxed, acquire, release, or stronger. Those dimensions must be specified independently.</p>
+<p>The LSU and coherence system must prevent another observer from seeing an invalid intermediate state for the defined atomic operation. This is more demanding than ordinary store-to-load forwarding within one core. An unsuccessful compare-and-swap or conditional store also has defined side effects and ordering requirements; the result cannot be reasoned about as a mere pair of ordinary independent load/store instructions. Implementations and API choices should be anchored in ISA and language documentation.</p>
+</section>
+<section id="memory-mapped-io-and-device-memory" aria-labelledby="heading-memory-mapped-io-and-device-memory"><h2 id="heading-memory-mapped-io-and-device-memory">Memory-Mapped I/O and Device Memory</h2>
+<p>Memory-mapped I/O (MMIO) uses load/store-like instructions to interact with device registers, but the access may trigger physical actions such as acknowledging an interrupt or starting a DMA transfer. Such accesses can have side effects on <em>reads</em>, be sensitive to width and order, or require completion before proceeding. Ordinary assumptions about cacheability, speculative execution, and safe replay may not apply.</p>
+<p>Device-memory ordering is governed by its specified attributes, platform bus rules, and driver interfaces. For example, many systems use operating-system-provided read/write functions that apply required ordering or byte-swapping; a hand-written C pointer dereference may not provide the necessary compiler or hardware semantics. Do not generalize a cacheable-RAM fence recipe to PCIe device registers or independently accessible DMA engines. Refer to the platform's driver and architecture manuals before writing low-level MMIO code.</p>
+</section>
+<section id="dma-io-coherence-and-ordering-domains" aria-labelledby="heading-dma-io-coherence-and-ordering-domains"><h2 id="heading-dma-io-coherence-and-ordering-domains">DMA, I/O Coherence, and Ordering Domains</h2>
+<p>A direct-memory-access (DMA) engine reads or writes memory without issuing instructions on the CPU core. Whether CPU caches and the device are mutually coherent depends on the platform, device, connection, and memory attributes. Even on a coherent platform, a driver may have to use explicit memory barriers to order descriptor initialization before publishing a work-queue pointer or ringing a device doorbell.</p>
+<p>Thus LSU ordering, cache coherence, IOMMU translation, and DMA synchronization are related but distinct. A device's ability to access a physical address does not prove that it has seen every buffered CPU write, and a completed device write does not automatically mean the operating system has performed any necessary cache maintenance on a noncoherent platform. Driver correctness requires documented ordering and ownership handoffs, not just plausible instruction ordering in C source.</p>
+</section>
+<section id="speculation-side-effects-and-transient-information-leakage" aria-labelledby="heading-speculation-side-effects-and-transient-information-leakage"><h2 id="heading-speculation-side-effects-and-transient-information-leakage">Speculation, Side Effects, and Transient Information Leakage</h2>
+<p>Speculative loads can leave traces in caches, TLBs, predictors, or queues even when their instructions are later squashed and do not retire. That behavior creates a potential <strong>transient-execution side channel</strong>: architectural rollback of a wrong-path load is not necessarily erasure of its microarchitectural effects. The security problem differs from an ordinary architectural memory-ordering violation. One concerns information leaked through physical timing state; the other concerns which program-visible values are legal.</p>
+<p>Mitigation choices depend on the threat model and platform: bounds-check hardening, speculative-execution barriers, safer data-access structure, microcode or firmware updates, isolation, and platform-specific kernel controls may each address different attack classes. Do not assume every memory fence is a complete security barrier. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a> owns the deeper mitigation and threat-model treatment.</p>
+</section>
+<section id="memory-level-parallelism-and-nonblocking-loads" aria-labelledby="heading-memory-level-parallelism-and-nonblocking-loads"><h2 id="heading-memory-level-parallelism-and-nonblocking-loads">Memory-Level Parallelism and Nonblocking Loads</h2>
+<p>A nonblocking memory subsystem can maintain several misses in flight, overlapping delays to the extent that cache and memory resources permit. Memory-level parallelism (MLP) is distinct from merely having multiple load issue ports. A pointer-chasing chain has a dependency from one address to the next, limiting overlap even when the LSU has dozens of load-queue entries; independent array streams may generate far more concurrent requests.</p>
+<p>Effective overlap depends on queue size, available miss-status handling structures, TLB-walk concurrency, cache-bank contention, interconnect bandwidth, and DRAM behavior. Memory latency is not simply divided by the number of outstanding requests: serialized dependencies remain serialized, while throughput limits emerge when too much traffic is in flight. The best interpretation combines instruction dependencies, hardware counters, and measured application progress.</p>
+</section>
+<section id="worked-example-dependent-versus-independent-loads" aria-labelledby="heading-worked-example-dependent-versus-independent-loads"><h2 id="heading-worked-example-dependent-versus-independent-loads">Worked Example: Dependent Versus Independent Loads</h2>
+<p>Suppose four loads each have a hypothetical 80-cycle response time. A pointer chain where each load's address is found in the previous load's result has a lower bound near <code>4 × 80 = 320</code> cycles on that serial dependency path, ignoring overhead. If four independent loads can issue together and the memory subsystem has sufficient capacity, the slowest response might be available after roughly 80 cycles instead. This is illustrative; real misses overlap partially, service times vary, and surrounding instructions consume resources.</p>
+<pre><code class="language-python">latency = 80
+n = 4
+serial_critical_path = n * latency
+parallel_idealized_path = latency
+assert serial_critical_path == 320
+assert parallel_idealized_path == 80
+print('Serial:', serial_critical_path, 'Parallel lower bound:', parallel_idealized_path)
+</code></pre>
+<p>The CPU cache hierarchy article covers locality and cache levels; here the focus is on <strong>how the LSU tracks independent requests and enforces their dependencies</strong> while allowing such overlap.</p>
+</section>
+<section id="load-and-store-bandwidth-limits" aria-labelledby="heading-load-and-store-bandwidth-limits"><h2 id="heading-load-and-store-bandwidth-limits">Load and Store Bandwidth Limits</h2>
+<p>Maximum load/store instruction throughput depends on address-generation resources, data-cache ports, queue allocation, store-data bandwidth, alignment, forwarding penalties, and memory disambiguation. A benchmark that streams 32 bytes per cycle in a tight loop may measure a combination of load ports, cache bandwidth, vector-width restrictions, and compiler choices rather than a single LSU component.</p>
+<p>A useful arithmetic ceiling is <code>effective bytes/cycle ≤ min(address capacity, data-port capacity, cache/interconnect capacity)</code> after units are normalized. A core with two eight-byte load paths offers an idealized 16 bytes per cycle <em>at that interface</em>, but this number does not guarantee 16 bytes/cycle from DRAM or when the code has serial dependencies. For stores, also consider how many committed bytes per cycle can drain from buffers; temporary burst throughput can exceed sustained downstream bandwidth.</p>
+</section>
+<section id="store-buffer-coalescing-and-write-combining" aria-labelledby="heading-store-buffer-coalescing-and-write-combining"><h2 id="heading-store-buffer-coalescing-and-write-combining">Store-Buffer Coalescing and Write Combining</h2>
+<p>Adjacent or repeated stores may be merged into fewer downstream transactions if the ISA and memory type permit it. For example, successive byte stores to distinct offsets of a cache line can sometimes be combined before a line update. This reduces traffic, but software may observe effects differently when device-memory or non-temporal write-combining rules apply. Hardware combining must preserve any architecturally required ordering and indivisibility.</p>
+<p><strong>Store coalescing</strong> within a CPU store buffer and <strong>write-combining memory types</strong> are not synonyms. Coalescing is an implementation optimization; a write-combining memory attribute can explicitly relax visibility and completion expectations, making appropriate ordering operations important at hardware/driver boundaries. A correct performance experiment distinguishes regular cacheable writes, streaming stores, and MMIO writes rather than treating all memory traffic as equivalent.</p>
+</section>
+<section id="false-sharing-and-inter-core-contention" aria-labelledby="heading-false-sharing-and-inter-core-contention"><h2 id="heading-false-sharing-and-inter-core-contention">False Sharing and Inter-Core Contention</h2>
+<p>False sharing occurs when distinct variables used by different cores occupy the same coherence line. The LSU may issue independent stores to separate bytes, yet the coherence system transfers ownership of the shared line between cores. The cost is a coherence and layout effect even though there is no same-address RAW dependence. For example, two threads updating separate counters placed in one line can experience high interconnect traffic despite being logically independent.</p>
+<p>Padding or per-core sharding can reduce such contention; however, increasing layout size can harm cache residency, and sharding requires a correct aggregation strategy. Measure before and after under controlled affinity and workload conditions. This phenomenon belongs at the intersection of LSU traffic, cache-line granularity, coherence, and data layout—not as evidence that the source program contains a direct memory dependence between its counters.</p>
+</section>
+<section id="prefetching-interactions-and-memory-order" aria-labelledby="heading-prefetching-interactions-and-memory-order"><h2 id="heading-prefetching-interactions-and-memory-order">Prefetching Interactions and Memory Order</h2>
+<p>Hardware or software prefetching requests cache lines in anticipation of future accesses. A prefetch hint ordinarily does not produce a language-level synchronization event, nor should it be treated as an architectural load of a value. It can nevertheless change cache occupancy, translation activity, bandwidth demand, and the timing of later accesses. Prefetch traffic and demand loads often share memory-system resources and can compete for limited miss-handling capacity.</p>
+<p>A correct LSU must keep demand-load faults and architectural values consistent regardless of speculative or prefetch traffic. Some instructions specifically carry fault-suppression or hint semantics, but these are ISA-specific. Tuning prefetch distance requires balancing the lead time needed to hide latency against wasted bandwidth, eviction of useful lines, and extra pressure on downstream resources. It never replaces proper ordering operations in a concurrent program.</p>
+</section>
+<section id="performance-analysis-a-bottleneck-checklist" aria-labelledby="heading-performance-analysis-a-bottleneck-checklist"><h2 id="heading-performance-analysis-a-bottleneck-checklist">Performance Analysis: A Bottleneck Checklist</h2>
+<table>
+<thead>
+<tr>
+  <th>Observed symptom</th>
+  <th>Candidate LSU mechanism</th>
+  <th>Evidence to collect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Load latency spikes</td>
+  <td>Cache/TLB misses, dependencies, replay</td>
+  <td>Sampled load latency and cache/TLB counters</td>
+</tr>
+<tr>
+  <td>Issue bandwidth is underused</td>
+  <td>No ready memory addresses or queue-full stalls</td>
+  <td>Dependency traces, dispatch stall breakdown</td>
+</tr>
+<tr>
+  <td>Stores block retirement</td>
+  <td>Full store buffer, slow downstream drain</td>
+  <td>Store-buffer occupancy/stall signals</td>
+</tr>
+<tr>
+  <td>Forwarding-related stalls</td>
+  <td>Width/alignment or partial-overlap restriction</td>
+  <td>Access-size distribution, address offsets</td>
+</tr>
+<tr>
+  <td>Cross-core scaling collapses</td>
+  <td>Coherence contention or false sharing</td>
+  <td>Cache-line ownership traffic and affinity</td>
+</tr>
+<tr>
+  <td>Extra fences lower IPC</td>
+  <td>Serialization or constrained memory overlap</td>
+  <td>Paired benchmark with correctness unchanged</td>
+</tr>
+<tr>
+  <td>High DRAM bandwidth but low progress</td>
+  <td>Unnecessary traffic, poor locality, no useful overlap</td>
+  <td>Bytes transferred versus useful work</td>
+</tr>
+</tbody>
+</table>
+<p>Performance counters are processor-specific and may count speculative operations, retired operations, or other events using different denominators. Never convert a vendor event name into a universal mechanism without consulting its definition. As in other performance investigations, use repeatable runs, isolate competing system activity, and report uncertainty rather than one unqualified measurement.</p>
+</section>
+<section id="a-simple-queue-pressure-model" aria-labelledby="heading-a-simple-queue-pressure-model"><h2 id="heading-a-simple-queue-pressure-model">A Simple Queue-Pressure Model</h2>
+<p>This teaching model accepts one memory operation per cycle for three cycles and services one operation every two cycles. It illustrates how an initially empty finite queue accumulates work when arrivals temporarily outpace service; it does not model overlapping cache misses, ROB behavior, or real pipeline scheduling.</p>
+<pre><code class="language-python">from collections import deque
+
+def queue_trace(arrivals, service_every=2, capacity=4):
+    queue = deque()
+    occupancy = []
+    for cycle, arrival in enumerate(arrivals):
+        if arrival:
+            if len(queue) == capacity:
+                raise RuntimeError('Backpressure before admission')
+            queue.append(cycle)
+        if cycle % service_every == 1 and queue:
+            queue.popleft()
+        occupancy.append(len(queue))
+    return occupancy
+
+assert queue_trace([1, 1, 1, 0, 0, 0]) == [1, 1, 2, 1, 1, 0]
+print(queue_trace([1, 1, 1, 0, 0, 0]))
+</code></pre>
+<p>A real performance model must separate LQ from SQ lifetime, track retire events and unresolved dependencies, represent cache misses and MSHRs, and account for bursty issue demand. This example is mainly a diagnostic prompt: <em>what resource is full, and what event finally releases it?</em></p>
+</section>
+<section id="correctness-invariants-for-the-lsu" aria-labelledby="heading-correctness-invariants-for-the-lsu"><h2 id="heading-correctness-invariants-for-the-lsu">Correctness Invariants for the LSU</h2>
+<p>Useful invariant statements include: a load's retired bytes must come from architecturally legal sources; an older store that aliases a younger load cannot be silently ignored; a wrong-path store must not produce forbidden architectural side effects; a faulting memory instruction must report the correct exception according to instruction age; committed stores must obey the ISA's visibility rules; and no queue entry or physical register can be reclaimed while a live instruction still depends on it.</p>
+<p>These are <strong>specification-level obligations</strong>, not assertions that each processor must use the same queue structure. A core may implement them through conservative issue, aggressive speculation with replay, in-order memory execution, or different recovery paths. Verification should connect invariants to a reference architectural model and should stress boundary cases such as page splits, missing store data, simultaneous redirects, and multiple overlapping older writes.</p>
+</section>
+<section id="ordering-and-value-selection-must-be-checked-separately" aria-labelledby="heading-ordering-and-value-selection-must-be-checked-separately"><h2 id="heading-ordering-and-value-selection-must-be-checked-separately">Ordering and Value Selection Must Be Checked Separately</h2>
+<p>An implementation can choose the correct source value for a load and still violate a required ordering relation, or obey an issue-order restriction while returning the wrong bytes from a partial store. The two properties require independent checks. <strong>Value selection</strong> asks which writes are candidates and which bytes they supply; <strong>ordering legality</strong> asks whether the overall execution is admitted by the architectural memory model. Add fault and replay behavior as a third, orthogonal dimension.</p>
+<p>For example, a store-forwarding function passing all byte-mask tests does not prove that two cores use release/acquire correctly. Conversely, running a set of classic memory litmus tests does not exhaust the bugs in split accesses, duplicate queue entries, or address-translation faults. A comprehensive CPU verification program includes directed microarchitectural tests and architecture-level memory-order tests, plus software-language concurrency tests when compiler behavior is involved.</p>
+</section>
+<section id="formal-verification-and-litmus-testing" aria-labelledby="heading-formal-verification-and-litmus-testing"><h2 id="heading-formal-verification-and-litmus-testing">Formal Verification and Litmus Testing</h2>
+<p><strong>Litmus tests</strong> describe short concurrent programs whose possible outcomes reveal memory-model guarantees. Store buffering, message passing, load buffering, and independent reads of independent writes are common patterns. The expected set of permitted outcomes must come from the target ISA model, not from a guess based on source order. An implementation that produces a forbidden outcome violates the architecture; an allowed outcome is not necessarily evidence of a programming bug when the program is intentionally weakly synchronized.</p>
+<p>Formal and simulation-based approaches can model loads, stores, fences, atomics, dependencies, reorder buffers, and forwarding. Differential testing compares the retired execution or event relations with a trusted reference. Random testing is useful but can miss rare interleavings; model checking or exhaustive bounded enumeration provides stronger coverage within its chosen state and instruction limits. Ensure the test suite includes <em>required</em> outcomes only as allowed sets, not as a guarantee that every allowed outcome occurs on every core.</p>
+</section>
+<section id="test-matrix-for-an-lsu-implementation" aria-labelledby="heading-test-matrix-for-an-lsu-implementation"><h2 id="heading-test-matrix-for-an-lsu-implementation">Test Matrix for an LSU Implementation</h2>
+<table>
+<thead>
+<tr>
+  <th>Test class</th>
+  <th>Essential case</th>
+  <th>Expected invariant</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Forwarding</td>
+  <td>Younger load partly overlaps two older stores</td>
+  <td>Youngest older byte wins</td>
+</tr>
+<tr>
+  <td>Age selection</td>
+  <td>A younger store executes early</td>
+  <td>Cannot forward to an older load</td>
+</tr>
+<tr>
+  <td>Unknown address</td>
+  <td>Older store address resolves late to load address</td>
+  <td>Replay or equivalent legal recovery</td>
+</tr>
+<tr>
+  <td>Translation</td>
+  <td>Store crosses a page boundary and faults</td>
+  <td>No forbidden partial architectural effect</td>
+</tr>
+<tr>
+  <td>Speculation</td>
+  <td>Branch squashes a younger store</td>
+  <td>No wrong-path architectural write</td>
+</tr>
+<tr>
+  <td>Atomicity</td>
+  <td>Contending read-modify-write operations</td>
+  <td>Legal indivisible operation result</td>
+</tr>
+<tr>
+  <td>Fences</td>
+  <td>Writer/reader ordering litmus</td>
+  <td>Only ISA-permitted observations</td>
+</tr>
+<tr>
+  <td>Multicore</td>
+  <td>Coherence probe races with executed load</td>
+  <td>Ordering/replay requirements maintained</td>
+</tr>
+<tr>
+  <td>Capacity</td>
+  <td>LQ/SQ or store buffer is full</td>
+  <td>Correct backpressure, no lost entry</td>
+</tr>
+<tr>
+  <td>MMIO</td>
+  <td>Side-effecting access during redirect</td>
+  <td>No forbidden speculative device action</td>
+</tr>
+</tbody>
+</table>
+<p>This matrix is a <strong>planning framework</strong>, not a completed certification test. CPU-specific verification plans must also address resets, interrupt handling, load cancellation, power states, atomics with unusual sizes, and data-cache protocol corner cases.</p>
+</section>
+<section id="applied-scenario-1-partial-store-forwarding-in-a-packet-parser" aria-labelledby="heading-applied-scenario-1-partial-store-forwarding-in-a-packet-parser"><h2 id="heading-applied-scenario-1-partial-store-forwarding-in-a-packet-parser">Applied Scenario 1 — Partial Store Forwarding in a Packet Parser</h2>
+<p>A packet parser writes a two-byte header field into an in-memory record and immediately reads a four-byte word containing that field. A profiler shows unexplained load stalls despite the record remaining in L1. The relevant issue may be partial store-to-load forwarding: the read overlaps the earlier write but requests a larger byte range. A particular processor might merge bytes, stall until a store drains, or replay a load if its fast path requires a suitable size/alignment match.</p>
+<p>The engineering review begins with correctness: determine the endianness and field layout, confirm the load reads the most recent appropriate bytes, and verify that unaligned reads are supported by the language and ISA. Only then test alternative layouts or access sizes. In C/C++, reinterpret-casting a structure into an incompatible integer type can introduce alignment and aliasing undefined behavior independent of the CPU's forwarding capability. Use defined loads, copies, or serialization functions and benchmark the optimized implementation. <strong>Diagnostic owner:</strong> LSU forwarding restrictions, not cache capacity alone.</p>
+</section>
+<section id="applied-scenario-2-the-store-queue-becomes-the-throughput-limit" aria-labelledby="heading-applied-scenario-2-the-store-queue-becomes-the-throughput-limit"><h2 id="heading-applied-scenario-2-the-store-queue-becomes-the-throughput-limit">Applied Scenario 2 — The Store Queue Becomes the Throughput Limit</h2>
+<p>A processor streams many small stores into a working set whose lines require frequent coherence ownership transfers. The arithmetic execution units show spare capacity, but retirement throughput collapses. A plausible chain is: store traffic waits for ownership or downstream bandwidth, committed stores drain slowly, store-buffer occupancy rises, and the backpressure eventually prevents newer store or ROB entries from making progress. This is distinct from a high load-miss rate, though the two may coexist.</p>
+<p>A defensible diagnosis correlates store-buffer stalls with cache-line ownership events, line alignment, and remote-thread activity. Potential remedies include batching, per-thread output buffers, reduction of false sharing, and reducing total write traffic. A store fence inserted without a proven ordering need could worsen the bottleneck. The measurement should report throughput, queue-related stall signals if available, and the effect of a controlled single-thread versus multicore comparison. <strong>Diagnostic owner:</strong> store retirement/drain and coherence resources.</p>
+</section>
+<section id="applied-scenario-3-an-older-store-address-is-not-ready" aria-labelledby="heading-applied-scenario-3-an-older-store-address-is-not-ready"><h2 id="heading-applied-scenario-3-an-older-store-address-is-not-ready">Applied Scenario 3 — An Older Store Address Is Not Ready</h2>
+<p>An out-of-order core has an older store whose address depends on a cache miss. A younger independent-looking load already knows its address and is ready to issue. If the core always waits, useful work may be unnecessarily serialized. If it predicts independence and executes, it may later discover that the store aliases the load. A correct design must detect the conflict and replay the load and any affected work without allowing an incorrect result to retire.</p>
+<p>An engineering experiment should compare conservative waiting, prediction with replay, and a dependence predictor across traces with different true alias frequencies. Report both useful throughput and replay frequency. Even a highly accurate predictor cannot be the only correctness mechanism; test the rare misprediction path with directed random cases that force late store addresses. <strong>Diagnostic owner:</strong> memory disambiguation and recovery. The successful outcome is not “no speculation,” but <strong>speculation whose mistakes remain architecturally invisible</strong>.</p>
+</section>
+<section id="applied-scenario-4-a-flag-publishes-a-data-structure" aria-labelledby="heading-applied-scenario-4-a-flag-publishes-a-data-structure"><h2 id="heading-applied-scenario-4-a-flag-publishes-a-data-structure">Applied Scenario 4 — A Flag Publishes a Data Structure</h2>
+<p>A producer fills a descriptor and then sets <code>ready</code>; a consumer waits until <code>ready</code> is set before reading the descriptor. On a strong-ordering system, a casual implementation using ordinary shared variables may appear reliable in testing. The same source may fail under compiler optimization, on a different ISA, or under an unanticipated interleaving because the necessary happens-before relation was never established.</p>
+<p>The correct design uses a well-defined synchronization API: initialize the descriptor, release-store the ready state, acquire-load the state in the consumer, then access the descriptor only after observing the publication. For more complicated ownership and repeated updates, use a mutex, versioned protocol, or another documented handoff. An acquire/release pair is not a universal solution if multiple writers race over the payload or the consumer accesses it before synchronization. <strong>Diagnostic owner:</strong> language-level concurrency contract and ISA memory-model lowering—not a presumed faulty cache.</p>
+</section>
+<section id="applied-scenario-5-a-device-doorbell-and-descriptor-ring" aria-labelledby="heading-applied-scenario-5-a-device-doorbell-and-descriptor-ring"><h2 id="heading-applied-scenario-5-a-device-doorbell-and-descriptor-ring">Applied Scenario 5 — A Device Doorbell and Descriptor Ring</h2>
+<p>A driver prepares a descriptor in memory and then writes a device doorbell register to tell a DMA engine that the work is ready. If the device can observe the doorbell before it can observe the descriptor contents, it may process incomplete work. The appropriate remedy depends on DMA coherence, the platform bus, memory attributes, and the operating-system driver API. A CPU-to-CPU fence mnemonic cannot be assumed sufficient for every device and interconnect.</p>
+<p>The engineering plan first establishes descriptor ownership, coherent versus noncoherent memory, required cache maintenance, and the specified ordering of descriptor writes relative to MMIO doorbell writes. It then uses supported platform primitives and verifies behavior with a device-appropriate test. The same review considers whether a status register read has side effects and whether writes can be combined. <strong>Diagnostic owner:</strong> boundary among LSU, cache maintenance, memory barriers, MMIO, and DMA—not ordinary application-level atomic flags alone.</p>
+</section>
+<section id="applied-scenario-6-a-pointer-chasing-graph-traversal" aria-labelledby="heading-applied-scenario-6-a-pointer-chasing-graph-traversal"><h2 id="heading-applied-scenario-6-a-pointer-chasing-graph-traversal">Applied Scenario 6 — A Pointer-Chasing Graph Traversal</h2>
+<p>A graph traversal repeatedly loads the next node address from the current node. Even when the memory subsystem can serve many independent misses concurrently, this dependency chain limits exploitable memory-level parallelism. Increasing load queue capacity alone cannot overlap accesses whose addresses are unknown until their predecessors return. The performance bottleneck may be memory <em>latency</em> rather than raw bandwidth.</p>
+<p>Potential changes include compacting nodes, improving adjacency locality, processing multiple independent traversal frontiers, precomputing an index, or restructuring the algorithm to expose parallel paths. Such changes may alter memory consumption, update cost, or traversal semantics and must be evaluated against the workload. A strong experiment separately measures pointer-chain latency, working-set size, aggregate memory bandwidth, and independent stream concurrency. <strong>Diagnostic owner:</strong> data dependence and MLP, with locality as an interacting but separate factor.</p>
+</section>
+<section id="ten-gate-lsu-design-and-evaluation-framework" aria-labelledby="heading-ten-gate-lsu-design-and-evaluation-framework"><h2 id="heading-ten-gate-lsu-design-and-evaluation-framework">Ten-Gate LSU Design and Evaluation Framework</h2>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Engineering question</th>
+  <th>Required evidence or decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. Architectural contract</td>
+  <td>Which ISA, memory regions, and memory model apply?</td>
+  <td>Document ordering, atomicity, and alignment guarantees.</td>
+</tr>
+<tr>
+  <td>2. Value formation</td>
+  <td>Which bytes must each load return?</td>
+  <td>Proven byte masks, endianness, and youngest-older-store selection.</td>
+</tr>
+<tr>
+  <td>3. Address resolution</td>
+  <td>When are addresses translated and checked?</td>
+  <td>AGU, TLB, permission, and split-access tests.</td>
+</tr>
+<tr>
+  <td>4. Dependence management</td>
+  <td>Can younger loads execute ahead of unknown older stores?</td>
+  <td>Policy, predictor validation, and replay guarantee.</td>
+</tr>
+<tr>
+  <td>5. Retirement boundary</td>
+  <td>When do stores cease to be speculative?</td>
+  <td>Wrong-path and precise-exception tests.</td>
+</tr>
+<tr>
+  <td>6. Visibility</td>
+  <td>How do writes become observable to other agents?</td>
+  <td>Store-buffer and coherence/memory-model compliance.</td>
+</tr>
+<tr>
+  <td>7. Synchronization</td>
+  <td>What ordering do applications and drivers need?</td>
+  <td>Atomic/fence/API selection from documented contracts.</td>
+</tr>
+<tr>
+  <td>8. Resource sizing</td>
+  <td>Which queues and ports become full under load?</td>
+  <td>Occupancy, arrival rates, stall traces, and bandwidth.</td>
+</tr>
+<tr>
+  <td>9. Security and I/O</td>
+  <td>Can speculative accesses affect protected state or devices?</td>
+  <td>Threat model and MMIO/DMA side-effect controls.</td>
+</tr>
+<tr>
+  <td>10. Validation</td>
+  <td>Which failure modes remain untested?</td>
+  <td>Directed tests, litmus suites, formal checks, and real measurements.</td>
+</tr>
+</tbody>
+</table>
+<p>A design should pass correctness gates before being optimized for peak issue bandwidth. Claims such as “the LSU supports two loads per cycle” do not settle questions about load-to-use latency, replay rates, memory ordering, or the costs of synchronization. The artifact of a successful review is a coherent trace from ISA requirements to queue policy, verified exceptions, performance evidence, and known limitations.</p>
+</section>
+<section id="suggested-study-path-beginning-cpu-student" aria-labelledby="heading-suggested-study-path-beginning-cpu-student"><h2 id="heading-suggested-study-path-beginning-cpu-student">Suggested Study Path: Beginning CPU Student</h2>
+<p>Start with the instruction path through the AGU and the distinction between loads and stores. Trace one arithmetic-dependent load and one immediately followed store-to-load-forwarding example. Then study the LQ/SQ relationship and the reason unknown store addresses complicate out-of-order processing. Finally, use the store-buffering litmus to separate same-thread value forwarding from other-core observation.</p>
+<p>A suitable sequence is <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a> → <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a> → this article → <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a>. Work one byte-mask problem before attempting cross-thread synchronization reasoning.</p>
+</section>
+<section id="suggested-study-path-processor-designer" aria-labelledby="heading-suggested-study-path-processor-designer"><h2 id="heading-suggested-study-path-processor-designer">Suggested Study Path: Processor Designer</h2>
+<p>Begin with the distinction between execution, completion, retirement, and visibility. Construct a trace of older unresolved stores and younger speculative loads, and specify the recovery sequence for a dependence misprediction. Next calculate queue occupancy under a workload with variable memory latency, then design directed tests for split accesses, faults, and a full store buffer. End by checking ISA memory-model compliance with short litmus tests and reference-model comparison.</p>
+<p>Pair this article with <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>, and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a>.</p>
+</section>
+<section id="suggested-study-path-systems-software-engineer" aria-labelledby="heading-suggested-study-path-systems-software-engineer"><h2 id="heading-suggested-study-path-systems-software-engineer">Suggested Study Path: Systems Software Engineer</h2>
+<p>Study memory ordering and language-level atomics before attempting hand-written lock-free data structures. Understand why the compiler and architecture can each transform observable schedules, and why a source-level <code>volatile</code> flag is not portable inter-thread synchronization. For operating systems and drivers, add MMIO, DMA, cache-coherence domains, and platform-specific barrier primitives. For performance work, separate cache misses from store-forwarding restrictions, queue pressure, and serialization caused by synchronization.</p>
+<p>Use the official ISA and language specifications as the source of truth. When a concurrency algorithm is complicated, a mutex and documented ownership protocol may provide a clearer correctness argument than bespoke lock-free code. When low-level atomics are necessary, specify exact success/failure memory orders and test under thread sanitizers or specialized concurrency tools in addition to CPU microbenchmarks.</p>
+</section>
+<section id="guided-exercise-1-trace-a-load-from-older-stores" aria-labelledby="heading-guided-exercise-1-trace-a-load-from-older-stores"><h2 id="heading-guided-exercise-1-trace-a-load-from-older-stores">Guided Exercise 1 — Trace a Load From Older Stores</h2>
+<p>An illustrative store queue contains three older stores: age 1 writes bytes <code>10 20</code> at addresses 0–1, age 3 writes <code>30</code> at address 1, and age 4 writes <code>40 50</code> at addresses 3–4. Memory originally contains <code>00</code> in every byte. A load at age 6 reads addresses 0–4. Determine the five bytes in ascending address order. Then explain why an otherwise identical store of age 7 is not eligible to forward to that load.</p>
+<p><strong>Check:</strong> The value is <code>10 30 00 40 50</code>. The age 3 store supersedes the age 1 write at address 1; address 2 comes from memory; and the age 7 store is younger than the load in program order. If the address of an older store is unknown when the load issues, the processor may need to wait or speculate with validation rather than relying on an incomplete store list.</p>
+</section>
+<section id="guided-exercise-2-predict-queue-pressure" aria-labelledby="heading-guided-exercise-2-predict-queue-pressure"><h2 id="heading-guided-exercise-2-predict-queue-pressure">Guided Exercise 2 — Predict Queue Pressure</h2>
+<p>An LSU admits an average of two load instructions per cycle, while the average load-queue residence time is 18 cycles. Estimate average occupancy under stable conditions, then explain two reasons that a 36-entry queue would still be a risky configuration. What if latency occasionally rises to 100 cycles for bursts of misses?</p>
+<p><strong>Check:</strong> Little's law gives <code>2 × 18 = 36</code> average occupied entries. A queue with exactly that capacity has no statistical headroom, and bursty arrivals/long-tail miss latency can push occupancy above the average. Actual residence time includes recovery and retirement policy; rates can also change when queue-full backpressure throttles admission. A practical design measures occupancy distributions rather than using only the mean.</p>
+</section>
+<section id="guided-exercise-3-reason-about-store-buffering" aria-labelledby="heading-guided-exercise-3-reason-about-store-buffering"><h2 id="heading-guided-exercise-3-reason-about-store-buffering">Guided Exercise 3 — Reason About Store Buffering</h2>
+<p>Two cores begin with <code>x=y=0</code> and execute <code>store x=1; load y</code> and <code>store y=1; load x</code>. Explain why the both-zero result contradicts sequential consistency but can be legal under a store-buffered model. Then identify a correct way to implement an ordered producer-consumer protocol at the language level, rather than merely inserting an arbitrary delay or relying on one CPU's usual behavior.</p>
+<p><strong>Check:</strong> SC requires a single total order consistent with both thread orders, which makes the both-zero cycle impossible. Buffered stores can make each other core's newly written variable temporarily unavailable while its own load proceeds. For publication/consumption, use an atomic release store and acquire load linked through the publishing atomic, or use a mutex protecting the state. The precise protocol and memory orders depend on the data ownership pattern.</p>
+</section>
+<section id="guided-exercise-4-investigate-a-forwarding-stall" aria-labelledby="heading-guided-exercise-4-investigate-a-forwarding-stall"><h2 id="heading-guided-exercise-4-investigate-a-forwarding-stall">Guided Exercise 4 — Investigate a Forwarding Stall</h2>
+<p>A low-level routine performs two-byte stores followed immediately by partially overlapping eight-byte loads. A profiler attributes stalls to memory execution even though the data set fits into the L1 cache. Propose a controlled experiment that can distinguish a forwarding restriction from random cache misses, and identify two correctness hazards that could invalidate a naive code rewrite.</p>
+<p><strong>Check:</strong> Vary alignment and access width while holding algorithmic work and data footprint constant. Collect load-latency/forwarding-related events where supported and compare a nonoverlapping control pattern. Correctness hazards include C/C++ strict-aliasing or unaligned-access violations, and changes to byte order or value semantics. Any rewrite must produce the same architectural bytes under the same language rules.</p>
+</section>
+<section id="guided-exercise-5-review-a-dma-descriptor-handoff" aria-labelledby="heading-guided-exercise-5-review-a-dma-descriptor-handoff"><h2 id="heading-guided-exercise-5-review-a-dma-descriptor-handoff">Guided Exercise 5 — Review a DMA Descriptor Handoff</h2>
+<p>A driver writes a descriptor in coherent or noncoherent shared memory and then updates a device doorbell. List the facts needed before deciding whether a barrier is necessary and which one to use. Distinguish CPU-to-CPU publish/consume ordering from CPU-to-device ownership transfer.</p>
+<p><strong>Check:</strong> Identify the platform's DMA-coherence contract, mapping/cache attributes, descriptor ownership rules, required cache maintenance, MMIO accessors, interconnect ordering, and device specification. Use the operating-system/driver APIs that encode those guarantees. Acquire/release atomics for CPU threads are not automatically equivalent to a device doorbell ordering sequence, nor is an instruction synchronization barrier necessarily relevant to descriptor visibility.</p>
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions"><h2 id="heading-review-questions">Review Questions</h2>
+<ol>
+<li>Why must a load's retirement eligibility be distinguished from the cycle when its value is available?</li>
+<li>How does an LSU choose the source bytes for a load overlapped by several older stores?</li>
+<li>What architectural danger arises if a wrong-path store updates shared memory too early?</li>
+<li>How can an unresolved older store address cause a younger load to replay?</li>
+<li>What is the difference between a load queue, a store queue, and a committed store buffer?</li>
+<li>Why does a store buffer enable both useful throughput and subtle cross-core observations?</li>
+<li>What does memory coherence establish, and what does it <em>not</em> establish across addresses?</li>
+<li>Why is a release/acquire publication pattern safer than an unsynchronized flag?</li>
+<li>Under which assumptions is the both-zero store-buffering outcome possible?</li>
+<li>What distinguishes a hardware memory fence from a compiler barrier and a device DMA synchronization API?</li>
+<li>Why might a pointer-chasing program remain latency-bound on a processor with many LQ entries?</li>
+<li>How would you test a replay mechanism after a speculative memory-dependence failure?</li>
+<li>Why is a successful misaligned load not proof that it is atomically indivisible?</li>
+<li>How can false sharing degrade performance without the threads accessing the same variable?</li>
+<li>What evidence would distinguish a load-port throughput limit from a full store buffer?</li>
+</ol>
+</section>
+<section id="glossary" aria-labelledby="heading-glossary"><h2 id="heading-glossary">Glossary</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Load/store unit (LSU)</td>
+  <td>CPU execution subsystem that coordinates memory requests, buffering, dependence checks, and ordering.</td>
+</tr>
+<tr>
+  <td>Address-generation unit (AGU)</td>
+  <td>Hardware that calculates effective addresses for loads and stores.</td>
+</tr>
+<tr>
+  <td>Program order</td>
+  <td>The architectural sequence of instructions in one thread.</td>
+</tr>
+<tr>
+  <td>Issue</td>
+  <td>Selection of a ready micro-operation for an execution resource.</td>
+</tr>
+<tr>
+  <td>Completion</td>
+  <td>Production of a local execution result, not necessarily retirement or remote visibility.</td>
+</tr>
+<tr>
+  <td>Retirement</td>
+  <td>Ordered acceptance of an instruction's architectural result.</td>
+</tr>
+<tr>
+  <td>Visibility</td>
+  <td>The circumstances under which another agent can observe a memory write.</td>
+</tr>
+<tr>
+  <td>Load queue (LQ)</td>
+  <td>Structure tracking outstanding loads and their ordering/replay information.</td>
+</tr>
+<tr>
+  <td>Store queue (SQ)</td>
+  <td>Structure tracking older stores and address/data readiness.</td>
+</tr>
+<tr>
+  <td>Store buffer</td>
+  <td>Storage that can retain committed stores awaiting downstream visibility.</td>
+</tr>
+<tr>
+  <td>Store-to-load forwarding</td>
+  <td>Supplying a younger load from matching older buffered store bytes.</td>
+</tr>
+<tr>
+  <td>Byte mask</td>
+  <td>Selection of byte lanes that an access modifies or supplies.</td>
+</tr>
+<tr>
+  <td>Memory disambiguation</td>
+  <td>Determination or prediction of whether memory instructions reference overlapping locations.</td>
+</tr>
+<tr>
+  <td>Replay</td>
+  <td>Re-execution or recovery after a speculative result is invalidated.</td>
+</tr>
+<tr>
+  <td>Memory dependence</td>
+  <td>A data- or ordering-relevant relation among memory operations.</td>
+</tr>
+<tr>
+  <td>RAW dependence</td>
+  <td>A younger read requiring a value written by an older write.</td>
+</tr>
+<tr>
+  <td>Memory model</td>
+  <td>Architectural/language rules constraining legal memory-access observations.</td>
+</tr>
+<tr>
+  <td>Sequential consistency (SC)</td>
+  <td>A single order of all operations preserving each thread's program order.</td>
+</tr>
+<tr>
+  <td>TSO</td>
+  <td>Total-store-ordering style model, used to describe important x86-64 ordinary-memory guarantees.</td>
+</tr>
+<tr>
+  <td>RVWMO</td>
+  <td>RISC-V weak memory ordering model for relevant memory accesses.</td>
+</tr>
+<tr>
+  <td>Acquire</td>
+  <td>Synchronization ordering that constrains certain operations after an acquire.</td>
+</tr>
+<tr>
+  <td>Release</td>
+  <td>Synchronization ordering that constrains certain operations before a release.</td>
+</tr>
+<tr>
+  <td>Fence</td>
+  <td>Instruction or language construct enforcing specified ordering constraints.</td>
+</tr>
+<tr>
+  <td>Atomic read-modify-write</td>
+  <td>Indivisible update, according to the specified architecture and granularity.</td>
+</tr>
+<tr>
+  <td>Cache coherence</td>
+  <td>Per-location/line coordination of cache ownership and observed writes.</td>
+</tr>
+<tr>
+  <td>MMIO</td>
+  <td>Access to device registers through memory-address-like operations.</td>
+</tr>
+<tr>
+  <td>DMA</td>
+  <td>Device access to memory without ordinary CPU execution of each transfer.</td>
+</tr>
+<tr>
+  <td>MLP</td>
+  <td>Memory-level parallelism: concurrent outstanding memory work.</td>
+</tr>
+<tr>
+  <td>False sharing</td>
+  <td>Coherence traffic caused by independent variables sharing a cache line.</td>
+</tr>
+<tr>
+  <td>Store buffering litmus</td>
+  <td>Two-thread test revealing whether stores can remain unseen while younger unrelated loads execute.</td>
+</tr>
+<tr>
+  <td>Precise exception</td>
+  <td>Fault reporting with a coherent architectural state corresponding to an instruction boundary.</td>
+</tr>
+<tr>
+  <td>Nonblocking cache</td>
+  <td>Cache supporting multiple outstanding misses or useful work during misses.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="complete-cpu-specialist-directory" aria-labelledby="heading-complete-cpu-specialist-directory"><h2 id="heading-complete-cpu-specialist-directory">Complete CPU Specialist Directory</h2>
+<p>The directory below preserves all <strong>24 active planned child destinations</strong> in the governing CPU unit index. Some destinations may not yet have physical HTML files or public deployment. Their presence as hyperlinks defines the navigation plan; it does not assert publication completion.</p>
+<ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths"><strong>Processor Cores and Datapaths</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state"><strong>Architectural Registers and Processor State</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode"><strong>Instruction Fetch and Decode</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units"><strong>Arithmetic, Logic, and Floating-Point Units</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling"><strong>CPU Control Logic and Exception Handling</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement"><strong>Instruction Completion and Retirement</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards"><strong>CPU Pipelines and Hazards</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution"><strong>Superscalar Issue and Out-of-Order Execution</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers"><strong>Register Renaming and Reorder Buffers</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution"><strong>Branch Prediction and Speculative Execution</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions"><strong>Vector, SIMD, and Specialized CPU Instructions</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation"><strong>Microcode and Internal Operation Translation</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality"><strong>CPU Cache Hierarchies and Locality</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering"><strong>Load/Store Units and Memory Ordering</strong></a> — <em>This article.</em></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers"><strong>Address Translation and Translation Lookaside Buffers</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources"><strong>Multi-Core CPU Topology and Shared Resources</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts"><strong>Simultaneous Multithreading and Hardware Contexts</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations"><strong>CPU Cache Coherence and Atomic Operations</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states"><strong>CPU Clock Frequency, Voltage, and Power States</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging"><strong>Processor Thermal Design and Packaging</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks"><strong>CPU Benchmarks, IPC, and Bottlenecks</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels"><strong>CPU Security Isolation and Speculative Side Channels</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery"><strong>CPU Reliability, Error Detection, and Recovery</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection"><strong>CPU Platform Compatibility and Workload Selection</strong></a></li></ol>
+
+</section>
+<section id="related-encyclopedia-topics-and-taxonomy-boundaries" aria-labelledby="heading-related-encyclopedia-topics-and-taxonomy-boundaries"><h2 id="heading-related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</h2>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit overview</a> — High-level role of the CPU and its components.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems division</a> — Physical processors, storage, devices, and platform components.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/">Computer Architecture division</a> — Architectural principles beyond one CPU implementation.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> — Broad hierarchy organization and trade-offs.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — General microarchitectural techniques.</li>
+<li><a href="/library/encyclopedia/computer-science/software-systems/">Operating Systems</a> — Thread scheduling and synchronization software context.</li>
+<li><a href="/library/encyclopedia/computer-science/security-systems/">Security Systems</a> — Threat modeling, isolation, and hardware/software security boundaries.</li>
+</ul>
+<p>This article <strong>owns CPU memory-execution machinery</strong>: the load/store pipes, buffering, forwarding, dependence checking, ordering enforcement, and observed LSU performance. Cache-system structure remains primarily in CPU Cache Hierarchies and Locality; atomic-coherence protocols belong in CPU Cache Coherence and Atomic Operations; the general memory-hierarchy abstraction remains in Computer Architecture; and language-level synchronization implementation belongs in its relevant software/programming units. Cross-links should preserve these editorial distinctions.</p>
+</section>
+<section id="primary-documentation-and-further-reading" aria-labelledby="heading-primary-documentation-and-further-reading"><h2 id="heading-primary-documentation-and-further-reading">Primary Documentation and Further Reading</h2>
+<ol>
+<li><strong>RISC-V International</strong>, <em>RISC-V Unprivileged ISA Specification</em>, memory-model chapters. <a href="https://docs.riscv.org/reference/isa/_attachments/riscv-unprivileged.pdf">Official specification PDF</a>. Normative description of preserved program order, loads, stores, fences, and atomic ordering.</li>
+<li><strong>RISC-V International</strong>, <em>RVWMO Explanatory Material</em>. <a href="https://docs.riscv.org/reference/isa/v20260120/unpriv/mm-eplan.html">Ratified specifications library</a>. Worked ordering examples and explanation of fence and acquire/release relations.</li>
+<li><strong>Arm</strong>, <em>Learn the Architecture: Memory Systems, Ordering, and Barriers</em>. <a href="https://support.arm.com/documentation/102336/0100/Memory-ordering">Arm learning guide</a>. Memory access reordering and barrier scope.</li>
+<li><strong>Arm</strong>, <em>Load-Acquire and Store-Release Instructions</em>. <a href="https://support.arm.com/documentation/102336/0101/Load-Acquire-and-Store-Release-instructions">Arm memory ordering guide</a>. Acquire and release instruction effects.</li>
+<li><strong>Intel</strong>, <em>Intel 64 and IA-32 Architectures Software Developer's Manuals</em>. <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Intel documentation hub</a>. Ordering requirements, memory types, and processor programming guarantees.</li>
+<li><strong>RISC-V BOOM Project</strong>, <em>The Load/Store Unit</em>. <a href="https://docs.boom-core.org/en/latest/sections/load-store-unit.html">BOOM implementation documentation</a>. Concrete out-of-order LSU queues, forwarding, and ordering examples; describes BOOM, not a universal hardware implementation.</li>
+<li><strong>RISC-V BOOM Project</strong>, <em>The BOOM Pipeline</em>. <a href="https://docs.boom-core.org/en/latest/sections/intro-overview/boom-pipeline.html">BOOM pipeline guide</a>. Pipeline context for memory execution and commit.</li>
+<li><strong>John L. Hennessy and David A. Patterson</strong>, <em>Computer Architecture: A Quantitative Approach</em>, relevant chapters on memory hierarchy, out-of-order execution, and instruction-level parallelism. Standard architectural context; edition-specific details should be checked in the reader's copy.</li>
+<li><strong>Mark Batty et al.</strong>, research on formal memory models, litmus tests, and language/ISA memory consistency. Consult primary peer-reviewed work for a chosen formal framework rather than relying on one simplified store-buffer simulator.</li>
+</ol>
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope"><h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Prepared November 23, 2026.</strong> This is the planned CPU specialist article <strong>14 of 24</strong>, stored physically at <code>library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering.html</code>, relative to the <code>C:\MGU\</code> extraction root. Its public canonical URL omits <code>.html</code>. The article explains architectural behavior and illustrative execution strategies; it does not claim to reverse-engineer a particular commercial CPU or to provide a fully conforming emulator of x86-64 TSO, Arm memory ordering, or RISC-V RVWMO.</p>
+<p>The CPU unit index and other sibling articles remain unchanged. Active child links are intentional navigational targets; their public availability must be checked separately. The executable Python snippets are small educational models and should not be used as the sole basis for hardware verification or real-time safety decisions.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<script defer src="/component/bottom-nav-loader.js"></script>
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

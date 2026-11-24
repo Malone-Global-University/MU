@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Core CPU Topology and Shared Resources | MGU Computer Science Encyclopedia | Malone Global University</title>
+<meta name="description" content="CPU multicore topology: physical cores, dies, chiplets, shared last-level caches, NUMA locality, package interconnects, core affinity, scheduling, and performance bounds.">
+<meta name="keywords" content="multicore CPU, core topology, NUMA, cache sharing, chiplet, CPU package, SMT, memory controllers, ring interconnect, mesh, CPU affinity, scheduling, shared resources, performance scalability">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Multi-Core CPU Topology and Shared Resources | MGU Encyclopedia">
+<meta property="og:description" content="How physical cores, chiplets, cache-sharing domains, package fabrics, NUMA nodes, and operating-system placement shape multicore performance.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero"><h1>Multi-Core CPU Topology and Shared Resources</h1><p class="subtitle">How physical cores, chiplets, cache-sharing domains, package fabrics, NUMA nodes, and operating-system placement shape multicore performance.</p></section>
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol><li><a href="#scope-and-central-question">Scope and Central Question</a></li><li><a href="#learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</a></li><li><a href="#defining-the-levels-of-processor-organization">Defining the Levels of Processor Organization</a></li><li><a href="#an-illustrative-package-and-core-cluster-diagram">An Illustrative Package and Core-Cluster Diagram</a></li><li><a href="#os-visible-topology-is-a-projection-of-physical-hardware">OS-Visible Topology Is a Projection of Physical Hardware</a></li><li><a href="#worked-example-count-cores-versus-logical-processors">Worked Example: Count Cores Versus Logical Processors</a></li><li><a href="#single-die-cpus-and-multi-die-packages">Single-Die CPUs and Multi-Die Packages</a></li><li><a href="#core-complexes-and-cluster-boundaries">Core Complexes and Cluster Boundaries</a></li><li><a href="#private-execution-resources-and-shared-infrastructure">Private Execution Resources and Shared Infrastructure</a></li><li><a href="#cache-sharing-as-a-topological-relationship">Cache Sharing as a Topological Relationship</a></li><li><a href="#worked-example-cache-domain-membership">Worked Example: Cache-Domain Membership</a></li><li><a href="#distributed-last-level-caches-and-home-agents">Distributed Last-Level Caches and Home Agents</a></li><li><a href="#ring-mesh-crossbar-and-fabric-interconnects">Ring, Mesh, Crossbar, and Fabric Interconnects</a></li><li><a href="#hop-count-is-not-the-whole-latency">Hop Count Is Not the Whole Latency</a></li><li><a href="#memory-controllers-and-channel-topology">Memory Controllers and Channel Topology</a></li><li><a href="#worked-example-aggregate-bandwidth-bound">Worked Example: Aggregate Bandwidth Bound</a></li><li><a href="#numa-memory-locality-within-and-across-packages">NUMA: Memory Locality Within and Across Packages</a></li><li><a href="#illustrative-numa-topology-matrix">Illustrative NUMA Topology Matrix</a></li><li><a href="#worked-example-weighted-local-and-remote-access">Worked Example: Weighted Local and Remote Access</a></li><li><a href="#first-touch-binding-preferred-and-interleaved-allocation">First Touch, Binding, Preferred, and Interleaved Allocation</a></li><li><a href="#cpu-affinity-and-memory-affinity-are-different-controls">CPU Affinity and Memory Affinity Are Different Controls</a></li><li><a href="#worked-example-a-placement-cost-heuristic">Worked Example: A Placement-Cost Heuristic</a></li><li><a href="#multicore-coherence-traffic-as-a-shared-resource-demand">Multicore Coherence Traffic as a Shared-Resource Demand</a></li><li><a href="#false-sharing-across-physical-cores">False Sharing Across Physical Cores</a></li><li><a href="#a-toy-line-sharing-detector">A Toy Line-Sharing Detector</a></li><li><a href="#core-to-core-communication-patterns">Core-to-Core Communication Patterns</a></li><li><a href="#cross-core-interrupts-and-tlb-shootdowns">Cross-Core Interrupts and TLB Shootdowns</a></li><li><a href="#i-o-locality-and-device-affinity">I/O Locality and Device Affinity</a></li><li><a href="#heterogeneous-cores-and-asymmetric-capacity">Heterogeneous Cores and Asymmetric Capacity</a></li><li><a href="#scheduling-domains-and-load-balancing">Scheduling Domains and Load Balancing</a></li><li><a href="#windows-processor-groups-and-large-systems">Windows Processor Groups and Large Systems</a></li><li><a href="#linux-cpu-topology-cpu-sets-and-hwloc">Linux CPU Topology, CPU Sets, and hwloc</a></li><li><a href="#worked-example-identify-unique-core-keys">Worked Example: Identify Unique Core Keys</a></li><li><a href="#hybrid-and-chiplet-systems-complicate-simple-affinity-rules">Hybrid and Chiplet Systems Complicate Simple Affinity Rules</a></li><li><a href="#parallel-scaling-the-amdahl-boundary">Parallel Scaling: The Amdahl Boundary</a></li><li><a href="#worked-example-amdahl-versus-actual-scaling">Worked Example: Amdahl Versus Actual Scaling</a></li><li><a href="#work-span-and-synchronization-structure">Work, Span, and Synchronization Structure</a></li><li><a href="#shared-resource-bottlenecks-and-the-roofline-view">Shared-Resource Bottlenecks and the Roofline View</a></li><li><a href="#contention-can-hide-behind-high-core-utilization">Contention Can Hide Behind High Core Utilization</a></li><li><a href="#latency-throughput-and-tail-behavior">Latency, Throughput, and Tail Behavior</a></li><li><a href="#frequency-and-thermal-coupling-across-cores">Frequency and Thermal Coupling Across Cores</a></li><li><a href="#virtual-cpus-hypervisors-and-topology-exposure">Virtual CPUs, Hypervisors, and Topology Exposure</a></li><li><a href="#security-and-side-effects-of-shared-resources">Security and Side Effects of Shared Resources</a></li><li><a href="#reliability-error-domains-and-failure-containment">Reliability, Error Domains, and Failure Containment</a></li><li><a href="#processor-topology-versus-the-bus-system-taxonomy">Processor Topology Versus the Bus-System Taxonomy</a></li><li><a href="#measuring-a-machine-before-optimizing-it">Measuring a Machine Before Optimizing It</a></li><li><a href="#practical-topology-discovery-on-windows">Practical Topology Discovery on Windows</a></li><li><a href="#practical-topology-discovery-on-linux">Practical Topology Discovery on Linux</a></li><li><a href="#benchmark-design-separate-independent-variables">Benchmark Design: Separate Independent Variables</a></li><li><a href="#performance-counter-interpretation-limits">Performance-Counter Interpretation Limits</a></li><li><a href="#worked-example-parallel-efficiency">Worked Example: Parallel Efficiency</a></li><li><a href="#locality-versus-load-balance-a-decision-table">Locality Versus Load Balance: A Decision Table</a></li><li><a href="#common-interpretation-errors">Common Interpretation Errors</a></li><li><a href="#applied-scenario-1-a-shared-cache-helps-an-analytics-pipeline">Applied Scenario 1 — A Shared Cache Helps an Analytics Pipeline</a></li><li><a href="#applied-scenario-2-a-memory-scan-stops-scaling-at-eight-cores">Applied Scenario 2 — A Memory Scan Stops Scaling at Eight Cores</a></li><li><a href="#applied-scenario-3-a-two-socket-database-has-remote-page-traffic">Applied Scenario 3 — A Two-Socket Database Has Remote Page Traffic</a></li><li><a href="#applied-scenario-4-a-chiplet-boundary-changes-queue-handoff-cost">Applied Scenario 4 — A Chiplet Boundary Changes Queue Handoff Cost</a></li><li><a href="#applied-scenario-5-a-virtual-machine-s-vcpu-count-misleads-operators">Applied Scenario 5 — A Virtual Machine&#x27;s vCPU Count Misleads Operators</a></li><li><a href="#applied-scenario-6-a-hybrid-laptop-prioritizes-interactive-work">Applied Scenario 6 — A Hybrid Laptop Prioritizes Interactive Work</a></li><li><a href="#ten-gate-multicore-engineering-framework">Ten-Gate Multicore Engineering Framework</a></li><li><a href="#guided-exercise-1-draw-a-processor-resource-map">Guided Exercise 1 — Draw a Processor Resource Map</a></li><li><a href="#guided-exercise-2-compare-two-thread-placements">Guided Exercise 2 — Compare Two Thread Placements</a></li><li><a href="#guided-exercise-3-analyze-a-numa-allocation-mistake">Guided Exercise 3 — Analyze a NUMA Allocation Mistake</a></li><li><a href="#guided-exercise-4-find-the-saturation-point">Guided Exercise 4 — Find the Saturation Point</a></li><li><a href="#guided-exercise-5-design-a-hybrid-core-policy">Guided Exercise 5 — Design a Hybrid-Core Policy</a></li><li><a href="#review-questions">Review Questions</a></li><li><a href="#glossary">Glossary</a></li><li><a href="#complete-cpu-specialist-directory">Complete CPU Specialist Directory</a></li><li><a href="#related-encyclopedia-topics-and-editorial-boundaries">Related Encyclopedia Topics and Editorial Boundaries</a></li><li><a href="#primary-technical-documentation-and-further-reading">Primary Technical Documentation and Further Reading</a></li><li><a href="#publication-status-and-scope">Publication Status and Scope</a></li></ol></section>
+<section id="scope-and-central-question" aria-labelledby="heading-scope-and-central-question"><h2 id="heading-scope-and-central-question">Scope and Central Question</h2>
+<p>A <strong>multicore CPU</strong> places more than one execution core within a processor product, but the word <em>multicore</em> alone tells an engineer remarkably little about cost or performance. Two cores can execute instructions independently while sharing an L3 cache, memory controller, fabric link, power budget, or physical package. Two hardware threads may instead share the <em>same</em> core. And two cores visible to an operating system may belong to different silicon dies or NUMA locality domains even when the product is marketed as a single socket. The central engineering question is therefore <strong>which resources are private, which are shared, where are they located, and what does a workload do to them?</strong></p>
+<p>This specialist treatment owns the concrete organization of processor packages, dies, chiplets, core clusters, shared last-level caches, interconnect paths, and proximity to memory and I/O. It explains how that organization changes contention, isolation, parallel scalability, and placement decisions. It does not duplicate the detailed cache algorithms in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a>, coherence-state protocols in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a>, or multiple-thread operation inside <em>one</em> core in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a>.</p>
+<p>A useful multicore design review must make a resource map before interpreting a benchmark: independent arithmetic capability is not the same as independent bandwidth, cache capacity, or power supply. Moreover, neither core count nor package count guarantees uniform performance. This distinction governs the examples, diagrams, formulas, and selection framework below.</p>
+
+</section>
+<section id="learning-objectives-and-prerequisites" aria-labelledby="heading-learning-objectives-and-prerequisites"><h2 id="heading-learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</h2>
+<p>After reading, the learner should be able to identify sockets, packages, dies, chiplets, cores, and logical processors without treating them as synonyms; interpret private versus shared cache diagrams; explain ring, mesh, and fabric trade-offs without assuming a vendor's unreported topology; calculate basic limits from Amdahl's law and bandwidth constraints; reason about NUMA memory placement and CPU affinity; and design a fair topology-sensitive performance experiment. The reader should also be able to distinguish a schedulable CPU identifier from a physical core, reason about a cross-core cache-line transfer, and recognize when an apparent performance regression is caused by resource contention rather than a slow instruction.</p>
+<p>Recommended preparation includes processor datapaths, cache locality, load/store operation, and virtual-memory translation. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit overview</a> supplies the broad background; the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">CPU specialist directory</a> gives the full 24-article sequence. Examples here are deliberately illustrative, not claims that a particular commercially available processor uses the diagram's exact cache sizes or interconnect distances.</p>
+
+</section>
+<section id="defining-the-levels-of-processor-organization" aria-labelledby="heading-defining-the-levels-of-processor-organization"><h2 id="heading-defining-the-levels-of-processor-organization">Defining the Levels of Processor Organization</h2>
+<p>A <strong>hardware thread</strong> or <strong>logical processor</strong> is a separately scheduled architectural execution context; <strong>core</strong> denotes a processing engine with substantial instruction-execution resources; <strong>die</strong> denotes a continuous piece of silicon; <strong>compute chiplet</strong> denotes a die or package element containing CPU cores; <strong>package</strong> denotes the assembled processor product; and a <strong>socket</strong> is the motherboard interface accommodating a package. Depending on product family, an entire CPU can use one die, many dies, or a heterogeneous mix of computing and I/O dies. An OS may also expose <em>virtual CPUs</em> that are scheduled onto physical hardware by a hypervisor, adding another layer of mapping.</p>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Practical meaning</th>
+  <th>Common reporting mistake</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Logical CPU / processing unit (PU)</td>
+  <td>Context available to the operating-system scheduler</td>
+  <td>Equating two SMT siblings with two independent physical cores</td>
+</tr>
+<tr>
+  <td>Physical core</td>
+  <td>Execution machinery for one or more hardware contexts</td>
+  <td>Assuming all cores have identical capacity</td>
+</tr>
+<tr>
+  <td>Core cluster / complex</td>
+  <td>Group of cores with a defined sharing or proximity relationship</td>
+  <td>Assuming any cluster boundary is a NUMA boundary</td>
+</tr>
+<tr>
+  <td>Die / chiplet</td>
+  <td>Silicon component containing some portion of the product</td>
+  <td>Assuming one CPU package implies one die</td>
+</tr>
+<tr>
+  <td>Package / socket</td>
+  <td>Processor assembly and its board installation point</td>
+  <td>Treating package number as proof of memory-access uniformity</td>
+</tr>
+<tr>
+  <td>NUMA memory node</td>
+  <td>OS-visible memory locality domain and policy target</td>
+  <td>Assuming there must be one NUMA node per socket</td>
+</tr>
+</tbody>
+</table>
+<p>Terminology is implementation-specific. For instance, a “core complex” in a manufacturer's documentation is a concrete sharing boundary for that product generation, not a universal building block of every processor. Numbering also requires care: Linux <code>core_id</code> can repeat across packages; a unique physical-core key generally needs package, die where meaningful, and core identity in the appropriate scope.</p>
+
+</section>
+<section id="an-illustrative-package-and-core-cluster-diagram" aria-labelledby="heading-an-illustrative-package-and-core-cluster-diagram"><h2 id="heading-an-illustrative-package-and-core-cluster-diagram">An Illustrative Package and Core-Cluster Diagram</h2>
+<p>The conceptual diagram below deliberately depicts two compute clusters sharing access to an I/O and memory subsystem. Each cluster contains two cores, each core has a private L1, and each cluster has an L3 cache. A pair of memory controllers is reached through a package fabric. The labels convey <em>relationships</em>, not physical routing, cache inclusivity, or bandwidth specifications of any actual CPU model.</p>
+<figure aria-labelledby="topology-diagram-caption">
+<svg role="img" aria-labelledby="topology-svg-title topology-svg-desc" viewBox="0 0 1060 510" width="100%" xmlns="http://www.w3.org/2000/svg">
+<title id="topology-svg-title">Illustrative multi-die CPU package with two core clusters, shared last-level caches, and memory controllers</title>
+<desc id="topology-svg-desc">One CPU package contains cluster A and cluster B. Each cluster has two cores with local L1 caches and its own shared L3 cache. Both clusters connect through a package fabric to two memory controllers that reach two DRAM channel groups. All sizes and paths are conceptual, not actual product specifications.</desc>
+<rect x="8" y="8" width="1044" height="493" rx="16" fill="#f7f8fa" stroke="#536171" stroke-width="3"/>
+<text x="530" y="39" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" fill="#172a3a" font-weight="bold">One CPU package — illustrative resource topology</text>
+<rect x="30" y="62" width="485" height="255" rx="12" fill="#e7eef4" stroke="#4c6679" stroke-width="2"/>
+<rect x="545" y="62" width="485" height="255" rx="12" fill="#e7eef4" stroke="#4c6679" stroke-width="2"/>
+<text x="272" y="88" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#25394c" font-weight="bold">Compute cluster / chiplet A</text>
+<text x="787" y="88" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#25394c" font-weight="bold">Compute cluster / chiplet B</text>
+<g font-family="Arial, sans-serif" font-size="17" fill="#1a3346" text-anchor="middle">
+<rect x="58" y="106" width="197" height="72" rx="9" fill="#ffffff" stroke="#547088" stroke-width="2"/>
+<text x="156" y="130">Core 0</text><text x="156" y="155" font-size="15">private L1</text>
+<rect x="288" y="106" width="197" height="72" rx="9" fill="#ffffff" stroke="#547088" stroke-width="2"/>
+<text x="386" y="130">Core 1</text><text x="386" y="155" font-size="15">private L1</text>
+<rect x="573" y="106" width="197" height="72" rx="9" fill="#ffffff" stroke="#547088" stroke-width="2"/>
+<text x="671" y="130">Core 2</text><text x="671" y="155" font-size="15">private L1</text>
+<rect x="803" y="106" width="197" height="72" rx="9" fill="#ffffff" stroke="#547088" stroke-width="2"/>
+<text x="901" y="130">Core 3</text><text x="901" y="155" font-size="15">private L1</text>
+<rect x="71" y="223" width="402" height="62" rx="8" fill="#cedfeb" stroke="#496779" stroke-width="2"/>
+<text x="272" y="261">Shared L3 cache A</text>
+<rect x="586" y="223" width="402" height="62" rx="8" fill="#cedfeb" stroke="#496779" stroke-width="2"/>
+<text x="787" y="261">Shared L3 cache B</text>
+</g>
+<g stroke="#516c7e" stroke-width="3" fill="none"><path d="M 156 178 V 203 H 272 V 223"/><path d="M 386 178 V 203 H 272"/><path d="M 671 178 V 203 H 787 V 223"/><path d="M 901 178 V 203 H 787"/><path d="M 272 285 V 351 H 530"/><path d="M 787 285 V 351 H 530"/></g>
+<rect x="332" y="332" width="396" height="52" rx="10" fill="#e2e7ef" stroke="#4c6679" stroke-width="2"/>
+<text x="530" y="364" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#1a3346">Package fabric / shared interconnect</text>
+<g stroke="#516c7e" stroke-width="3" fill="none"><path d="M 450 384 V 410 H 242 V 432"/><path d="M 610 384 V 410 H 818 V 432"/></g>
+<g font-family="Arial, sans-serif" font-size="17" text-anchor="middle" fill="#1a3346">
+<rect x="72" y="432" width="340" height="48" rx="8" fill="#eef2f6" stroke="#4c6679" stroke-width="2"/>
+<text x="242" y="460">Memory controller 0 → DRAM channels</text>
+<rect x="648" y="432" width="340" height="48" rx="8" fill="#eef2f6" stroke="#4c6679" stroke-width="2"/>
+<text x="818" y="460">Memory controller 1 → DRAM channels</text>
+</g>
+</svg>
+<figcaption id="topology-diagram-caption">Figure 1. Illustrative physical sharing hierarchy. Cache topology, die count, and controller placement differ across real processors. This diagram does not imply one NUMA node per cluster.</figcaption>
+</figure>
+
+<p><strong>Reading the diagram:</strong> accesses from a core to its private cache typically traverse a shorter and less-contended path than accesses to memory reached across shared controllers. A pair of cores in the same cache cluster may enjoy high shared-data locality while also displacing one another's working set. Cores in different clusters can be physically present within one package yet encounter additional fabric traffic for data exchange. The exact latencies depend on implementation, clock domains, power state, cache policy, and measured workload.</p>
+
+</section>
+<section id="os-visible-topology-is-a-projection-of-physical-hardware" aria-labelledby="heading-os-visible-topology-is-a-projection-of-physical-hardware"><h2 id="heading-os-visible-topology-is-a-projection-of-physical-hardware">OS-Visible Topology Is a Projection of Physical Hardware</h2>
+<p>Operating systems learn topology from architecture-specific discovery, firmware tables, and processor interfaces, then publish a <em>usable</em> view to software. That view may be filtered by CPU hot-plug status, container CPU sets, affinity restrictions, hypervisor exposure, firmware configuration, and the platform's ability to represent all hierarchy levels. A topology API is authoritative about the <strong>view it returns</strong>, not proof of every internal silicon detail.</p>
+<p>On Linux, <code>lscpu -e</code> and <code>/sys/devices/system/cpu/cpu*/topology/</code> can expose package, die, core, and sibling relationships; <code>lscpu -C</code> can summarize caches. On Windows, <code>GetLogicalProcessorInformationEx</code> exposes processor-core, package, die, cache, NUMA, and processor-group relationships. Tools such as <code>hwloc</code> or Microsoft Sysinternals Coreinfo can help visualize the map. Do not infer a unique physical core from an OS logical-processor number alone; do not assume an index remains stable after hot-plug, BIOS changes, or virtual-machine migration.</p>
+
+</section>
+<section id="worked-example-count-cores-versus-logical-processors" aria-labelledby="heading-worked-example-count-cores-versus-logical-processors"><h2 id="heading-worked-example-count-cores-versus-logical-processors">Worked Example: Count Cores Versus Logical Processors</h2>
+<p>Imagine a package with four performance cores that expose two hardware contexts each and four efficiency cores with one context each. Its <strong>physical-core count is eight</strong>, while its <strong>logical-CPU count is twelve</strong>. It would be incorrect to infer twelve independent full-performance execution engines. At the same time, eight physical cores do not guarantee eight equal-capacity engines; microarchitecture, clocks, shared resources, and power management can differ among the core classes.</p>
+<pre><code class="language-python">p_cores, p_threads = 4, 2
+e_cores, e_threads = 4, 1
+physical = p_cores + e_cores
+logical = p_cores * p_threads + e_cores * e_threads
+assert (physical, logical) == (8, 12)
+print(f&quot;physical cores={physical}, logical processors={logical}&quot;)
+</code></pre>
+<p>For scheduling, the distinction determines whether a new runnable thread may use idle execution machinery or must compete with a sibling already using the same core. The response is workload-dependent: SMT may hide pipeline stalls effectively in one code mix, but provide less benefit when siblings saturate the same execution ports or cache bandwidth.</p>
+
+</section>
+<section id="single-die-cpus-and-multi-die-packages" aria-labelledby="heading-single-die-cpus-and-multi-die-packages"><h2 id="heading-single-die-cpus-and-multi-die-packages">Single-Die CPUs and Multi-Die Packages</h2>
+<p>A monolithic die integrates cores and infrastructure on one silicon piece. Its advantages can include simpler internal paths and uniform manufacturability of some components; its costs can include yield, die-size, power-delivery, and product-scaling constraints. A chiplet design partitions the system into dies joined by package-level interconnects. Partitioning can improve manufacturing flexibility, reuse across product families, and the separation of compute logic from I/O or analog functions. These are design opportunities, not automatic benefits for every workload.</p>
+<p>A compute die may contain multiple cores and local caches while an I/O die contains memory controllers, peripheral interfaces, and package fabric endpoints. Alternatively, memory and I/O controls may be distributed. Cross-die communication introduces latency and energy costs and can create fabric bottlenecks. The performance result depends on cache hierarchy, shared data placement, inter-die bandwidth, and software locality rather than simply on chiplet count.</p>
+
+</section>
+<section id="core-complexes-and-cluster-boundaries" aria-labelledby="heading-core-complexes-and-cluster-boundaries"><h2 id="heading-core-complexes-and-cluster-boundaries">Core Complexes and Cluster Boundaries</h2>
+<p><strong>Core cluster</strong> is a broad organizational term: the cluster may share L2, L3, an instruction cache, a front-end, an interconnect segment, or a power domain. Some designs place one cache slice per cluster; others implement distributed last-level cache slices or centralized banks. A shared cache is a capacity and communication resource, not a promise that cache access costs are identical from every core.</p>
+<p>If a program passes cache lines frequently among two producer-consumer threads, keeping them near a shared cache and coherence neighborhood may reduce some transfers. But if the threads constantly stream unrelated large arrays, placing them in separate clusters can reduce cache contention. No single rule—“always pack together” or “always spread apart”—is correct for both workloads. The topology matters in combination with the access pattern.</p>
+
+</section>
+<section id="private-execution-resources-and-shared-infrastructure" aria-labelledby="heading-private-execution-resources-and-shared-infrastructure"><h2 id="heading-private-execution-resources-and-shared-infrastructure">Private Execution Resources and Shared Infrastructure</h2>
+<p>A typical physical core has substantial private resources: program counter(s), instruction execution engines, at least some registers and buffers, and usually L1 instruction/data caches. Resources outside the core may include last-level cache capacity, memory controllers, on-package interconnect routers, I/O translation facilities, and the package's power/thermal budget. Some resources that appear private at the architectural level are shared internally when SMT is enabled, and some caches are partitioned by design.</p>
+<table>
+<thead>
+<tr>
+  <th>Resource</th>
+  <th>Common sharing pattern</th>
+  <th>Principal concern</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Integer/FP execution units</td>
+  <td>Mostly core-local; may be shared by SMT contexts</td>
+  <td>Pipeline-port contention</td>
+</tr>
+<tr>
+  <td>L1 data/instruction cache</td>
+  <td>Commonly core-local, shared by SMT siblings</td>
+  <td>Local capacity and access conflict</td>
+</tr>
+<tr>
+  <td>L2 cache</td>
+  <td>Private per core or shared within a small core group</td>
+  <td>Working-set interference</td>
+</tr>
+<tr>
+  <td>Last-level cache</td>
+  <td>Shared across a cluster, die, or broader domain</td>
+  <td>Capacity, bandwidth, cross-core latency</td>
+</tr>
+<tr>
+  <td>Memory controller</td>
+  <td>Shared by cores attached to its memory domain</td>
+  <td>Aggregate DRAM-channel bandwidth</td>
+</tr>
+<tr>
+  <td>Fabric routers and links</td>
+  <td>Shared by many cores and agents</td>
+  <td>Hop count, queueing, congestion</td>
+</tr>
+<tr>
+  <td>Power and thermal headroom</td>
+  <td>Shared at several hierarchy levels</td>
+  <td>Frequency reductions under load</td>
+</tr>
+</tbody>
+</table>
+<p>A hierarchy should be described as a graph with ownership and bandwidth, not merely as a drawing of nested boxes. The physically nearest resource may also be occupied or busy; queueing delay can dominate its nominal access latency under load.</p>
+
+</section>
+<section id="cache-sharing-as-a-topological-relationship" aria-labelledby="heading-cache-sharing-as-a-topological-relationship"><h2 id="heading-cache-sharing-as-a-topological-relationship">Cache Sharing as a Topological Relationship</h2>
+<p>Cache structure is central to multicore placement. The CPU's L1 caches usually serve one physical core, while higher levels may span several cores. Shared cache can improve data reuse and reduce expensive external transfers when threads cooperate. The same sharing can lower effective cache capacity per thread or introduce contention when their footprints conflict. A large aggregate cache size may be divided into slices or clusters that do not have equal access latencies.</p>
+<p>Consider two workers using 8 MiB each. If they share a 12 MiB usable cache and their access patterns do not reuse the same data, their combined 16 MiB working set exceeds that cache's capacity. The resulting misses depend on replacement policy, address mapping, and access order; the shortfall alone does not quantify a miss rate. If the workers instead reuse 4 MiB of overlapping read-only data, the shared cache could reduce duplication and improve performance. The cache's <em>topological sharing scope</em> must therefore be paired with a working-set analysis.</p>
+
+</section>
+<section id="worked-example-cache-domain-membership" aria-labelledby="heading-worked-example-cache-domain-membership"><h2 id="heading-worked-example-cache-domain-membership">Worked Example: Cache-Domain Membership</h2>
+<p>The following toy map uses four logical processors and two shared L3 domains. It asks which pairs can share a last-level cache; it does not infer memory latency, interconnect bandwidth, or cache coherence protocol. Such grouping can be read from the operating system or a portable topology library, then checked against the target machine.</p>
+<pre><code class="language-python">cache_domain = {0: 'L3-A', 1: 'L3-A', 2: 'L3-B', 3: 'L3-B'}
+def shares_llc(a, b):
+    return cache_domain[a] == cache_domain[b]
+assert shares_llc(0, 1)
+assert not shares_llc(0, 2)
+print([(0, i, shares_llc(0, i)) for i in range(1, 4)])
+</code></pre>
+<p>The reverse of this question—“which threads should share an LLC?”—cannot be answered from topology alone. It requires data-sharing frequency, reuse distance, cache-bandwidth demand, interference measurements, and the application's synchronization model.</p>
+
+</section>
+<section id="distributed-last-level-caches-and-home-agents" aria-labelledby="heading-distributed-last-level-caches-and-home-agents"><h2 id="heading-distributed-last-level-caches-and-home-agents">Distributed Last-Level Caches and Home Agents</h2>
+<p>Some multicore systems distribute LLC slices, coherence directories, or address home agents across an interconnect. An address-mapping function determines which slice or agent owns a line's directory/home information; the querying core may be near or far from it. This complicates a simplistic hierarchy where every core is exactly one fixed latency away from one global L3. A local hit, a remote-slice hit, and a memory access can have different paths even when all use the same logical last-level cache level.</p>
+<p>The mapping, slice count, and replacement design are vendor- and generation-specific. Software generally should not hardcode assumptions about undocumented hash functions. Performance engineers instead use cache-domain discovery, hardware performance counters where supported, and controlled experiments to identify the cost of sharing or placement. Coherence state machines are treated separately in the dedicated CPU coherence article.</p>
+
+</section>
+<section id="ring-mesh-crossbar-and-fabric-interconnects" aria-labelledby="heading-ring-mesh-crossbar-and-fabric-interconnects"><h2 id="heading-ring-mesh-crossbar-and-fabric-interconnects">Ring, Mesh, Crossbar, and Fabric Interconnects</h2>
+<p>A <strong>ring</strong> connects agents around a logical loop and can be efficient for a moderate number of endpoints, but total link traffic and traversal distances rise as the design scales. A <strong>mesh</strong> introduces more routing choices and can distribute traffic over many paths, at the cost of routing complexity and potentially variable hop count. A <strong>crossbar</strong> can offer flexible simultaneous paths but grows in hardware cost with port count. <strong>Fabric</strong> is a general term for an interconnect whose physical and logical structure may involve switches, links, bridges, or multiple protocol layers.</p>
+<p>A CPU with chiplets may use one interconnect within compute dies and a different package fabric between dies. A ring versus mesh comparison without router capacity, operating frequency, address mapping, and contention is incomplete. Designers balance latency, bisection bandwidth, area, power, clock-domain crossings, service quality, resilience, and manufacturing constraints. Readers seeking signaling and protocol details should consult Computer Architecture's Bus Systems unit rather than treating this article as a bus electrical specification.</p>
+
+</section>
+<section id="hop-count-is-not-the-whole-latency" aria-labelledby="heading-hop-count-is-not-the-whole-latency"><h2 id="heading-hop-count-is-not-the-whole-latency">Hop Count Is Not the Whole Latency</h2>
+<p>A useful teaching model is total access time = fixed endpoint cost + router/link costs + queueing + service. The smallest-hop route can become slow when queues are saturated; a somewhat longer route can win if its effective capacity is higher and the fabric supports that alternative. Memory traffic may traverse cache lookup and coherence management before reaching a controller, so the count of physical fabric links alone is not an end-to-end memory-latency model.</p>
+<pre><code class="language-python">def toy_path_latency(base_ns, hops, per_hop_ns, queue_ns, service_ns):
+    return base_ns + hops * per_hop_ns + queue_ns + service_ns
+near_busy = toy_path_latency(5, 1, 2, 30, 8)
+far_clear = toy_path_latency(5, 4, 2, 2, 8)
+assert near_busy == 45 and far_clear == 23
+print(f&quot;near/busy={near_busy} ns, far/uncongested={far_clear} ns&quot;)
+</code></pre>
+<p>These are constructed illustrative parameters, not silicon measurements. Real fabrics may not dynamically choose a different route for a request and do not necessarily have constant per-hop delay. The lesson is that contention and placement must be observed, not inferred mechanically from a diagram.</p>
+
+</section>
+<section id="memory-controllers-and-channel-topology" aria-labelledby="heading-memory-controllers-and-channel-topology"><h2 id="heading-memory-controllers-and-channel-topology">Memory Controllers and Channel Topology</h2>
+<p>Physical memory bandwidth is delivered through memory controllers and channels. Multiple cores can issue memory requests independently but still compete for the same controller queues, DRAM channels, memory banks, and write/read scheduling capacity. A core's local L1 bandwidth might be large while package-level sustained DRAM bandwidth is much smaller. Once the memory subsystem saturates, additional cores may increase requests and power without increasing useful completed bytes.</p>
+<p>Memory-channel count, data rate, transfer efficiency, read/write mix, and workload locality shape the bound. Controller placement also matters: some packages make one set of cores physically closer to a controller or group memory with a NUMA locality domain. Channel bandwidth is separate from capacity, and dual-channel versus single-channel labels do not by themselves identify the number of memory controllers or NUMA nodes.</p>
+
+</section>
+<section id="worked-example-aggregate-bandwidth-bound" aria-labelledby="heading-worked-example-aggregate-bandwidth-bound"><h2 id="heading-worked-example-aggregate-bandwidth-bound">Worked Example: Aggregate Bandwidth Bound</h2>
+<p>Suppose six identical workers each demand 12 GB/s from DRAM while the platform sustains 48 GB/s for the tested access mix. Aggregate demand is 72 GB/s; under a deliberately simplified fair-share model, only two-thirds of demand can be supplied. That does <strong>not</strong> mean every worker always receives exactly 8 GB/s: real memory scheduling, traffic distribution, and priority may be unequal.</p>
+<pre><code class="language-python">worker_count = 6
+worker_demand_gbs = 12.0
+sustainable_gbs = 48.0
+demand = worker_count * worker_demand_gbs
+fraction = min(1.0, sustainable_gbs / demand)
+assert demand == 72 and round(fraction, 6) == round(2/3, 6)
+print(f&quot;aggregate demand={demand:.0f} GB/s, attainable fraction≈{fraction:.1%}&quot;)
+</code></pre>
+<p>When a kernel is bandwidth-bound, the next optimization may be data reuse, compressed representations, fewer memory passes, or changes to placement rather than increasing its worker count. The bound should be estimated from measured <em>sustained</em> bandwidth under an equivalent access pattern, not from only the product's headline transfer rate.</p>
+
+</section>
+<section id="numa-memory-locality-within-and-across-packages" aria-labelledby="heading-numa-memory-locality-within-and-across-packages"><h2 id="heading-numa-memory-locality-within-and-across-packages">NUMA: Memory Locality Within and Across Packages</h2>
+<p><strong>Non-uniform memory access (NUMA)</strong> means different CPU-to-memory paths can have different latency or bandwidth characteristics. A NUMA node is an operating-system locality and allocation domain; it can correspond to one socket, part of a socket, or a platform configuration spanning components. NUMA is a relation between memory and initiators, not a proof that physically separate DRAM is absent or inaccessible. Many systems retain a shared physical address space while access costs vary.</p>
+<p>A page can be “remote” to a running CPU when its memory resides in another locality domain. The application may still function correctly, but pointer-chasing latency, fabric traffic, and controller congestion can increase. Some platforms permit firmware-configured modes that change visible node granularity without changing the number of processor packages. On such systems, “one NUMA node per socket” is a particularly unreliable shortcut.</p>
+
+</section>
+<section id="illustrative-numa-topology-matrix" aria-labelledby="heading-illustrative-numa-topology-matrix"><h2 id="heading-illustrative-numa-topology-matrix">Illustrative NUMA Topology Matrix</h2>
+<p>The table represents invented measured-like relative access costs for a two-node model. It illustrates asymmetry without claiming a universal factor. Nodes can also differ in CPU count, memory capacity, and available bandwidth; the topology need not be symmetric.</p>
+<table>
+<thead>
+<tr>
+  <th>Requesting CPU node</th>
+  <th style="text-align:right">Memory node 0</th>
+  <th style="text-align:right">Memory node 1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Node 0</td>
+  <td style="text-align:right">90 ns</td>
+  <td style="text-align:right">155 ns</td>
+</tr>
+<tr>
+  <td>Node 1</td>
+  <td style="text-align:right">150 ns</td>
+  <td style="text-align:right">95 ns</td>
+</tr>
+</tbody>
+</table>
+<p>Latency depends on operation, cache misses, contention, and clock conditions. This toy matrix cannot predict application performance by itself: a cache-friendly program may rarely reach DRAM, while an application that touches unpredictable dependent pointers can be much more sensitive. Topology distance and performance should be measured for the same hardware and operating conditions, not borrowed from a similarly branded processor.</p>
+
+</section>
+<section id="worked-example-weighted-local-and-remote-access" aria-labelledby="heading-worked-example-weighted-local-and-remote-access"><h2 id="heading-worked-example-weighted-local-and-remote-access">Worked Example: Weighted Local and Remote Access</h2>
+<p>Assume a memory-intensive task performs 80% local and 20% remote uncached DRAM reads, at constructed costs of 90 ns and 155 ns. A simple weighted-average <em>service-latency</em> illustration yields 103 ns. This is not a real execution-time prediction because it ignores overlapping misses, cache hits, prefetching, queueing, and bandwidth.</p>
+<pre><code class="language-python">local_fraction = 0.80
+local_ns, remote_ns = 90.0, 155.0
+weighted_ns = local_fraction * local_ns + (1-local_fraction) * remote_ns
+assert weighted_ns == 103.0
+print(f&quot;illustrative mean DRAM service latency={weighted_ns:.1f} ns&quot;)
+</code></pre>
+<p>Moving allocations local might lower memory access cost, but an indiscriminate binding policy can create imbalance or put memory pressure on one node. Interleaving can spread bandwidth demand, while local allocation often favors latency-sensitive work. The preferable policy depends on bandwidth and capacity, not merely the shortest access time.</p>
+
+</section>
+<section id="first-touch-binding-preferred-and-interleaved-allocation" aria-labelledby="heading-first-touch-binding-preferred-and-interleaved-allocation"><h2 id="heading-first-touch-binding-preferred-and-interleaved-allocation">First Touch, Binding, Preferred, and Interleaved Allocation</h2>
+<p>On many Linux configurations, anonymous pages are physically allocated on first touch according to the effective memory policy and available nodes. Consequently, having one thread allocate and initialize all data before starting workers can concentrate pages on that first thread's node. A parallel initialization phase that follows future worker ownership can often improve locality. Caveats include inherited memory policy, cpusets, transparent huge pages, page migration, and differences in file-backed mappings.</p>
+<p><strong>Bind</strong> restricts allocation to specified nodes subject to policy and failure behavior; <strong>preferred</strong> expresses a preference with fallback according to operating-system semantics; <strong>interleave</strong> distributes pages across allowed nodes; <strong>local</strong> chooses a node near the allocating CPU when possible. These policies have distinct behavior on allocation, migration, and exhaustion. The Linux kernel's NUMA memory-policy documentation is the normative starting point for Linux-specific modes, not a generic guarantee across operating systems.</p>
+
+</section>
+<section id="cpu-affinity-and-memory-affinity-are-different-controls" aria-labelledby="heading-cpu-affinity-and-memory-affinity-are-different-controls"><h2 id="heading-cpu-affinity-and-memory-affinity-are-different-controls">CPU Affinity and Memory Affinity Are Different Controls</h2>
+<p>Pinning execution to CPUs does not automatically move an application's already-allocated pages. Likewise, binding memory to a NUMA node does not force its worker threads to remain there. Good placement strategies coordinate both sides and account for migration, load balancing, time-varying workload demand, and other tenants. On Linux, CPU sets and memory policy expose different controls; Windows provides separate scheduling and NUMA-related APIs.</p>
+<p>Hard pinning can benefit predictable, high-intensity workloads that demand cache or memory locality. It can harm throughput when cores would otherwise be idle, when task demand changes quickly, or when CPU capacity is asymmetric. A scheduler that is NUMA-aware may already make useful placement decisions. Before forcing affinity, record the baseline, measure migrations and access locality, and test against load variations rather than treating affinity as a universal optimization.</p>
+
+</section>
+<section id="worked-example-a-placement-cost-heuristic" aria-labelledby="heading-worked-example-a-placement-cost-heuristic"><h2 id="heading-worked-example-a-placement-cost-heuristic">Worked Example: A Placement-Cost Heuristic</h2>
+<p>This model assigns four memory-heavy tasks to two nodes based on a simplified per-task remote-access penalty and node capacity. It demonstrates a choice procedure, not a complete scheduler: it omits migration overhead, cache traffic, task dependencies, and concurrent memory bandwidth.</p>
+<pre><code class="language-python">nodes = {'N0': {'slots': 2}, 'N1': {'slots': 2}}
+tasks = [('A', 'N0'), ('B', 'N0'), ('C', 'N1'), ('D', 'N1')]
+assignment = {}
+for task, home in tasks:
+    eligible = [n for n, d in nodes.items() if d['slots'] &gt; 0]
+    chosen = min(eligible, key=lambda n: (n != home, n))
+    assignment[task] = chosen
+    nodes[chosen]['slots'] -= 1
+assert assignment == {'A':'N0', 'B':'N0', 'C':'N1', 'D':'N1'}
+print(assignment)
+</code></pre>
+<p>A production allocator should treat topology as one input to a measured cost model, with fairness, capacity, memory pressure, and priority constraints. A choice that minimizes estimated per-request latency can reduce whole-system throughput if it packs too much activity onto one cache or controller.</p>
+
+</section>
+<section id="multicore-coherence-traffic-as-a-shared-resource-demand" aria-labelledby="heading-multicore-coherence-traffic-as-a-shared-resource-demand"><h2 id="heading-multicore-coherence-traffic-as-a-shared-resource-demand">Multicore Coherence Traffic as a Shared-Resource Demand</h2>
+<p>When separate cores read and write the same cache line, coherence transactions maintain the architecture's rules for the line's visibility and ownership. Even if all required data eventually comes from caches, the transfers consume fabric links, tag lookups, directory resources, and sometimes time waiting for another core. A program with a shared counter can therefore scale poorly because cores repeatedly take turns owning the cache line, not because any individual integer-add instruction is particularly expensive.</p>
+<p>This is a <em>topology</em> question insofar as the ownership handoff travels among cores, clusters, or dies. The actual MOESI/MESI variants, serialization points, atomic instructions, and memory-consistency contracts belong to the separate coherence and LSU articles. Do not conflate coherence (which value each agent may observe under the protocol) with the performance cost of moving the line through the package.</p>
+
+</section>
+<section id="false-sharing-across-physical-cores" aria-labelledby="heading-false-sharing-across-physical-cores"><h2 id="heading-false-sharing-across-physical-cores">False Sharing Across Physical Cores</h2>
+<p><strong>False sharing</strong> occurs when threads update different variables that occupy the same coherence granule, typically a cache line. The variables are logically independent, but ownership traffic follows the line rather than the variable. The cost often rises with the distance, update frequency, and number of competing cores. Padding or aligning independent counters can reduce line ping-pong; whether padding helps depends on object layout, allocator behavior, and cache-line sizes on the target processor.</p>
+<p>A common mistake is to add threads to a per-thread counter array without recognizing that adjacent counters share a line. Another is to presume “make every value 64-byte aligned” is universally appropriate; padding can waste memory, harm cache capacity, and complicate ABI layouts. First verify the line-sharing hypothesis with a focused experiment and the platform's documented coherence granularity.</p>
+
+</section>
+<section id="a-toy-line-sharing-detector" aria-labelledby="heading-a-toy-line-sharing-detector"><h2 id="heading-a-toy-line-sharing-detector">A Toy Line-Sharing Detector</h2>
+<p>The demonstration groups byte addresses into 64-byte lines. It identifies potential line sharing; it cannot prove that two threads actually write concurrently or that the platform's line size is 64 bytes. Replace the assumed granularity with measured or documented hardware information when applying the method.</p>
+<pre><code class="language-python">line_bytes = 64
+addresses = {'worker0': 0x1000, 'worker1': 0x1008, 'worker2': 0x1080}
+line = {k: addr // line_bytes for k, addr in addresses.items()}
+assert line['worker0'] == line['worker1']
+assert line['worker2'] != line['worker0']
+print(line)
+</code></pre>
+<p>A more realistic investigation measures speed under separate-core versus same-core placement, changes padding while holding algorithm and data volume constant, and checks whether memory traffic and cache transfers change. The result should be replicated under controlled frequency, thermal, and background-load conditions.</p>
+
+</section>
+<section id="core-to-core-communication-patterns" aria-labelledby="heading-core-to-core-communication-patterns"><h2 id="heading-core-to-core-communication-patterns">Core-to-Core Communication Patterns</h2>
+<p>Communication between cores can be read-mostly, producer-consumer, multiple-reader/single-writer, many-to-many, or update-intensive. Each pattern interacts differently with shared caches and fabric placement. Producer-consumer data exchange may benefit from nearby cores, especially when messages fit in shared cache. Independent streaming workers may benefit from spreading across cache or memory-controller domains. A shared work queue can introduce contention around its metadata despite the useful work being parallel.</p>
+<p>Communication includes more than data payloads: synchronization variables, allocation metadata, page-table changes, interrupt delivery, and I/O completion notifications can all move through shared infrastructure. Evaluate total <em>line movement and contention</em> rather than only bytes in an application's logical messages.</p>
+
+</section>
+<section id="cross-core-interrupts-and-tlb-shootdowns" aria-labelledby="heading-cross-core-interrupts-and-tlb-shootdowns"><h2 id="heading-cross-core-interrupts-and-tlb-shootdowns">Cross-Core Interrupts and TLB Shootdowns</h2>
+<p>Some operating-system operations require other CPUs to invalidate stale translation entries or acknowledge coordination requests. A mapping change affecting many active cores can trigger inter-processor signaling and wait for remote handling. The cost may grow with the number of affected processors and their topology, although implementations may batch invalidations, use address-space tagging, or choose different strategies. The earlier TLB article explains the detailed invalidation correctness protocol.</p>
+<p>Such coordination can limit scalability of tasks that frequently change memory mappings, allocate and free large numbers of virtual-memory regions, or manage many virtual machines. A topology-aware analysis distinguishes expensive remote communication from page-table work performed locally. It also separates shootdown frequency from shootdown duration; optimizing one metric does not necessarily optimize the other.</p>
+
+</section>
+<section id="i-o-locality-and-device-affinity" aria-labelledby="heading-i-o-locality-and-device-affinity"><h2 id="heading-i-o-locality-and-device-affinity">I/O Locality and Device Affinity</h2>
+<p>PCIe roots, storage adapters, and network interfaces have physical attachment points within a server's package-and-I/O topology. A network-processing thread may gain locality when placed near the NUMA node that serves its NIC and DMA buffers. Conversely, separating packet-processing workers can sometimes improve overall capacity if the nearby cores are already saturated. The device's DMA behavior and cache coherence must be established rather than assumed.</p>
+<p>For an I/O workload, topology discovery should link CPU groups, memory locality, IRQ affinity, driver queues, and device path. NUMA node labels exposed by the operating system may be missing, synthetic, or not granular enough to describe every hop. A practical tuning report includes baseline queue depth, interrupt rates, bytes processed, tail latency, and any change in CPU/fabric utilization.</p>
+
+</section>
+<section id="heterogeneous-cores-and-asymmetric-capacity" aria-labelledby="heading-heterogeneous-cores-and-asymmetric-capacity"><h2 id="heading-heterogeneous-cores-and-asymmetric-capacity">Heterogeneous Cores and Asymmetric Capacity</h2>
+<p>Modern CPU packages sometimes mix performance-oriented and efficiency-oriented cores. The hardware presents different instructions-per-cycle characteristics, cache arrangements, vector support, clocks, and power behaviors depending on family and operating mode. A scheduler must distribute latency-critical tasks, background work, and parallel bulk work according to these capacities and the current system state. A runnable thread is not necessarily equally fast on every logical CPU.</p>
+<p>Intel documents performance-hybrid cores and Thread Director as hardware guidance consumed by supported OS scheduling. Linux documents capacity-aware and energy-aware scheduling for architectures where capacity models are available. The fact that a system exposes unequal core types does not imply that all schedulers, virtual machines, or applications have an equally precise map. Feature detection and runtime measurements remain necessary.</p>
+
+</section>
+<section id="scheduling-domains-and-load-balancing" aria-labelledby="heading-scheduling-domains-and-load-balancing"><h2 id="heading-scheduling-domains-and-load-balancing">Scheduling Domains and Load Balancing</h2>
+<p>Schedulers often represent CPU groups at increasingly broad topology levels. A local balancing decision may preserve cache affinity while an all-system decision can move a task to an idle distant processor at the cost of cache warmth and potential NUMA remoteness. Linux scheduling domains provide a concrete example of such hierarchical policy; Windows has its own scheduler and processor-group relationships.</p>
+<p>A balanced <strong>runnable-thread count</strong> is not the same as balanced performance. One core running a memory-stalled task, another running an AVX-heavy compute task, and a third running interrupt handlers do not consume equal shared resources. For heterogeneous systems, a suitable policy may use effective capacity rather than equally dividing threads. Affinity should be evaluated alongside each worker's observed progress and scheduling delays.</p>
+
+</section>
+<section id="windows-processor-groups-and-large-systems" aria-labelledby="heading-windows-processor-groups-and-large-systems"><h2 id="heading-windows-processor-groups-and-large-systems">Windows Processor Groups and Large Systems</h2>
+<p>Windows exposes processor groups for systems whose logical-processor counts exceed a group's capacity, and APIs describe per-group relationships. Windows 11 and Windows Server 2022 changed defaults so processes and their threads may span all groups by default, subject to compatibility and API constraints. Developers should use <code>GetLogicalProcessorInformationEx</code> and relevant group-aware affinity interfaces rather than assume all CPUs fit in one 64-bit mask. Group organization is an OS enumeration and scheduling mechanism, not a direct silicon boundary.</p>
+<p>Windows documentation provides <code>RelationProcessorCore</code>, <code>RelationCache</code>, <code>RelationProcessorPackage</code>, <code>RelationProcessorDie</code>, and NUMA node relationships. A group mask alone is insufficient to classify physical core, chiplet, or memory distance. In addition, virtual machines may expose groups and topology chosen for compatibility or licensing, not a perfect reproduction of the host's package layout.</p>
+
+</section>
+<section id="linux-cpu-topology-cpu-sets-and-hwloc" aria-labelledby="heading-linux-cpu-topology-cpu-sets-and-hwloc"><h2 id="heading-linux-cpu-topology-cpu-sets-and-hwloc">Linux CPU Topology, CPU Sets, and hwloc</h2>
+<p>Linux exposes online and possible CPU maps and topology attributes such as <code>physical_package_id</code>, <code>core_id</code>, and <code>core_cpus_list</code>/older sibling aliases. Cache-sharing descriptions may also be available under cache <code>shared_cpu_list</code>. <code>numactl --hardware</code>, <code>lscpu</code>, and <code>hwloc</code> can help correlate the processor map with memory nodes and caches. A process's effective CPU set can be smaller than the host-wide list, particularly within a container or job scheduler.</p>
+<p><code>hwloc</code> models packages, dies, cores, processing units, caches, memory nodes, and I/O relationships. Its documentation cautions that memory nodes and the primary CPU topology tree do not always nest in the simplistic “one NUMA node inside one socket” manner. Use the library's topology and distance information where possible rather than only a single string label from <code>/proc/cpuinfo</code>.</p>
+
+</section>
+<section id="worked-example-identify-unique-core-keys" aria-labelledby="heading-worked-example-identify-unique-core-keys"><h2 id="heading-worked-example-identify-unique-core-keys">Worked Example: Identify Unique Core Keys</h2>
+<p>In this fictional inventory, the operating system exposes two packages with two physical cores each and two SMT logical processors per core. The logical IDs are not contiguous by physical core. Counting unique <code>(package, core)</code> tuples correctly gives four cores, whereas counting logical IDs gives eight. In systems exposing die identifiers and where <code>core_id</code> is scoped differently, include the proper extra disambiguating fields.</p>
+<pre><code class="language-python">cpus = [
+    (0,0,0), (4,0,0), (1,0,1), (5,0,1),
+    (2,1,0), (6,1,0), (3,1,1), (7,1,1),
+]
+logical = len(cpus)
+physical = len({(package, core) for _,package,core in cpus})
+assert logical == 8 and physical == 4
+print(f&quot;logical={logical}, physical={physical}&quot;)
+</code></pre>
+<p>For a real machine, do not sort numeric CPU IDs and assume adjacent IDs are SMT siblings or cache neighbors. Discover the explicit sibling and shared-cache relationships. Virtualization, offline processors, firmware behavior, and different enumeration choices all defeat the adjacency shortcut.</p>
+
+</section>
+<section id="hybrid-and-chiplet-systems-complicate-simple-affinity-rules" aria-labelledby="heading-hybrid-and-chiplet-systems-complicate-simple-affinity-rules"><h2 id="heading-hybrid-and-chiplet-systems-complicate-simple-affinity-rules">Hybrid and Chiplet Systems Complicate Simple Affinity Rules</h2>
+<p>An algorithm that assigns threads in ascending logical-CPU order may pile the first threads onto the same core, a particular cluster, or an efficiency-core group, depending on OS enumeration. A chiplet-aware allocator may instead wish to keep a cooperating group within one LLC domain, while a streaming allocator may spread across controllers. Hybrid core types add capacity asymmetry and possibly different instruction acceleration capabilities.</p>
+<p>An adaptable allocation policy should map candidate CPUs to physical cores, SMT siblings, cache domains, memory nodes, and usable core classes before deciding placement. The application can then encode workload-sensitive goals, such as minimizing producer-consumer latency, maximizing independent bandwidth, avoiding pathological cache interference, or conserving energy. Test the results rather than assuming that a tidy affinity chart guarantees a faster workload.</p>
+
+</section>
+<section id="parallel-scaling-the-amdahl-boundary" aria-labelledby="heading-parallel-scaling-the-amdahl-boundary"><h2 id="heading-parallel-scaling-the-amdahl-boundary">Parallel Scaling: The Amdahl Boundary</h2>
+<p>Amdahl's law expresses the limitation imposed by serial work. If the serial fraction is <code>s</code> and the parallel part scales ideally across <code>p</code> equal workers, the ideal speedup is <code>1 / (s + (1-s)/p)</code>. This is an <strong>upper-bound model</strong> under fixed problem size, not a promise that increasing core count yields the result. Memory contention, synchronization, scheduling, migration, load imbalance, nonuniform capacities, and power constraints can all reduce observed speedup.</p>
+<p>For a job whose serial fraction is 0.15, eight ideal equal cores give speedup <code>1/(0.15 + 0.85/8) ≈ 3.90</code>, not eight. The example says nothing about what happens if the parallel part is bandwidth-limited. Amdahl's law identifies a structural ceiling from serialization; hardware topology adds additional ceilings.</p>
+
+</section>
+<section id="worked-example-amdahl-versus-actual-scaling" aria-labelledby="heading-worked-example-amdahl-versus-actual-scaling"><h2 id="heading-worked-example-amdahl-versus-actual-scaling">Worked Example: Amdahl Versus Actual Scaling</h2>
+<pre><code class="language-python">def amdahl_speedup(serial_fraction, cores):
+    if not (0 &lt;= serial_fraction &lt;= 1 and cores &gt;= 1):
+        raise ValueError('invalid inputs')
+    return 1 / (serial_fraction + (1-serial_fraction)/cores)
+assert round(amdahl_speedup(.15, 8), 3) == 3.902
+assert amdahl_speedup(.15, 1) == 1
+print(f&quot;ideal 8-core speedup={amdahl_speedup(.15,8):.2f}x&quot;)
+</code></pre>
+<p>A useful experiment computes speedup from measured elapsed time at 1, 2, 4, and 8 <em>physical</em> cores with consistent data sets and power policy. Repeat using SMT siblings to expose resource-sharing effects, and compare local versus cross-cluster placement. Record differences in topology and parallel efficiency rather than folding all configurations into one “threads” axis.</p>
+
+</section>
+<section id="work-span-and-synchronization-structure" aria-labelledby="heading-work-span-and-synchronization-structure"><h2 id="heading-work-span-and-synchronization-structure">Work, Span, and Synchronization Structure</h2>
+<p>Amdahl's simplified serial fraction is not the only way to reason about scaling. <strong>Work</strong> is the total computation performed and <strong>span</strong> is the length of the longest dependency chain. In an ideal parallel scheduler, execution time cannot be better than either total work divided by available effective processing capacity or the span. Real systems also pay for scheduling, queue management, locks, barriers, cache-line movement, and other overhead.</p>
+<p>For tasks involving fine-grained dependencies, the span can dominate long before package bandwidth saturates. Conversely, a highly parallel memory scan may have short dependency chains but saturate shared memory channels. The appropriate optimization depends on whether the application's limiting factor is computation, dependency, memory, communication, or external I/O.</p>
+
+</section>
+<section id="shared-resource-bottlenecks-and-the-roofline-view" aria-labelledby="heading-shared-resource-bottlenecks-and-the-roofline-view"><h2 id="heading-shared-resource-bottlenecks-and-the-roofline-view">Shared-Resource Bottlenecks and the Roofline View</h2>
+<p>A useful high-level bound compares arithmetic throughput and memory bandwidth: attainable operations per second are limited by peak compute capability and by <code>arithmetic intensity × sustained memory bandwidth</code>. The <strong>arithmetic intensity</strong> counts useful operations per byte moved at the chosen memory level. Moving the same data repeatedly from DRAM can make a many-core computation bandwidth-bound even when every core has idle arithmetic units.</p>
+<pre><code class="language-python">peak_gflops = 800.0
+sustained_gbs = 100.0
+intensity_flop_per_byte = 2.0
+bound = min(peak_gflops, sustained_gbs * intensity_flop_per_byte)
+assert bound == 200.0
+print(f&quot;illustrative bound={bound:.0f} GFLOP/s&quot;)
+</code></pre>
+<p>This equation is an idealized upper bound and assumes consistent units, equivalent memory traffic accounting, and a measured bandwidth appropriate to the operation. Memory-level choice changes the bound: an algorithm may be limited by LLC bandwidth instead of DRAM bandwidth. Roofline analysis is a complement to, not a replacement for, CPU topology discovery.</p>
+
+</section>
+<section id="contention-can-hide-behind-high-core-utilization" aria-labelledby="heading-contention-can-hide-behind-high-core-utilization"><h2 id="heading-contention-can-hide-behind-high-core-utilization">Contention Can Hide Behind High Core Utilization</h2>
+<p>A system can report near-100% busy logical processors while useful completed operations plateau. The cores may be stalled on memory, waiting at barriers, spinning on locks, or losing performance to cache evictions. Scheduler activity and frequency throttling can also raise apparent utilization without improving service throughput. High aggregate usage does not, by itself, show that execution units are fully productive.</p>
+<p>During diagnosis, measure completed requests or units of work, not only CPU time. Compare instructions per cycle, stalled cycles, LLC hit/miss patterns, memory bandwidth, remote memory events, synchronization wait time, and topology placement as supported by the platform's tools. Beware that hardware performance counters vary by CPU generation and often cannot be compared one-for-one across different core classes.</p>
+
+</section>
+<section id="latency-throughput-and-tail-behavior" aria-labelledby="heading-latency-throughput-and-tail-behavior"><h2 id="heading-latency-throughput-and-tail-behavior">Latency, Throughput, and Tail Behavior</h2>
+<p><strong>Latency</strong> measures time to finish a request; <strong>throughput</strong> measures completed requests per time; and <strong>tail latency</strong> characterizes the slowest fraction of requests. Spreading tasks can improve aggregate throughput while making one request slower due to synchronization or remote access. Packing tasks near an LLC can lower typical inter-thread communication delay while increasing queueing and tail variability if all requests compete for the same core group.</p>
+<p>An evaluation should therefore state the business or technical objective explicitly. For an interactive service, p99 latency and deadline compliance may matter more than peak aggregate jobs per second. For an offline rendering farm, steady-state throughput and energy per result may dominate. Same-core, same-cluster, same-package, and cross-package placement should be tested under comparable concurrency.</p>
+
+</section>
+<section id="frequency-and-thermal-coupling-across-cores" aria-labelledby="heading-frequency-and-thermal-coupling-across-cores"><h2 id="heading-frequency-and-thermal-coupling-across-cores">Frequency and Thermal Coupling Across Cores</h2>
+<p>Per-core performance changes under package-level power and thermal constraints. As additional cores become active, some CPUs reduce sustained frequency, change voltage/frequency operating points, or shift activity among power domains. Thus a two-thread speedup is not necessarily two times single-thread speed even if the work is perfectly independent. Peak boost clocks are not equal to guaranteed all-core sustained operating frequencies.</p>
+<p>Thermal throttling, fan behavior, voltage guardrails, and workload-specific instruction mix can interact with topology. Hardware designers may concentrate high-power cores or spread them physically to manage hotspots; package policy may be more relevant than the number of shared cache levels. For deeper electrical and thermal mechanisms, consult the dedicated Power and Thermal Systems division and CPU power/thermal specialist articles.</p>
+
+</section>
+<section id="virtual-cpus-hypervisors-and-topology-exposure" aria-labelledby="heading-virtual-cpus-hypervisors-and-topology-exposure"><h2 id="heading-virtual-cpus-hypervisors-and-topology-exposure">Virtual CPUs, Hypervisors, and Topology Exposure</h2>
+<p>A VM's virtual processor topology may be chosen for management, compatibility, or licensing. It can expose apparent sockets and cores that differ from the host silicon. The hypervisor may schedule multiple vCPUs onto the same physical core at different times or map them across NUMA nodes; memory backing can also move or be allocated remotely. Consequently, a guest's logical topology is not automatically a complete performance description of its host.</p>
+<p>Virtualization tuning should check vCPU-to-host mapping, CPU overcommit, steal or ready time, host and guest NUMA configuration, memory allocation, noisy neighbors, and migration practices. Explicit virtual NUMA can help large guest workloads when mapped consistently to host memory locality, but an inaccurate virtual topology can mislead application-level placement. Always document which layer a measurement observes.</p>
+
+</section>
+<section id="security-and-side-effects-of-shared-resources" aria-labelledby="heading-security-and-side-effects-of-shared-resources"><h2 id="heading-security-and-side-effects-of-shared-resources">Security and Side Effects of Shared Resources</h2>
+<p>Sharing caches, fabric links, memory controllers, or SMT resources can create timing interference. In some threat models, shared microarchitectural state can contribute to side-channel information leakage or denial-of-service contention. Isolation decisions depend on tenant trust, architecture-specific mitigations, cache partitioning features where available, process placement, hypervisor policy, and workload behavior. A cache-sharing map is therefore relevant to security review but does not prove that a specific attack is feasible.</p>
+<p>Avoid conflating performance interference with a security vulnerability: a reduction in throughput from co-located tasks is a service-quality symptom, while an exploitable timing channel requires a particular threat model and information path. Detailed speculative and cache side channels belong to the separate CPU Security article; the purpose here is to include sharing domains in the platform isolation assessment.</p>
+
+</section>
+<section id="reliability-error-domains-and-failure-containment" aria-labelledby="heading-reliability-error-domains-and-failure-containment"><h2 id="heading-reliability-error-domains-and-failure-containment">Reliability, Error Domains, and Failure Containment</h2>
+<p>Multiple cores can share uncore infrastructure and therefore share exposure to some faults. An error in one cache slice, memory controller, fabric link, or power domain may affect more than one core. Conversely, redundant paths, ECC-protected structures, error reporting, and recovery strategies can contain or mitigate some failures. The scope varies by product and platform configuration and cannot be determined by socket count alone.</p>
+<p>Operational diagnostics should distinguish corrected memory/cache errors, uncorrectable machine-check events, fabric timeouts, scheduler stalls, and ordinary application exceptions. Error locality can inform isolation and maintenance decisions, but a fault counter's name does not necessarily identify the defective physical component. Consult the product's RAS documentation before assigning blame to a package or chiplet.</p>
+
+</section>
+<section id="processor-topology-versus-the-bus-system-taxonomy" aria-labelledby="heading-processor-topology-versus-the-bus-system-taxonomy"><h2 id="heading-processor-topology-versus-the-bus-system-taxonomy">Processor Topology Versus the Bus-System Taxonomy</h2>
+<p>The <em>processor topology</em> question asks which cores and resources exist, how they share capacity, and how placement affects performance. A <em>bus or interconnect</em> question asks how transactions are carried, arbitrated, ordered, encoded, and electrically signaled. Those questions intersect but are not identical. This article discusses ring/mesh/fabric shapes and communication costs only to explain multicore behavior; it does not restate PCIe framing or on-die protocol specifications.</p>
+<p>The MGU taxonomy also separates physical CPU cache organization from abstract memory-hierarchy principles, and hardware coherence from programming-language synchronization. This separation keeps a reader's causal diagnosis precise: “remote cache access” is not interchangeable with “remote NUMA DRAM,” and neither is interchangeable with “the compiler reordered a memory operation.”</p>
+
+</section>
+<section id="measuring-a-machine-before-optimizing-it" aria-labelledby="heading-measuring-a-machine-before-optimizing-it"><h2 id="heading-measuring-a-machine-before-optimizing-it">Measuring a Machine Before Optimizing It</h2>
+<p>A repeatable investigation begins with hardware identification and the <strong>OS-visible topology actually granted to the process</strong>. Record model, microcode/firmware revision when available, package count, die and core count, SMT status, shared-cache groups, NUMA nodes, memory configuration, and CPU affinity restrictions. Next record CPU frequency policy, thermal conditions, virtualization, and competing workloads. Otherwise two test runs can differ even though the application binary and nominal thread count did not change.</p>
+<p>Start by creating a resource-sharing hypothesis rather than tuning everything at once. “Workers interfere in L3” predicts a different set of observations from “all workers saturate DRAM” or “tasks are waiting on one shared lock.” Each can produce a flat throughput curve, but the interventions differ. A good performance note states the hypothesis, the change, the expected counter movement, the observed work-rate change, and any confounding limits.</p>
+
+</section>
+<section id="practical-topology-discovery-on-windows" aria-labelledby="heading-practical-topology-discovery-on-windows"><h2 id="heading-practical-topology-discovery-on-windows">Practical Topology Discovery on Windows</h2>
+<p>On Windows, <code>GetLogicalProcessorInformationEx</code> is the structured API for cores, caches, packages, dies, and NUMA relationships. Microsoft Coreinfo is a convenient external inspection tool; its output should be interpreted with regard to its tool version and the OS's processor-group reporting. A simple PowerShell snapshot provides useful preliminary context without providing the full core-to-cache relationship graph:</p>
+<pre><code class="language-powershell">Get-CimInstance Win32_Processor |
+    Select-Object DeviceID, Name, NumberOfCores, NumberOfLogicalProcessors
+Get-CimInstance Win32_PhysicalMemory |
+    Select-Object BankLabel, Capacity, Speed
+</code></pre>
+<p>The CIM report may provide socket-level counts and module inventory but not enough detail to distinguish all shared caches, core types, or per-node memory affinity. Hardware topology utilities and documented OS APIs are needed for those questions. On a VM, counts may represent the guest configuration rather than the host's physical topology. Also distinguish operating-system logical processor count from available processing capacity under a job or process affinity mask.</p>
+
+</section>
+<section id="practical-topology-discovery-on-linux" aria-labelledby="heading-practical-topology-discovery-on-linux"><h2 id="heading-practical-topology-discovery-on-linux">Practical Topology Discovery on Linux</h2>
+<p>A Linux investigation can begin with <code>lscpu -e=CPU,ONLINE,SOCKET,DIE,CORE,NODE</code> where supported, <code>lscpu -C</code>, <code>numactl --hardware</code>, and <code>lstopo</code> if the relevant tools are installed. Linux sysfs under <code>/sys/devices/system/cpu/cpu*/topology/</code> and <code>/sys/devices/system/cpu/cpu*/cache/</code> can expose sibling lists and cache-sharing CPU masks. A tool must gracefully handle missing attributes, permission restrictions, containers, offline CPUs, and kernels with differing field support.</p>
+<pre><code class="language-bash">lscpu -e=CPU,ONLINE,SOCKET,DIE,CORE,NODE
+lscpu -C
+numactl --hardware
+# If hwloc is installed:
+lstopo --of console
+</code></pre>
+<p>Interpret <code>NUMA node(s): 1</code> cautiously. It may be the actual exposure of the firmware and OS, or it may be a guest/container view. Absence of visible NUMA division is not proof that every underlying memory path has identical latency. Conversely, the presence of multiple nodes is not by itself evidence that remote pages are causing a performance regression.</p>
+
+</section>
+<section id="benchmark-design-separate-independent-variables" aria-labelledby="heading-benchmark-design-separate-independent-variables"><h2 id="heading-benchmark-design-separate-independent-variables">Benchmark Design: Separate Independent Variables</h2>
+<p>A useful topology study varies one dimension at a time: (1) one versus multiple physical cores; (2) SMT sibling use; (3) core placement within and across shared-cache clusters; (4) CPU placement local versus remote to allocated memory; and (5) increasing memory bandwidth demand. Keep problem size, algorithm, input distribution, and compiler settings fixed within each experiment. Warm-up and repeated steady-state observations are usually necessary because boost frequencies, caches, page allocation, and runtime optimizers change over time.</p>
+<p>Measure both whole-program results and resource-level indicators. Run multiple trials, show the dispersion (not only the best run), note whether threads migrate, and compare tail latency under representative load. An abnormal improvement after manual pinning could reflect lower migration, better NUMA locality, less cache contention, less OS noise, or simple measurement variance. A credible conclusion narrows the cause with controlled evidence.</p>
+
+</section>
+<section id="performance-counter-interpretation-limits" aria-labelledby="heading-performance-counter-interpretation-limits"><h2 id="heading-performance-counter-interpretation-limits">Performance-Counter Interpretation Limits</h2>
+<p>Hardware counters can quantify cycles, instructions, LLC events, remote-memory events, memory-controller traffic, or interconnect activity when the architecture supports those metrics. Their meanings differ: “L3 miss” on one product may not correspond directly to a named counter on another, and counters may be sampled, multiplexed, or filtered. Caches and interconnects also evolve across CPU generations. Treat named event groups as platform documentation questions rather than universal units.</p>
+<p>Counting miss events without normalizing by work can be misleading. A run that performs twice as much work can incur more cache misses while improving work rate. Better comparisons include misses per thousand retired instructions where appropriate, bytes transferred per completed transaction, cycles per request, sustained bandwidth, and wall-clock time. Normalize carefully and disclose when metrics are unavailable or incomparable.</p>
+
+</section>
+<section id="worked-example-parallel-efficiency" aria-labelledby="heading-worked-example-parallel-efficiency"><h2 id="heading-worked-example-parallel-efficiency">Worked Example: Parallel Efficiency</h2>
+<p>Parallel efficiency is measured speedup divided by the number of <em>equal-capacity</em> workers used for the comparison. If eight physical cores reduce job time from 80 to 20 seconds, speedup is 4× and efficiency is 50%. This scalar metric becomes misleading when mixing cores of unequal capacity or logical SMT contexts; for heterogeneous machines, report the actual configuration and consider effective-capacity weighting.</p>
+<pre><code class="language-python">baseline_seconds = 80.0
+parallel_seconds = 20.0
+physical_cores = 8
+speedup = baseline_seconds / parallel_seconds
+efficiency = speedup / physical_cores
+assert speedup == 4 and efficiency == 0.5
+print(f&quot;speedup={speedup:.1f}x, equal-core efficiency={efficiency:.0%}&quot;)
+</code></pre>
+<p>An efficiency drop with more cores does not identify the cause. It might be algorithmic serialization, insufficient tasks, scheduling, last-level-cache contention, memory bandwidth, synchronization overhead, or reduced all-core frequency. Diagnosis requires testing a specific mechanism rather than applying “use fewer threads” as a permanent substitute for understanding it.</p>
+
+</section>
+<section id="locality-versus-load-balance-a-decision-table" aria-labelledby="heading-locality-versus-load-balance-a-decision-table"><h2 id="heading-locality-versus-load-balance-a-decision-table">Locality Versus Load Balance: A Decision Table</h2>
+<table>
+<thead>
+<tr>
+  <th>Workload characteristic</th>
+  <th>Initial placement hypothesis</th>
+  <th>Main failure mode to test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Producer and consumer exchange small mutable messages</td>
+  <td>Place near a shared-cache/coherence neighborhood</td>
+  <td>Core capacity saturation or excessive wakeups</td>
+</tr>
+<tr>
+  <td>Independent memory streams</td>
+  <td>Spread across distinct memory-controller domains</td>
+  <td>Remote-memory placement or unequal bandwidth</td>
+</tr>
+<tr>
+  <td>Large read-only common lookup table</td>
+  <td>Consider shared-cache locality</td>
+  <td>Cache capacity eviction or bandwidth contention</td>
+</tr>
+<tr>
+  <td>Independent latency-sensitive services</td>
+  <td>Separate from high-interference neighbors</td>
+  <td>Reduced locality or unused system capacity</td>
+</tr>
+<tr>
+  <td>Large NUMA-sensitive graph traversal</td>
+  <td>Couple thread placement with page ownership</td>
+  <td>Pointer-chasing to remote pages</td>
+</tr>
+<tr>
+  <td>Heterogeneous CPU package</td>
+  <td>Match critical tasks to effective core capacity</td>
+  <td>Energy, thermal, or fairness regression</td>
+</tr>
+<tr>
+  <td>Packet-processing worker groups</td>
+  <td>Align CPU, buffer memory, and device queue locality</td>
+  <td>NIC/IRQ hotspot and software-queue contention</td>
+</tr>
+</tbody>
+</table>
+<p>The table describes hypotheses, not universal prescriptions. The selection can change with data size, cache policy, processor generation, application phase, and competing load. Measure the location and demand of the bottleneck before setting persistent affinities.</p>
+
+</section>
+<section id="common-interpretation-errors" aria-labelledby="heading-common-interpretation-errors"><h2 id="heading-common-interpretation-errors">Common Interpretation Errors</h2>
+<p><strong>Error 1:</strong> “The machine has 64 CPUs, therefore 64 full-performance physical cores.” The count may refer to logical processors, hardware threads, or guest vCPUs. <strong>Error 2:</strong> “Same socket means equal memory latency.” A socket can contain multiple dies and NUMA domains. <strong>Error 3:</strong> “The largest LLC always delivers best throughput.” Cache contention and access distance also matter. <strong>Error 4:</strong> “More runnable threads equals more parallel speedup.” Shared bandwidth, serial work, and scheduler overhead cap throughput.</p>
+<p><strong>Error 5:</strong> “NUMA pinning always improves performance.” Poor binding can exhaust local memory or reduce load balance. <strong>Error 6:</strong> “High CPU utilization proves compute saturation.” Stalls or busy-wait synchronization may dominate. <strong>Error 7:</strong> “Two threads writing separate variables cannot contend.” They may share a coherence line. <strong>Error 8:</strong> “The same topology names mean the same physical design on every product.” Operating systems and vendors expose abstractions whose precision and meaning differ. Each error is corrected by a resource map plus measured workload behavior.</p>
+
+</section>
+<section id="applied-scenario-1-a-shared-cache-helps-an-analytics-pipeline" aria-labelledby="heading-applied-scenario-1-a-shared-cache-helps-an-analytics-pipeline"><h2 id="heading-applied-scenario-1-a-shared-cache-helps-an-analytics-pipeline">Applied Scenario 1 — A Shared Cache Helps an Analytics Pipeline</h2>
+<p>An analytics service has two worker threads that repeatedly access a large shared, mostly read-only dimension table while processing separate batches. The team initially spreads workers across different LLC clusters to avoid interference. Performance declines compared with pairing them within a shared-cache domain. The hypothesis is that sharing avoids duplicate cache footprints and expensive inter-cluster transfers for popular table entries. The team measures table reuse, cache misses, latency, and throughput under both placements while holding input distribution and the number of physical cores constant.</p>
+<p>The decision is not to declare same-cluster placement universally superior. As the table grows beyond the cache or the number of workers increases, capacity pressure may outweigh reuse. The operational rule is to choose a placement policy tied to the actual working-set shape and revisit it after model or data growth. Related studies include cache locality, memory-bandwidth measurements, and safe affinity changes.</p>
+
+</section>
+<section id="applied-scenario-2-a-memory-scan-stops-scaling-at-eight-cores" aria-labelledby="heading-applied-scenario-2-a-memory-scan-stops-scaling-at-eight-cores"><h2 id="heading-applied-scenario-2-a-memory-scan-stops-scaling-at-eight-cores">Applied Scenario 2 — A Memory Scan Stops Scaling at Eight Cores</h2>
+<p>A scientific array-processing job scales nearly linearly from one to four physical cores but adds little throughput from eight to sixteen. CPU utilization remains high. The likely candidate bottlenecks include sustained DRAM bandwidth, page placement, memory-channel configuration, all-core frequency, and synchronization. The team performs a read/write bandwidth test with the same access pattern and sees the channel throughput plateau as the core count rises, while available compute execution capability still exists.</p>
+<p>The response is to reduce transferred bytes, fuse passes, improve cache reuse, or adjust data partitioning. Spreading threads without matching page placement might worsen the problem. The team documents throughput at each core count, per-node memory traffic, remote access fraction, and energy per processed element. It avoids claiming that the platform's entire memory system is universally saturated from one single benchmark.</p>
+
+</section>
+<section id="applied-scenario-3-a-two-socket-database-has-remote-page-traffic" aria-labelledby="heading-applied-scenario-3-a-two-socket-database-has-remote-page-traffic"><h2 id="heading-applied-scenario-3-a-two-socket-database-has-remote-page-traffic">Applied Scenario 3 — A Two-Socket Database Has Remote Page Traffic</h2>
+<p>A database uses two processor packages but its workers initialize a large in-memory index from one startup thread. Later, queries on the other package repeatedly traverse pages allocated near the first. Queries are functionally correct, yet p99 latency rises when worker placement shifts. The team verifies page placement, CPU migrations, and local versus remote memory access before making changes.</p>
+<p>A controlled remediation partitions the index by ownership, parallelizes page initialization, and balances read-only replicated structures against memory-capacity cost. The team may test interleaving for a shared scan-heavy structure while preserving local allocation for pointer-chasing indexes. The outcome should be judged on queries per second, p95/p99 latency, memory footprint, and cross-socket traffic, not on average DRAM latency alone.</p>
+
+</section>
+<section id="applied-scenario-4-a-chiplet-boundary-changes-queue-handoff-cost" aria-labelledby="heading-applied-scenario-4-a-chiplet-boundary-changes-queue-handoff-cost"><h2 id="heading-applied-scenario-4-a-chiplet-boundary-changes-queue-handoff-cost">Applied Scenario 4 — A Chiplet Boundary Changes Queue Handoff Cost</h2>
+<p>A work-stealing runtime passes small task descriptors among worker threads. A benchmark shows higher handoff latency between two workers assigned to separate compute chiplets than between workers within one cache cluster. The team checks whether the difference persists after controlling CPU frequency, task size, and background load. It also measures overall completed tasks to avoid optimizing latency at the expense of throughput.</p>
+<p>A topology-aware queue policy may give workers local tasks first and steal remotely when needed, limiting unnecessary cross-chiplet movement while preserving load balance. If one chiplet goes idle while another is overloaded, a strict locality-only policy can be worse. The refined design permits remote steals when the expected benefit exceeds migration and coherence costs. The article on shared resources owns the placement cost; the queue algorithm belongs in software and parallel-programming materials.</p>
+
+</section>
+<section id="applied-scenario-5-a-virtual-machine-s-vcpu-count-misleads-operators" aria-labelledby="heading-applied-scenario-5-a-virtual-machine-s-vcpu-count-misleads-operators"><h2 id="heading-applied-scenario-5-a-virtual-machine-s-vcpu-count-misleads-operators">Applied Scenario 5 — A Virtual Machine&#x27;s vCPU Count Misleads Operators</h2>
+<p>A cloud VM advertises 24 virtual CPUs. Operators assume it has 24 dedicated physical cores and tune a worker pool to 24. During peak hours the service shows uneven latency and steal/ready time. Investigation reveals host overcommit and an exposed virtual topology that does not fully match the actual physical core and NUMA relationships. Increasing the pool size cannot remove a host scheduling bottleneck.</p>
+<p>The remediation is to coordinate virtual topology, reservation or placement policy, vNUMA and memory allocation, and the service's true concurrency requirements with the provider. Application-level tests remain essential because a guest OS cannot necessarily observe all host-level shared resources. Record guest-visible topology and host-level facts separately; do not present a guest socket number as a physical host-socket measurement.</p>
+
+</section>
+<section id="applied-scenario-6-a-hybrid-laptop-prioritizes-interactive-work" aria-labelledby="heading-applied-scenario-6-a-hybrid-laptop-prioritizes-interactive-work"><h2 id="heading-applied-scenario-6-a-hybrid-laptop-prioritizes-interactive-work">Applied Scenario 6 — A Hybrid Laptop Prioritizes Interactive Work</h2>
+<p>A hybrid-core laptop runs a latency-sensitive user interface beside background indexing and media transcoding. A naive application pins all work to a fixed group of logical processor IDs, inadvertently creating congestion on the same performance-core cluster. The OS's scheduler and hardware capacity hints could have kept urgent work responsive while letting low-priority tasks use other available resources.</p>
+<p>The team replaces brittle numeric-ID affinity rules with clear task priorities and a measured policy for exceptional cases. It checks sustained behavior on battery and external power, thermal state, deadline misses, and work completed per joule. Explicit pinning is retained only where tests demonstrate an advantage. This case illustrates that correct topology awareness sometimes means <strong>not</strong> overriding a capable scheduler.</p>
+
+</section>
+<section id="ten-gate-multicore-engineering-framework" aria-labelledby="heading-ten-gate-multicore-engineering-framework"><h2 id="heading-ten-gate-multicore-engineering-framework">Ten-Gate Multicore Engineering Framework</h2>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Question</th>
+  <th>Evidence for a decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. Confirm workload</td>
+  <td>Is the goal throughput, latency, predictable deadlines, or energy?</td>
+  <td>Work-rate and latency baseline</td>
+</tr>
+<tr>
+  <td>2. Discover visible topology</td>
+  <td>Which logical CPUs map to cores, dies, packages, caches, and nodes?</td>
+  <td>OS topology and affinity report</td>
+</tr>
+<tr>
+  <td>3. Establish physical limits</td>
+  <td>Which caches, controllers, fabric links, and power domains are shared?</td>
+  <td>Vendor specifications and measured resource scope</td>
+</tr>
+<tr>
+  <td>4. Classify access pattern</td>
+  <td>Is traffic compute-bound, cache-resident, streaming, or remote-memory-heavy?</td>
+  <td>Working-set and memory/CPU counters</td>
+</tr>
+<tr>
+  <td>5. Determine communication</td>
+  <td>How often do workers exchange data or synchronize?</td>
+  <td>Message/lock rates, sharing observations</td>
+</tr>
+<tr>
+  <td>6. Identify NUMA ownership</td>
+  <td>Where are pages allocated relative to their users?</td>
+  <td>Memory locality and migration measures</td>
+</tr>
+<tr>
+  <td>7. Control scheduler effects</td>
+  <td>Can migration, SMT, or core asymmetry explain a result?</td>
+  <td>Affinity, active capacity, and scheduling trace</td>
+</tr>
+<tr>
+  <td>8. Calculate bounds</td>
+  <td>What limits follow from serialization and shared bandwidth?</td>
+  <td>Amdahl and measured-bandwidth estimates</td>
+</tr>
+<tr>
+  <td>9. Run controlled experiments</td>
+  <td>Does changing one topology variable improve user-valued outcomes?</td>
+  <td>Repeatable A/B trials with variability</td>
+</tr>
+<tr>
+  <td>10. Deploy and reassess</td>
+  <td>Will the configuration remain effective under changed load and hardware?</td>
+  <td>Rollback path, monitoring, re-benchmark schedule</td>
+</tr>
+</tbody>
+</table>
+<p>Use gates in order, but revisit them as new observations invalidate earlier hypotheses. A topology optimization that improves synthetic throughput but worsens user-facing p99 latency or operational reliability should not be accepted without an explicit trade-off decision.</p>
+
+</section>
+<section id="guided-exercise-1-draw-a-processor-resource-map" aria-labelledby="heading-guided-exercise-1-draw-a-processor-resource-map"><h2 id="heading-guided-exercise-1-draw-a-processor-resource-map">Guided Exercise 1 — Draw a Processor Resource Map</h2>
+<p>Given a fictional two-package system, each package containing two compute chiplets, each chiplet containing four cores, draw the package/chiplet/core hierarchy and propose a location for two last-level-cache sharing domains per package. Count 16 physical cores for the complete machine. Next hypothesize the logical-processor count if every core exposes two hardware contexts: 32. State clearly that the example does not specify whether SMT contexts share all pipelines, which memory controllers serve each chiplet, or how many NUMA nodes firmware exposes.</p>
+<p><strong>Check:</strong> the number of compute chiplets is four total, not eight; core count is four chiplets × four cores = sixteen. Do not deduce NUMA count merely from chiplet count.</p>
+
+</section>
+<section id="guided-exercise-2-compare-two-thread-placements" aria-labelledby="heading-guided-exercise-2-compare-two-thread-placements"><h2 id="heading-guided-exercise-2-compare-two-thread-placements">Guided Exercise 2 — Compare Two Thread Placements</h2>
+<p>Two threads repeatedly hand off a 64-byte message. Placement A keeps both on separate physical cores sharing a nearby LLC domain; placement B moves them to different dies. Design an experiment that uses the same thread count and work, controls CPU frequency, and records handoff latency and completed messages per second. Identify at least two competing explanations if placement A is faster (coherence path length and cache reuse), and at least two possible confounders (different core capacity and background activity).</p>
+<p><strong>Check:</strong> any result must be presented as platform-specific. A thread on a sibling SMT context is not necessarily equivalent to a second physical core, and prefetcher or cache policy changes can alter the result.</p>
+
+</section>
+<section id="guided-exercise-3-analyze-a-numa-allocation-mistake" aria-labelledby="heading-guided-exercise-3-analyze-a-numa-allocation-mistake"><h2 id="heading-guided-exercise-3-analyze-a-numa-allocation-mistake">Guided Exercise 3 — Analyze a NUMA Allocation Mistake</h2>
+<p>A thread on node 0 initializes a 2 GiB array. Later, twelve workers on node 1 perform dependent random reads of that array. Describe why first-touch allocation may make accesses remote, why a memory-binding change may not relocate already allocated pages, and how you would verify and repair locality. Compare parallel initialization with explicit migration and note the potential cost of duplicating the array.</p>
+<p><strong>Check:</strong> identify thread placement, page placement, and measurement as three separate questions. Do not prescribe global interleaving without examining latency and capacity.</p>
+
+</section>
+<section id="guided-exercise-4-find-the-saturation-point" aria-labelledby="heading-guided-exercise-4-find-the-saturation-point"><h2 id="heading-guided-exercise-4-find-the-saturation-point">Guided Exercise 4 — Find the Saturation Point</h2>
+<p>A streaming kernel achieves 8, 16, 27, 36, 40, and 41 GB/s with 1, 2, 4, 8, 12, and 16 physical cores. Plot bandwidth versus core count and identify the likely saturation region. Estimate marginal throughput beyond eight cores. Then list tests that would separate memory bandwidth saturation from cache thrashing or reduced all-core frequency.</p>
+<p><strong>Check:</strong> throughput increases by only about 5 GB/s from eight to sixteen cores, but the numbers alone cannot prove why. Compare physical DRAM traffic, cache events, core clocks, and changes to working-set size.</p>
+
+</section>
+<section id="guided-exercise-5-design-a-hybrid-core-policy" aria-labelledby="heading-guided-exercise-5-design-a-hybrid-core-policy"><h2 id="heading-guided-exercise-5-design-a-hybrid-core-policy">Guided Exercise 5 — Design a Hybrid-Core Policy</h2>
+<p>A service uses one high-priority event loop, four CPU-intensive batch workers, and intermittent background scanning. Explain how a policy could prioritize the event loop on suitable high-capacity cores without hardcoding numeric CPU IDs. Include conditions for allowing the batch workers to use the rest of the package and for reversing a manual affinity rule if deadlines or energy worsen.</p>
+<p><strong>Check:</strong> the answer distinguishes priority and capacity from fixed core identity. A good policy has measurement and rollback, and it does not assume that all SMT siblings or efficiency cores provide the same benefit.</p>
+
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions"><h2 id="heading-review-questions">Review Questions</h2>
+<ol>
+<li>Why can two CPUs in a single physical package have different memory access costs?</li>
+<li>How does a hardware-thread count differ from a count of independent physical cores?</li>
+<li>Which resources might two separate physical cores share even if each has a private L1 cache?</li>
+<li>Why is a shared last-level cache sometimes a benefit and sometimes a contention source?</li>
+<li>What extra information is needed before claiming one NUMA node per socket?</li>
+<li>How can first-touch allocation affect later remote-memory traffic?</li>
+<li>What does a weighted average of local and remote DRAM latency omit?</li>
+<li>Why can a task on a “nearby” core be slower than one farther away?</li>
+<li>What do ring and mesh topologies trade off at a high level?</li>
+<li>How does cache-line false sharing limit multicore throughput?</li>
+<li>Why should affinity and memory allocation policies be tested together?</li>
+<li>What does Amdahl's law predict, and what does it not predict?</li>
+<li>Why can an application show high CPU utilization while throughput stalls?</li>
+<li>How does a hybrid package complicate “workers per core” reasoning?</li>
+<li>Why might a guest's apparent sockets not describe host silicon?</li>
+<li>Which performance counters and end-to-end measures would support a NUMA hypothesis?</li>
+<li>How can power and thermal policy change apparent multicore scaling?</li>
+<li>What is the distinction between coherence traffic and memory-consistency semantics?</li>
+<li>Why can a topology-aware work-stealing scheduler outperform strict pinning?</li>
+<li>What baseline and rollback evidence should accompany an affinity change?</li>
+</ol>
+
+</section>
+<section id="glossary" aria-labelledby="heading-glossary"><h2 id="heading-glossary">Glossary</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Affinity</td>
+  <td>Scheduler constraint or preference tying execution to a chosen CPU set</td>
+</tr>
+<tr>
+  <td>Asymmetric multicore</td>
+  <td>Processor design with cores that differ in performance or energy characteristics</td>
+</tr>
+<tr>
+  <td>Bisection bandwidth</td>
+  <td>Aggregate communication capacity across a conceptual network partition</td>
+</tr>
+<tr>
+  <td>Chiplet</td>
+  <td>Distinct silicon die integrated into a multi-die processor package</td>
+</tr>
+<tr>
+  <td>Coherence domain</td>
+  <td>Scope within which agents coordinate caching of shared memory</td>
+</tr>
+<tr>
+  <td>Core</td>
+  <td>Instruction-execution engine distinct from another physical core</td>
+</tr>
+<tr>
+  <td>Core complex / cluster</td>
+  <td>Implementation-defined grouping of cores and shared resources</td>
+</tr>
+<tr>
+  <td>CPU set / cpuset</td>
+  <td>OS-level set of CPUs allowed for a task or process</td>
+</tr>
+<tr>
+  <td>Die</td>
+  <td>Continuous silicon component within a processor assembly</td>
+</tr>
+<tr>
+  <td>Fabric</td>
+  <td>Interconnect linking processor cores, caches, memory, or I/O agents</td>
+</tr>
+<tr>
+  <td>False sharing</td>
+  <td>Coherence contention caused by independent variables sharing a line</td>
+</tr>
+<tr>
+  <td>First touch</td>
+  <td>Memory placement behavior associated with the first physical page allocation</td>
+</tr>
+<tr>
+  <td>Hardware thread</td>
+  <td>Architectural execution context exposed as a schedulable logical CPU</td>
+</tr>
+<tr>
+  <td>Home agent</td>
+  <td>Component that tracks or manages responsibility for memory/cache-line requests</td>
+</tr>
+<tr>
+  <td>Interconnect hop</td>
+  <td>Router or link traversal along an internal communication path</td>
+</tr>
+<tr>
+  <td>LLC</td>
+  <td>Last-level cache closest to memory in a particular cache hierarchy</td>
+</tr>
+<tr>
+  <td>Logical processor</td>
+  <td>OS-visible schedulable hardware or virtual execution context</td>
+</tr>
+<tr>
+  <td>Memory controller</td>
+  <td>Hardware managing requests to attached DRAM channels</td>
+</tr>
+<tr>
+  <td>Memory policy</td>
+  <td>Rules directing NUMA page allocation, interleaving, or preferred locality</td>
+</tr>
+<tr>
+  <td>NUMA</td>
+  <td>Non-uniform memory access; memory-access cost depends on initiator and location</td>
+</tr>
+<tr>
+  <td>Package</td>
+  <td>Assembled processor product installed into a platform interface</td>
+</tr>
+<tr>
+  <td>Physical core</td>
+  <td>Core with independent substantial execution resources</td>
+</tr>
+<tr>
+  <td>Processor group</td>
+  <td>Windows scheduling abstraction for sets of logical processors</td>
+</tr>
+<tr>
+  <td>Roofline bound</td>
+  <td>Estimated compute rate limited by peak arithmetic or memory throughput</td>
+</tr>
+<tr>
+  <td>SMT</td>
+  <td>Simultaneous multithreading: multiple architectural contexts share one core</td>
+</tr>
+<tr>
+  <td>Socket</td>
+  <td>Motherboard interface accommodating a processor package</td>
+</tr>
+<tr>
+  <td>Tail latency</td>
+  <td>High-percentile completion time, such as p99</td>
+</tr>
+<tr>
+  <td>Topology</td>
+  <td>Relationship map of cores, caches, dies, nodes, and connectivity</td>
+</tr>
+<tr>
+  <td>vCPU</td>
+  <td>Virtual CPU exposed by a hypervisor to a guest operating system</td>
+</tr>
+<tr>
+  <td>Work/span</td>
+  <td>Parallel analysis separating total operations from the longest dependency path</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="complete-cpu-specialist-directory" aria-labelledby="heading-complete-cpu-specialist-directory"><h2 id="heading-complete-cpu-specialist-directory">Complete CPU Specialist Directory</h2>
+<p>The following child destinations are prescribed by the existing CPU specialist unit index. Their active hyperlinks are editorial navigation targets; they do not imply every child has been deployed.</p><ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths"><strong>Processor Cores and Datapaths</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state"><strong>Architectural Registers and Processor State</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode"><strong>Instruction Fetch and Decode</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units"><strong>Arithmetic, Logic, and Floating-Point Units</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling"><strong>CPU Control Logic and Exception Handling</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement"><strong>Instruction Completion and Retirement</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards"><strong>CPU Pipelines and Hazards</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution"><strong>Superscalar Issue and Out-of-Order Execution</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers"><strong>Register Renaming and Reorder Buffers</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution"><strong>Branch Prediction and Speculative Execution</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions"><strong>Vector, SIMD, and Specialized CPU Instructions</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation"><strong>Microcode and Internal Operation Translation</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality"><strong>CPU Cache Hierarchies and Locality</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering"><strong>Load/Store Units and Memory Ordering</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers"><strong>Address Translation and Translation Lookaside Buffers</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources"><strong>Multi-Core CPU Topology and Shared Resources</strong></a> — <em>This article</em></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts"><strong>Simultaneous Multithreading and Hardware Contexts</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations"><strong>CPU Cache Coherence and Atomic Operations</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states"><strong>CPU Clock Frequency, Voltage, and Power States</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging"><strong>Processor Thermal Design and Packaging</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks"><strong>CPU Benchmarks, IPC, and Bottlenecks</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels"><strong>CPU Security Isolation and Speculative Side Channels</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery"><strong>CPU Reliability, Error Detection, and Recovery</strong></a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection"><strong>CPU Platform Compatibility and Workload Selection</strong></a></li></ol>
+
+
+</section>
+<section id="related-encyclopedia-topics-and-editorial-boundaries" aria-labelledby="heading-related-encyclopedia-topics-and-editorial-boundaries"><h2 id="heading-related-encyclopedia-topics-and-editorial-boundaries">Related Encyclopedia Topics and Editorial Boundaries</h2>
+<p>The parent <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> article provides orientation; <a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems</a> situates processor hardware alongside storage, devices, and power. <a href="/library/encyclopedia/computer-science/computer-architecture/">Computer Architecture</a> covers generalized machine organization; <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> covers instruction scheduling and execution concepts at the architecture level; <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems</a> owns communication protocol mechanics. <a href="/library/encyclopedia/computer-science/software-systems/">Software Systems</a> supplies operating-system scheduling context; <a href="/library/encyclopedia/computer-science/programming-and-development/">Programming and Development</a> supplies parallel software design; <a href="/library/encyclopedia/computer-science/security-systems/">Security Systems</a> supplies broader risk and isolation frameworks.</p>
+<p>This article's specialist responsibility is <strong>physical multicore topology and shared-resource consequences</strong>: core/cluster/package/chiplet relationships; cache and memory locality; uncore contention; scheduling and affinity consequences; and performance diagnosis across the topology. Detailed SMT implementation, coherence protocols, CPU thermal design, and product selection belong to their own CPU unit children. The goal is useful cross-linking without duplicating competing tutorials.</p>
+
+</section>
+<section id="primary-technical-documentation-and-further-reading" aria-labelledby="heading-primary-technical-documentation-and-further-reading"><h2 id="heading-primary-technical-documentation-and-further-reading">Primary Technical Documentation and Further Reading</h2>
+<ol>
+<li><strong>Linux kernel</strong>, <em>How CPU Topology Info Is Exported via sysfs</em>. <a href="https://cdn.kernel.org/doc/html/latest/admin-guide/cputopology.html">Kernel documentation</a>. Source for OS-visible CPU topology attributes and their limits.</li>
+<li><strong>Linux kernel</strong>, <em>Scheduler Domains</em>. <a href="https://www.kernel.org/doc/html/latest/scheduler/sched-domains.html">Kernel scheduling documentation</a>. Explains hierarchical scheduler domains and balancing concerns.</li>
+<li><strong>Linux kernel</strong>, <em>NUMA Memory Policy</em>. <a href="https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html">Kernel documentation</a>. Source for binding, preference, and interleaving policy semantics.</li>
+<li><strong>Linux kernel</strong>, <em>Capacity Aware Scheduling</em>. <a href="https://docs.kernel.org/scheduler/sched-capacity.html">Kernel documentation</a>. Explains heterogeneous CPU capacity in scheduling decisions.</li>
+<li><strong>Microsoft</strong>, <em>GetLogicalProcessorInformationEx</em>. <a href="https://learn.microsoft.com/en-us/windows/desktop/api/sysinfoapi/nf-sysinfoapi-getlogicalprocessorinformationex">Windows API documentation</a>. Core, cache, die, package, NUMA, and processor-group relationships.</li>
+<li><strong>Microsoft</strong>, <em>Processor Groups</em>. <a href="https://learn.microsoft.com/en-us/windows/win32/procthread/processor-groups">Windows platform documentation</a>. Processor-group scheduling and behavior on large systems.</li>
+<li><strong>Microsoft Sysinternals</strong>, <em>Coreinfo</em>. <a href="https://learn.microsoft.com/en-us/sysinternals/downloads/coreinfo">Official utility page</a>. Tool for mapping logical processors, sockets, NUMA and caches.</li>
+<li><strong>hwloc project</strong>, <em>Hardware Locality</em>. <a href="https://www.open-mpi.org/projects/hwloc/doc/v2.15.0/termsanddefs.html">Documentation</a>. Portable hardware topology object definitions and practical locality modeling.</li>
+<li><strong>AMD</strong>, <em>AMD EPYC 9005 Processor Architecture Overview</em>. <a href="https://docs.amd.com/v/u/en-US/58462_amd-epyc-9005-tg-architecture-overview">Official AMD documentation</a>. Concrete chiplet, cache, and platform organization; model/generation specific.</li>
+<li><strong>Intel</strong>, <em>Hybrid Architecture</em>. <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/hybrid-architecture.htm">Developer technical overview</a>. Explains example of heterogeneous core scheduling considerations.</li>
+<li><strong>Intel</strong>, <em>Performance Hybrid Architecture</em>. <a href="https://www.intel.com/content/www/us/en/support/articles/000091896/processors.html">Product technical overview</a>. Defines P/E-core distinctions for named product families.</li>
+<li><strong>John L. Hennessy and David A. Patterson</strong>, <em>Computer Architecture: A Quantitative Approach</em>. Consult the edition's multicore, memory, and parallel-performance chapters for quantitative architectural context.</li>
+<li><strong>Gene M. Amdahl</strong>, “Validity of the Single Processor Approach to Achieving Large Scale Computing Capabilities” (1967). Foundational fixed-workload speedup limitation; more complete hardware models require communication and resource contention.</li>
+<li><strong>Samuel Williams, Andrew Waterman, and David Patterson</strong>, “Roofline: An Insightful Visual Performance Model for Multicore Architectures” (2009). Framework for compute-versus-bandwidth ceilings; its simplified bounds are not direct measurements of a specific CPU.</li>
+</ol>
+<p><strong>Source interpretation:</strong> the official OS and architecture references establish reported interfaces and architecture-family behaviors. The toy numerical examples, topology diagram, and Python demonstrations are original instructional models. They are not claims about unmeasured products or fully cycle-accurate vendor simulators.</p>
+
+</section>
+<section id="publication-status-and-scope" aria-labelledby="heading-publication-status-and-scope"><h2 id="heading-publication-status-and-scope">Publication Status and Scope</h2>
+<p><strong>Prepared November 23, 2026.</strong> This is CPU specialist article <strong>16 of 24</strong> under <code>hardware-systems/central-processing-unit-articles/</code>. The physical file is named <code>multicore-cpu-topology-and-shared-resources.html</code>, while its public canonical URL omits <code>.html</code>. The approved CPU specialist index remains the governing directory, and this article intentionally links to all 24 of its named children, including articles that may not yet be available publicly.</p>
+<p>The page is designed as a comprehensive educational and engineering reference for identifying CPU topology and reasoning about shared-resource effects. Examples do not replace platform-specific tuning guides, architecture manuals, production benchmarking, or operating-system scheduler diagnostics. This delivery does not change the existing parent, unit index, or sibling articles.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<script defer src="/component/bottom-nav-loader.js"></script>
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

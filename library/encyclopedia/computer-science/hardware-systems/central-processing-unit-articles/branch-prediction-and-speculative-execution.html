@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Branch Prediction and Speculative Execution | MGU Computer Science Encyclopedia | Malone Global University</title>
+<meta name="description" content="In-depth MGU Encyclopedia treatment of branch direction and target prediction, bimodal counters, history-based predictors, BTBs, return stacks, speculative execution, recovery, branch performance, and security boundaries.">
+<meta name="keywords" content="branch prediction, speculative execution, CPU hardware, bimodal predictor, BTB, RAS, gshare, global history, TAGE, branch MPKI, misprediction penalty, pipeline flush, branch recovery, wrong-path execution">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Branch Prediction and Speculative Execution | MGU Encyclopedia">
+<meta property="og:description" content="Control-flow prediction and speculative recovery in modern CPU hardware, from two-bit counters to history-based predictors and precise wrong-path squashing.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Branch Prediction and Speculative Execution</h1>
+<p class="subtitle">Branch direction and target prediction, history and confidence, fetch redirection, wrong-path recovery, and precise architectural outcomes.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-purpose-and-scope">Definition, Purpose, and Scope</a></li>
+<li><a href="#learning-objectives">Learning Objectives</a></li>
+<li><a href="#the-fundamental-control-hazard-problem">The Fundamental Control-Hazard Problem</a></li>
+<li><a href="#branch-types-and-their-prediction-questions">Branch Types and Their Prediction Questions</a></li>
+<li><a href="#fetch-pcs-instruction-boundaries-and-prediction-timing">Fetch PCs, Instruction Boundaries, and Prediction Timing</a></li>
+<li><a href="#prediction-versus-resolution-versus-retirement">Prediction Versus Resolution Versus Retirement</a></li>
+<li><a href="#speculative-front-end-and-recovery-diagram">Speculative Front-End and Recovery Diagram</a></li>
+<li><a href="#static-direction-policies">Static Direction Policies</a></li>
+<li><a href="#one-bit-prediction-and-transition-noise">One-Bit Prediction and Transition Noise</a></li>
+<li><a href="#two-bit-saturating-counter-prediction">Two-Bit Saturating Counter Prediction</a></li>
+<li><a href="#bimodal-tables-pc-indexing-and-aliasing">Bimodal Tables, PC Indexing, and Aliasing</a></li>
+<li><a href="#local-branch-history">Local Branch History</a></li>
+<li><a href="#global-history-and-correlated-branches">Global History and Correlated Branches</a></li>
+<li><a href="#gshare-mixing-branch-address-and-global-history">Gshare: Mixing Branch Address and Global History</a></li>
+<li><a href="#gselect-and-history-length-trade-offs">Gselect and History-Length Trade-offs</a></li>
+<li><a href="#tournament-and-hybrid-predictors">Tournament and Hybrid Predictors</a></li>
+<li><a href="#tagged-geometric-history-and-tage-type-designs">Tagged Geometric History and TAGE-Type Designs</a></li>
+<li><a href="#loop-predictors-and-difficult-exit-patterns">Loop Predictors and Difficult Exit Patterns</a></li>
+<li><a href="#branch-target-buffers-and-target-prediction">Branch Target Buffers and Target Prediction</a></li>
+<li><a href="#direct-branches-unconditional-jumps-and-early-decode">Direct Branches, Unconditional Jumps, and Early Decode</a></li>
+<li><a href="#return-address-stacks">Return-Address Stacks</a></li>
+<li><a href="#indirect-branches-and-polymorphic-targets">Indirect Branches and Polymorphic Targets</a></li>
+<li><a href="#fetch-blocks-with-multiple-control-transfers">Fetch Blocks With Multiple Control Transfers</a></li>
+<li><a href="#a-teaching-model-of-next-pc-selection">A Teaching Model of Next-PC Selection</a></li>
+<li><a href="#predictor-access-latency-and-multi-level-designs">Predictor Access Latency and Multi-Level Designs</a></li>
+<li><a href="#prediction-confidence-and-selective-policies">Prediction Confidence and Selective Policies</a></li>
+<li><a href="#predictor-training-and-update-timing">Predictor Training and Update Timing</a></li>
+<li><a href="#speculative-global-history-and-checkpoints">Speculative Global History and Checkpoints</a></li>
+<li><a href="#the-fetch-target-queue-and-prediction-metadata">The Fetch Target Queue and Prediction Metadata</a></li>
+<li><a href="#predictor-checkpoints-rename-maps-and-recovery-boundaries">Predictor Checkpoints, Rename Maps, and Recovery Boundaries</a></li>
+<li><a href="#branch-resolution-and-actual-target-checking">Branch Resolution and Actual Target Checking</a></li>
+<li><a href="#wrong-path-squashing-and-control-redirects">Wrong-Path Squashing and Control Redirects</a></li>
+<li><a href="#precise-exceptions-and-architectural-commitment">Precise Exceptions and Architectural Commitment</a></li>
+<li><a href="#a-minimal-age-ordered-squash-model">A Minimal Age-Ordered Squash Model</a></li>
+<li><a href="#speculation-beyond-control-flow">Speculation Beyond Control Flow</a></li>
+<li><a href="#speculative-memory-access-and-cache-state">Speculative Memory Access and Cache State</a></li>
+<li><a href="#transient-execution-and-side-channel-risk">Transient Execution and Side-Channel Risk</a></li>
+<li><a href="#prediction-accuracy-branch-mpki-and-useful-work">Prediction Accuracy, Branch MPKI, and Useful Work</a></li>
+<li><a href="#cpi-penalty-and-the-cost-of-a-bad-prediction">CPI Penalty and the Cost of a Bad Prediction</a></li>
+<li><a href="#recovery-latency-and-flush-depth">Recovery Latency and Flush Depth</a></li>
+<li><a href="#predictor-storage-budget-and-energy-cost">Predictor Storage Budget and Energy Cost</a></li>
+<li><a href="#multi-core-and-smt-predictor-sharing">Multi-Core and SMT Predictor Sharing</a></li>
+<li><a href="#predictor-warmup-phase-changes-and-reproducibility">Predictor Warmup, Phase Changes, and Reproducibility</a></li>
+<li><a href="#branch-prediction-counters-and-profiling-boundaries">Branch Prediction Counters and Profiling Boundaries</a></li>
+<li><a href="#a-repeatable-predictor-trace-harness">A Repeatable Predictor Trace Harness</a></li>
+<li><a href="#validation-against-a-functional-isa-model">Validation Against a Functional ISA Model</a></li>
+<li><a href="#predictor-state-recovery-invariants">Predictor-State Recovery Invariants</a></li>
+<li><a href="#formal-properties-for-a-simplified-branch-machine">Formal Properties for a Simplified Branch Machine</a></li>
+<li><a href="#implementation-pitfall-training-with-wrong-path-outcomes">Implementation Pitfall: Training With Wrong-Path Outcomes</a></li>
+<li><a href="#implementation-pitfall-incomplete-return-stack-rollback">Implementation Pitfall: Incomplete Return-Stack Rollback</a></li>
+<li><a href="#implementation-pitfall-wrong-path-completion-after-reuse">Implementation Pitfall: Wrong-Path Completion After Reuse</a></li>
+<li><a href="#implementation-pitfall-assuming-prediction-is-authorization">Implementation Pitfall: Assuming Prediction Is Authorization</a></li>
+<li><a href="#implementation-pitfall-overfitting-predictor-benchmarks">Implementation Pitfall: Overfitting Predictor Benchmarks</a></li>
+<li><a href="#applied-scenario-1-counting-loop-exit-behavior">Applied Scenario 1: Counting-Loop Exit Behavior</a></li>
+<li><a href="#applied-scenario-2-data-dependent-conditional-work">Applied Scenario 2: Data-Dependent Conditional Work</a></li>
+<li><a href="#applied-scenario-3-virtual-dispatch-and-indirect-calls">Applied Scenario 3: Virtual Dispatch and Indirect Calls</a></li>
+<li><a href="#applied-scenario-4-deeply-nested-function-calls">Applied Scenario 4: Deeply Nested Function Calls</a></li>
+<li><a href="#applied-scenario-5-wide-out-of-order-server-core">Applied Scenario 5: Wide Out-of-Order Server Core</a></li>
+<li><a href="#applied-scenario-6-isolation-and-predictor-state-interference">Applied Scenario 6: Isolation and Predictor-State Interference</a></li>
+<li><a href="#ten-gate-branch-prediction-engineering-framework">Ten-Gate Branch-Prediction Engineering Framework</a></li>
+<li><a href="#a-worked-design-selection-comparison">A Worked Design-Selection Comparison</a></li>
+<li><a href="#common-misconceptions-and-corrective-principles">Common Misconceptions and Corrective Principles</a></li>
+<li><a href="#guided-exercise-1-two-bit-counter-trace">Guided Exercise 1: Two-Bit Counter Trace</a></li>
+<li><a href="#guided-exercise-2-pc-index-and-gshare-correlation">Guided Exercise 2: PC Index and Gshare Correlation</a></li>
+<li><a href="#guided-exercise-3-wrong-path-recovery-trace">Guided Exercise 3: Wrong-Path Recovery Trace</a></li>
+<li><a href="#guided-exercise-4-branch-mpki-and-cpi-sensitivity">Guided Exercise 4: Branch MPKI and CPI Sensitivity</a></li>
+<li><a href="#guided-exercise-5-return-prediction-and-security-boundary">Guided Exercise 5: Return Prediction and Security Boundary</a></li>
+<li><a href="#review-questions">Review Questions</a></li>
+<li><a href="#glossary">Glossary</a></li>
+<li><a href="#specialist-study-pathways">Specialist Study Pathways</a></li>
+<li><a href="#complete-cpu-specialist-directory">Complete CPU Specialist Directory</a></li>
+<li><a href="#related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</a></li>
+<li><a href="#primary-documentation-and-further-reading">Primary Documentation and Further Reading</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="definition-purpose-and-scope" aria-labelledby="heading-definition-purpose-and-scope"><h2 id="heading-definition-purpose-and-scope">Definition, Purpose, and Scope</h2>
+<p><strong>Branch prediction</strong> is a microarchitectural attempt to forecast the instruction address and control-flow outcome the processor will need before the controlling branch finishes execution. <strong>Speculative execution</strong> permits the machine to fetch, decode, schedule, and sometimes execute instructions on that predicted path before the path has been proved correct. A correct prediction allows a deep or wide pipeline to remain supplied with useful instructions. A wrong prediction requires recovery: younger wrong-path instructions are invalidated, the correct fetch address is restored, and the architectural behavior must be indistinguishable from execution along the actual path.</p>
+<p>Prediction does <strong>not</strong> redefine the instruction set architecture (ISA). Software observes the specified instruction results and exceptions, not a license for a predictor to change program semantics. Internal speculation may leave microarchitectural effects such as cache fills and predictor training, which creates a separate security concern. This article owns hardware mechanisms for direction and target prediction, the coupling of prediction with execution, predictor-state recovery, misprediction costs, and measurement. The companion <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a> article takes a deeper treatment of threat models and mitigations.</p>
+
+</section>
+<section id="learning-objectives" aria-labelledby="heading-learning-objectives"><h2 id="heading-learning-objectives">Learning Objectives</h2>
+<p>Readers should be able to distinguish a branch's <strong>direction</strong> from its <strong>target</strong>; compare static hints, one-bit and two-bit counters, local and global history, and hybrid prediction; explain the functions of a branch target buffer (BTB), return-address stack (RAS), and indirect-target predictor; and trace how fetch follows a prediction, execution resolves it, and the reorder buffer suppresses wrong-path retirement. They should be able to calculate a simplified misprediction penalty, identify the costs of predictor aliasing and cold starts, and test a predictor against a deterministic trace.</p>
+<p>For design review, readers should also explain why speculative global history needs checkpoints; why resolved information and committed training data are not always identical; how a redirected fetch must agree with rename and memory state; how context separation affects predictor security; and why neither a high prediction accuracy nor an apparently quiet architectural trace is proof that transient microarchitectural information cannot be observed.</p>
+
+</section>
+<section id="the-fundamental-control-hazard-problem" aria-labelledby="heading-the-fundamental-control-hazard-problem"><h2 id="heading-the-fundamental-control-hazard-problem">The Fundamental Control-Hazard Problem</h2>
+<p>A fetch unit must choose a next program counter every cycle or fetch opportunity. An ordinary sequential instruction usually advances by its encoded length, but a conditional branch can select either a fall-through address or a branch destination. In a pipeline, operands and branch conditions may not be known until several stages after fetch. Waiting for each branch to resolve would waste bandwidth and could drain the downstream instruction window. Predicting a next address permits continued work, but introduces the need to distinguish <em>tentative</em> instructions from instructions eligible to become architectural state.</p>
+<p>The magnitude of the problem depends on branch frequency, pipeline depth, front-end width, execution scheduling, and the branch's resolution latency. An in-order five-stage teaching core and a wide out-of-order production core may use fundamentally different prediction structures. The following figures are illustrative rather than universal: a 20% branch fraction, a 5% misprediction rate among branches, and a 12-cycle effective recovery penalty yield approximately 0.12 additional cycles per retired instruction attributable to the simplified branch term, not a complete CPU performance estimate.</p>
+
+</section>
+<section id="branch-types-and-their-prediction-questions" aria-labelledby="heading-branch-types-and-their-prediction-questions"><h2 id="heading-branch-types-and-their-prediction-questions">Branch Types and Their Prediction Questions</h2>
+<table>
+<thead>
+<tr>
+  <th>Control transfer</th>
+  <th>Direction question</th>
+  <th>Target question</th>
+  <th>Common predictor source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Conditional direct branch</td>
+  <td>Taken or not taken</td>
+  <td>Direct target if taken</td>
+  <td>Direction table plus BTB or decode-derived target</td>
+</tr>
+<tr>
+  <td>Unconditional direct jump</td>
+  <td>Known taken</td>
+  <td>PC-relative target</td>
+  <td>BTB or early decode</td>
+</tr>
+<tr>
+  <td>Indirect jump or call</td>
+  <td>Known taken</td>
+  <td>Runtime-dependent target</td>
+  <td>Indirect-target predictor, possibly history-based</td>
+</tr>
+<tr>
+  <td>Procedure return</td>
+  <td>Known taken</td>
+  <td>Return address at runtime</td>
+  <td>Return-address stack with fallback</td>
+</tr>
+<tr>
+  <td>Exception or interrupt transfer</td>
+  <td>Not an ordinary branch guess</td>
+  <td>Handler destination from architectural control</td>
+  <td>Trap/interrupt control, not a normal branch predictor</td>
+</tr>
+</tbody>
+</table>
+<p>A direction predictor that says <strong>taken</strong> but supplies the wrong target has still made an unusable next-PC prediction. A target predictor can know the target of a taken branch but waste the redirect if the branch should fall through. These are related but separable error modes. A return predictor often benefits from the last-in-first-out nature of balanced function calls, whereas an indirect branch may have a complex collection of possible destinations.</p>
+
+</section>
+<section id="fetch-pcs-instruction-boundaries-and-prediction-timing" aria-labelledby="heading-fetch-pcs-instruction-boundaries-and-prediction-timing"><h2 id="heading-fetch-pcs-instruction-boundaries-and-prediction-timing">Fetch PCs, Instruction Boundaries, and Prediction Timing</h2>
+<p>The fetch PC identifies where the front end requests instructions; it is not necessarily the precise architectural PC of a retiring instruction. Fetch blocks may contain several instructions, multiple branches, and variable-width encodings. A predictor may run on a block address, an individual branch address, or both. It must identify the earliest predicted taken control transfer within a fetch group to avoid sending younger instructions from an unreachable region. Some implementations predict the next <em>block</em> rather than the next <em>instruction</em>.</p>
+<p>Front-end timing creates a practical dilemma. A fast, compact predictor can choose the next request early, while a larger predictor may need more cycles or access a dense SRAM. A design may issue a rapid first guess and later override it with a higher-quality prediction; this can cause a redirect without a backend branch execution. The Berkeley Out-of-Order Machine (BOOM) documents a fast Next-Line Predictor and a Backing Predictor as one such organization; it is a documented example, not an ISA mandate.</p>
+
+</section>
+<section id="prediction-versus-resolution-versus-retirement" aria-labelledby="heading-prediction-versus-resolution-versus-retirement"><h2 id="heading-prediction-versus-resolution-versus-retirement">Prediction Versus Resolution Versus Retirement</h2>
+<p>Three events should not be conflated. <strong>Prediction</strong> supplies an anticipated direction or target, often before the instruction has been fully decoded. <strong>Resolution</strong> computes the actual branch condition and destination from the instruction's source operands and semantics. <strong>Retirement</strong> establishes the instruction as part of committed program history once all older instructions satisfy the machine's commit rules. A branch can resolve correctly while still waiting to retire; younger instructions may have executed speculatively in the meantime.</p>
+<p>A misprediction at resolution normally causes a redirect and squashes younger instructions on the bad path. It does not retroactively undo instructions that were older than the branch, and it must not permit younger incorrect instructions to commit. The reorder buffer, rename checkpoints, issue queues, fetch-target tracking, and load/store structures collaborate in this operation. Some implementations discover a bad prediction earlier at decode; the available redirect point and recovery latency vary by design.</p>
+
+</section>
+<section id="speculative-front-end-and-recovery-diagram" aria-labelledby="heading-speculative-front-end-and-recovery-diagram"><h2 id="heading-speculative-front-end-and-recovery-diagram">Speculative Front-End and Recovery Diagram</h2>
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bps-title bps-desc" viewBox="0 0 1140 580" style="display:block;max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px" fill="none" stroke="currentColor" stroke-width="2">
+<title id="bps-title">Branch prediction and speculative recovery in a CPU pipeline</title>
+<desc id="bps-desc">A simplified pipeline showing a fetch PC, a branch direction and target predictor, speculative fetch and decode, dynamic execution, branch resolution, and in-order retirement. If resolution agrees, correct-path instructions proceed toward retirement; when resolution disagrees, younger wrong-path instructions are squashed, predictor history and rename state are restored, and fetch is redirected to the actual target.</desc>
+<defs><marker id="bps-arrow" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="currentColor" stroke="none"/></marker></defs>
+<rect x="32" y="100" width="180" height="80" rx="9"/><rect x="260" y="100" width="180" height="80" rx="9"/><rect x="488" y="100" width="180" height="80" rx="9"/><rect x="716" y="100" width="180" height="80" rx="9"/><rect x="950" y="100" width="162" height="80" rx="9"/>
+<path d="M212 140H260M440 140H488M668 140H716M896 140H950" marker-end="url(#bps-arrow)"/>
+<rect x="270" y="280" width="255" height="108" rx="9"/><rect x="645" y="280" width="285" height="108" rx="9"/>
+<path d="M1030 180V245H788V280" marker-end="url(#bps-arrow)"/>
+<path d="M788 388V460H408V388" stroke-dasharray="8 5" marker-end="url(#bps-arrow)"/>
+<path d="M270 333H185V246H122V180" stroke-dasharray="8 5" marker-end="url(#bps-arrow)"/>
+<path d="M525 335H645" marker-end="url(#bps-arrow)"/>
+<g fill="currentColor" stroke="none" font-family="system-ui,sans-serif" text-anchor="middle">
+<text x="570" y="41" font-size="26" font-weight="700">Predict → execute → validate → commit or recover</text>
+<text x="122" y="134" font-size="20" font-weight="700">Fetch PC</text><text x="122" y="156" font-size="14">next address</text>
+<text x="350" y="128" font-size="19" font-weight="700">Direction + Target</text><text x="350" y="153" font-size="15">BTB · history · RAS</text>
+<text x="578" y="129" font-size="19" font-weight="700">Speculative Fetch</text><text x="578" y="154" font-size="15">decode + rename</text>
+<text x="806" y="129" font-size="19" font-weight="700">Execute</text><text x="806" y="154" font-size="15">resolve condition</text>
+<text x="1031" y="129" font-size="18" font-weight="700">Validate</text><text x="1031" y="153" font-size="15">actual next PC</text>
+<text x="397" y="316" font-size="19" font-weight="700">Redirect / Squash</text><text x="397" y="340" font-size="15">discard younger wrong work</text><text x="397" y="362" font-size="15">restore history and mappings</text>
+<text x="787" y="315" font-size="19" font-weight="700">Commit Correct Path</text><text x="787" y="342" font-size="15">age-ordered retirement</text><text x="787" y="363" font-size="15">never retire wrong-path effects</text>
+<text x="570" y="498" font-size="16">Dashed paths: recovery and refetch; solid paths: ordinary information flow</text>
+</g>
+</svg><figcaption>Illustrative control-flow speculation. A real core may have multiple prediction stages, separate resolution points, a reorder buffer and fetch-target queue, and different checkpoint schemes. Recovery preserves the correct committed path while rejecting younger invalid work.</figcaption>
+</figure>
+
+<p>The diagram separates two related forms of state: the <strong>architectural</strong> register/memory history protected by in-order retirement and the <strong>microarchitectural</strong> history used to predict what comes next. A recoverable branch checkpoint must provide enough information to restore the necessary speculative state. It need not store a complete copy of every hardware structure: designers may use incremental undo logs, checkpoints, epoch tags, or equivalent schemes.</p>
+
+</section>
+<section id="static-direction-policies" aria-labelledby="heading-static-direction-policies"><h2 id="heading-static-direction-policies">Static Direction Policies</h2>
+<p>Static policies choose a prediction without learning each branch's outcomes during execution. Examples include always not-taken, always taken, and compiler-informed or layout-informed heuristics. A common intuition is that backward loop branches are frequently taken and some forward branches are frequently not taken, but exceptions abound: the final loop exit is not taken, error-handling branches may have unusual distributions, and source-level shapes are not guaranteed to survive compilation. Static prediction can be attractive for simple, area-constrained cores or as a fallback when dynamic table entries are invalid.</p>
+<p>Suppose a branch's observed outcomes are <code>T,T,T,T,N</code> repeated four times. Always-taken correctly predicts 16 of 20 outcomes, whereas always-not-taken gets four right. On a different branch with rare true conditions those results invert. Consequently, a static policy should be evaluated using measured dynamic outcome frequencies, not the label “loop branch” alone. A static prediction can also lack a next-PC target until an early decode stage has identified the branch.</p>
+<pre><code class="language-python">outcomes = [True, True, True, True, False] * 4
+always_taken = sum(actual is True for actual in outcomes)
+always_not_taken = sum(actual is False for actual in outcomes)
+assert (always_taken, always_not_taken) == (16, 4)
+print('Always taken accuracy:', always_taken / len(outcomes))
+</code></pre>
+
+</section>
+<section id="one-bit-prediction-and-transition-noise" aria-labelledby="heading-one-bit-prediction-and-transition-noise"><h2 id="heading-one-bit-prediction-and-transition-noise">One-Bit Prediction and Transition Noise</h2>
+<p>A one-bit dynamic predictor records whether a branch was last taken. It predicts the last observed outcome for the next encounter. This captures stable branches at very low cost but reacts immediately to every isolated reversal. A loop that is taken repeatedly and then exits often creates a miss at exit; on the next invocation its first taken iteration may create another miss. The exact behavior depends on predictor initialization, branch interleaving, and loop structure.</p>
+<p>A one-bit predictor uses a single bit of <strong>direction state</strong>, not the target address itself. If the target lookup fails, even a correct direction bit may not deliver a timely next fetch address. It is important to distinguish per-branch state from a single global bit: realistic designs index a finite table with program-counter information, and different branches can collide in the same entry. The simple Python model below deliberately isolates one branch to show the counter's logic without aliasing.</p>
+<pre><code class="language-python">outcomes = [True, True, True, False] * 3
+last = False  # initial prediction: not taken
+correct = 0
+for actual in outcomes:
+    correct += (last == actual)
+    last = actual
+assert correct == 6  # two wrong at each complete loop interval
+print('One-bit correct:', correct, 'of', len(outcomes))
+</code></pre>
+
+</section>
+<section id="two-bit-saturating-counter-prediction" aria-labelledby="heading-two-bit-saturating-counter-prediction"><h2 id="heading-two-bit-saturating-counter-prediction">Two-Bit Saturating Counter Prediction</h2>
+<p>A classic bimodal predictor uses a two-bit counter in states 0, 1, 2, and 3. States 0 and 1 predict not-taken; 2 and 3 predict taken. Taken increments the counter up to 3, and not-taken decrements it down to 0. The middle threshold builds <strong>hysteresis</strong>: one anomalous result usually weakens confidence without immediately reversing a strongly held prediction. A two-bit counter is an implementation technique for prediction, not a guarantee of probability calibration.</p>
+<table>
+<thead>
+<tr>
+  <th>State</th>
+  <th>Interpretation</th>
+  <th>Predict</th>
+  <th>Next on taken</th>
+  <th>Next on not taken</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>0</td>
+  <td>Strongly not taken</td>
+  <td>N</td>
+  <td>1</td>
+  <td>0</td>
+</tr>
+<tr>
+  <td>1</td>
+  <td>Weakly not taken</td>
+  <td>N</td>
+  <td>2</td>
+  <td>0</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Weakly taken</td>
+  <td>T</td>
+  <td>3</td>
+  <td>1</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Strongly taken</td>
+  <td>T</td>
+  <td>3</td>
+  <td>2</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python">def predict(counter):
+    assert 0 &lt;= counter &lt;= 3
+    return counter &gt;= 2
+
+def update(counter, taken):
+    return min(3, counter + 1) if taken else max(0, counter - 1)
+
+c = 3
+assert predict(c)
+c = update(c, False)
+assert (c, predict(c)) == (2, True)
+c = update(c, False)
+assert (c, predict(c)) == (1, False)
+print('Two-bit hysteresis:', c)
+</code></pre>
+
+</section>
+<section id="bimodal-tables-pc-indexing-and-aliasing" aria-labelledby="heading-bimodal-tables-pc-indexing-and-aliasing"><h2 id="heading-bimodal-tables-pc-indexing-and-aliasing">Bimodal Tables, PC Indexing, and Aliasing</h2>
+<p>A <strong>bimodal table</strong> stores prediction counters at indices derived from branch addresses. For example, a simplified table with 256 entries may use <code>(PC &gt;&gt; 2) &amp; 255</code> as the index for four-byte-aligned instruction addresses. The particular shift is only an example; compressed or variable-length instructions and modern predictor organizations use different details. An entry normally lacks a full unique tag, so unrelated branches can map to the same counter. This is <strong>aliasing</strong>, not a software data race.</p>
+<p>Aliasing can be destructive if one branch is usually taken and another is usually not taken, because their training moves one counter in opposite directions. It can occasionally be constructive when behavior is correlated. Increasing table size may reduce some collisions at increased storage and energy cost, but simple size scaling does not guarantee a proportional accuracy gain. Some predictors add tags, history mixing, bank selection, or selective allocation to manage interference.</p>
+<pre><code class="language-python">entries = [1] * 8
+index = lambda pc: (pc &gt;&gt; 2) &amp; 7
+pc_a, pc_b = 0x100, 0x120
+assert index(pc_a) == index(pc_b)
+for actual in [True] * 5:
+    slot = index(pc_a)
+    entries[slot] = min(3, entries[slot] + 1)
+assert entries[index(pc_a)] == 3
+for actual in [False] * 4:
+    slot = index(pc_b)
+    entries[slot] = max(0, entries[slot] - 1)
+assert entries[index(pc_a)] == 0
+print('Destructive aliasing at table entry', index(pc_a))
+</code></pre>
+
+</section>
+<section id="local-branch-history" aria-labelledby="heading-local-branch-history"><h2 id="heading-local-branch-history">Local Branch History</h2>
+<p>Some branches follow a repeating private pattern, such as two taken outcomes followed by one not-taken. A single two-bit counter cannot encode arbitrary multi-step histories. A local-history predictor keeps recent outcomes for a particular branch or group of branches; that bit pattern selects a prediction counter, allowing different outcomes after different recent contexts. The history is <em>local</em> to a branch identity or an indexed entry, not automatically unique for every static branch in the program.</p>
+<p>Local-history performance depends on history length, how many counters are available, aliasing, and training. A length of <code>h</code> bits can select up to <code>2^h</code> history patterns, but storage and access requirements grow. The predictor may take longer to learn after a cold start. Capturing a deterministic pattern is different from memorizing a random sequence; a predictor can learn only relationships that remain observable and sufficiently stable. Local history is often part of a hybrid design rather than an independently universal best choice.</p>
+
+</section>
+<section id="global-history-and-correlated-branches" aria-labelledby="heading-global-history-and-correlated-branches"><h2 id="heading-global-history-and-correlated-branches">Global History and Correlated Branches</h2>
+<p>Global branch history records recent outcomes across branches. This can predict a branch whose result depends on another recent branch, even when its own local history is uninformative. For example, a later bounds check may be taken primarily when an earlier type check was taken. A global-history register (GHR) shifts in recent taken/not-taken bits; the resulting pattern contributes to selecting a prediction counter. However, interleaving unrelated branches can obscure useful correlations, and the logical meaning of the bits depends on their ordering.</p>
+<p>An important pipeline detail is <strong>speculative history</strong>. If the front end waits for older branches to commit before shifting history, the predictor works with stale context for many inflight branches. Some implementations therefore shift <em>predicted</em> bits into the GHR immediately and restore a snapshot when an earlier prediction was wrong. The BOOM BPD documentation explicitly describes this distinction. Training the prediction counters on resolution or retirement is a separate decision from tracking speculative context.</p>
+
+</section>
+<section id="gshare-mixing-branch-address-and-global-history" aria-labelledby="heading-gshare-mixing-branch-address-and-global-history"><h2 id="heading-gshare-mixing-branch-address-and-global-history">Gshare: Mixing Branch Address and Global History</h2>
+<p>A pedagogical <strong>gshare</strong> predictor XORs some low branch-address bits with the GHR to choose a two-bit counter. The XOR mixes branch location and recent global context, which may reduce particular classes of collision while introducing other interactions. Unlike a pure global-history-indexed table, different branches can select different entries with the same history. Unlike a pure PC-indexed bimodal table, one branch can select different entries in different contexts.</p>
+<p>The simplified code below assumes a power-of-two table and uses <strong>actual</strong> outcomes to train an offline trace. A real speculative pipeline must distinguish training updates, predicted-history shifts, branch order, and snapshots. Gshare is an instructive concrete family, not an adequate model of every modern tagged or multi-component predictor.</p>
+<pre><code class="language-python">history_bits = 3
+mask = (1 &lt;&lt; history_bits) - 1
+counters = [1] * (1 &lt;&lt; history_bits)
+ghr = 0
+trace = [(0x100, True), (0x108, False), (0x100, True), (0x108, True)]
+for pc, actual in trace:
+    slot = ((pc &gt;&gt; 2) ^ ghr) &amp; mask
+    prediction = counters[slot] &gt;= 2
+    counters[slot] = min(3, counters[slot] + 1) if actual else max(0, counters[slot] - 1)
+    ghr = ((ghr &lt;&lt; 1) | int(actual)) &amp; mask
+assert ghr == 0b011
+print('Final history:', format(ghr, '03b'))
+</code></pre>
+
+</section>
+<section id="gselect-and-history-length-trade-offs" aria-labelledby="heading-gselect-and-history-length-trade-offs"><h2 id="heading-gselect-and-history-length-trade-offs">Gselect and History-Length Trade-offs</h2>
+<p>An alternative to XOR mixing is to concatenate bits of program-counter identity and global history, sometimes called <strong>gselect</strong>. Both are methods of organizing a finite pattern-history table. Short histories cannot capture long correlations; very long untagged histories may cause sparse training and aliasing. Selecting a history length is therefore an empirical engineering trade-off rather than a rule that “more history is always better.” A small predictor may offer high performance per byte and per joule even if a larger predictor wins on a narrow benchmark.</p>
+<p>Changing the history length also changes the time needed to access and restore predictor state. A fast front end may use folding or hashing to reduce long histories into smaller indices, preserve distinct prediction banks, or stage the result. Prediction storage, predictor access latency, and fetch throughput must be considered together. An improved hit rate is not useful when the improvement itself introduces more fetch bubbles than it saves, or when increased power violates the device budget.</p>
+
+</section>
+<section id="tournament-and-hybrid-predictors" aria-labelledby="heading-tournament-and-hybrid-predictors"><h2 id="heading-tournament-and-hybrid-predictors">Tournament and Hybrid Predictors</h2>
+<p>A tournament predictor combines multiple candidate predictors with a choice mechanism that learns which one to trust in a particular context. A common teaching configuration combines a local-history predictor and a global-history predictor plus a two-bit chooser. The chooser is not a substitute for checking whether either candidate actually predicted correctly. It should generally be trained when the candidate predictors disagree; when they agree, their common outcome provides no immediate evidence about which candidate is preferable.</p>
+<pre><code class="language-python">chooser = 1  # prefer local when below 2
+local_guess, global_guess, actual = False, True, True
+selected = global_guess if chooser &gt;= 2 else local_guess
+assert selected is False
+if local_guess != global_guess:
+    if global_guess == actual:
+        chooser = min(3, chooser + 1)
+    elif local_guess == actual:
+        chooser = max(0, chooser - 1)
+assert chooser == 2
+assert (global_guess if chooser &gt;= 2 else local_guess) is True
+print('Chooser learned to prefer global after disagreement')
+</code></pre>
+<p>In production, selector table indexing, competing table size, warmup, and multiple branches per fetch group influence the value of hybrid selection. A fixed local/global combination is not required: modern predictors may use tagged history components, perceptron-like scores, loop predictors, or multiple target specialists. The broad design idea is to trade a modest amount of state and selection logic for better prediction across different branch behaviors.</p>
+
+</section>
+<section id="tagged-geometric-history-and-tage-type-designs" aria-labelledby="heading-tagged-geometric-history-and-tage-type-designs"><h2 id="heading-tagged-geometric-history-and-tage-type-designs">Tagged Geometric History and TAGE-Type Designs</h2>
+<p><strong>TAGE</strong> refers to a family of predictors that consult tagged tables indexed with several geometric history lengths. Typically a simpler base predictor provides a fallback; longer-history tables may provide more context-specific matches. Tags help reject some destructive aliasing, while allocation and usefulness rules decide which entries to retain. There is no single, universal TAGE parameter configuration: number of tables, history lengths, tag widths, counter formats, and update policy are implementation choices.</p>
+<p>The principal insight is that different branches depend on different history horizons. A branch may be predicted best from very recent events, another from an event many branches earlier. A multi-history design can select a matching provider without dedicating an exhaustive <code>2^h</code> untagged table to each long pattern. The hardware cost includes tag checks, history folding, tables, selection and training. BOOM and gem5 document configurable TAGE-related mechanisms; use the exact implementation documentation before attributing particular behavior to a named processor.</p>
+
+</section>
+<section id="loop-predictors-and-difficult-exit-patterns" aria-labelledby="heading-loop-predictors-and-difficult-exit-patterns"><h2 id="heading-loop-predictors-and-difficult-exit-patterns">Loop Predictors and Difficult Exit Patterns</h2>
+<p>A simple counter-based direction predictor often handles a stable loop well but mispredicts its terminating iteration. A <strong>loop predictor</strong> can learn repetition counts and detect when an iteration is likely to exit, when the loop behavior is regular enough. Such units must cope with nested loops, variable trip counts, early breaks, and aliasing between different loops. Counts often depend on context, so a loop predictor may also need confidence and validity state.</p>
+<p>Loop structure is not identical to a single branch's binary outcomes. A compiled loop may have multiple branches, early exits, or optimizations that reshape its control flow. A loop predictor improves performance only when its extra complexity and state produce enough reduction in misprediction penalty. Fallback to a general predictor matters when the regular pattern no longer holds, and a predictor should not treat unreliable guesses as guarantees of the next PC.</p>
+
+</section>
+<section id="branch-target-buffers-and-target-prediction" aria-labelledby="heading-branch-target-buffers-and-target-prediction"><h2 id="heading-branch-target-buffers-and-target-prediction">Branch Target Buffers and Target Prediction</h2>
+<p>A <strong>branch target buffer</strong> (BTB) is an associative or indexed structure that predicts where a detected control-flow transfer will go. An entry usually associates a fetch PC or branch identifier with a target and supporting metadata. It may also identify whether the relevant instruction is a direct branch, jump, or return, or where it occurs within a fetch block. A hit can supply the next fetch address before the instruction's immediate field or register operands are fully available. This is valuable even for unconditional jumps: the target may be architecturally obvious after decode, but the fetch engine must choose a next address earlier.</p>
+<p>BTB tags, replacement, sharing, and update policy shape both performance and security. A missed target can force a front-end redirect despite a direction predictor correctly deciding taken. A BTB collision may predict a target from an unrelated branch, causing transient execution at a wrong address until validation corrects it. The BTB is not a database of guaranteed instruction locations, and it must not bypass architectural address checks. BOOM's documented next-line predictor combines a BTB with a bimodal table and RAS; other CPUs may organize the same functions differently.</p>
+
+</section>
+<section id="direct-branches-unconditional-jumps-and-early-decode" aria-labelledby="heading-direct-branches-unconditional-jumps-and-early-decode"><h2 id="heading-direct-branches-unconditional-jumps-and-early-decode">Direct Branches, Unconditional Jumps, and Early Decode</h2>
+<p>A direct branch target is computed from a PC-relative offset or another specified encoding; once the instruction bytes are decoded, a target can often be determined without waiting for general register operand values. That does not mean the front end necessarily has decoded the relevant instruction at the instant it must select the next fetch line. Fast target prediction addresses that timing gap. Some pipelines allow early decode to override a wrong BTB target, reducing the need to wait for the actual condition in execution.</p>
+<p>For a conditional branch, a taken prediction demands a target; a not-taken prediction selects the fall-through address. An unconditional jump can be treated as always taken and may use a specialized decode or BTB path. The precise encoding, branch reach, and alignment requirements belong to the ISA, while whether target calculation occurs at fetch, decode, or execute is a hardware design choice. Branch alignment faults and protection checks must still be handled correctly after prediction.</p>
+
+</section>
+<section id="return-address-stacks" aria-labelledby="heading-return-address-stacks"><h2 id="heading-return-address-stacks">Return-Address Stacks</h2>
+<p>A <strong>return-address stack</strong> (RAS) predicts the destinations of function returns using the last-in-first-out pattern produced by ordinary calls and returns. A detected call pushes the expected return address; a corresponding return predicts that saved address. Many implementations update the RAS speculatively at fetch or decode so nested calls can be predicted before older calls retire. On wrong-path execution, such speculative pushes and pops must be undone or made irrelevant through a recoverable history mechanism.</p>
+<p>The RAS is a prediction structure, not the software call stack, an architectural call/return record, or an authorization mechanism. Non-LIFO control flow, unusual calling conventions, recursion deeper than the predictor's effective capacity, exceptions, or RAS underflow can break the simple pattern. In RISC-V, register operands and calling-convention link registers provide implicit hints about calls and returns; consult the ISA for exact JAL/JALR hint behavior rather than assuming all JALR instructions are returns.</p>
+<pre><code class="language-python">def return_trace(events):
+    stack, predicted = [], []
+    for kind, value in events:
+        if kind == 'call':
+            stack.append(value)
+        elif kind == 'return':
+            predicted.append(stack.pop() if stack else None)
+        else:
+            raise ValueError(kind)
+    return predicted
+
+paths = [('call', 0x104), ('call', 0x204), ('return', None), ('return', None)]
+assert return_trace(paths) == [0x204, 0x104]
+print('Nested return targets:', return_trace(paths))
+</code></pre>
+
+</section>
+<section id="indirect-branches-and-polymorphic-targets" aria-labelledby="heading-indirect-branches-and-polymorphic-targets"><h2 id="heading-indirect-branches-and-polymorphic-targets">Indirect Branches and Polymorphic Targets</h2>
+<p>An indirect branch obtains its destination at runtime from a register or memory-dependent computation. The same instruction PC may target several different functions or code locations, as in a dispatch table or virtual call. A conventional BTB that remembers only the last destination may be poor when targets alternate. More advanced predictors correlate indirect targets with history or other context. Their internal storage and update rules vary with the implementation, and some processors maintain separate indirect-branch mechanisms.</p>
+<p>The difficult question here is principally <em>which target</em>, not whether the instruction will branch. A wrong indirect target can waste many cycles while the pipeline executes and later squashes instructions from the wrong code location. It is also security-sensitive: training or collision behavior may allow a hostile execution context to influence which wrong target is speculatively followed. Architectural control-flow checks and security mitigations remain necessary regardless of average target prediction accuracy.</p>
+
+</section>
+<section id="fetch-blocks-with-multiple-control-transfers" aria-labelledby="heading-fetch-blocks-with-multiple-control-transfers"><h2 id="heading-fetch-blocks-with-multiple-control-transfers">Fetch Blocks With Multiple Control Transfers</h2>
+<p>A wide fetch block can contain more than one control transfer. The front end must ensure that only the control flow through the <strong>first dynamically relevant</strong> taken branch determines the next valid stream. If two branch entries predict taken in the same block, blindly choosing the second can skip a required redirect at the first. Similarly, an instruction after a predicted taken branch in the same line is wrong-path work, even if its instruction bytes were fetched together for convenience.</p>
+<p>Branch position metadata, instruction-boundary decoding, partial fetch masks, and multiple-prediction bandwidth help wide front ends handle this problem. A block predictor may emit a mask of predicted taken decisions and a selected target. An implementation that cannot inspect enough branch locations in one cycle can create front-end bubbles or require an overriding redirect. Throughput depends on sustained correct instruction delivery, not simply on the number of bytes the instruction cache can return.</p>
+
+</section>
+<section id="a-teaching-model-of-next-pc-selection" aria-labelledby="heading-a-teaching-model-of-next-pc-selection"><h2 id="heading-a-teaching-model-of-next-pc-selection">A Teaching Model of Next-PC Selection</h2>
+<p>The simplified function below shows why conditional direction, target availability, and fall-through length are separate inputs. It is not a full decoder and does not model exceptions, variable-length fetch packets, or indirect target authorization. The branch target for this example is assumed to have already been decoded or predicted. The function selects a next PC without claiming that the selected path is architecturally established.</p>
+<pre><code class="language-python">def choose_next_pc(pc, instruction_length, branch_kind, taken=None, target=None):
+    fallthrough = pc + instruction_length
+    if branch_kind == 'ordinary':
+        return fallthrough
+    if branch_kind == 'conditional':
+        if taken is None:
+            raise ValueError('direction prediction required')
+        if not taken:
+            return fallthrough
+    elif branch_kind not in ('jump', 'return', 'indirect'):
+        raise ValueError('unknown control transfer')
+    if target is None:
+        raise ValueError('taken target prediction required')
+    return target
+
+assert choose_next_pc(0x100, 4, 'ordinary') == 0x104
+assert choose_next_pc(0x100, 4, 'conditional', False) == 0x104
+assert choose_next_pc(0x100, 4, 'conditional', True, 0x180) == 0x180
+assert choose_next_pc(0x100, 4, 'return', target=0x90) == 0x90
+print('Next-PC predictions follow the selected control-transfer type')
+</code></pre>
+
+</section>
+<section id="predictor-access-latency-and-multi-level-designs" aria-labelledby="heading-predictor-access-latency-and-multi-level-designs"><h2 id="heading-predictor-access-latency-and-multi-level-designs">Predictor Access Latency and Multi-Level Designs</h2>
+<p>Prediction accuracy alone cannot measure front-end quality. A large, history-rich predictor may take more than one cycle to read, tag-match, or choose among candidate answers. If the fetch PC must be available each cycle, a fast front-end component can supply a provisional target while a more accurate component responds later. The later component can override earlier work when it has a different prediction, creating a recoverable redirect before the branch executes in the backend.</p>
+<p>Multi-level organizations distribute complexity: the fast path supplies timeliness, the deeper path supplies accuracy, and metadata tracks which guesses were made. Such designs require careful bookkeeping to avoid double training, duplicated branch records, or incorrect recovery when two redirections overlap. The BOOM NLP/BPD organization is a useful concrete example. It must not be generalized into a claim that all modern processors employ precisely two predictor stages or identical training points.</p>
+
+</section>
+<section id="prediction-confidence-and-selective-policies" aria-labelledby="heading-prediction-confidence-and-selective-policies"><h2 id="heading-prediction-confidence-and-selective-policies">Prediction Confidence and Selective Policies</h2>
+<p>Some predictors record confidence or use counter strength as a rough proxy for whether a guess is reliable. Low confidence can motivate fallback rules, alternative predictor selection, or selective throttling of expensive speculative activities. A confidence score does not make a branch outcome safe or known, and there may be cases in which choosing not to speculate is preferable. Such choices depend on workload, power policy, recovery cost, and the hardware's ability to stop or redirect fetch.</p>
+<p>Designing a confidence mechanism requires calibration on realistic branch histories and awareness of warmup and phase changes. A two-bit saturating counter is not a calibrated 0–100% probability estimate; its numerical values simply encode hysteresis states. Systems may also keep separate confidence for direction and target, since a confidently taken conditional branch can still have an uncertain target. High-confidence policy can be wrong under novel workloads, cross-thread interference, and adversarial training.</p>
+
+</section>
+<section id="predictor-training-and-update-timing" aria-labelledby="heading-predictor-training-and-update-timing"><h2 id="heading-predictor-training-and-update-timing">Predictor Training and Update Timing</h2>
+<p>A predictor learns by comparing a prior prediction with a resolved outcome. The update may be applied at execution, later at retirement, or through staged speculative and committed pathways. Early training improves responsiveness but risks introducing wrong-path information; commit-only training is more conservative but delays feedback and requires retaining metadata until retirement. Some systems update a direction table with correct-path resolved outcomes while separately repairing speculative history immediately after a redirect. The precise choice is an implementation detail.</p>
+<p>The BOOM documentation describes commit-stage updates using records retained in a fetch target queue. That is a specific design response to the need for correct-path training and metadata lifetime management. It should not be mistaken for a general rule that no branch prediction component ever changes before commit: speculative history, RAS content, and some table or replacement state may be updated earlier. Verification must identify each state element and the event that makes its update valid.</p>
+
+</section>
+<section id="speculative-global-history-and-checkpoints" aria-labelledby="heading-speculative-global-history-and-checkpoints"><h2 id="heading-speculative-global-history-and-checkpoints">Speculative Global History and Checkpoints</h2>
+<p>Suppose the GHR is <code>1011</code> and a new conditional branch is predicted taken. A four-bit shift-register update records <code>0111</code>; that <em>predicted</em> result helps the front end predict still-younger branches. If the branch later resolves not-taken, restoring the previous <code>1011</code> and shifting the correct zero yields <code>0110</code>. It is not enough to keep <code>0111</code>, because its incorrect last bit may influence future predictions. Nor should the recovery apply the actual bit to a history snapshot that already includes younger, wrong-path branches.</p>
+<pre><code class="language-python">def append_history(history, bit, width=4):
+    return ((history &lt;&lt; 1) | int(bit)) &amp; ((1 &lt;&lt; width) - 1)
+
+before = 0b1011
+speculative = append_history(before, True)
+repaired = append_history(before, False)
+assert speculative == 0b0111
+assert repaired == 0b0110
+assert speculative != repaired
+print('Predicted:', format(speculative, '04b'), 'repaired:', format(repaired, '04b'))
+</code></pre>
+<p>A correct design also accounts for older unresolved branches and branch checkpoints created after the mispredicted branch. Recovery restores a logically correct history prefix, incorporates the actual outcome, and discards all younger speculative contributions. Special flushes such as exceptions or replays may need a committed-history fallback even when no branch outcome directly caused the redirect.</p>
+
+</section>
+<section id="the-fetch-target-queue-and-prediction-metadata" aria-labelledby="heading-the-fetch-target-queue-and-prediction-metadata"><h2 id="heading-the-fetch-target-queue-and-prediction-metadata">The Fetch Target Queue and Prediction Metadata</h2>
+<p>A fetch-target queue (FTQ), or an equivalent tracking structure, can retain fetch-PC identities, predicted outcomes, target information, predictor indices, and other metadata associated with inflight instructions. The reason is temporal separation: a prediction occurs early, but a stable training update may not be ready until the relevant instructions resolve or retire. Recording the original index matters when speculative history or predictor tables have since changed; recomputing a lookup with today's context can select the wrong entry.</p>
+<p>An FTQ is not the same thing as a reorder buffer. The ROB tracks individual instructions and program-age ordering, whereas one FTQ entry may represent a fetch packet containing several instructions. Consequently the two structures can have different capacities and allocation/reclamation rules. The exact relationship is implementation-specific. A missing or exhausted FTQ slot can limit frontend progress even if ROB entries and execution resources remain available.</p>
+
+</section>
+<section id="predictor-checkpoints-rename-maps-and-recovery-boundaries" aria-labelledby="heading-predictor-checkpoints-rename-maps-and-recovery-boundaries"><h2 id="heading-predictor-checkpoints-rename-maps-and-recovery-boundaries">Predictor Checkpoints, Rename Maps, and Recovery Boundaries</h2>
+<p>A resolved misprediction often invalidates every younger instruction that depended on the predicted path, but the machine must preserve older work and correctly restore its state. Required recovery information can include a branch's next-PC target, speculative GHR and RAS information, rename-map mappings, physical-register allocation state, load/store queue cutoffs, and reorder-buffer age markers. Not every design copies all these structures for each branch; checkpointing, walking the ROB, transaction IDs, and undo logs can implement equivalent logical recovery.</p>
+<p>Recovery scope is critical. Restoring a rename-map checkpoint from before the mispredicted branch without incorporating legitimate older instructions would corrupt dependency versions. Conversely, retaining a younger wrong-path allocation risks physical-register leaks or false data dependencies. The correct recovery boundary is defined by <strong>instruction age and correctness</strong>, not by the physical location of a pipeline register. A fetch redirect alone does not establish complete pipeline recovery.</p>
+
+</section>
+<section id="branch-resolution-and-actual-target-checking" aria-labelledby="heading-branch-resolution-and-actual-target-checking"><h2 id="heading-branch-resolution-and-actual-target-checking">Branch Resolution and Actual Target Checking</h2>
+<p>At execution, a conditional branch compares operands under the ISA's signedness and width rules and computes its actual control-flow result. The machine must compare the resolved result against what fetch assumed. A direction mismatch, a target mismatch, or a missing prediction that required a later redirect can all incur cost. The actual target may be subject to alignment, privilege, and instruction-access checks under the ISA and implementation; a predictor hit never authorizes instruction execution.</p>
+<p>Resolving a branch can occur in a dedicated branch execution unit, a general integer unit, or an earlier stage for certain simple operations. A branch with a long dependency chain might resolve much later than a nearby independent branch. Out-of-order scheduling allows some branches to resolve before older instructions have committed. A redirect from a younger resolved branch may be superseded by an older misprediction or exception, so age-aware priority logic is essential.</p>
+
+</section>
+<section id="wrong-path-squashing-and-control-redirects" aria-labelledby="heading-wrong-path-squashing-and-control-redirects"><h2 id="heading-wrong-path-squashing-and-control-redirects">Wrong-Path Squashing and Control Redirects</h2>
+<p>On a misprediction, a control redirect sends fetch to the correct destination and a <strong>squash</strong> invalidates younger incorrect work. Squashing typically marks speculative instruction instances as canceled, removes or disables their outstanding execution eligibility, and prevents them from retiring. Existing results from an older correct-path instruction should remain usable. Different structures may need different cancellation mechanisms; a load request already sent to cache may have effects that cannot simply be reversed electrically.</p>
+<p>The word “flush” can mean discarding all pipeline work or only work younger than a boundary; it is too vague for a precise design review. Require the recovery trace to identify which instruction ages remain, which are discarded, and what happens to the ROB, rename map, issue queue, load/store queue, predictor history, and pending completion messages. A late result from a squashed operation must not write a physical register that has since been reassigned to another instruction.</p>
+
+</section>
+<section id="precise-exceptions-and-architectural-commitment" aria-labelledby="heading-precise-exceptions-and-architectural-commitment"><h2 id="heading-precise-exceptions-and-architectural-commitment">Precise Exceptions and Architectural Commitment</h2>
+<p>A branch predictor may speculatively fetch an instruction that would cause a page fault, illegal-instruction trap, or access exception if reached architecturally. If an older branch subsequently proves that instruction belonged to a wrong path, the speculative fault must not become an architectural exception. Precise retirement machinery ensures that a fault reaches architectural state only when it is on the valid path and all older instructions have satisfied commit requirements. The exact timing of detection and recording may differ from the timing of trap delivery.</p>
+<p>Wrong-path store operations are especially sensitive. A speculative store may calculate an address and data and occupy a store queue, but it must not become an irreversible architectural memory write simply because its address was computed. A design that commits a younger store before an older unresolved control dependency violates the required sequential semantics. A correct branch recovery procedure also clears or invalidates younger speculative stores and prevents stale acknowledgments from being treated as committed work.</p>
+
+</section>
+<section id="a-minimal-age-ordered-squash-model" aria-labelledby="heading-a-minimal-age-ordered-squash-model"><h2 id="heading-a-minimal-age-ordered-squash-model">A Minimal Age-Ordered Squash Model</h2>
+<p>This teaching model treats each inflight instruction as a record with increasing sequence numbers. A mispredicted branch at sequence 12 keeps all instructions through 12 and discards younger records. It does not itself simulate physical register allocation, dependency resolution, or the instruction cache. Real hardware may tag entries by ROB indices and epochs or other ordered identifiers; the conceptual rule is the same.</p>
+<pre><code class="language-python">inflight = [
+    {'seq': 10, 'kind': 'alu'},
+    {'seq': 11, 'kind': 'load'},
+    {'seq': 12, 'kind': 'branch'},
+    {'seq': 13, 'kind': 'wrong-path alu'},
+    {'seq': 14, 'kind': 'wrong-path store'},
+]
+branch_seq = 12
+survivors = [entry for entry in inflight if entry['seq'] &lt;= branch_seq]
+squashed = [entry for entry in inflight if entry['seq'] &gt; branch_seq]
+assert [x['seq'] for x in survivors] == [10, 11, 12]
+assert [x['seq'] for x in squashed] == [13, 14]
+assert all(x['kind'] != 'wrong-path store' for x in survivors)
+print('Squashed:', [x['seq'] for x in squashed])
+</code></pre>
+
+</section>
+<section id="speculation-beyond-control-flow" aria-labelledby="heading-speculation-beyond-control-flow"><h2 id="heading-speculation-beyond-control-flow">Speculation Beyond Control Flow</h2>
+<p>Control speculation predicts <em>where</em> instructions will be fetched, but out-of-order CPUs may speculate about <em>when</em> data dependencies permit execution. A load can be issued before an older store's address is known if a memory-dependence predictor expects no aliasing. If the addresses later overlap, the load and dependent younger instructions may need replay or squashing. Likewise, value prediction or execution of dependent operations using a predicted value can occur in some research or specialized designs, though it is not a universal commercial feature.</p>
+<p>These mechanisms may interact. A branch's condition might depend on a speculative load; a memory-order violation can make the previously computed branch outcome untrustworthy and force recovery even if direction prediction logic was internally consistent. Always distinguish <em>branch misprediction</em> from <em>memory-order mis-speculation</em>. They may use overlapping recovery machinery but differ in the violated assumption and the point from which work must restart.</p>
+
+</section>
+<section id="speculative-memory-access-and-cache-state" aria-labelledby="heading-speculative-memory-access-and-cache-state"><h2 id="heading-speculative-memory-access-and-cache-state">Speculative Memory Access and Cache State</h2>
+<p>Speculative loads may bring data into caches, fill translation structures, consume cache bandwidth, or influence replacement state before the load can retire. Even if a branch later squashes all associated instructions, restoring the architectural register and memory state is not equivalent to restoring every transient microarchitectural effect. Some caches and predictor components may retain state influenced by an instruction that never committed. Implementations can limit or partition some effects but usually cannot assume that branch recovery alone erases all timing observables.</p>
+<p>This distinction is foundational for side-channel analysis. The hardware must enforce privilege and access permissions architecturally, but transient operations can sometimes influence shared resources in ways observable through timing or contention. Not every speculative cache fill constitutes a security vulnerability, and not every CPU has identical behavior. Security conclusions require a specified adversary, processor version, privilege boundary, mitigation state, and measurement method.</p>
+
+</section>
+<section id="transient-execution-and-side-channel-risk" aria-labelledby="heading-transient-execution-and-side-channel-risk"><h2 id="heading-transient-execution-and-side-channel-risk">Transient Execution and Side-Channel Risk</h2>
+<p><strong>Transient execution</strong> means instructions execute during a period in which their results may later be discarded, for example after a branch misprediction or fault. Certain attacks exploit a difference between architectural rollback and microarchitectural persistence: secret-dependent transient activity can affect timing-visible structures even though no unauthorized architectural value is committed. Spectre-class branch-training attacks and several related techniques depend on details such as predictor sharing, speculative data access, and timing observability; the names alone do not establish exposure for a particular deployment.</p>
+<p>Safe engineering starts by identifying untrusted inputs and cross-domain interactions, then applying vendor-supported hardware, firmware, OS, compiler, and software controls as appropriate. Mitigations can include speculation barriers, control-flow hardening, predictor management, isolation, and data-dependent code restructuring, but their effectiveness and costs are processor- and threat-specific. A benchmark showing fewer branch misses is not a security evaluation. The specialized <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">side-channel article</a> covers the deeper security engineering.</p>
+
+</section>
+<section id="prediction-accuracy-branch-mpki-and-useful-work" aria-labelledby="heading-prediction-accuracy-branch-mpki-and-useful-work"><h2 id="heading-prediction-accuracy-branch-mpki-and-useful-work">Prediction Accuracy, Branch MPKI, and Useful Work</h2>
+<p><strong>Prediction accuracy</strong> is the fraction of evaluated predictions that match resolved outcomes, but it should be reported separately for direction and target and with an explicit denominator. For overall workload impact, engineers often calculate <strong>branch mispredictions per thousand retired instructions (branch MPKI)</strong>. This incorporates branch density and therefore better compares applications with different numbers of branches. It still does not reveal every wrong-target redirect, front-end bubble, or cost of recovery.</p>
+<p>If 1,000,000 instructions retire, 180,000 conditional branches are encountered, and 5,400 conditional branches are mispredicted, the conditional-branch MPKI is <code>5.4</code>; the conditional misprediction fraction is <code>5,400/180,000 = 3%</code>. A low fraction on a very branch-heavy workload may cause more lost cycles than a higher fraction on a branch-light workload. Counters must be interpreted with care: vendors can count predicted, resolved, retired, redirecting, or speculative events differently, and some events count wrong targets separately.</p>
+<pre><code class="language-python">instructions = 1_000_000
+conditional_branches = 180_000
+wrong = 5_400
+misprediction_rate = wrong / conditional_branches
+mpki = wrong * 1000 / instructions
+assert abs(misprediction_rate - 0.03) &lt; 1e-12
+assert abs(mpki - 5.4) &lt; 1e-12
+print('rate:', f'{misprediction_rate:.1%}', 'branch MPKI:', mpki)
+</code></pre>
+
+</section>
+<section id="cpi-penalty-and-the-cost-of-a-bad-prediction" aria-labelledby="heading-cpi-penalty-and-the-cost-of-a-bad-prediction"><h2 id="heading-cpi-penalty-and-the-cost-of-a-bad-prediction">CPI Penalty and the Cost of a Bad Prediction</h2>
+<p>A common analytical approximation for extra cycles per retired instruction is</p>
+<p><strong>Branch penalty model:</strong> <code>ΔCPI<sub>branch</sub> ≈ f<sub>b</sub> × p<sub>m</sub> × L<sub>m</sub></code>.</p>
+
+<p>where <code>f_b</code> is the dynamic branch fraction, <code>p_m</code> is the relevant misprediction probability, and <code>L_m</code> is the <em>effective</em> cycles lost per misprediction. The penalty must be defined under the studied machine model. If recovery overlaps unrelated stalls, the effective value can be smaller than a simple pipeline-depth estimate; if a redirect drains a wide instruction window or incurs further fetch misses, it may be larger. Do not add this term blindly to a measured CPI that already includes branch effects.</p>
+<p>For <code>f_b=0.20</code>, <code>p_m=0.05</code>, and <code>L_m=12</code>, the idealized contribution is <code>0.12 CPI</code>. If a model's baseline is <code>0.85 CPI</code> without this contribution and all other factors are held fixed, the resulting estimate is <code>0.97 CPI</code>. Those numbers illustrate sensitivity, not the performance of any commercial CPU.</p>
+<pre><code class="language-python">def branch_cpi_fraction(branch_fraction, miss_fraction, effective_penalty):
+    assert 0 &lt;= branch_fraction &lt;= 1
+    assert 0 &lt;= miss_fraction &lt;= 1
+    assert effective_penalty &gt;= 0
+    return branch_fraction * miss_fraction * effective_penalty
+
+penalty = branch_cpi_fraction(.20, .05, 12)
+assert abs(penalty - .12) &lt; 1e-12
+assert abs(.85 + penalty - .97) &lt; 1e-12
+print('Illustrative added CPI:', penalty)
+</code></pre>
+
+</section>
+<section id="recovery-latency-and-flush-depth" aria-labelledby="heading-recovery-latency-and-flush-depth"><h2 id="heading-recovery-latency-and-flush-depth">Recovery Latency and Flush Depth</h2>
+<p>The apparent pipeline depth is only one contributor to a wrong-path cost. A branch must receive its operands, execute, send a redirect, invalidate younger work, restore prediction and rename state, request correct-path instructions, and refill the path toward retirement. Some of these tasks overlap; some may be gated by cache or instruction-translation latency. A redirect initiated at decode can differ from one initiated at a late execution stage, and an instruction that depends on a long-latency load can delay branch resolution substantially.</p>
+<p>A useful trace should record the sequence from prediction to resolution to first correct-path fetch, issue, and retirement, rather than reporting a single fixed “branch penalty” without a definition. Performance investigators should distinguish the cost of a prediction <em>being wrong</em> from the counterfactual throughput that the machine could have achieved with perfect predictions under the same workload and other bottlenecks. The latter often requires simulation or a carefully controlled analytical model.</p>
+
+</section>
+<section id="predictor-storage-budget-and-energy-cost" aria-labelledby="heading-predictor-storage-budget-and-energy-cost"><h2 id="heading-predictor-storage-budget-and-energy-cost">Predictor Storage Budget and Energy Cost</h2>
+<p>Prediction structures consume SRAM or flip-flop bits, associative tags, update ports, history checkpoints, and routing energy. A design that reduces branch MPKI can still be inferior if it increases front-end timing, power draw, silicon area, or verification cost disproportionately. Comparisons should account for tables beyond the nominal direction counters, including tags, selector state, indirect-target entries, BTB, RAS, history snapshots, and update metadata. Equating “a 16-KiB predictor” with only the size of its two-bit counters can materially understate a complete implementation.</p>
+<p>Power matters especially in devices that operate mostly at low instruction throughput. Keeping a large predictor active may draw energy for little marginal speed benefit in some phases. Designs can use banking, selective access, clock gating, confidence-based policies, or smaller fast predictors with delayed overrides. Reducing energy consumption without corrupting speculative state requires correctly handling inactive banks, partial updates, reset, and wakeup timing.</p>
+
+</section>
+<section id="multi-core-and-smt-predictor-sharing" aria-labelledby="heading-multi-core-and-smt-predictor-sharing"><h2 id="heading-multi-core-and-smt-predictor-sharing">Multi-Core and SMT Predictor Sharing</h2>
+<p>Multiple cores generally have physically distinct prediction contexts unless an implementation deliberately shares resources. Within one core, simultaneous multithreading (SMT) can cause branches from different hardware threads to contend for shared predictor tables, ports, capacity, or branch-history mechanisms. Some state is per thread, some may be shared, and exact partitioning is implementation-specific. This interference can change accuracy and recovery performance even when each program's instruction sequence is unchanged.</p>
+<p>Isolation is also important. An attacker running on one context may attempt to influence prediction state observed by another context if resources or history are shared in a relevant way. Scheduler placement, privilege transitions, predictor flushing or partitioning, and hardware mitigation support may change this risk. Avoid a blanket statement that every context switch either completely resets prediction or leaves all predictors shared. The applicable architecture and vendor guidance determine the available and recommended controls.</p>
+
+</section>
+<section id="predictor-warmup-phase-changes-and-reproducibility" aria-labelledby="heading-predictor-warmup-phase-changes-and-reproducibility"><h2 id="heading-predictor-warmup-phase-changes-and-reproducibility">Predictor Warmup, Phase Changes, and Reproducibility</h2>
+<p>A dynamic predictor begins with initialized counters and empty or reset state. Its first encounters with a branch may be substantially less accurate than later predictions. A measurement starting from a cold cache and cold predictor cannot be directly compared with one collected after a long warmed-up simulation. Workloads also change phases: a server may shift from short request handlers to batch processing, and a loop's trip count may vary between inputs. Static instruction counts do not reveal those transitions.</p>
+<p>Experimental design should specify warmup instructions, observation interval, inputs, random seeds, compiler flags, runtime scheduling, and simulator model. Branch-trace replay can isolate predictor behavior but omits timing feedback and some speculation interactions unless the replay harness models them. Where possible, report both the accuracy over committed branches and the time-varying accuracy by phase, including the first-use cold period.</p>
+
+</section>
+<section id="branch-prediction-counters-and-profiling-boundaries" aria-labelledby="heading-branch-prediction-counters-and-profiling-boundaries"><h2 id="heading-branch-prediction-counters-and-profiling-boundaries">Branch Prediction Counters and Profiling Boundaries</h2>
+<p>Hardware performance counters are invaluable for identifying branch-heavy hot spots, but counter naming and semantics differ across vendors and CPU models. Events might report retired branch instructions, retired mispredicted branches, branch restarts, speculative machine clears, front-end stalls, or target prediction failures. A counter that includes speculative wrong-path events does not have the same denominator as retired instructions. Multiplexed sampling may introduce scaling and uncertainty if the hardware cannot count all requested events concurrently.</p>
+<p>Investigate a representative workload with a known binary build, stable CPU affinity when appropriate, and an adequate sample duration. Relate counters to user-observable time and throughput; a reduction in misses that coincides with more memory stalls may not improve end-to-end latency. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a> article owns the broader performance-evaluation methodology.</p>
+
+</section>
+<section id="a-repeatable-predictor-trace-harness" aria-labelledby="heading-a-repeatable-predictor-trace-harness"><h2 id="heading-a-repeatable-predictor-trace-harness">A Repeatable Predictor Trace Harness</h2>
+<p>For a small predictor, a deterministic trace can validate that predictions are made <strong>before</strong> the corresponding outcome is learned, that counters update with saturation, and that the reported rate uses the correct denominator. The harness below supports multiple branches with direct-mapped bimodal entries. It explicitly trains on the same trace that it measures, illustrating warmup behavior rather than a holdout prediction study. The branch PC is an identifier in this teaching model, not a real instruction-cache address.</p>
+<pre><code class="language-python">def replay_bimodal(trace, size=16, initial=1):
+    assert size &gt; 0 and size &amp; (size - 1) == 0
+    table = [initial] * size
+    correct = 0
+    for pc, actual in trace:
+        idx = (pc &gt;&gt; 2) &amp; (size - 1)
+        guess = table[idx] &gt;= 2
+        correct += (guess == actual)
+        table[idx] = min(3, table[idx] + 1) if actual else max(0, table[idx] - 1)
+    return correct, table
+
+trace = [(0x100, True)] * 5 + [(0x108, False)] * 5
+hits, table = replay_bimodal(trace)
+assert hits == 9  # first taken prediction misses; stable not-taken is correct
+assert len(table) == 16
+print('Measured:', hits, '/', len(trace))
+</code></pre>
+
+</section>
+<section id="validation-against-a-functional-isa-model" aria-labelledby="heading-validation-against-a-functional-isa-model"><h2 id="heading-validation-against-a-functional-isa-model">Validation Against a Functional ISA Model</h2>
+<p>A branch predictor can be excellent at guessing but still fail the CPU's correctness requirements if redirects or traps are mishandled. To verify a core, compare committed instruction results against a trusted architectural reference: PC, destination register writes, memory-visible effects, exceptions, and order-sensitive operations. Wrong-path instructions must not appear as committed trace entries. Random instruction streams, directed branch tests, and tests with dependent operands can reveal cases that simple prediction-accuracy testing misses.</p>
+<p>A particularly useful directed case places a trap-producing instruction immediately after a branch that is predicted not taken but actually taken. The trap must disappear when the instruction is squashed. Another case places a store on the wrong path and confirms that no architectural write survives. A third uses nested unresolved branches to ensure that recovery from an older branch invalidates a younger redirect. These checks exercise the correctness of the <em>integration</em> rather than just the counter tables.</p>
+
+</section>
+<section id="predictor-state-recovery-invariants" aria-labelledby="heading-predictor-state-recovery-invariants"><h2 id="heading-predictor-state-recovery-invariants">Predictor-State Recovery Invariants</h2>
+<p>A design review should state its invariants explicitly. Every architectural retirement must belong to the validated path; every redirect must carry a correct age boundary; every younger wrong-path instruction must lose commit eligibility; and each surviving branch's history context must reflect only the intended prefix. Predictor bookkeeping records must be reclaimed exactly once, and a reallocated checkpoint or FTQ slot must not accept an old completion packet. These invariants are testable with assertions and bounded state exploration in teaching models.</p>
+<table>
+<thead>
+<tr>
+  <th>State object</th>
+  <th>Prediction-time change</th>
+  <th>Recovery obligation</th>
+  <th>Architectural consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Fetch PC</td>
+  <td>Points along tentative next path</td>
+  <td>Redirect to correct address</td>
+  <td>No wrong-path retirement</td>
+</tr>
+<tr>
+  <td>GHR / local history</td>
+  <td>Often speculative</td>
+  <td>Restore relevant snapshot</td>
+  <td>Prediction quality and security, not ISA result</td>
+</tr>
+<tr>
+  <td>RAS</td>
+  <td>May push/pop speculatively</td>
+  <td>Undo or reconstruct wrong-path changes</td>
+  <td>Return prediction only</td>
+</tr>
+<tr>
+  <td>Rename map</td>
+  <td>Allocates speculative versions</td>
+  <td>Restore age-correct producer mapping</td>
+  <td>Correct operand dependencies</td>
+</tr>
+<tr>
+  <td>ROB and issue structures</td>
+  <td>Contain tentative instructions</td>
+  <td>Squash younger incorrect entries</td>
+  <td>Precise in-order retirement</td>
+</tr>
+<tr>
+  <td>Store queue</td>
+  <td>Holds speculative stores</td>
+  <td>Prevent wrong-path commitment</td>
+  <td>No incorrect memory write</td>
+</tr>
+<tr>
+  <td>Cache / translation structures</td>
+  <td>May be accessed transiently</td>
+  <td>No universal full rollback guarantee</td>
+  <td>Potential timing effects</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="formal-properties-for-a-simplified-branch-machine" aria-labelledby="heading-formal-properties-for-a-simplified-branch-machine"><h2 id="heading-formal-properties-for-a-simplified-branch-machine">Formal Properties for a Simplified Branch Machine</h2>
+<p>A small formal model can distinguish <em>safety</em> from <em>performance</em>. Safety includes “no squashed instruction retires” and “the committed PC sequence matches the architectural program semantics.” Progress properties require careful assumptions about fair resource service, valid instruction memory, and faults. “Every predicted branch is eventually resolved” is not an unconditional liveness property if the instruction can be canceled by an older misprediction or if the machine halts. A realistic proof states exactly which inflight instructions and environmental assumptions are covered.</p>
+<p>Formal state exploration faces a combinatorial problem: predictor counters, history bits, pipeline slots, ROB entries, and memory states multiply the number of possible configurations. Use abstraction and compositional invariants where justified, but verify that the abstraction retains the branch-age relationships under study. Randomized testing remains complementary; neither a bounded proof of a simplified model nor a million passing simulation cycles establishes every property of a production CPU.</p>
+
+</section>
+<section id="implementation-pitfall-training-with-wrong-path-outcomes" aria-labelledby="heading-implementation-pitfall-training-with-wrong-path-outcomes"><h2 id="heading-implementation-pitfall-training-with-wrong-path-outcomes">Implementation Pitfall: Training With Wrong-Path Outcomes</h2>
+<p>An update is meaningful only when the designer knows whether the outcome was valid for the prediction state being modified. A branch can execute on a path that later proves incorrect because of an older branch. Training global predictor tables on such a younger branch may encode never-architecturally-reached control flow. This can degrade prediction accuracy and complicate security analysis. Some research and implementation techniques intentionally allow certain speculative updates and repair them; the required contract must be explicit rather than assumed.</p>
+<p>A training record should retain an age identifier, the lookup context needed to update the intended table entry, the outcome, and validity or squash status. An update queue that loses its connection to branch age can silently train on obsolete packets. Commit-stage training is one solution, but speculative history still needs to be refreshed promptly. Distinguish confirmed outcome bits from the predictor's last guess and from the history state used <em>at lookup time</em>.</p>
+
+</section>
+<section id="implementation-pitfall-incomplete-return-stack-rollback" aria-labelledby="heading-implementation-pitfall-incomplete-return-stack-rollback"><h2 id="heading-implementation-pitfall-incomplete-return-stack-rollback">Implementation Pitfall: Incomplete Return-Stack Rollback</h2>
+<p>A RAS often changes on call and return recognition <em>before</em> the associated instructions retire. Suppose a mispredicted branch temporarily follows a path containing a call that pushes a predicted return address. If the processor restores the fetch PC but leaves that speculative RAS push behind, a later legitimate return can read the wrong top entry, producing another misprediction even though the original erroneous call never retired. A correct recovery must restore, recompute, or otherwise insulate return prediction state.</p>
+<p>This is a predictor-correctness and performance problem independent of architectural call-stack correctness. RAS state can be restored with checkpoints, reversible push/pop logs, or other implementation schemes. Underflow, overflow, unusual tail calls, recursive call depth, and concurrent thread contexts deserve directed tests. Never use a RAS match as proof that control flow is authorized; the real return target and protection rules remain authoritative.</p>
+
+</section>
+<section id="implementation-pitfall-wrong-path-completion-after-reuse" aria-labelledby="heading-implementation-pitfall-wrong-path-completion-after-reuse"><h2 id="heading-implementation-pitfall-wrong-path-completion-after-reuse">Implementation Pitfall: Wrong-Path Completion After Reuse</h2>
+<p>A long-latency instruction may complete after a misprediction has already caused its original ROB or physical-register resources to be reclaimed. If another instruction reuses those identifiers, a stale completion can corrupt the new instruction's data or readiness state unless the completion is distinguished by generation, epoch, or another validity check. The same pattern affects branch-update packets and memory responses. Squashing a queue entry does not necessarily cancel a transaction already issued across a bus.</p>
+<p>Engineering controls should include age-tag or epoch integrity checks, correct arbitration between squash and completion, and explicit behavior for retries and exceptions. Verification should target simultaneous events at cycle boundaries: a branch resolves wrong while a load completes; a checkpoint is freed while a later branch allocates; a store-data response arrives after cancellation. These are integration hazards that remain even if the direction predictor's algorithm is mathematically correct.</p>
+
+</section>
+<section id="implementation-pitfall-assuming-prediction-is-authorization" aria-labelledby="heading-implementation-pitfall-assuming-prediction-is-authorization"><h2 id="heading-implementation-pitfall-assuming-prediction-is-authorization">Implementation Pitfall: Assuming Prediction Is Authorization</h2>
+<p>A predicted next address is a performance hint, not a grant to execute privileged instructions or access secret data. Translation, privilege, execute permission, control-flow integrity, and other architectural rules apply independently. The machine may fetch or perform limited transient work while checks are pending under implementation-specific rules, but architectural results and traps must obey the ISA. Real-world side-channel mitigation may require additional restrictions on information flow beyond mere prevention of unauthorized retirement.</p>
+<p>This distinction also applies to application code: a bounds-check branch being <em>predicted</em> in one direction does not justify treating the protected memory access as secure against transient leakage. Software-level branch patterns may be compiled, optimized, vectorized, or transformed, and mitigation guidance varies by target processor. Do not invent an architecture-independent “always safe after a branch” rule. Follow supported, current vendor security recommendations for the actual environment.</p>
+
+</section>
+<section id="implementation-pitfall-overfitting-predictor-benchmarks" aria-labelledby="heading-implementation-pitfall-overfitting-predictor-benchmarks"><h2 id="heading-implementation-pitfall-overfitting-predictor-benchmarks">Implementation Pitfall: Overfitting Predictor Benchmarks</h2>
+<p>Predictor proposals sometimes report large improvements on a narrow selection of traces, then disappoint in complete processor execution. This can happen because the model ignores access latency, BTB misses, front-end redirects, table contention, wrong-path pollution, and the effect of instruction-cache stalls. A predictor that looks accurate in isolation can also change program timing enough to alter branch interleaving and cache behavior, especially under SMT and multithreaded workloads.</p>
+<p>A sound evaluation combines trace-driven predictor experiments, cycle-aware simulation, realistic workload suites, and power/area estimates where feasible. Vary input distributions and execution phases. Disclose all table and checkpoint bits, how statistics are counted, whether warmup is included, and whether observed gains come from fewer wrong directions, better targets, faster prediction availability, or quicker recovery. No single branch-accuracy percentage captures the complete design trade-off.</p>
+
+</section>
+<section id="applied-scenario-1-counting-loop-exit-behavior" aria-labelledby="heading-applied-scenario-1-counting-loop-exit-behavior"><h2 id="heading-applied-scenario-1-counting-loop-exit-behavior">Applied Scenario 1: Counting-Loop Exit Behavior</h2>
+<p>A data-processing loop runs for a known but varying number of iterations. Its back-edge conditional branch is taken repeatedly and not taken on final exit. An always-taken predictor gets nearly every iteration correct except the exit; a two-bit counter usually handles the repeated taken pattern but may still miss the exit. If the same loop runs again, the two-bit counter often remains in a taken-predicting state, avoiding the one-bit predictor's additional first-iteration reversal. The exact outcome depends on intervening branch traffic and any predictor-table aliasing.</p>
+<p>An engineer should start by collecting the distribution of trip counts. If the loop usually executes once, the intuition that “backward branches are taken” may be wrong. A loop predictor may improve the exit prediction when trip counts repeat, but it requires training and overhead. Compare observed branch MPKI, elapsed time, and code layout rather than presuming a particular hardware family or compiler optimization.</p>
+
+</section>
+<section id="applied-scenario-2-data-dependent-conditional-work" aria-labelledby="heading-applied-scenario-2-data-dependent-conditional-work"><h2 id="heading-applied-scenario-2-data-dependent-conditional-work">Applied Scenario 2: Data-Dependent Conditional Work</h2>
+<p>A request handler tests an input property before performing additional work. Most requests may follow one path, but a burst of exceptional inputs changes the taken fraction. A two-bit counter can adapt, though hysteresis may temporarily produce wrong guesses during the transition. Local-history approaches may be useful if outcomes follow a stable repeating pattern, while global-history correlation may help if the earlier request-state branch predicts the current branch. Which predictor wins depends on the actual dynamic trace.</p>
+<p>The performance analysis should separate throughput and tail latency. Rare high-cost mispredictions might matter to p99 latency more than their aggregate accuracy share implies, while expensive memory operations could dominate regardless. If the branch guards sensitive memory access, security review also needs to consider transient execution; performance regularity does not prove that speculative paths are safe.</p>
+
+</section>
+<section id="applied-scenario-3-virtual-dispatch-and-indirect-calls" aria-labelledby="heading-applied-scenario-3-virtual-dispatch-and-indirect-calls"><h2 id="heading-applied-scenario-3-virtual-dispatch-and-indirect-calls">Applied Scenario 3: Virtual Dispatch and Indirect Calls</h2>
+<p>A language runtime dispatches interface calls through one indirect-call instruction with multiple possible targets. If one object type dominates, a last-target BTB may be effective; when types alternate, target prediction becomes more difficult even though the branch is unconditionally taken. A history-sensitive indirect predictor may capture correlations between preceding code and the target class. A compiler may sometimes devirtualize or specialize code, altering the control-flow profile, but those optimizations have size and maintenance trade-offs.</p>
+<p>Measure wrong-target redirects separately from conditional-direction misses where possible. Warmup matters when the service first encounters a new object type or code version. Treat cross-privilege or cross-process target prediction as security-sensitive and follow the platform's mitigations; a correct virtual-call target according to a software type rule is distinct from a target guessed transiently by hardware.</p>
+
+</section>
+<section id="applied-scenario-4-deeply-nested-function-calls" aria-labelledby="heading-applied-scenario-4-deeply-nested-function-calls"><h2 id="heading-applied-scenario-4-deeply-nested-function-calls">Applied Scenario 4: Deeply Nested Function Calls</h2>
+<p>A parser or interpreter performs many nested calls and returns. A return-address stack can predict ordinary returns accurately because calls and returns usually form a nested LIFO sequence. Very deep nesting, nonlocal unwinding, unusual coroutine transfers, or speculative mispredictions can exceed or disturb the RAS's effective state. The resulting wrong-return targets increase front-end redirects even if conditional branches elsewhere are easy to predict.</p>
+<p>Investigate the depth distribution and the actual control transfers generated by the compiler. A tail-call optimization may remove a return in one place and change the pattern without changing program semantics. The software stack protects the correct return address architecturally, while the RAS only supplies speculative targets. Correct recovery should reestablish a useful prediction context after wrongly fetched calls and returns.</p>
+
+</section>
+<section id="applied-scenario-5-wide-out-of-order-server-core" aria-labelledby="heading-applied-scenario-5-wide-out-of-order-server-core"><h2 id="heading-applied-scenario-5-wide-out-of-order-server-core">Applied Scenario 5: Wide Out-of-Order Server Core</h2>
+<p>A hypothetical eight-wide machine fetches several instructions per cycle and has a large speculative window. This can expose substantial instruction-level parallelism, but a late branch misprediction may discard a large number of younger decoded and executed instructions. Merely increasing issue width does not guarantee better performance: the front end must deliver enough correct-path instructions, and the branch predictor must have the throughput to cover multiple branch positions per fetch group.</p>
+<p>Review branch MPKI, average effective recovery penalty, front-end starvation, ROB occupancy, and branch-resolution latency together. Model the effect of a 20% reduction in miss frequency against a plausible change in predictor access time and energy. The decision should consider total system workload throughput rather than a standalone predictor accuracy number. If SMT shares prediction tables, repeat the experiment under co-running workloads.</p>
+
+</section>
+<section id="applied-scenario-6-isolation-and-predictor-state-interference" aria-labelledby="heading-applied-scenario-6-isolation-and-predictor-state-interference"><h2 id="heading-applied-scenario-6-isolation-and-predictor-state-interference">Applied Scenario 6: Isolation and Predictor-State Interference</h2>
+<p>A multitenant system switches frequently between unrelated security domains. Even when committed architectural registers and page tables are correctly managed, the processor may retain or share predictor and cache state depending on its design. One workload's branch history can interfere with another's prediction accuracy; in some security scenarios, such shared state may also expose or influence timing behavior. Predictors are not necessarily flushed on every ordinary context switch.</p>
+<p>An engineering assessment names the specific processor, microcode/firmware revision, OS and hypervisor policies, and threat model. It distinguishes ordinary performance interference from demonstrated cross-domain disclosure risk and relies on up-to-date vendor mitigation guidance. If changes to speculative execution controls reduce performance, quantify the impact using representative workloads and report that trade-off separately from the security objective.</p>
+
+</section>
+<section id="ten-gate-branch-prediction-engineering-framework" aria-labelledby="heading-ten-gate-branch-prediction-engineering-framework"><h2 id="heading-ten-gate-branch-prediction-engineering-framework">Ten-Gate Branch-Prediction Engineering Framework</h2>
+<p>A defensible prediction design or diagnostic effort should pass the following gates in order. Some gates concern ISA correctness, others concern cost and measurable performance. Neither group can substitute for the other.</p>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Engineering question</th>
+  <th>Required evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. Define architecture</td>
+  <td>Which branch forms and address rules does the ISA require?</td>
+  <td>Branch, call, return and exception semantics</td>
+</tr>
+<tr>
+  <td>2. Define fetch contract</td>
+  <td>How many instructions or fetch blocks require next-PC decisions per cycle?</td>
+  <td>Front-end width, instruction encoding and timing budget</td>
+</tr>
+<tr>
+  <td>3. Profile workload</td>
+  <td>Which branches dominate wrong-path work?</td>
+  <td>Direction/target events, MPKI, phase and warmup description</td>
+</tr>
+<tr>
+  <td>4. Select predictor families</td>
+  <td>Which history correlations justify each table or specialist?</td>
+  <td>Trace studies and storage-cost accounting</td>
+</tr>
+<tr>
+  <td>5. Validate timing</td>
+  <td>Can the predictor supply usable targets at the required stage?</td>
+  <td>Access latency and override/refetch measurements</td>
+</tr>
+<tr>
+  <td>6. Define speculative state</td>
+  <td>Which histories, RAS positions and metadata change before resolution?</td>
+  <td>Checkpoint and update-lifecycle specification</td>
+</tr>
+<tr>
+  <td>7. Prove recovery</td>
+  <td>Does a wrong path leave no invalid architectural effects?</td>
+  <td>Age-aware squash assertions and differential traces</td>
+</tr>
+<tr>
+  <td>8. Address isolation</td>
+  <td>Can prediction-state sharing cross an important trust boundary?</td>
+  <td>Threat model and applicable mitigation guidance</td>
+</tr>
+<tr>
+  <td>9. Compare total cost</td>
+  <td>Do lower misses outweigh storage, power, timing and area cost?</td>
+  <td>End-to-end performance and energy evaluation</td>
+</tr>
+<tr>
+  <td>10. Revalidate deployments</td>
+  <td>Do software, compiler and hardware revisions alter the result?</td>
+  <td>Repeatable regression tests and counter definitions</td>
+</tr>
+</tbody>
+</table>
+<p>The framework is iterative. A failure at the performance gate can motivate a smaller predictor; a failure at recovery or isolation is not an acceptable trade-off for a modest IPC improvement. All numerical targets should be tied to the intended workload and technology constraints.</p>
+
+</section>
+<section id="a-worked-design-selection-comparison" aria-labelledby="heading-a-worked-design-selection-comparison"><h2 id="heading-a-worked-design-selection-comparison">A Worked Design-Selection Comparison</h2>
+<p>Consider two hypothetical predictors. Model A has a branch miss fraction of 6%, a nominal 10-cycle effective penalty, and no extra front-end delay. Model B reduces misses to 3% but adds a 0.02 CPI cost due to occasional delayed overrides and greater access complexity. Assume a 20% conditional branch fraction and other factors unchanged. The branch contribution for A is <code>0.20 × 0.06 × 10 = 0.12 CPI</code>; for B the miss term is <code>0.20 × 0.03 × 10 = 0.06 CPI</code>, plus <code>0.02 CPI</code> of overhead, totaling <code>0.08 CPI</code>. Under those explicitly simplified assumptions, B wins by <code>0.04 CPI</code>.</p>
+<pre><code class="language-python">base = 0.90
+branch_fraction = 0.20
+penalty = 10
+option_a = base + branch_fraction * .06 * penalty
+option_b = base + branch_fraction * .03 * penalty + .02
+assert abs(option_a - 1.02) &lt; 1e-12
+assert abs(option_b - .98) &lt; 1e-12
+assert option_b &lt; option_a
+print('Illustrative CPI A/B:', round(option_a, 2), round(option_b, 2))
+</code></pre>
+<p>The calculation does not establish an energy winner, because B may consume more dynamic or static power. Nor does it prove that both predictors would face the same penalty distribution: better prediction may alter other pipeline occupancy. A real design comparison should use measured or cycle-accurate modeling under consistent constraints and include frequency, area, energy, and security requirements.</p>
+
+</section>
+<section id="common-misconceptions-and-corrective-principles" aria-labelledby="heading-common-misconceptions-and-corrective-principles"><h2 id="heading-common-misconceptions-and-corrective-principles">Common Misconceptions and Corrective Principles</h2>
+<table>
+<thead>
+<tr>
+  <th>Misconception</th>
+  <th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>“Taken/not-taken accuracy gives the next PC.”</td>
+  <td>Taken branches also need a correct target at the right time.</td>
+</tr>
+<tr>
+  <td>“Speculation means changing architectural behavior.”</td>
+  <td>Incorrect work must be prevented from committing; the ISA contract remains intact.</td>
+</tr>
+<tr>
+  <td>“The BTB and direction table are interchangeable.”</td>
+  <td>One predicts locations; the other predicts branch decisions, though implementations may combine storage.</td>
+</tr>
+<tr>
+  <td>“A larger predictor always improves performance.”</td>
+  <td>Timing, energy, aliasing, workload and recovery effects all matter.</td>
+</tr>
+<tr>
+  <td>“A branch is correct once execution finishes.”</td>
+  <td>Retirement and older faults still determine architectural commitment.</td>
+</tr>
+<tr>
+  <td>“Squash erases every hardware effect.”</td>
+  <td>Caches and predictors may retain transient changes.</td>
+</tr>
+<tr>
+  <td>“Every CPU uses the same recovery pipeline.”</td>
+  <td>Checkpoint and update designs differ across implementations.</td>
+</tr>
+<tr>
+  <td>“A correct RAS prediction makes the return safe.”</td>
+  <td>Target prediction is not an architectural authorization check.</td>
+</tr>
+<tr>
+  <td>“A low branch MPKI proves high overall IPC.”</td>
+  <td>Memory, bandwidth, frontend and execution bottlenecks can dominate.</td>
+</tr>
+<tr>
+  <td>“A passing functional test proves no speculative leakage.”</td>
+  <td>Side-channel risk needs a separate threat model and measurements.</td>
+</tr>
+</tbody>
+</table>
+<p>Use these distinctions when reviewing vendor slides, simulator traces, or student diagrams. A simplified predictor can be pedagogically valuable if its assumptions are explicit, but it should not be presented as a faithful model of a particular commercial microarchitecture without supporting documentation.</p>
+
+</section>
+<section id="guided-exercise-1-two-bit-counter-trace" aria-labelledby="heading-guided-exercise-1-two-bit-counter-trace"><h2 id="heading-guided-exercise-1-two-bit-counter-trace">Guided Exercise 1: Two-Bit Counter Trace</h2>
+<p>Start a two-bit saturating counter in state <code>1</code> (weakly not-taken) and apply the outcomes <code>T, T, N, T, T, N, N, N</code>. Before each outcome, record the predicted direction; after each, record the updated counter. Compute the number of incorrect predictions and explain which result crosses the threshold between not-taken and taken. Then repeat with initial states 0 and 3. The exercise should make clear why a two-bit predictor responds differently to one surprising result depending on prior confidence.</p>
+<p><strong>Verification guide:</strong> Predictions are determined by the counter <em>before</em> training. Saturation at 0 and 3 must be enforced. A sequence of updates that never predicts before observing the same outcome is not a prediction experiment; it accidentally uses perfect hindsight. Once the single-branch trace is correct, interleave a second branch in the same direct-mapped entry to demonstrate aliasing.</p>
+
+</section>
+<section id="guided-exercise-2-pc-index-and-gshare-correlation" aria-labelledby="heading-guided-exercise-2-pc-index-and-gshare-correlation"><h2 id="heading-guided-exercise-2-pc-index-and-gshare-correlation">Guided Exercise 2: PC Index and Gshare Correlation</h2>
+<p>Construct eight control-flow records with branch PCs <code>0x100</code> and <code>0x108</code> and outcomes chosen to depend on the preceding branch. Compare (a) a two-bit bimodal predictor using only PC index and (b) a gshare predictor with a two-bit global history and the same counter budget. Show each lookup index and state transition. Identify the point where global history helps or hurts. Repeat after swapping the PC addresses so the XOR mapping changes.</p>
+<p><strong>Verification guide:</strong> Keep the total number of counter bits comparable, initialize each model identically, and update history in dynamic outcome order. Treat any predictor-history snapshots used for speculation as additional state, not as a free resource. Do not claim that gshare is universally superior from one constructed example; this exercise only demonstrates the value and cost of contextual indexing.</p>
+
+</section>
+<section id="guided-exercise-3-wrong-path-recovery-trace" aria-labelledby="heading-guided-exercise-3-wrong-path-recovery-trace"><h2 id="heading-guided-exercise-3-wrong-path-recovery-trace">Guided Exercise 3: Wrong-Path Recovery Trace</h2>
+<p>Model five in-flight instructions ordered <code>I0</code> through <code>I4</code>. Let <code>I1</code> be a branch predicted not taken but actually taken; <code>I2</code> and <code>I3</code> are wrong-path ALU instructions, and <code>I4</code> is a wrong-path store. Record the fetch PC, rename map, ROB contents, and memory-effect permissions before and after resolution. Explain why <code>I0</code> may remain committed, <code>I1</code> may subsequently retire, and <code>I2–I4</code> may not retire or cause the store to become visible.</p>
+<p><strong>Verification guide:</strong> The branch's own correct architectural behavior is retained while younger incorrect work is discarded. Restore speculative producer versions consistently. If the branch's GHR snapshot records history from before its prediction, incorporate its <em>actual</em> outcome after rollback. Include a late-response case to show that squashed results cannot be mistaken for newly allocated instruction tags.</p>
+
+</section>
+<section id="guided-exercise-4-branch-mpki-and-cpi-sensitivity" aria-labelledby="heading-guided-exercise-4-branch-mpki-and-cpi-sensitivity"><h2 id="heading-guided-exercise-4-branch-mpki-and-cpi-sensitivity">Guided Exercise 4: Branch MPKI and CPI Sensitivity</h2>
+<p>For a hypothetical workload with 500 million retired instructions, 100 million conditional branches, and 4 million mispredictions, compute branch MPKI and the conditional miss fraction. Then model an effective 8-cycle lost-work penalty and calculate the simple CPI contribution. Repeat at half the misprediction count and discuss why the estimated speedup may not equal the observed speedup if the workload has substantial cache misses or a different frequency.</p>
+<p><strong>Verification guide:</strong> There are 8 mispredictions per thousand retired instructions and a 4% conditional miss fraction in the first case. Under the simplified model, <code>0.20 × 0.04 × 8 = 0.064</code> extra CPI. Report assumptions before presenting the result. If working with real hardware, clarify whether the relevant counter measures retired mispredictions, speculative redirects, or another event class.</p>
+
+</section>
+<section id="guided-exercise-5-return-prediction-and-security-boundary" aria-labelledby="heading-guided-exercise-5-return-prediction-and-security-boundary"><h2 id="heading-guided-exercise-5-return-prediction-and-security-boundary">Guided Exercise 5: Return Prediction and Security Boundary</h2>
+<p>Trace calls <code>A→B→C</code> and subsequent returns using a teaching RAS. Insert a wrong-path call between two legitimate calls and demonstrate how a missing RAS rollback can corrupt a later target prediction. Explain why a correct software return address can coexist with an incorrect speculative target and why checking the RAS contents alone cannot establish authorization. For an advanced exercise, model a limited-capacity RAS and compare replacement or wrap policies.</p>
+<p><strong>Verification guide:</strong> A conceptual software call stack, speculative RAS, and architectural PC must be tracked separately. Do not assume a particular physical RAS overflow behavior unless the exercise specifies it. A security claim requires consideration of the actual processor and the data exposed through any wrong-path execution, not simply whether one prediction missed.</p>
+
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions"><h2 id="heading-review-questions">Review Questions</h2>
+<ol>
+<li>Why does a fetch pipeline need a next-PC prediction before the branch condition is known?</li>
+<li>How can a direction prediction be correct while the next-PC prediction is wrong?</li>
+<li>What difference does a two-bit saturating counter make compared with a one-bit predictor on a loop exit?</li>
+<li>What is destructive aliasing in a branch prediction table?</li>
+<li>When can local history outperform global history, and vice versa?</li>
+<li>Why do some implementations update GHR speculatively but train counters later?</li>
+<li>How does a BTB differ from a return-address stack and an indirect-target predictor?</li>
+<li>Why must a wide fetch unit respect the earliest predicted taken branch in its packet?</li>
+<li>What architectural state must be protected when a branch mispredicts?</li>
+<li>What is the difference between branch resolution and retirement?</li>
+<li>Why can a wrong-path page fault be discarded rather than delivered architecturally?</li>
+<li>How does branch MPKI differ from a misprediction percentage?</li>
+<li>What factors determine effective recovery latency?</li>
+<li>Why does a squash not guarantee that cache or predictor state is completely restored?</li>
+<li>What additional evidence is required before claiming a prediction optimization improves deployment performance or security?</li>
+</ol>
+
+</section>
+<section id="glossary" aria-labelledby="heading-glossary"><h2 id="heading-glossary">Glossary</h2>
+<ul>
+<li><strong>Architectural state:</strong> Program-visible state specified by an ISA, such as committed registers and memory effects.</li>
+<li><strong>Aliasing:</strong> Multiple branch contexts mapping to overlapping predictor storage, potentially interfering with each other's training.</li>
+<li><strong>Backing predictor:</strong> A secondary prediction component that may be richer or slower than an initial fast predictor.</li>
+<li><strong>Bimodal predictor:</strong> A table-based predictor commonly using one saturating counter per indexed branch context.</li>
+<li><strong>Branch:</strong> An instruction that can redirect the next architecturally executed instruction.</li>
+<li><strong>Branch direction:</strong> Taken versus not-taken outcome for a conditional branch.</li>
+<li><strong>Branch MPKI:</strong> Branch mispredictions per thousand retired instructions, subject to the counter's event definition.</li>
+<li><strong>Branch predictor:</strong> Hardware forecasting a branch decision, target, or both.</li>
+<li><strong>Branch resolution:</strong> Computing actual control-flow behavior from instruction semantics and operands.</li>
+<li><strong>Branch target buffer (BTB):</strong> Structure retaining likely destinations of control transfers.</li>
+<li><strong>Checkpoint:</strong> Saved or reconstructible context used to restore speculative state.</li>
+<li><strong>Committed history:</strong> History corresponding to the valid, retired instruction path.</li>
+<li><strong>Conditional branch:</strong> A control transfer whose direction depends on a computed condition.</li>
+<li><strong>Control hazard:</strong> Pipeline uncertainty about the next valid instruction address.</li>
+<li><strong>CPI:</strong> Cycles per retired instruction, defined for a particular measurement model.</li>
+<li><strong>Direction predictor:</strong> Component that forecasts whether a conditional branch will be taken.</li>
+<li><strong>Dynamic predictor:</strong> Predictor that learns from previously observed behavior.</li>
+<li><strong>Fall-through:</strong> Instruction address selected if a conditional branch is not taken.</li>
+<li><strong>Fetch packet:</strong> Group of instructions fetched or processed as a unit by a particular front end.</li>
+<li><strong>Fetch target queue (FTQ):</strong> Structure that can retain prediction metadata until update or retirement.</li>
+<li><strong>Flush:</strong> General term for discarding pipeline contents; precise scope must be specified.</li>
+<li><strong>Global history register (GHR):</strong> Register recording recent branch outcomes for contextual prediction.</li>
+<li><strong>Gshare:</strong> Predictor design combining branch-address bits and global-history bits, commonly with XOR.</li>
+<li><strong>Gselect:</strong> History-based indexing scheme using concatenation of branch and history bits.</li>
+<li><strong>History folding:</strong> Compressing longer branch histories into shorter lookup values.</li>
+<li><strong>Hybrid predictor:</strong> Prediction architecture combining multiple candidate predictors.</li>
+<li><strong>Indirect branch:</strong> Control transfer whose target comes from runtime-computed data.</li>
+<li><strong>Instruction retirement:</strong> Committing an instruction's valid program-visible effect in age order.</li>
+<li><strong>Local history:</strong> Recent outcomes associated with a particular branch or indexed branch group.</li>
+<li><strong>Loop predictor:</strong> Predictor specializing in repeated loop branch patterns and likely exits.</li>
+<li><strong>Misprediction:</strong> A predicted direction or target that differs from actual control flow.</li>
+<li><strong>Next-line predictor:</strong> Fast predictor of the next fetch block, in some processor designs.</li>
+<li><strong>Out-of-order execution:</strong> Scheduling instructions outside program order subject to data and control requirements.</li>
+<li><strong>Pattern-history table:</strong> Array of prediction counters indexed by branch and/or history information.</li>
+<li><strong>Prediction confidence:</strong> Estimate or heuristic of the reliability of a prediction.</li>
+<li><strong>RAS:</strong> Return-address stack used to forecast return destinations.</li>
+<li><strong>Redirect:</strong> Switching the fetch stream to a newly determined target.</li>
+<li><strong>Reorder buffer (ROB):</strong> Inflight instruction-age structure supporting precise architectural commitment.</li>
+<li><strong>Saturating counter:</strong> Bounded counter that stops increasing or decreasing at its end states.</li>
+<li><strong>Speculative execution:</strong> Performing work under an assumption that may later require rollback.</li>
+<li><strong>Speculative history:</strong> Predictor context updated using predictions before their outcome is confirmed.</li>
+<li><strong>Squash:</strong> Invalidating instructions that must not continue as architectural work.</li>
+<li><strong>TAGE:</strong> Tagged geometric-history branch-prediction family using different history horizons.</li>
+<li><strong>Target predictor:</strong> Component forecasting a control-transfer destination address.</li>
+<li><strong>Transient execution:</strong> Execution of instructions whose results may later be discarded.</li>
+<li><strong>Wrong-path instruction:</strong> Instruction fetched on a control path ultimately found to be incorrect.</li>
+</ul>
+
+</section>
+<section id="specialist-study-pathways" aria-labelledby="heading-specialist-study-pathways"><h2 id="heading-specialist-study-pathways">Specialist Study Pathways</h2>
+<p><strong>New readers:</strong> Begin with <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a>, then <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a>, before returning to this article's static, bimodal, and BTB examples. That sequence establishes why wrong next-PC choices disrupt a pipeline.</p>
+<p><strong>Microarchitecture students:</strong> Continue to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a>, and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>. Study checkpoints, age-based squashing and predictor training as one integrated recovery problem.</p>
+<p><strong>Performance engineers:</strong> Study the predictor-counters and branch MPKI sections, then follow <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a> to interpret counters and bottleneck data. <strong>Security researchers:</strong> use this article to understand prediction and transient execution, then study <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a> and applicable current vendor guidance for the threat model.</p>
+
+</section>
+<section id="complete-cpu-specialist-directory" aria-labelledby="heading-complete-cpu-specialist-directory"><h2 id="heading-complete-cpu-specialist-directory">Complete CPU Specialist Directory</h2>
+<p>The governing CPU specialist index establishes the following <strong>24 article destinations</strong>. A link may lead to a planned article not yet installed.</p><ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution" aria-current="page">Branch Prediction and Speculative Execution</a> — Current article.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a>.</li></ol><p>See the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">CPU specialist unit index</a> or the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit parent overview</a> for broader context.</p>
+</section>
+<section id="related-encyclopedia-topics-and-taxonomy-boundaries" aria-labelledby="heading-related-encyclopedia-topics-and-taxonomy-boundaries"><h2 id="heading-related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</h2>
+<p>This article owns <strong>prediction direction, prediction target, history and confidence structures, speculative control-flow recovery, misprediction performance, and their immediate security implications</strong>. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">fetch/decode</a> article owns general instruction-byte delivery and decoding. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">register-renaming/ROB</a> article owns physical register mapping and precise retirement bookkeeping. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">exception-handling</a> article owns privileged trap-entry and interrupt semantics. The side-channel specialist owns detailed attack classes and mitigations.</p>
+<p>Neighboring division topics include <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a>, <a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing">Pipeline Processing</a>, and <a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a>. Branch predictors are microarchitectural mechanisms; ISA-defined branch outcomes, target encoding, privilege rules, and exceptions must remain conceptually separate from performance guesses.</p>
+
+</section>
+<section id="primary-documentation-and-further-reading" aria-labelledby="heading-primary-documentation-and-further-reading"><h2 id="heading-primary-documentation-and-further-reading">Primary Documentation and Further Reading</h2>
+<ol>
+<li><a href="https://docs.boom-core.org/en/latest/sections/branch-prediction/">Berkeley Out-of-Order Machine (BOOM), “Branch Prediction.”</a> Concrete division into fast next-line and backing predictors, with implementation vocabulary.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/branch-prediction/nl-predictor.html">BOOM, “The Next-Line Predictor (NLP).”</a> BTB, bimodal table, RAS and next-PC timing in this documented design.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/branch-prediction/backing-predictor.html">BOOM, “The Backing Predictor (BPD).”</a> Speculative GHR, FTQ metadata, predictor updates and recovery snapshots.</li>
+<li><a href="https://www.gem5.org/documentation/general_docs/cpu_models/O3CPU">gem5 Documentation, “O3CPU.”</a> Out-of-order CPU fetch and branch misspeculation recovery in a simulation model.</li>
+<li><a href="https://github.com/gem5/gem5/blob/stable/src/cpu/pred/BranchPredictor.py">gem5 source, “BranchPredictor.py.”</a> Configurable simulation predictor models and their parameters; APIs vary with source revision.</li>
+<li><a href="https://riscv.github.io/riscv-isa-manual/snapshot/spec/">RISC-V Instruction Set Manual.</a> Architectural branch, JAL/JALR and call/return hint rules; consult a stable applicable release for engineering baselines.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/technical-documentation/hardware-behavior-related-to-speculative-execution.html">Intel, “Hardware Features and Behaviors Related to Speculative Execution.”</a> Processor-dependent prediction behavior and security-relevant mechanisms.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/technical-documentation/speculative-execution-side-channel-mitigations.html">Intel, “Speculative Execution Side Channel Mitigations.”</a> Mitigation context and platform-specific security considerations.</li>
+<li>Yeh, Tse-Yu, and Yale N. Patt. “Two-Level Adaptive Training Branch Prediction.” <em>Proceedings of MICRO</em> (1991). Foundational work on history-based prediction.</li>
+<li>McFarling, Scott. “Combining Branch Predictors.” Digital Western Research Laboratory Technical Note TN-36 (1993). Early hybrid prediction design.</li>
+<li>Seznec, André, and Pierre Michaud. “A Case for (Partially) TAgged GEometric History Length Branch Prediction.” <em>Journal of Instruction-Level Parallelism</em> 8 (2006). Introduction to a TAGE predictor family.</li>
+<li>Hennessy, John L., and David A. Patterson. <em>Computer Architecture: A Quantitative Approach</em>. Morgan Kaufmann. General treatment of speculation, prediction, performance, and design trade-offs.</li>
+</ol>
+
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope"><h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Prepared November 23, 2026:</strong> This is the tenth of the twenty-four Level 5 destinations prescribed by the existing Central Processing Unit specialist index. It develops branch prediction from basic counter machines through multi-history and target prediction, explains speculative execution and age-based recovery, and provides reproducible teaching examples and applied design scenarios. Named project documentation is used as implementation evidence, while performance figures and teaching models are explicitly illustrative rather than claims about commercial processors.</p>
+<p>The downloadable ZIP preserves the file path from <code>library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/</code>. Extracting its contents at <code>C:\MGU\</code> places the HTML file at the intended local destination. Its canonical public URL is extensionless, while the physical file retains <code>.html</code>. Specialist links point to planned destinations, including articles not yet installed. The CPU unit index and previously completed articles have not been modified.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

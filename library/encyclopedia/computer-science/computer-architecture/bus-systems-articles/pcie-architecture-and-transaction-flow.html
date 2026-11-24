@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCI Express Architecture and Transaction Flow | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="MGU specialist article on PCI Express architecture, PCIe 7.1 and older generations, topology, TLP requests/completions, flow control, DMA, PCIe switches, enumeration, ordering, MSI-X, and reliable performance.">
+<meta name="keywords" content="PCI Express,PCIe,transaction flow,TLP,completion,DLLP,FLIT,PCIe 7.1,PAM4,root complex,root port,endpoint,PCIe switch,BAR,configuration space,MSI-X,DMA,IOMMU,AER,flow-control credits,PCIe lanes,link training">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PCI Express Architecture and Transaction Flow | MGU Encyclopedia">
+<meta property="og:description" content="An architectural treatment of PCIe links, packets, requests, completions, switching, device configuration, DMA and performance.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>PCI Express Architecture and Transaction Flow</h1>
+<p class="subtitle">The architecture of PCIe root complexes, endpoints, switches, serial links, TLP requests and completions, configuration, DMA, flow control, and real-world performance.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#scope-and-architectural-position">Scope and architectural position</a></li>
+<li><a href="#the-architectural-problem-pcie-solves">The architectural problem PCIe solves</a></li>
+<li><a href="#three-layers-and-their-responsibilities">Three layers and their responsibilities</a></li>
+<li><a href="#root-complexes-root-ports-and-endpoints">Root complexes, root ports, and endpoints</a></li>
+<li><a href="#switches-and-pci-to-pci-bridge-functions">Switches and PCI-to-PCI bridge functions</a></li>
+<li><a href="#links-lanes-width-speed-and-direction">Links, lanes, width, speed, and direction</a></li>
+<li><a href="#a-point-to-point-connection-is-not-a-shared-bus">A point-to-point connection is not a shared bus</a></li>
+<li><a href="#physical-layer-and-serial-transmission">Physical layer and serial transmission</a></li>
+<li><a href="#link-training-and-the-ltssm">Link training and the LTSSM</a></li>
+<li><a href="#encoding-evolution-across-generations">Encoding evolution across generations</a></li>
+<li><a href="#flit-mode-pam4-and-forward-error-correction">FLIT mode, PAM4, and forward error correction</a></li>
+<li><a href="#transaction-layer-packets-and-request-meaning">Transaction Layer Packets and request meaning</a></li>
+<li><a href="#posted-non-posted-and-completion-categories">Posted, non-posted, and completion categories</a></li>
+<li><a href="#memory-read-transaction-flow">Memory Read transaction flow</a></li>
+<li><a href="#memory-write-transaction-flow">Memory Write transaction flow</a></li>
+<li><a href="#configuration-transactions-and-discovery">Configuration transactions and discovery</a></li>
+<li><a href="#bus-device-function-and-segment-identifiers">Bus, device, function, and segment identifiers</a></li>
+<li><a href="#base-address-registers-and-resource-windows">Base Address Registers and resource windows</a></li>
+<li><a href="#transaction-routing-through-root-ports-and-switches">Transaction routing through root ports and switches</a></li>
+<li><a href="#transaction-identifiers-and-completion-matching">Transaction identifiers and completion matching</a></li>
+<li><a href="#payload-sizes-request-limits-and-boundaries">Payload sizes, request limits, and boundaries</a></li>
+<li><a href="#data-link-reliability-and-replay">Data-link reliability and replay</a></li>
+<li><a href="#credit-based-flow-control">Credit-based flow control</a></li>
+<li><a href="#ordering-rules-attributes-and-visibility">Ordering rules, attributes, and visibility</a></li>
+<li><a href="#interrupts-messages-and-msi-x-delivery">Interrupts, messages, and MSI-X delivery</a></li>
+<li><a href="#dma-and-pcie-bus-mastering">DMA and PCIe bus mastering</a></li>
+<li><a href="#iommus-acs-and-device-trust-boundaries">IOMMUs, ACS, and device trust boundaries</a></li>
+<li><a href="#peer-to-peer-transfers-and-root-complex-boundaries">Peer-to-peer transfers and root-complex boundaries</a></li>
+<li><a href="#virtual-functions-and-sr-iov">Virtual functions and SR-IOV</a></li>
+<li><a href="#hot-plug-power-states-and-reset-paths">Hot-plug, power states, and reset paths</a></li>
+<li><a href="#error-reporting-aer-and-fault-recovery">Error reporting, AER, and fault recovery</a></li>
+<li><a href="#tlps-versus-dllps-versus-completion-records">TLPs versus DLLPs versus completion records</a></li>
+<li><a href="#pcie-and-related-standards-nvme-usb4-cxl">PCIe and related standards: NVMe, USB4, CXL</a></li>
+<li><a href="#performance-variables-and-the-meaning-of-bandwidth">Performance variables and the meaning of bandwidth</a></li>
+<li><a href="#transaction-size-and-useful-transfer-efficiency">Transaction size and useful transfer efficiency</a></li>
+<li><a href="#outstanding-reads-and-latency-hiding">Outstanding reads and latency hiding</a></li>
+<li><a href="#topology-oversubscription-and-contention">Topology oversubscription and contention</a></li>
+<li><a href="#switch-latency-and-root-complex-service-costs">Switch latency and root-complex service costs</a></li>
+<li><a href="#cpu-to-device-mmio-versus-device-to-memory-dma">CPU-to-device MMIO versus device-to-memory DMA</a></li>
+<li><a href="#configuration-capabilities-and-feature-negotiation">Configuration capabilities and feature negotiation</a></li>
+<li><a href="#queueing-fairness-and-traffic-classes">Queueing fairness and traffic classes</a></li>
+<li><a href="#reliability-across-multiple-links">Reliability across multiple links</a></li>
+<li><a href="#pcie-link-adaptation-and-power-budgeting">PCIe link adaptation and power budgeting</a></li>
+<li><a href="#compliance-interoperability-and-version-boundaries">Compliance, interoperability, and version boundaries</a></li>
+<li><a href="#design-review-and-investigation-framework">Design review and investigation framework</a></li>
+<li><a href="#pcie-architecture-comparison">PCIe architecture comparison</a></li>
+<li><a href="#transaction-type-comparison">Transaction-type comparison</a></li>
+<li><a href="#pcie-generation-and-lane-rate-comparison">PCIe generation and lane-rate comparison</a></li>
+<li><a href="#common-misconceptions-and-corrections">Common misconceptions and corrections</a></li>
+<li><a href="#worked-example-1-reading-a-device-register">Worked example 1 — Reading a device register</a></li>
+<li><a href="#worked-example-2-a-posted-mmio-doorbell-write">Worked example 2 — A posted MMIO doorbell write</a></li>
+<li><a href="#worked-example-3-read-tags-and-out-of-order-completions">Worked example 3 — Read tags and out-of-order completions</a></li>
+<li><a href="#worked-example-4-splitting-a-large-read-into-completions">Worked example 4 — Splitting a large read into completions</a></li>
+<li><a href="#worked-example-5-a-page-boundary-crossing">Worked example 5 — A page-boundary crossing</a></li>
+<li><a href="#worked-example-6-gen3-x4-one-way-coding-ceiling">Worked example 6 — Gen3 x4 one-way coding ceiling</a></li>
+<li><a href="#worked-example-7-gen5-x16-versus-gen4-x8-downtraining">Worked example 7 — Gen5 x16 versus Gen4 x8 downtraining</a></li>
+<li><a href="#worked-example-8-full-duplex-accounting">Worked example 8 — Full-duplex accounting</a></li>
+<li><a href="#worked-example-9-packet-payload-overhead">Worked example 9 — Packet payload overhead</a></li>
+<li><a href="#worked-example-10-uplink-oversubscription-behind-a-switch">Worked example 10 — Uplink oversubscription behind a switch</a></li>
+<li><a href="#worked-example-11-tags-versus-latency-bound-read-throughput">Worked example 11 — Tags versus latency-bound read throughput</a></li>
+<li><a href="#worked-example-12-mps-fragmentation-of-a-transfer">Worked example 12 — MPS fragmentation of a transfer</a></li>
+<li><a href="#worked-example-13-credit-exhaustion-without-a-broken-link">Worked example 13 — Credit exhaustion without a broken link</a></li>
+<li><a href="#worked-example-14-msi-x-after-dma-completion">Worked example 14 — MSI-X after DMA completion</a></li>
+<li><a href="#worked-example-15-a-switch-path-failure-investigation">Worked example 15 — A switch-path failure investigation</a></li>
+<li><a href="#worked-example-16-comparing-a-new-specification-with-installed-hardware">Worked example 16 — Comparing a new specification with installed hardware</a></li>
+<li><a href="#specialist-glossary">Specialist glossary</a></li>
+<li><a href="#references-and-further-technical-reading">References and further technical reading</a></li>
+<li><a href="#sub-articles-in-the-bus-systems-unit">Sub-Articles in the Bus Systems unit</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#editorial-scope-and-publication-status">Editorial scope and publication status</a></li>
+</ol>
+</section>
+<section id="scope-and-architectural-position" aria-labelledby="heading-scope-and-architectural-position">
+<h2 id="heading-scope-and-architectural-position">Scope and architectural position</h2>
+<p>PCI Express (PCIe) is a packet-oriented, point-to-point expansion interconnect used to connect processors and platforms with storage controllers, network interfaces, accelerators, and many other peripheral functions. It retains the software-discovery model of the PCI family, but its communication medium is fundamentally different from the older shared parallel PCI bus. A PCIe link joins exactly two adjacent ports; multiple links and switches can form a hierarchy in which many devices operate concurrently. The link is not a multi-drop collection of address, data, and control wires arbitrated as one shared electrical bus.</p>
+<p>This article is the Bus Systems unit's specialist treatment of PCIe topology and transaction movement. It connects <strong>physical signaling, link-level reliability, transaction-layer semantics, configuration, and software ownership</strong> into one coherent model. Detailed DMA driver programming, signal-integrity engineering, security isolation, and CXL memory coherence belong to neighboring articles; they are introduced here only where understanding a PCIe transaction requires them. Unless otherwise stated, examples describe a simplified conventional non-FLIT PCIe path, and version-dependent behaviors are identified separately. A protocol principle should not be mistaken for a promise about every device, generation, or root-complex implementation.</p>
+
+</section>
+<section id="the-architectural-problem-pcie-solves" aria-labelledby="heading-the-architectural-problem-pcie-solves">
+<h2 id="heading-the-architectural-problem-pcie-solves">The architectural problem PCIe solves</h2>
+<p>An expansion fabric must move short control accesses and long data transfers among independent participants while allowing operating systems to discover, allocate, protect, and operate devices. Conventional PCI shared address and data conductors, so electrical loading, arbitration, and parallel timing limited the opportunities for scaling. PCIe replaced the common electrical segment with high-speed serial links, switching elements, and transaction packets. A switch can forward an upstream device's request while a separate link is serving another endpoint; nevertheless, shared upstream links, memory controllers, and switch resources can still constrain aggregate throughput.</p>
+<p>The software compatibility story is subtler than physical continuity. PCIe devices expose PCI-style configuration functions, vendor and device identification, class codes, base address registers, and capabilities. Software does not generally treat a PCIe switch as an Ethernet router, however: the PCI hierarchy and firmware-defined resource windows determine how configuration and many memory requests reach their destinations. PCIe transports memory reads and writes, configuration accesses, completion messages, interrupts, and other defined message types under rules that differ from IP-network packet forwarding.</p>
+
+</section>
+<section id="three-layers-and-their-responsibilities" aria-labelledby="heading-three-layers-and-their-responsibilities">
+<h2 id="heading-three-layers-and-their-responsibilities">Three layers and their responsibilities</h2>
+<p>PCIe traditionally describes <strong>Transaction</strong>, <strong>Data Link</strong>, and <strong>Physical</strong> layers. The transaction layer interprets addresses, request types, attributes, tags, and completion rules. The data link layer manages adjacent-link reliability and related flow-control information. The physical layer moves encoded signaling across lanes, establishes the link, and manages training and recovery. A transaction may traverse several links, so each link terminates and regenerates relevant link-layer information while the transaction-level meaning survives forwarding.</p>
+<p>In traditional non-FLIT operation, a Transaction Layer Packet (TLP) receives sequence and integrity fields for a link transfer, and Data Link Layer Packets (DLLPs) carry supporting link-level messages. In PCIe 6.0 and later FLIT-capable operation, a fixed-length flow-control unit reorganizes packing, protection, and acknowledgment mechanics. Accordingly, 'all PCIe packets are individually wrapped with the same old-format link fields' is not a version-neutral statement. When investigating a link, record negotiated speed, width, and operational mode before interpreting traces or error counters.</p>
+
+</section>
+<section id="root-complexes-root-ports-and-endpoints" aria-labelledby="heading-root-complexes-root-ports-and-endpoints">
+<h2 id="heading-root-complexes-root-ports-and-endpoints">Root complexes, root ports, and endpoints</h2>
+<p>The <strong>Root Complex (RC)</strong> connects the host processing/memory domain to one or more PCIe hierarchies. A <strong>Root Port</strong> is the downstream-facing port through which a PCIe hierarchy begins. An <strong>Endpoint</strong> implements one or more PCI functions, which are software-visible entities such as a network controller or NVMe device. Many endpoints contain internal DMA engines and are capable of initiating requests to host memory after suitable configuration and authorization.</p>
+<p>The RC is not necessarily a single visible chip and should not be equated with a device's driver. Some platforms implement several root ports, multiple root complexes or host bridges, and segmented PCI domains. The operating system generally discovers the host's root-bus arrangements through platform mechanisms and then enumerates downstream PCI configuration functions. A useful systems diagram therefore labels host memory, IOMMU, root ports, intermediate switches, endpoint functions, and separate links rather than drawing a vague line marked 'PCIe bus.'</p>
+
+</section>
+<section id="switches-and-pci-to-pci-bridge-functions" aria-labelledby="heading-switches-and-pci-to-pci-bridge-functions">
+<h2 id="heading-switches-and-pci-to-pci-bridge-functions">Switches and PCI-to-PCI bridge functions</h2>
+<p>A PCIe switch provides an <strong>upstream port</strong> toward the host and <strong>downstream ports</strong> toward other components. Architecturally, its ports often appear to PCI configuration software as bridge functions. The switch establishes routing for configuration and transaction traffic; it is not a CPU, nor does it magically create independent host-memory bandwidth. Several endpoints behind one switch may share the same uplink and its flow-control and buffering resources.</p>
+<p>An example hierarchy is <code>Root Port → x8 switch uplink → four x4 endpoint links</code>. The downstream side offers four x4 physical links, but traffic that must reach host memory through the x8 uplink shares that narrower aggregate path. Endpoint-to-endpoint transfers may or may not follow a direct peer route, depending on topology, routing rules, platform permissions, and software support. Avoid interpreting a collection of downstream link widths as guaranteed sustained aggregate throughput to the processor.</p>
+
+</section>
+<section id="links-lanes-width-speed-and-direction" aria-labelledby="heading-links-lanes-width-speed-and-direction">
+<h2 id="heading-links-lanes-width-speed-and-direction">Links, lanes, width, speed, and direction</h2>
+<p>One PCIe <strong>lane</strong> has transmit and receive signal paths, allowing simultaneous traffic in opposite directions. A <strong>link</strong> aggregates one or more negotiated lanes, commonly expressed as x1, x2, x4, x8, or x16. Link width and link generation are different properties: a card physically shaped for x16 may operate electrically at a lower width, and the two link partners may negotiate a slower common rate. Device limits, firmware, wiring, faults, equalization, and lane availability all affect the actual negotiated result.</p>
+<p>A link's advertised raw rate is not the same thing as application bytes per second. Coding, fixed-unit overhead, TLP headers, alignment, flow-control updates, idle time, retries, software processing, and payload size all matter. Direction also matters: saying 'a Gen5 x16 link offers about 126 GB/s' without specifying that this figure combines the two directions can mislead readers who need one-way DMA throughput. Later quantitative examples state both rates and assumptions explicitly.</p>
+
+</section>
+<section id="a-point-to-point-connection-is-not-a-shared-bus" aria-labelledby="heading-a-point-to-point-connection-is-not-a-shared-bus">
+<h2 id="heading-a-point-to-point-connection-is-not-a-shared-bus">A point-to-point connection is not a shared bus</h2>
+<p>Only the two adjacent components connected by a PCIe link directly exchange the electrical signaling on that link. No third card wins ownership of those same conductors by a traditional bus-grant signal. When several endpoints seek the same upstream switch port, the <strong>switch arbitrates packets and buffer space</strong>, which is a resource-sharing problem at a higher level than electrical bus ownership.</p>
+<p>The distinction matters in troubleshooting. A congested upstream route may show queues and backpressure without any physical signaling fault. Conversely, an unstable lane can produce link retraining even at low application traffic. Counting available slots, physical connectors, negotiated link widths, and actual topology is a necessary first step; the visible slot shape alone is not a system block diagram.</p>
+
+</section>
+<section id="physical-layer-and-serial-transmission" aria-labelledby="heading-physical-layer-and-serial-transmission">
+<h2 id="heading-physical-layer-and-serial-transmission">Physical layer and serial transmission</h2>
+<p>The physical layer organizes lane signaling, electrical training, clock recovery, and transitions among operational states. Each lane carries information through high-speed serializers and receivers with channel equalization and clock-data recovery. For early generations, PCIe used NRZ signaling with established block-coding schemes. Later high-speed generations rely on more demanding channel engineering; PCIe 6.0 introduced four-level PAM4 signaling for 64.0 GT/s operation, along with FLIT mode and forward error correction.</p>
+<p>At the system level, the physical layer explains why a connector or cable may fit yet fail to sustain a desired width or generation. Trace loss, reflections, reference-clock quality, crosstalk, retimers, firmware, and endpoint implementation affect training margin. For a deployment investigation, separate <strong>link up/down</strong>, <strong>negotiated capabilities</strong>, <strong>link-level error recovery</strong>, and <strong>application transaction performance</strong>. Passing the first condition does not prove the remaining three.</p>
+
+</section>
+<section id="link-training-and-the-ltssm" aria-labelledby="heading-link-training-and-the-ltssm">
+<h2 id="heading-link-training-and-the-ltssm">Link training and the LTSSM</h2>
+<p>A PCIe link is brought up through a link-training and status state machine (LTSSM). Educational summaries typically include Detect, Polling, Configuration, L0, Recovery, and Disabled or low-power-related states, but the actual state machine has additional substates and defined transitions. Training sequences establish presence, lane relationships, width, and other operating parameters; rate changes and equalization may require transitions through recovery procedures.</p>
+<p>The stable high-level operating condition is normally associated with <strong>L0</strong>. A link that repeatedly leaves productive operation can lose bandwidth even without a permanent disconnect. Engineers should inspect negotiated <code>LnkSta</code> speed and width, downtraining, retrain indications, physical error logs, and AER evidence before assuming that an endpoint's peak published generation is in use. These observations are not interchangeable with transaction-layer timeout reports.</p>
+
+</section>
+<section id="encoding-evolution-across-generations" aria-labelledby="heading-encoding-evolution-across-generations">
+<h2 id="heading-encoding-evolution-across-generations">Encoding evolution across generations</h2>
+<p>PCIe 1.x uses <strong>2.5 GT/s</strong> and PCIe 2.x <strong>5 GT/s</strong>, with 8b/10b coding in traditional mode: only eight of each ten transmitted bits are data-coded payload bits. PCIe 3.x, 4.x, and 5.x increase the nominal rates to <strong>8, 16, and 32 GT/s</strong> and use 128b/130b-style coding for ordinary non-FLIT operation. These changes substantially reduce encoding overhead relative to the earliest generations.</p>
+<p>PCIe 6.x doubles the nominal rate to <strong>64 GT/s</strong> with PAM4 and FLIT-based operation; PCIe 7.x raises it to <strong>128 GT/s</strong>, retaining the PAM4/FLIT approach while evolving physical requirements. FLIT mode uses different framing and error-handling assumptions than old-style TLP+DLLP transmission, so applying the 128/130 coding fraction to PCIe 6 or 7 traffic is incorrect. PCI-SIG's public material quotes approximate bidirectional x16 capacities; practical usable throughput remains below simple nominal values and depends on the negotiated version and workload.</p>
+
+</section>
+<section id="flit-mode-pam4-and-forward-error-correction" aria-labelledby="heading-flit-mode-pam4-and-forward-error-correction">
+<h2 id="heading-flit-mode-pam4-and-forward-error-correction">FLIT mode, PAM4, and forward error correction</h2>
+<p>A <strong>FLIT</strong> is a fixed-length protocol transfer unit. PCIe 6.0 introduced a 256-byte FLIT format along with low-latency forward error correction (FEC) and CRC mechanisms suited to PAM4 operation. FLITs can carry portions of transaction and link-control information; they are not identical to one software I/O request or one application packet. A large transfer can require many FLITs, and multiple short items can share packing opportunities subject to protocol constraints.</p>
+<p>PAM4 uses four signal levels rather than two, permitting more information to be represented per symbol at the cost of different noise-margin and integrity trade-offs. FEC can correct certain physical transmission errors, but it is not an application-level data-integrity guarantee or a substitute for higher-layer checks. Implementation and mode details control packet packing, replay, credit treatment, and error counters. A diagnostic tool that assumes a fixed old-generation TLP framing format cannot necessarily decode a Gen6/Gen7 FLIT stream accurately.</p>
+
+</section>
+<section id="transaction-layer-packets-and-request-meaning" aria-labelledby="heading-transaction-layer-packets-and-request-meaning">
+<h2 id="heading-transaction-layer-packets-and-request-meaning">Transaction Layer Packets and request meaning</h2>
+<p>The <strong>Transaction Layer Packet (TLP)</strong> is the principal PCIe abstraction for operations such as Memory Read, Memory Write, Configuration Read/Write, Completions, and Messages. TLP headers convey a type and format, addressing or routing information, length, traffic attributes, and identifiers needed for response association. The fields and permitted extensions are version- and mode-dependent; describing their concepts is safer than memorizing an incomplete fixed layout.</p>
+<p>A PCIe <strong>transaction</strong> should be modeled as a logical exchange, not always as a request plus a returned answer. A memory read requires completion information, while a posted memory write generally does not produce a normal completion TLP back to its requester. Messages can represent events without acting as bulk-data transfers. Furthermore, a multi-link path may deliver a TLP through a sequence of data-link reliability domains without converting it into multiple independent PCIe transactions.</p>
+
+</section>
+<section id="posted-non-posted-and-completion-categories" aria-labelledby="heading-posted-non-posted-and-completion-categories">
+<h2 id="heading-posted-non-posted-and-completion-categories">Posted, non-posted, and completion categories</h2>
+<p>PCIe traffic is often grouped into <strong>Posted (P)</strong>, <strong>Non-Posted (NP)</strong>, and <strong>Completion (Cpl)</strong> categories. A posted Memory Write can be accepted and forwarded without sending a conventional response packet for every write. A non-posted Memory Read requests information that must return through one or more Completion TLPs. Configuration accesses and other defined non-posted requests likewise have response semantics that differ from posted traffic.</p>
+<p>Why separate these categories? The interconnect can reserve and track header/data credits, ordering behavior, and buffer resources appropriate for each traffic class. A read requester may consume tags and completion-buffer capacity long after the request header leaves its first link. A successful link transmission of a posted write does not, by itself, prove that a device applied its register side effect. Software must respect platform and device-specific completion, barrier, and posted-write-flush rules.</p>
+
+</section>
+<section id="memory-read-transaction-flow" aria-labelledby="heading-memory-read-transaction-flow">
+<h2 id="heading-memory-read-transaction-flow">Memory Read transaction flow</h2>
+<p>A basic Memory Read begins when a requester prepares a read TLP for a specified address and length. The fabric routes it to the appropriate completer. The completer fetches or forms the requested data and returns one or more Completion-with-Data packets carrying the association information needed by the requester. On receipt, the requester uses identifiers and fragment bookkeeping to satisfy the original operation.</p>
+<p>A large read can be split into multiple completions, subject to request limits, alignment, completion-boundary rules, and receiver capabilities. The requester's overall latency includes request traversal, completer service, and return traversal plus processing. Therefore, a nominally fast x16 link cannot eliminate memory latency, queueing, translation delay, or host-bridge behavior. For many small reads, keeping several requests outstanding may improve overall utilization, subject to tag and credit limits.</p>
+
+</section>
+<section id="memory-write-transaction-flow" aria-labelledby="heading-memory-write-transaction-flow">
+<h2 id="heading-memory-write-transaction-flow">Memory Write transaction flow</h2>
+<p>For a Memory Write, the requester generally places data with its write TLP and sends it along the routed path. The request is <strong>posted</strong>, so it ordinarily needs no matching completion-without-data packet. The receiving function or memory path processes it according to applicable ordering, memory attributes, and device semantics. The lack of a normal response makes posted writes efficient, but it also complicates determining precisely when an effect is visible.</p>
+<p>A CPU's MMIO write to a doorbell register and a device's DMA write into host memory are both expressible as PCIe writes, but they differ in initiator, address translation, and synchronization responsibilities. In device-driver protocols, software often writes descriptors into memory, ensures they are visible, rings a device doorbell, and later examines status or receives an interrupt. The PCIe fabric transports these actions; it does not automatically establish every software-level happens-before relationship.</p>
+
+</section>
+<section id="configuration-transactions-and-discovery" aria-labelledby="heading-configuration-transactions-and-discovery">
+<h2 id="heading-configuration-transactions-and-discovery">Configuration transactions and discovery</h2>
+<p>PCIe keeps the PCI <strong>configuration-space</strong> programming model. A function exposes standardized identification and control fields, plus implementation-specific capability structures. Host firmware and the operating system discover reachable functions through host-bridge mechanisms and determine bus numbering, device/function identities, bridge windows, interrupts, and resource assignments. Configuration requests are routed differently from ordinary memory TLPs through the hierarchy.</p>
+<p>A useful conceptual enumeration sequence is: identify root buses; traverse accessible bridge ports; read vendor/device/class information; determine resource requirements; assign bridge ranges and endpoint BAR windows; enable approved decoding and bus-mastering privileges; and bind a suitable driver. The exact order and division of responsibility between firmware and OS varies. Never imply that reading a PCIe device's vendor ID is enough to authorize its DMA engine or that every available PCIe capability is automatically enabled.</p>
+
+</section>
+<section id="bus-device-function-and-segment-identifiers" aria-labelledby="heading-bus-device-function-and-segment-identifiers">
+<h2 id="heading-bus-device-function-and-segment-identifiers">Bus, device, function, and segment identifiers</h2>
+<p>A conventional PCI function is addressed by a <strong>Bus:Device.Function (BDF)</strong> identity, usually alongside a segment or domain identifier when multiple host-bridge segments exist. Configuration software uses these identifiers to reach the correct function. In a bridge hierarchy, bus-number windows control configuration routing. Operating-system tools often print values such as <code>0000:03:00.0</code>, where the first group identifies a domain, then bus, device, and function.</p>
+<p>BDF identity is not an immutable physical serial number, and it can change when topology, firmware, or resource assignment changes. It is also distinct from a TLP <strong>Tag</strong>, which associates one outstanding non-posted request with its completions. A <strong>Requester ID</strong> identifies the originating function for relevant transaction processing, whereas addresses select target resources. Confusing these three identities leads to incorrect DMA tracing and device attribution.</p>
+
+</section>
+<section id="base-address-registers-and-resource-windows" aria-labelledby="heading-base-address-registers-and-resource-windows">
+<h2 id="heading-base-address-registers-and-resource-windows">Base Address Registers and resource windows</h2>
+<p>An endpoint's <strong>Base Address Registers (BARs)</strong> describe memory or I/O resource windows that host software can assign and map. A BAR can correspond to control registers, device-local memory aperture, or another defined resource region. Bridges require compatible resource windows so downstream addresses can be forwarded to the intended functions. Some devices have multiple BARs, and a 64-bit memory BAR consumes an appropriate pair of configuration-register slots.</p>
+<p>BAR-assigned host physical addresses are not the same as device-internal offsets or DMA addresses. A driver typically maps an authorized BAR and accesses registers using OS-provided MMIO accessors; that is an outbound CPU-to-device operation. When the device initiates DMA, it uses device-visible addresses obtained through a separate mapping and translation workflow. Furthermore, resource allocation does not imply that every byte of a BAR range behaves like ordinary RAM: reads and writes may have side effects and require particular widths and ordering.</p>
+
+</section>
+<section id="transaction-routing-through-root-ports-and-switches" aria-labelledby="heading-transaction-routing-through-root-ports-and-switches">
+<h2 id="heading-transaction-routing-through-root-ports-and-switches">Transaction routing through root ports and switches</h2>
+<p>The hierarchy distinguishes address-routed memory traffic, configuration routing through bus-number windows, and message-routing forms. A switch selects an appropriate downstream port based on transaction information and its configured topology. Intermediate ports are forwarding elements; they are not the final memory completer merely because they forwarded the request. Return completions travel toward the requester under the corresponding routing rules.</p>
+<p>Routing is not universal full connectivity. Some requests are prohibited, redirected, or blocked by device capabilities, bridge rules, access controls, and host root-complex behavior. Address validity and routing success also differ: an address can be syntactically well-formed but target an unmapped window or trigger a completion error. The correct troubleshooting sequence is to map the hierarchy, check resource allocation and authorization, then inspect transaction and link-level failures.</p>
+
+</section>
+<section id="transaction-identifiers-and-completion-matching" aria-labelledby="heading-transaction-identifiers-and-completion-matching">
+<h2 id="heading-transaction-identifiers-and-completion-matching">Transaction identifiers and completion matching</h2>
+<p>A requester typically tags an outstanding non-posted request so its completion can be matched to the correct operation. The combination of requester identity and relevant tag information supports concurrency without requiring all reads to finish in initial request order. Completions also report status and other bookkeeping details; split read completions must be assembled with the appropriate remaining-length and byte-position interpretation.</p>
+<p>Tags are <strong>finite resources</strong> and their supported capacity varies by device and enabled feature. Exhausting the available tags can prevent another non-posted request from being issued even when the physical link has idle capacity. Conversely, a fast switch uplink cannot increase a device's tag pool. When reasoning about outstanding-read performance, track both transaction count and return-data capacity; a small read request and a long read request consume different bandwidth and buffering over time.</p>
+
+</section>
+<section id="payload-sizes-request-limits-and-boundaries" aria-labelledby="heading-payload-sizes-request-limits-and-boundaries">
+<h2 id="heading-payload-sizes-request-limits-and-boundaries">Payload sizes, request limits, and boundaries</h2>
+<p>The <strong>Maximum Payload Size (MPS)</strong> limits payload length for relevant TLP transfers, while the <strong>Maximum Read Request Size (MRRS)</strong> constrains the length of a Memory Read request as configured for a requester. These are separate negotiated/configured controls and should not be confused with a link's width or the size of an application buffer. Read completions may be partitioned according to completer and boundary requirements, so one MRRS-sized request is not necessarily one wire-level data completion.</p>
+<p>A transaction's boundary and alignment constraints depend on type and specification rules; PCIe requests have important 4 KiB page-boundary restrictions, and completion boundaries also matter. An operating system moving a large scatter-gather buffer will commonly generate a series of requests with lengths and addresses appropriate to these limits. Increasing MPS or MRRS may improve efficiency for a compatible workload, but it is not automatically safe, legal, or beneficial on every topology; the whole path and device capabilities must be considered.</p>
+
+</section>
+<section id="data-link-reliability-and-replay" aria-labelledby="heading-data-link-reliability-and-replay">
+<h2 id="heading-data-link-reliability-and-replay">Data-link reliability and replay</h2>
+<p>For conventional non-FLIT operation, the <strong>Data Link Layer</strong> protects exchanges over one adjacent PCIe link. TLP transport uses link-level sequence/CRC and acknowledgment/replay mechanisms, and support packets convey information such as flow-control updates. If an error is detected, link-level recovery may retransmit traffic without requiring the original application to retry its logical operation. These activities are distinct from the completion status of a PCIe Memory Read or Configuration Read.</p>
+<p>Link replay generally protects against specific transient transmission problems, not every failed device operation. Link problems may ultimately require recovery, retraining, or software fault response. Error behavior differs in FLIT mode, where fixed-size units, FEC, CRC, and replay change the accounting. A comprehensive diagnostic distinguishes a correctable physical/link event from a completion timeout, Unsupported Request, completion abort, or platform-reported fatal error.</p>
+
+</section>
+<section id="credit-based-flow-control" aria-labelledby="heading-credit-based-flow-control">
+<h2 id="heading-credit-based-flow-control">Credit-based flow control</h2>
+<p>PCIe uses receive-buffer <strong>credits</strong> to avoid transmitting traffic when the adjacent receiver lacks protocol buffer capacity. Credit management distinguishes traffic categories such as posted requests, non-posted requests, and completions, including header/data distinctions where applicable. A transmitter tracks advertised availability and respects the rules for sending new traffic; the receiver returns credit as space is freed. This is link-level protection against buffer overflow, not a promise of fair end-to-end bandwidth allocation.</p>
+<p>A request can be held back even when the serial line is physically able to transmit bits: there may be insufficient credits, tags, internal request queue entries, or downstream capacity. A large posted write can consume data credits that a tiny configuration request does not use in the same way. Flow-control stalls can therefore be workload-specific. Some assumptions about packet and credit organization change in FLIT mode, so a version-aware trace is essential when measuring advertised versus usable buffering.</p>
+
+</section>
+<section id="ordering-rules-attributes-and-visibility" aria-labelledby="heading-ordering-rules-attributes-and-visibility">
+<h2 id="heading-ordering-rules-attributes-and-visibility">Ordering rules, attributes, and visibility</h2>
+<p>PCIe defines ordering rules to prevent certain request and completion classes from bypassing others in prohibited ways. Attributes such as <strong>Relaxed Ordering</strong> and <strong>No Snoop</strong> can alter treatment when legal, supported, and properly managed. The fact that packets occupy the same link does not imply all requests complete in FIFO order. Ordering domains, requester identities, host-memory rules, bridge behavior, and device-specific contracts must be read together.</p>
+<p>Three different statements should never be collapsed into one: <strong>a packet reached the next link</strong>, <strong>the completer accepted a transaction</strong>, and <strong>the effects are now visible to the other agent</strong>. For example, a driver may need a platform-appropriate barrier and readback operation to ensure posted register writes are observed before subsequent dependent actions. Likewise, coherent DMA does not eliminate the need to arrange descriptor publication and ownership transitions. PCIe ordering semantics are necessary, but not always sufficient, for a complete software synchronization protocol.</p>
+
+</section>
+<section id="interrupts-messages-and-msi-x-delivery" aria-labelledby="heading-interrupts-messages-and-msi-x-delivery">
+<h2 id="heading-interrupts-messages-and-msi-x-delivery">Interrupts, messages, and MSI-X delivery</h2>
+<p>PCIe can transport events in ways that replace earlier dedicated signal wires. <strong>Message-Signaled Interrupts (MSI and MSI-X)</strong> are commonly implemented through specialized memory-write transactions targeted at the platform's interrupt-remapping or interrupt-controller path. A device may use different MSI-X vectors for distinct submission and completion queues. This mechanism is not the same as reading a completion TLP for every DMA transfer: the device may write completion records and then raise an interrupt separately.</p>
+<p>Interrupt moderation, coalescing, affinity, masking, and virtualization affect observed latency and CPU work. A successful MSI-X write should not be used as evidence that arbitrary device data buffers are visible without satisfying the applicable ordering/coherency protocol. Similarly, a device can make progress using polling even if interrupts are disabled. The main responsibility of the PCIe interconnect is correct message transport under the platform's configured routing and protections.</p>
+
+</section>
+<section id="dma-and-pcie-bus-mastering" aria-labelledby="heading-dma-and-pcie-bus-mastering">
+<h2 id="heading-dma-and-pcie-bus-mastering">DMA and PCIe bus mastering</h2>
+<p>After host software configures a function and grants the needed privileges, a PCIe endpoint may initiate <strong>DMA Memory Read and Memory Write TLPs</strong>. The endpoint's device-visible address need not equal a process virtual address or even host physical address when an IOMMU translates and restricts the transaction. DMA mapping establishes buffer ownership, permitted direction and length, cache handling, and lifetime; the bus-master capability alone does not authorize unrestricted system-memory access.</p>
+<p>A representative storage transfer has several steps: allocate and map command/data buffers; publish submission descriptors; notify the controller; controller fetches descriptors and writes or reads data using DMA; controller publishes completion status; software observes completion and unmaps/reuses buffers at the correct time. Each arrow may involve separate traffic and visibility constraints. Platform interfaces can include ATS, PRI, PASID, and peer DMA capabilities, but those features are optional, negotiated, and subject to security policy.</p>
+
+</section>
+<section id="iommus-acs-and-device-trust-boundaries" aria-labelledby="heading-iommus-acs-and-device-trust-boundaries">
+<h2 id="heading-iommus-acs-and-device-trust-boundaries">IOMMUs, ACS, and device trust boundaries</h2>
+<p>An IOMMU can translate device-originated addresses and enforce per-device or per-domain access restrictions. <strong>Access Control Services (ACS)</strong> can influence PCIe peer-to-peer routing and isolation on supported ports; however, capability support and platform wiring determine whether a topology provides the desired isolation. Logical assignment to different VMs does not itself prove that their PCIe devices are isolated through every switch and memory route.</p>
+<p>Important threats include malicious or compromised bus masters, untrusted external devices, inappropriate shared translation domains, and device-reset state that survives in queues or memory. Defensive design requires authorized DMA mappings, safe device initialization/reset, correct interrupt remapping where available, and firmware/software cooperation. PCIe also includes optional security capabilities in some implementations; do not assume that an ordinary PCIe link is universally encrypted or that IOMMU enablement alone solves every device firmware or timing-channel risk.</p>
+
+</section>
+<section id="peer-to-peer-transfers-and-root-complex-boundaries" aria-labelledby="heading-peer-to-peer-transfers-and-root-complex-boundaries">
+<h2 id="heading-peer-to-peer-transfers-and-root-complex-boundaries">Peer-to-peer transfers and root-complex boundaries</h2>
+<p>Some PCIe systems permit one endpoint to address memory resources belonging to another endpoint, commonly called <strong>peer-to-peer (P2P)</strong> traffic. This can avoid unnecessary trips through host memory for certain workloads. Feasibility depends on BAR exposure, route legality, switch support, ACS settings, platform root-complex behavior, driver support, and address mappings. A route that appears short on a diagram can nevertheless be blocked or redirected.</p>
+<p>The Linux kernel's P2P DMA documentation specifically cautions that routes are well-defined through PCIe topology only up to host bridge/root-port boundaries, where platform-dependent behavior complicates assumptions. Applications should not presume that any GPU can DMA directly into any NVMe controller across arbitrary root complexes. A sound performance analysis checks the actual connectivity and supported driver framework rather than inferring P2P capability from shared PCIe branding.</p>
+
+</section>
+<section id="virtual-functions-and-sr-iov" aria-labelledby="heading-virtual-functions-and-sr-iov">
+<h2 id="heading-virtual-functions-and-sr-iov">Virtual functions and SR-IOV</h2>
+<p><strong>Single Root I/O Virtualization (SR-IOV)</strong> lets certain capable devices expose a <strong>Physical Function (PF)</strong> and multiple lightweight <strong>Virtual Functions (VFs)</strong> for separately managed consumers. Each VF can have its own requester identity and applicable resource/interrupt configuration, while the physical device and link remain shared. A VF is not a separate independent x16 physical connection and does not automatically receive a private bandwidth or cache budget.</p>
+<p>A system administrator or hypervisor must coordinate allocation, IOMMU isolation, interrupts, reset, link accounting, and fairness. The PF retains responsibilities for controlling certain common device resources. SR-IOV can reduce software overhead in virtualized networking and storage, but the security boundary depends on hardware capabilities and deployment configuration. It is a PCIe device-function and virtualization feature, not a generic mechanism for making an arbitrary PCIe endpoint coherent with host caches.</p>
+
+</section>
+<section id="hot-plug-power-states-and-reset-paths" aria-labelledby="heading-hot-plug-power-states-and-reset-paths">
+<h2 id="heading-hot-plug-power-states-and-reset-paths">Hot-plug, power states, and reset paths</h2>
+<p>PCIe supports platform-dependent hot-plug mechanisms, link power management, and several forms of device or link reset. A hot-plug-capable slot requires electrical, firmware, controller, and OS support; a mechanically accessible connector is not automatically safe for live removal. Adding or removing a device can change bridge resources and interrupt routing, and drivers must quiesce ongoing DMA before release.</p>
+<p>Link power states and component power states can reduce energy but add entry/exit or retraining delays. Reset may clear BAR configuration, MSI setup, bus mastering, and other device state. Safe recovery typically requires isolating failed traffic, resetting the appropriate scope, restoring configuration, rebuilding DMA mappings or queues as needed, and verifying successful re-enumeration. It is unsafe to resume device traffic solely because the link again reports L0.</p>
+
+</section>
+<section id="error-reporting-aer-and-fault-recovery" aria-labelledby="heading-error-reporting-aer-and-fault-recovery">
+<h2 id="heading-error-reporting-aer-and-fault-recovery">Error reporting, AER, and fault recovery</h2>
+<p>PCIe errors span several levels: transient link corruption and replay; malformed or unsupported requests; completion failures or timeouts; and serious errors that compromise reliable operation. <strong>Advanced Error Reporting (AER)</strong>, when supported and enabled, supplies richer classification and information about reported errors. Linux exposes AER handling and statistics that can help associate correctable, nonfatal, and fatal reports with devices and upstream ports.</p>
+<p>Error logs are observations, not automatic root-cause diagnoses. A completion timeout can reflect a failed endpoint, blocked bridge route, software reset race, missing credits, or another underlying issue. A high correctable-error rate can suggest a marginal link even when workloads succeed. Troubleshoot from physical topology and negotiated status through error codes, transaction traces, device ownership, and reset history; keep transient versus reproducible faults separate.</p>
+
+</section>
+<section id="tlps-versus-dllps-versus-completion-records" aria-labelledby="heading-tlps-versus-dllps-versus-completion-records">
+<h2 id="heading-tlps-versus-dllps-versus-completion-records">TLPs versus DLLPs versus completion records</h2>
+<p>Three often-confused objects must be distinguished. A <strong>TLP</strong> is PCIe transaction traffic. A <strong>DLLP</strong>, in traditional operation, helps manage a neighboring link. A <strong>device completion record</strong> is data in a device-defined queue or structure, such as a storage or networking completion ring; it may be written using DMA TLPs and later announced by MSI-X. The device completion record is not automatically a PCIe Completion TLP.</p>
+<p>This vocabulary matters when diagnosing performance. A single NVMe command can require several posted writes, one or more memory reads, numerous completions at device-protocol level, and a notification; these are not one-to-one translations. A TLP Completion tells the PCIe requester about a qualifying non-posted PCIe request. A command completion tells the device driver about work defined by the peripheral protocol. The latter may arrive much later than the former.</p>
+
+</section>
+<section id="pcie-and-related-standards-nvme-usb4-cxl" aria-labelledby="heading-pcie-and-related-standards-nvme-usb4-cxl">
+<h2 id="heading-pcie-and-related-standards-nvme-usb4-cxl">PCIe and related standards: NVMe, USB4, CXL</h2>
+<p>PCIe is a transport foundation for various systems, but protocols running on top of or beside it retain different semantics. <strong>NVMe</strong> describes controller/host command queues and storage operations that commonly travel through PCIe memory and DMA transactions. Some USB4/Thunderbolt systems tunnel PCIe traffic across another interconnect; their security authorization and bandwidth arbitration differ from a native motherboard link. <strong>Compute Express Link (CXL)</strong> uses PCIe-derived physical and architectural foundations, with additional protocols for cache and memory functions where supported.</p>
+<p>Neither 'PCIe attached' nor 'PCIe-derived' tells the reader whether memory is coherent, whether an accelerator is securely isolated, or whether a device supports hot-plug. PCIe by itself does not convert ordinary device memory into transparent CPU RAM. Distinguish the service a higher protocol provides from the PCIe transactions that carry or accompany it.</p>
+
+</section>
+<section id="performance-variables-and-the-meaning-of-bandwidth" aria-labelledby="heading-performance-variables-and-the-meaning-of-bandwidth">
+<h2 id="heading-performance-variables-and-the-meaning-of-bandwidth">Performance variables and the meaning of bandwidth</h2>
+<p>A PCIe performance estimate begins with negotiated generation and width, then subtracts coding, framing, packet, and transfer-management overhead. <strong>Useful payload throughput</strong> counts the bytes a workload wanted delivered; <strong>link throughput</strong> may include control traffic and repeated data. The two should not be confused. A benchmark reporting disk throughput also includes device media, host memory, driver, and queueing constraints outside the PCIe link itself.</p>
+<p>For one direction in traditional Gen1–Gen5 operation, a useful idealized expression is <code>lane rate × lanes × coding fraction ÷ 8</code>. For Gen6/Gen7 FLIT-based operation, use the applicable nominal byte-rate model and then deduct FLIT/protocol overhead; older encoding fractions do not apply. An x16 link has a capacity per direction, and a separate simultaneous capacity in the reverse direction. Reporting their sum without the word <em>bidirectional</em> overstates what one DMA copy direction can achieve.</p>
+
+</section>
+<section id="transaction-size-and-useful-transfer-efficiency" aria-labelledby="heading-transaction-size-and-useful-transfer-efficiency">
+<h2 id="heading-transaction-size-and-useful-transfer-efficiency">Transaction size and useful transfer efficiency</h2>
+<p>Small TLPs spend a larger fraction of transmitted resources on headers, link framing, and acknowledgment or credit-control activity than large payloads. An elementary teaching model is <code>efficiency = useful payload bytes ÷ total bytes transmitted for that operation</code>, but a real PCIe measurement must decide which layer's bytes are counted. A completion packet may contain only part of a large read; a posted write has different return traffic from a read.</p>
+<p>Effective efficiency also depends on MPS, MRRS, alignment, split completions, interleaving, FLIT packing, and link idle intervals. Enlarging a transfer can raise byte efficiency but increase serialization latency or buffer occupancy. A latency-sensitive control access might prefer a short packet even when it is inefficient by a pure bytes-per-packet metric. Therefore, selecting MPS/MRRS and queue depth is a system decision, not simply 'maximize all packet sizes.'</p>
+
+</section>
+<section id="outstanding-reads-and-latency-hiding" aria-labelledby="heading-outstanding-reads-and-latency-hiding">
+<h2 id="heading-outstanding-reads-and-latency-hiding">Outstanding reads and latency hiding</h2>
+<p>A non-posted read ties up request-tracking resources until required completions arrive. If the read response latency is high relative to serialization time, issuing only one at a time leaves much of the link unused. Multiple outstanding reads can overlap path delay and completer service, provided there are enough tags, credits, queue entries, and memory bandwidth.</p>
+<p>A rough upper bound follows the bandwidth-delay-product idea: to sustain <code>B</code> useful bytes per second at an effective round-trip service time <code>L</code>, enough independently outstanding work is needed to cover approximately <code>B × L</code> bytes, subject to protocol and workload restrictions. The result is an estimate, not a literal required credit count; requests may complete at variable times and compete for distinct resources. A chain of address-dependent pointer reads cannot be transformed into independent requests merely by configuring a larger MRRS.</p>
+
+</section>
+<section id="topology-oversubscription-and-contention" aria-labelledby="heading-topology-oversubscription-and-contention">
+<h2 id="heading-topology-oversubscription-and-contention">Topology oversubscription and contention</h2>
+<p>A switched hierarchy can have more aggregate downstream capacity than upstream capacity. For example, four Gen4 x4 endpoint links can each sustain substantial local traffic, while a Gen4 x8 uplink to a host may carry at most half their combined theoretical one-way link capacity. The real outcome depends on whether all four need to send in the same direction, whether peer transfers remain local, and what other traffic shares the uplink.</p>
+<p>Switch buffering can absorb bursts but cannot manufacture sustained throughput beyond the bottleneck port. When burst traffic overwhelms queues, credit backpressure can move toward endpoints and affect latency. Benchmarking one device in isolation therefore says little about simultaneous behavior of multiple ports. An honest capacity plan draws a directed graph of links and labels speed, width, oversubscription, and host-memory bottlenecks.</p>
+
+</section>
+<section id="switch-latency-and-root-complex-service-costs" aria-labelledby="heading-switch-latency-and-root-complex-service-costs">
+<h2 id="heading-switch-latency-and-root-complex-service-costs">Switch latency and root-complex service costs</h2>
+<p>Each forwarding point may add routing, arbitration, packet buffering, and physical serialization delays. A switch can provide concurrency and more endpoint connectivity without reducing latency for every path. A transaction to host memory also crosses the root port and host memory subsystem, and the completer may introduce delay far larger than the wire's transfer time.</p>
+<p>For read latency, distinguish request serialization, request-path hop delays, target service time, completion serialization, return-path delays, and requester processing. For write performance, the absence of a completion does not mean zero latency to actual device effect. Switch cut-through, buffering, internal width, power states, and transaction type can all change the result. A useful investigative strategy is to measure both low-concurrency latency and high-concurrency throughput rather than use one benchmark for both.</p>
+
+</section>
+<section id="cpu-to-device-mmio-versus-device-to-memory-dma" aria-labelledby="heading-cpu-to-device-mmio-versus-device-to-memory-dma">
+<h2 id="heading-cpu-to-device-mmio-versus-device-to-memory-dma">CPU-to-device MMIO versus device-to-memory DMA</h2>
+<p>A CPU writing a PCIe device control register usually accesses a mapped BAR aperture; the RC generates appropriate PCIe traffic. A device DMA write moves data the other direction, from endpoint toward host memory, often using an IOMMU mapping created by the driver. The <em>same physical link</em> supports both traffic directions, but software-visible ordering and authorization differ.</p>
+<p>Consider a command queue: software fills descriptors in ordinary host memory, performs required publication operations, then writes a device BAR doorbell. The endpoint reads the descriptors using DMA, executes work, and writes status back. Drivers must avoid reusing the command buffer until completion ownership transfers. It is a design error to infer that any ordinary CPU store automatically becomes immediately visible to the PCIe device independent of cache policy and barriers.</p>
+
+</section>
+<section id="configuration-capabilities-and-feature-negotiation" aria-labelledby="heading-configuration-capabilities-and-feature-negotiation">
+<h2 id="heading-configuration-capabilities-and-feature-negotiation">Configuration capabilities and feature negotiation</h2>
+<p>PCI configuration space contains standard fields and capability structures that reveal supported functions such as PCI Express controls, MSI/MSI-X, extended reporting, and optional advanced features. Support in a capability list does not necessarily mean the feature is enabled. Configuration may be limited by firmware ownership, root-port policy, device errata, power state, security requirements, and other software.</p>
+<p>A platform also exposes negotiated <strong>Link Status</strong>, separate from advertised <strong>Link Capabilities</strong>. A device can report Gen5 capability but currently operate at Gen4 x8; traffic calculations must use actual status. Similarly, a function may support extended tags while not having them enabled. Reliable system records should capture both capability and control/status values, along with driver and firmware versions, before evaluating performance or isolation.</p>
+
+</section>
+<section id="queueing-fairness-and-traffic-classes" aria-labelledby="heading-queueing-fairness-and-traffic-classes">
+<h2 id="heading-queueing-fairness-and-traffic-classes">Queueing fairness and traffic classes</h2>
+<p>PCIe traffic shares port buffers and egress bandwidth. The protocol contains mechanisms for traffic classes and virtual channels, but supported channel counts, arbitration policies, and quality-of-service guarantees differ by implementation. A device's advertised QoS-related setting is not proof of a strict worst-case latency guarantee. Switches and root complexes may combine or remap categories under defined policies.</p>
+<p>Real-time design must consider head-of-line blocking, completion starvation avoidance, backpressure, competing DMA engines, memory-controller contention, and firmware activity. A bulk write stream may saturate uplink bandwidth even though a control read needs only a few bytes. Whether that control read suffers unacceptable latency depends on scheduling and buffer resources, not just the physical link rate. System testing should include mixed traffic in both directions with representative burstiness.</p>
+
+</section>
+<section id="reliability-across-multiple-links" aria-labelledby="heading-reliability-across-multiple-links">
+<h2 id="heading-reliability-across-multiple-links">Reliability across multiple links</h2>
+<p>Every adjacent PCIe link has its own physical and link-management responsibilities, while end-to-end transaction meaning spans the fabric. An upstream link's error-recovery event does not necessarily imply that the endpoint's memory operation failed, but persistent errors may exhaust recovery mechanisms or cause higher-layer timeout. Conversely, a perfectly clean link can carry a syntactically valid but unauthorized address request that fails at the transaction layer.</p>
+<p>A multilink fault investigation should identify the segment reporting errors, the affected requester/completer, whether a retry was handled locally, and whether a driver observed a transaction-level failure. AER reporting may identify root ports and downstream functions, but errors can propagate and appear at a component other than the physical origin. Capture topology and timestamps, then correlate software fault handling with hardware counters.</p>
+
+</section>
+<section id="pcie-link-adaptation-and-power-budgeting" aria-labelledby="heading-pcie-link-adaptation-and-power-budgeting">
+<h2 id="heading-pcie-link-adaptation-and-power-budgeting">PCIe link adaptation and power budgeting</h2>
+<p>The physical resources needed for higher-generation signaling are significant: equalization and retimer requirements, receiver power, board design, and signal integrity can influence successful deployment. Link power management can save energy during idle periods, with possible costs when traffic resumes. A low-latency control workload and a continuously streaming accelerator may have different optimal policies.</p>
+<p>Actual platform policies must respect device capabilities and firmware ownership. Turning off link power management for performance is not always justified; likewise, forcing a lower link speed may reduce power while destroying workload throughput. Compare joules per completed task as well as instantaneous watts, and record the observed negotiated speed to avoid comparing unlike operating conditions. Retimer presence and cable qualification are system-design facts, not software hints that can be ignored.</p>
+
+</section>
+<section id="compliance-interoperability-and-version-boundaries" aria-labelledby="heading-compliance-interoperability-and-version-boundaries">
+<h2 id="heading-compliance-interoperability-and-version-boundaries">Compliance, interoperability, and version boundaries</h2>
+<p>A PCIe specification revision describes allowed behavior, not a promise that every shipping product implements every optional feature. Hardware components across generations are designed for interoperable negotiation within supported conditions, but the resulting operating point can be limited by either side or by intermediate platform hardware. The connector form factor, lane wiring, timing, power, and device protocol may impose independent restrictions.</p>
+<p>As of November 2026, PCI-SIG lists the PCI Express Base Specification <strong>Revision 7.1</strong>, released September 17, 2026. That is a specification-library publication, not evidence that a reader's installed workstation supports Gen7 or that a specific operating system has enabled every new capability. When documenting performance, identify the exact marketed product, negotiated generation, link mode, and measurement conditions rather than substituting the newest available specification number.</p>
+
+</section>
+<section id="design-review-and-investigation-framework" aria-labelledby="heading-design-review-and-investigation-framework">
+<h2 id="heading-design-review-and-investigation-framework">Design review and investigation framework</h2>
+<p>A defensible PCIe design review starts with <strong>topology</strong>: root complex, root ports, switches, endpoint functions, and physical links. It then inventories <strong>negotiated properties</strong>: generation, width, link state, MPS/MRRS, configuration resources, request tags, and credit conditions. The third pass traces <strong>transactions</strong>: who requests what, how it is routed, how completions return, how software knows the operation became visible, and which trust boundary grants access.</p>
+<p>The final pass validates behavior under stress: simultaneous traffic, page-boundary crossings, hot resets, interrupt moderation, transient link errors, endpoint faults, and hostile or malformed requests. Record the difference between 'device disappeared,' 'link retrained,' 'completion timed out,' and 'DMA data was stale'; each suggests a different failure path. No single bandwidth benchmark or configuration dump can establish correctness, performance, and security in isolation.</p>
+
+</section>
+<section id="pcie-architecture-comparison" aria-labelledby="heading-pcie-architecture-comparison">
+<h2 id="heading-pcie-architecture-comparison">PCIe architecture comparison</h2>
+<table>
+<thead>
+<tr>
+  <th>Property</th>
+  <th>Conventional shared PCI</th>
+  <th>PCIe non-FLIT links</th>
+  <th>PCIe 6/7 FLIT-mode links</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Electrical sharing</td>
+  <td>Devices share a parallel segment</td>
+  <td>Adjacent point-to-point serial links</td>
+  <td>Adjacent point-to-point high-speed serial links</td>
+</tr>
+<tr>
+  <td>Coordination</td>
+  <td>Bus ownership arbitration</td>
+  <td>Packet forwarding and credits</td>
+  <td>FLIT-based transfer, credits, and integrity mechanisms</td>
+</tr>
+<tr>
+  <td>Link integrity</td>
+  <td>Technology-specific parity/error handling</td>
+  <td>Adjacent-link CRC/acknowledgment/replay</td>
+  <td>FLIT-oriented FEC, CRC, and recovery</td>
+</tr>
+<tr>
+  <td>Expansion</td>
+  <td>Common segment and bridges</td>
+  <td>Switch hierarchy</td>
+  <td>Switch hierarchy with mode-dependent link behavior</td>
+</tr>
+<tr>
+  <td>Throughput interpretation</td>
+  <td>Shared bus clock and width</td>
+  <td>Negotiated GT/s, lanes, coding and TLP overhead</td>
+  <td>Negotiated GT/s, PAM4/FLIT overhead and traffic pattern</td>
+</tr>
+<tr>
+  <td>Driver view</td>
+  <td>PCI configuration functions</td>
+  <td>PCI-style configuration functions</td>
+  <td>PCI-style configuration functions</td>
+</tr>
+</tbody>
+</table>
+<p>The table compares architectural patterns rather than guaranteeing that particular implementation generations deliver a specific feature. Conventional PCI's shared electrical bus is categorically different from a PCIe fabric even though much software-facing configuration vocabulary survives.</p>
+
+</section>
+<section id="transaction-type-comparison" aria-labelledby="heading-transaction-type-comparison">
+<h2 id="heading-transaction-type-comparison">Transaction-type comparison</h2>
+<table>
+<thead>
+<tr>
+  <th>Operation</th>
+  <th>Typical initiator</th>
+  <th>Typical response</th>
+  <th>Primary interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Memory Read</td>
+  <td>CPU/root complex or endpoint bus master</td>
+  <td>Completion(s) with data</td>
+  <td>Non-posted request for addressed bytes</td>
+</tr>
+<tr>
+  <td>Memory Write</td>
+  <td>CPU/root complex or endpoint bus master</td>
+  <td>Usually no per-write completion TLP</td>
+  <td>Posted transfer of data and side effect</td>
+</tr>
+<tr>
+  <td>Configuration Read</td>
+  <td>Configuration manager via root complex</td>
+  <td>Completion carrying configuration data/status</td>
+  <td>Device discovery and capability reading</td>
+</tr>
+<tr>
+  <td>Configuration Write</td>
+  <td>Configuration manager via root complex</td>
+  <td>Completion/status according to type</td>
+  <td>Device setup, permissions, resource controls</td>
+</tr>
+<tr>
+  <td>MSI/MSI-X</td>
+  <td>Interrupt-capable endpoint</td>
+  <td>No ordinary data-read response</td>
+  <td>Event delivery toward interrupt destination</td>
+</tr>
+<tr>
+  <td>Device queue completion</td>
+  <td>Endpoint or controller firmware</td>
+  <td>Device-defined completion record, potentially MSI-X</td>
+  <td>Peripheral-protocol operation finished</td>
+</tr>
+</tbody>
+</table>
+<p>The table separates PCIe completion packets from device-level completions. Ordering, routing, and response details depend on traffic type and capability configuration.</p>
+
+</section>
+<section id="pcie-generation-and-lane-rate-comparison" aria-labelledby="heading-pcie-generation-and-lane-rate-comparison">
+<h2 id="heading-pcie-generation-and-lane-rate-comparison">PCIe generation and lane-rate comparison</h2>
+<table>
+<thead>
+<tr>
+  <th>Generation</th>
+  <th style="text-align:right">Nominal signaling rate</th>
+  <th>Representative physical/transfer approach</th>
+  <th style="text-align:right">Approximate one-way ceiling for x16, before all protocol overhead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>PCIe 1.x</td>
+  <td style="text-align:right">2.5 GT/s</td>
+  <td>8b/10b</td>
+  <td style="text-align:right">4.00 GB/s</td>
+</tr>
+<tr>
+  <td>PCIe 2.x</td>
+  <td style="text-align:right">5 GT/s</td>
+  <td>8b/10b</td>
+  <td style="text-align:right">8.00 GB/s</td>
+</tr>
+<tr>
+  <td>PCIe 3.x</td>
+  <td style="text-align:right">8 GT/s</td>
+  <td>128b/130b (non-FLIT)</td>
+  <td style="text-align:right">15.75 GB/s</td>
+</tr>
+<tr>
+  <td>PCIe 4.x</td>
+  <td style="text-align:right">16 GT/s</td>
+  <td>128b/130b (non-FLIT)</td>
+  <td style="text-align:right">31.51 GB/s</td>
+</tr>
+<tr>
+  <td>PCIe 5.x</td>
+  <td style="text-align:right">32 GT/s</td>
+  <td>128b/130b (non-FLIT)</td>
+  <td style="text-align:right">63.02 GB/s</td>
+</tr>
+<tr>
+  <td>PCIe 6.x</td>
+  <td style="text-align:right">64 GT/s</td>
+  <td>PAM4 and FLIT mode at 64 GT/s</td>
+  <td style="text-align:right">About 128 GB/s nominal per direction before FLIT/protocol overhead</td>
+</tr>
+<tr>
+  <td>PCIe 7.x</td>
+  <td style="text-align:right">128 GT/s</td>
+  <td>PAM4 and FLIT mode at 128 GT/s</td>
+  <td style="text-align:right">About 256 GB/s nominal per direction before FLIT/protocol overhead</td>
+</tr>
+</tbody>
+</table>
+<p>For Gen6/Gen7, the displayed figures are <strong>approximate nominal per-direction capacities</strong>, not usable application payload. Public PCI-SIG figures often quote approximately 256 GB/s bidirectional for Gen6 x16 and 512 GB/s bidirectional for Gen7 x16. Doubling a one-way number to quote both directions does not help a workload that is predominantly one-way. The base-specification and physical-layer implementation details govern actual overhead.</p>
+
+</section>
+<section id="common-misconceptions-and-corrections" aria-labelledby="heading-common-misconceptions-and-corrections">
+<h2 id="heading-common-misconceptions-and-corrections">Common misconceptions and corrections</h2>
+<p><strong>Misconception: 'PCIe x16 means the operating system can transfer 16 bytes in one cycle.'</strong> Width counts serial lanes, not parallel CPU bytes. A lane is a high-speed differential signaling path with independent directional operation and packet framing. <strong>Misconception: 'Every PCIe read is one request and one response packet.'</strong> Read responses can be split into multiple completion TLPs. <strong>Misconception: 'A posted write succeeded because there is no completion error.'</strong> Posted writes do not ordinarily return per-write completions, so protocol-specific checking is required.</p>
+<p><strong>Misconception: 'A switch guarantees additive bandwidth for all attached devices.'</strong> The uplink and host-memory path can be oversubscribed. <strong>Misconception: 'PCIe guarantees cache coherence.'</strong> Ordinary PCIe request transport does not by itself supply a uniform CPU-device cache-coherence contract. <strong>Misconception: 'Gen7's link rate is the throughput of every Gen7 device.'</strong> The actual negotiated width, mode, framing, workload, and endpoint capabilities determine observed performance. <strong>Misconception: 'MSI-X completion equals PCIe Completion.'</strong> MSI-X is event notification, not a non-posted read's returned TLP.</p>
+
+</section>
+<section id="worked-example-1-reading-a-device-register" aria-labelledby="heading-worked-example-1-reading-a-device-register">
+<h2 id="heading-worked-example-1-reading-a-device-register">Worked example 1 — Reading a device register</h2>
+<p>A diagnostic application requests a status register at an address assigned to a device's BAR. <strong>Step 1:</strong> the driver uses its mapped MMIO accessor rather than treating the address like process-heap memory. <strong>Step 2:</strong> the root complex produces a Memory Read request carrying the relevant address and requester/tag information. <strong>Step 3:</strong> switches or bridges route it according to the configured address window. <strong>Step 4:</strong> the device returns a Completion-with-Data, which travels back to the root complex. <strong>Step 5:</strong> the processor and driver consume the returned register value.</p>
+<p>This example deliberately does not attach a universal cycle count. Completion latency depends on bridge routing, device service, link speed, and contention. A read may also have a device-defined side effect, so repeated polling or debugging must respect the register specification. The returned TLP completion is not the same as a command-completion entry in an NVMe submission/completion queue. Troubleshooting question: if the link is healthy but the read times out, is the function powered, decoded, correctly mapped, or stuck handling another operation?</p>
+
+</section>
+<section id="worked-example-2-a-posted-mmio-doorbell-write" aria-labelledby="heading-worked-example-2-a-posted-mmio-doorbell-write">
+<h2 id="heading-worked-example-2-a-posted-mmio-doorbell-write">Worked example 2 — A posted MMIO doorbell write</h2>
+<p>Software fills an I/O submission descriptor and then rings a doorbell at an address mapped into the controller's BAR. The CPU-to-device write becomes a posted Memory Write transaction. A PCIe switch can forward it without returning a matching Completion TLP to the initiating root complex. <strong>Consequence:</strong> the CPU's issuance of the store alone is not a universal end-to-end acknowledgment that the controller has consumed the descriptor.</p>
+<p>A correct driver follows the platform's ordering rules when publishing the descriptor before the doorbell and relies on the device's completion protocol to determine when work is finished. In some driver/hardware situations, a subsequent appropriate read or barrier is used to establish the needed ordering or flush posted writes, according to documented rules. The useful lesson is that <em>link transport</em>, <em>device acceptance</em>, <em>command execution</em>, and <em>application completion</em> are distinct events.</p>
+
+</section>
+<section id="worked-example-3-read-tags-and-out-of-order-completions" aria-labelledby="heading-worked-example-3-read-tags-and-out-of-order-completions">
+<h2 id="heading-worked-example-3-read-tags-and-out-of-order-completions">Worked example 3 — Read tags and out-of-order completions</h2>
+<p>Imagine a requester sends three Memory Reads, identified for teaching as tags <code>0x21</code>, <code>0x22</code>, and <code>0x23</code>, for unrelated cache lines. All three requests are accepted. The completer returns the data for <code>0x22</code> first because it hit a local buffer, followed by <code>0x21</code> and <code>0x23</code>. Subject to applicable ordering and capabilities, the requester can use the request association to deliver each answer to the correct waiting operation rather than assume that response order equals request order.</p>
+<p>This illustrates what tags are for; it is not a claim that all permissible PCIe operations can reorder freely. Different transaction classes and attributes have distinct constraints. For a large read, a single request may produce multiple completion packets; tag association alone does not remove the need to track remaining bytes and completion fragments. If a tag is mistakenly reused before its earlier request is fully resolved, the receiver could lose the ability to associate return traffic correctly.</p>
+
+</section>
+<section id="worked-example-4-splitting-a-large-read-into-completions" aria-labelledby="heading-worked-example-4-splitting-a-large-read-into-completions">
+<h2 id="heading-worked-example-4-splitting-a-large-read-into-completions">Worked example 4 — Splitting a large read into completions</h2>
+<p>A requester issues a <strong>1,024-byte</strong> Memory Read within allowed boundaries, with a configured read-request limit that permits the operation. Suppose for this <strong>illustration only</strong> that the completer returns data in chunks no larger than <strong>256 bytes</strong> and that alignment and boundary conditions permit four equal chunks. The number of data completions is then <code>1,024 ÷ 256 = 4</code>. Those completions can contain distinct byte ranges but correspond to one logical read request.</p>
+<p>The total wire traffic includes a request header plus the headers and link overhead of all four data completions, not just 1,024 useful bytes. Actual completion partitioning is governed by PCIe rules including boundaries, buffer and capability constraints, so the assumed chunks are not a universal recipe. A developer counting one PCIe Completion for every software <code>read()</code> operation, or vice versa, would infer false performance metrics.</p>
+
+</section>
+<section id="worked-example-5-a-page-boundary-crossing" aria-labelledby="heading-worked-example-5-a-page-boundary-crossing">
+<h2 id="heading-worked-example-5-a-page-boundary-crossing">Worked example 5 — A page-boundary crossing</h2>
+<p>Suppose a teaching example needs to fetch <strong>64 bytes</strong> beginning at address <code>0x1FF0</code>. The next 4 KiB boundary is <code>0x2000</code>, which is <strong>16 bytes</strong> beyond the starting address. A single constrained request cannot simply cross that boundary in violation of applicable PCIe rules. The workload can be represented as a <strong>16-byte</strong> request ending at <code>0x1FFF</code> and a <strong>48-byte</strong> request beginning at <code>0x2000</code>, assuming other conditions permit those sizes.</p>
+<p>The bytes add correctly: <code>16 + 48 = 64</code>. This is a transaction segmentation problem, not a proof that device memory is arranged in 4 KiB physical pages or that an IOMMU mapping automatically covers both regions. If the second page is not legally mapped for DMA, the device may encounter a translation or access fault even though the first segment was valid. The distinction between PCIe request boundaries and address-translation permissions is important.</p>
+
+</section>
+<section id="worked-example-6-gen3-x4-one-way-coding-ceiling" aria-labelledby="heading-worked-example-6-gen3-x4-one-way-coding-ceiling">
+<h2 id="heading-worked-example-6-gen3-x4-one-way-coding-ceiling">Worked example 6 — Gen3 x4 one-way coding ceiling</h2>
+<p>For PCIe Gen3 in conventional non-FLIT mode, take <strong>8.0 GT/s per lane</strong>, <strong>128/130 coding efficiency</strong>, and <strong>four lanes</strong>. An idealized one-direction coded-data rate is:</p>
+<p><code>8 × 10^9 transfers/s × (128/130) ÷ 8 bits/byte × 4 lanes = 3.93846 × 10^9 bytes/s ≈ 3.94 GB/s</code>.</p>
+<p>This number is a <em>coding-adjusted link ceiling</em>, not application throughput. It does not deduct TLP headers, data-link effects, idle gaps, completion traffic, host-memory constraints, and software overhead. If a storage device copies only 2.5 GB/s, it may be limited by media, device firmware, queue depth, or host processing; the difference from 3.94 GB/s is not automatically lost to PCIe encoding.</p>
+
+</section>
+<section id="worked-example-7-gen5-x16-versus-gen4-x8-downtraining" aria-labelledby="heading-worked-example-7-gen5-x16-versus-gen4-x8-downtraining">
+<h2 id="heading-worked-example-7-gen5-x16-versus-gen4-x8-downtraining">Worked example 7 — Gen5 x16 versus Gen4 x8 downtraining</h2>
+<p>Using non-FLIT coding-adjusted ceilings, a PCIe Gen5 x16 link offers approximately <code>32 × 10^9 × 128/130 ÷ 8 × 16 ≈ 63.02 GB/s</code> in <strong>one direction</strong>. A Gen4 x8 link offers approximately <code>16 × 10^9 × 128/130 ÷ 8 × 8 ≈ 15.75 GB/s</code> in <strong>one direction</strong>. Thus the second configuration has <strong>one-quarter</strong> the nominal coding-adjusted one-way capacity of the first.</p>
+<p>This does not imply that an application benchmark must slow down fourfold. If the workload is bound by CPU compute, low request concurrency, or storage media, its useful throughput may hardly change. The calculation shows why reading actual negotiated speed and width is essential: a physically x16 device that downtrains to Gen4 x8 should not be modeled using its product label's peak Gen5 x16 figure.</p>
+
+</section>
+<section id="worked-example-8-full-duplex-accounting" aria-labelledby="heading-worked-example-8-full-duplex-accounting">
+<h2 id="heading-worked-example-8-full-duplex-accounting">Worked example 8 — Full-duplex accounting</h2>
+<p>An idealized Gen4 x8 non-FLIT link has a coding-adjusted ceiling of approximately <strong>15.75 GB/s per direction</strong>. If both ends are simultaneously transferring independent traffic at that ceiling, the combined transmitted volume across the two directions is about <strong>31.51 GB/s</strong>. If an application copies data only from endpoint to host, its relevant physical-path ceiling is still the <strong>15.75 GB/s one-way</strong> number, not the sum.</p>
+<p>In practice, send and receive transactions may not be symmetric. Memory Reads travel outward as relatively small request packets and return as larger completion packets; a read-intensive workload uses both directions but not equal numbers of payload bytes. Full-duplex capacity therefore should be described by directional traffic matrices rather than one undifferentiated figure.</p>
+
+</section>
+<section id="worked-example-9-packet-payload-overhead" aria-labelledby="heading-worked-example-9-packet-payload-overhead">
+<h2 id="heading-worked-example-9-packet-payload-overhead">Worked example 9 — Packet payload overhead</h2>
+<p>Assume an artificial instructional packet format with <strong>256 bytes</strong> of useful data and <strong>16 bytes</strong> of combined counted overhead. At the layer being counted, the efficiency is <code>256 ÷ (256 + 16) = 256/272 ≈ 94.12%</code>. If the useful data shrinks to <strong>32 bytes</strong> but the assumed overhead stays at <strong>16 bytes</strong>, efficiency becomes <code>32/(32+16) ≈ 66.67%</code>.</p>
+<p><strong>These overhead values are not a PCIe specification claim.</strong> They illustrate why packet size affects payload efficiency and why one must define the accounting layer. Real PCIe overhead includes format- and mode-dependent structures, sometimes packing and fixed-size FLIT units, plus traffic that does not map one-to-one to payload packets. The comparison helps explain why small random accesses may underuse a fast link even while many transactions per second are being processed.</p>
+
+</section>
+<section id="worked-example-10-uplink-oversubscription-behind-a-switch" aria-labelledby="heading-worked-example-10-uplink-oversubscription-behind-a-switch">
+<h2 id="heading-worked-example-10-uplink-oversubscription-behind-a-switch">Worked example 10 — Uplink oversubscription behind a switch</h2>
+<p>A switch has <strong>four Gen4 x4</strong> downstream links and <strong>one Gen4 x8</strong> uplink. Each downstream Gen4 x4 link has an idealized coding-adjusted one-way ceiling around <strong>7.88 GB/s</strong>, so together they represent <strong>31.51 GB/s</strong> of downstream potential. The x8 uplink offers only <strong>15.75 GB/s</strong> toward the root complex under the same assumptions. For four simultaneously streaming endpoints needing host memory, the uplink is oversubscribed by approximately <strong>2:1</strong>.</p>
+<p>No forwarding policy can sustain 31.51 GB/s across a 15.75 GB/s path indefinitely. Switch buffering might absorb short bursts, but queues fill and credits eventually throttle inputs. In a simple equal-share scenario, each endpoint might approach 3.94 GB/s toward the host, yet actual shares depend on arbitration and demand. Local peer transfers that do not cross the uplink require separate analysis and may be subject to access-control rules.</p>
+
+</section>
+<section id="worked-example-11-tags-versus-latency-bound-read-throughput" aria-labelledby="heading-worked-example-11-tags-versus-latency-bound-read-throughput">
+<h2 id="heading-worked-example-11-tags-versus-latency-bound-read-throughput">Worked example 11 — Tags versus latency-bound read throughput</h2>
+<p>Suppose, for a simplified model, a requester can sustain <strong>32 independent outstanding reads</strong>, each returning <strong>512 bytes</strong>, and each request occupies a slot for an average <strong>10 microseconds</strong>. The amount of useful payload simultaneously in flight is <code>32 × 512 = 16,384 bytes</code>. Dividing by the service time gives a rough upper bound of <code>16,384 ÷ 0.000010 = 1.6384 × 10^9 bytes/s</code>, or <strong>1.64 GB/s</strong>.</p>
+<p>This is a concurrency-bound approximation and assumes the requests are independent and the effective average service time stays at 10 microseconds. It does not assert that a PCIe link itself is 1.64 GB/s. To sustain 10 GB/s at the same latency with the same average response size, the bandwidth-delay-product estimate calls for around <code>10 × 10^9 × 10 × 10^-6 ÷ 512 ≈ 196</code> simultaneous reads, if other hardware allows. Request count, not just lane count, can matter.</p>
+
+</section>
+<section id="worked-example-12-mps-fragmentation-of-a-transfer" aria-labelledby="heading-worked-example-12-mps-fragmentation-of-a-transfer">
+<h2 id="heading-worked-example-12-mps-fragmentation-of-a-transfer">Worked example 12 — MPS fragmentation of a transfer</h2>
+<p>Imagine a controller wants to DMA-write <strong>1,000 bytes</strong> and a simplified path enforces a maximum payload of <strong>256 bytes</strong> for the relevant TLPs, with no page or alignment complication. The controller can divide the data into <strong>256 + 256 + 256 + 232 = 1,000 bytes</strong>, requiring <strong>four</strong> write TLP payloads. Each incurs its own framing and transaction overhead; one application's 1,000-byte buffer is not one guaranteed PCIe packet.</p>
+<p>If a system uses 128-byte payloads instead, it would need eight payload-bearing write packets for the same contiguous amount: seven of 128 bytes and one of 104 bytes. That may increase overhead but could align differently with buffering and latency requirements. The model omits optional header forms and other real constraints; it is intended to illustrate segmentation rather than dictate exact packet sizes for a real controller.</p>
+
+</section>
+<section id="worked-example-13-credit-exhaustion-without-a-broken-link" aria-labelledby="heading-worked-example-13-credit-exhaustion-without-a-broken-link">
+<h2 id="heading-worked-example-13-credit-exhaustion-without-a-broken-link">Worked example 13 — Credit exhaustion without a broken link</h2>
+<p>Consider an imaginary output port that has <strong>three available posted-data credit units</strong> and receives two writes that each need <strong>two</strong> such units. The first write uses two credits, leaving one, so the second must wait until at least one more unit becomes available under the simplified rule. The electrical transmitter could be idle during this pause even though its signal quality and negotiated rate are normal.</p>
+<p>A performance trace that records 'no bytes moved' should therefore check credits, packet eligibility, arbitration, requester queues, and downstream congestion before declaring a physical defect. Actual PCIe uses specified credit units and updates, with differences across modes; the hypothetical unit sizes above are for reasoning only. The engineering insight is that lack of receive-buffer permission can stall a fast link independently of wire rate.</p>
+
+</section>
+<section id="worked-example-14-msi-x-after-dma-completion" aria-labelledby="heading-worked-example-14-msi-x-after-dma-completion">
+<h2 id="heading-worked-example-14-msi-x-after-dma-completion">Worked example 14 — MSI-X after DMA completion</h2>
+<p>A network controller receives data and uses PCIe DMA Memory Writes to place packet bytes into host buffers. It then updates a descriptor or completion-ring entry and sends an MSI-X notification according to device and platform ordering rules. The CPU's interrupt handler observes the notification, inspects the ring, and processes available completions. If interrupt moderation combines several completions, the handler may find multiple completed operations after one event.</p>
+<p>This timeline contains at least three distinct things: data movement TLPs, device-defined completion-ring state, and an interrupt-delivery write. None is a generic PCIe Completion-with-Data packet for the original network receive operation. Drivers must also handle races where more work arrives between ring inspection and interrupt rearming. The exact barriers and affinity policy depend on the device protocol and host platform.</p>
+
+</section>
+<section id="worked-example-15-a-switch-path-failure-investigation" aria-labelledby="heading-worked-example-15-a-switch-path-failure-investigation">
+<h2 id="heading-worked-example-15-a-switch-path-failure-investigation">Worked example 15 — A switch-path failure investigation</h2>
+<p>An endpoint occasionally disappears under heavy load. The initial observation is <strong>not enough</strong> to conclude that its DMA engine is faulty. First, record negotiated speed/width and whether the affected downstream link retrains. Second, inspect root-port and endpoint AER records and correlate timestamps. Third, test the endpoint alone, then alongside other switch-connected devices to determine whether congestion or shared power changes the failure rate. Fourth, inspect device firmware, reset history, and allowed topology.</p>
+<p>If the link repeatedly retrains only under simultaneous traffic, possible contributors include signal margin, power or thermal instability, switch firmware, and link-state transitions. If the link remains stable but commands time out, investigate request routing, IOMMU faults, resource windows, queues, and completer behavior instead. The example demonstrates a diagnostic sequence, not a fabricated report of a specific deployed system.</p>
+
+</section>
+<section id="worked-example-16-comparing-a-new-specification-with-installed-hardware" aria-labelledby="heading-worked-example-16-comparing-a-new-specification-with-installed-hardware">
+<h2 id="heading-worked-example-16-comparing-a-new-specification-with-installed-hardware">Worked example 16 — Comparing a new specification with installed hardware</h2>
+<p>A procurement sheet advertises <strong>PCIe 7.1</strong> compatibility in a platform roadmap, but a current server reports a <strong>Gen5 x16</strong> endpoint link. The link status—not the newest PCI-SIG publication—defines the present transport limit. Its idealized Gen5 x16 one-way coding-adjusted ceiling remains about <strong>63 GB/s</strong>, not Gen7's much larger nominal capacity. A future card or firmware upgrade cannot guarantee a Gen7 operating point if the root port, motherboard channel, retimers, and endpoint do not support it.</p>
+<p>To validate a planned upgrade, obtain the specification for each link partner and intermediate element, verify physical channel qualification, confirm firmware support and fallback behavior, and test representative workloads. Treat the newest Base Specification revision as a normative reference for compliant designs, not a hardware inventory or throughput certificate for a particular data center.</p>
+
+</section>
+<section id="specialist-glossary" aria-labelledby="heading-specialist-glossary">
+<h2 id="heading-specialist-glossary">Specialist glossary</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>AER</td>
+  <td>Advanced Error Reporting capability and associated diagnosis.</td>
+</tr>
+<tr>
+  <td>ACS</td>
+  <td>Access Control Services affecting supported routing/isolation.</td>
+</tr>
+<tr>
+  <td>ATS</td>
+  <td>Address Translation Services for capable I/O devices.</td>
+</tr>
+<tr>
+  <td>BAR</td>
+  <td>Base Address Register describing a PCI function's resource window.</td>
+</tr>
+<tr>
+  <td>BDF</td>
+  <td>Bus:Device.Function PCI configuration identity.</td>
+</tr>
+<tr>
+  <td>Bridge</td>
+  <td>PCI/PCIe forwarding/configuration function defining hierarchy.</td>
+</tr>
+<tr>
+  <td>Bus mastering</td>
+  <td>Endpoint ability to initiate authorized transactions.</td>
+</tr>
+<tr>
+  <td>Capability</td>
+  <td>Config-space structure advertising a specific optional feature.</td>
+</tr>
+<tr>
+  <td>Completion</td>
+  <td>PCIe reply to certain non-posted requests.</td>
+</tr>
+<tr>
+  <td>Completion timeout</td>
+  <td>Failure to receive a required completion within specified conditions.</td>
+</tr>
+<tr>
+  <td>Completer</td>
+  <td>Agent that services a non-posted PCIe request.</td>
+</tr>
+<tr>
+  <td>CRC</td>
+  <td>Error-detection check; exact use depends on PCIe mode.</td>
+</tr>
+<tr>
+  <td>Credit</td>
+  <td>Receiver-buffer permission used for link flow control.</td>
+</tr>
+<tr>
+  <td>CXL</td>
+  <td>Compute Express Link, PCIe-derived transport with additional protocols.</td>
+</tr>
+<tr>
+  <td>Data Link Layer</td>
+  <td>Adjacent-link integrity and management layer.</td>
+</tr>
+<tr>
+  <td>DLLP</td>
+  <td>Traditional Data Link Layer Packet.</td>
+</tr>
+<tr>
+  <td>DMA</td>
+  <td>Direct Memory Access initiated by devices or dedicated engines.</td>
+</tr>
+<tr>
+  <td>Downtraining</td>
+  <td>Operating a link below an advertised maximum speed or width.</td>
+</tr>
+<tr>
+  <td>ECAM</td>
+  <td>Enhanced Configuration Access Mechanism for PCI configuration space.</td>
+</tr>
+<tr>
+  <td>Endpoint</td>
+  <td>Device/function at an edge of a PCIe hierarchy.</td>
+</tr>
+<tr>
+  <td>Equalization</td>
+  <td>Signal adaptation for reliable high-speed channels.</td>
+</tr>
+<tr>
+  <td>FEC</td>
+  <td>Forward Error Correction for supported high-speed FLIT operation.</td>
+</tr>
+<tr>
+  <td>FLIT</td>
+  <td>Fixed-length Flow Control Unit in FLIT mode.</td>
+</tr>
+<tr>
+  <td>Function</td>
+  <td>Software-visible PCI configuration entity.</td>
+</tr>
+<tr>
+  <td>Full duplex</td>
+  <td>Simultaneous transmission in both link directions.</td>
+</tr>
+<tr>
+  <td>Gen</td>
+  <td>Generation of PCIe nominal signaling/feature family.</td>
+</tr>
+<tr>
+  <td>Hot-plug</td>
+  <td>Supported live insertion/removal system mechanism.</td>
+</tr>
+<tr>
+  <td>IOMMU</td>
+  <td>Hardware address translation/protection for I/O DMA.</td>
+</tr>
+<tr>
+  <td>IDE</td>
+  <td>Optional Integrity and Data Encryption capability, where supported.</td>
+</tr>
+<tr>
+  <td>L0</td>
+  <td>Normal active link state in the LTSSM.</td>
+</tr>
+<tr>
+  <td>Lane</td>
+  <td>One bidirectional lane comprising separate transmit/receive paths.</td>
+</tr>
+<tr>
+  <td>Link</td>
+  <td>Connection between two adjacent PCIe ports.</td>
+</tr>
+<tr>
+  <td>LTSSM</td>
+  <td>Link Training and Status State Machine.</td>
+</tr>
+<tr>
+  <td>MPS</td>
+  <td>Maximum Payload Size configuration for TLP payloads.</td>
+</tr>
+<tr>
+  <td>MRRS</td>
+  <td>Maximum Read Request Size for a requester's reads.</td>
+</tr>
+<tr>
+  <td>MSI</td>
+  <td>Message-Signaled Interrupt.</td>
+</tr>
+<tr>
+  <td>MSI-X</td>
+  <td>Extended MSI with table/vector facilities.</td>
+</tr>
+<tr>
+  <td>No Snoop</td>
+  <td>Transaction attribute affecting permitted snooping behavior.</td>
+</tr>
+<tr>
+  <td>Non-posted</td>
+  <td>Request type that expects a completion response.</td>
+</tr>
+<tr>
+  <td>NVMe</td>
+  <td>Storage command interface often transported on PCIe.</td>
+</tr>
+<tr>
+  <td>PAM4</td>
+  <td>Four-level pulse-amplitude modulation at newer rates.</td>
+</tr>
+<tr>
+  <td>PASID</td>
+  <td>Process Address Space ID capability for supported transactions.</td>
+</tr>
+<tr>
+  <td>Peer-to-peer</td>
+  <td>Direct or fabric-routed endpoint-to-endpoint transfers.</td>
+</tr>
+<tr>
+  <td>PF</td>
+  <td>Physical Function in SR-IOV.</td>
+</tr>
+<tr>
+  <td>Physical layer</td>
+  <td>Lane signaling, training, and transmission.</td>
+</tr>
+<tr>
+  <td>Posted</td>
+  <td>Request type normally without per-request completion.</td>
+</tr>
+<tr>
+  <td>PRI</td>
+  <td>Page Request Interface on supporting platforms.</td>
+</tr>
+<tr>
+  <td>RC</td>
+  <td>Root Complex connecting host domain and PCIe hierarchy.</td>
+</tr>
+<tr>
+  <td>Recovery</td>
+  <td>LTSSM state/behavior for restoring link operation.</td>
+</tr>
+<tr>
+  <td>Relaxed Ordering</td>
+  <td>Transaction attribute changing allowed ordering constraints.</td>
+</tr>
+<tr>
+  <td>Replay</td>
+  <td>Retrying data/link transfer after qualifying errors.</td>
+</tr>
+<tr>
+  <td>Requester</td>
+  <td>Agent that originates a PCIe request.</td>
+</tr>
+<tr>
+  <td>Requester ID</td>
+  <td>Identity that associates traffic with originating function.</td>
+</tr>
+<tr>
+  <td>Retimer</td>
+  <td>Signal-processing element improving qualified link reach.</td>
+</tr>
+<tr>
+  <td>Root Port</td>
+  <td>Downstream-facing root-complex port for a hierarchy.</td>
+</tr>
+<tr>
+  <td>SR-IOV</td>
+  <td>Single Root I/O Virtualization.</td>
+</tr>
+<tr>
+  <td>Switch</td>
+  <td>Multilink PCIe forwarding component with bridge-style ports.</td>
+</tr>
+<tr>
+  <td>Tag</td>
+  <td>Identifier used to associate outstanding non-posted requests and replies.</td>
+</tr>
+<tr>
+  <td>TLP</td>
+  <td>Transaction Layer Packet.</td>
+</tr>
+<tr>
+  <td>Traffic Class</td>
+  <td>PCIe classification for supported prioritization/QoS.</td>
+</tr>
+<tr>
+  <td>Transaction Layer</td>
+  <td>Request, completion, attribute, and routing semantics.</td>
+</tr>
+<tr>
+  <td>Uplink</td>
+  <td>Switch port/link directed toward root-complex hierarchy.</td>
+</tr>
+<tr>
+  <td>VF</td>
+  <td>Virtual Function exposed by a capable SR-IOV device.</td>
+</tr>
+<tr>
+  <td>Virtual Channel</td>
+  <td>Traffic and buffering mechanism when supported/configured.</td>
+</tr>
+<tr>
+  <td>Width</td>
+  <td>Negotiated number of active lanes in a PCIe link.</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="references-and-further-technical-reading" aria-labelledby="heading-references-and-further-technical-reading">
+<h2 id="heading-references-and-further-technical-reading">References and further technical reading</h2>
+<ol>
+<li><a href="https://pcisig.com/specification/pci-express-base-specification-revision-71">PCI-SIG — PCI Express Base Specification Revision 7.1</a>. Current specification listing as of November 2026; full normative material may require member access.</li>
+<li><a href="https://pcisig.com/specification-overview/pci-express-base">PCI-SIG — PCI Express Base Specification and revision library</a>. Public official directory for revisions and engineering change notices.</li>
+<li><a href="https://pcisig.com/pci-express-6.0-specification">PCI-SIG — PCIe 6.0 Specification</a>. Public explanations of 64 GT/s, PAM4, FLIT operation, and headline bandwidth.</li>
+<li><a href="https://pcisig.com/what-flit-mode-and-why-did-pci-sig-move-unit-data-exchange">PCI-SIG — What Is Flit Mode?</a>. Public explanation of fixed-size transport units and generation compatibility.</li>
+<li><a href="https://pcisig.com/specifications/pcie-70-specification-version-03-now-available-members">PCI-SIG — PCIe 7.0 specification release</a>. Published throughput context and evolution.</li>
+<li><a href="https://docs.kernel.org/PCI/pci.html">Linux Kernel — PCI driver programming</a>. Configuration space, BARs, PCI resource ownership, and driver basics.</li>
+<li><a href="https://docs.kernel.org/PCI/acpi-info.html">Linux Kernel — PCI host bridge ACPI considerations</a>. Host bridge resource descriptions, ECAM, and enumeration.</li>
+<li><a href="https://docs.kernel.org/driver-api/pci/p2pdma.html">Linux Kernel — PCI peer-to-peer DMA</a>. Topology restrictions and supported memory mapping rules.</li>
+<li><a href="https://docs.kernel.org/PCI/pcieaer-howto.html">Linux Kernel — PCIe Advanced Error Reporting driver guide</a>. AER logs, classes, and error recovery.</li>
+<li><a href="https://docs.kernel.org/PCI/endpoint/index.html">Linux Kernel — PCIe endpoint support documentation</a>. Endpoint-side design and controller interfaces.</li>
+</ol>
+<p>These are source and further-reading pointers. The simplified numerical exercises and diagrams here are authored teaching models, not reproductions of confidential PCI-SIG specification tables or measurements of actual MGU equipment.</p>
+
+</section>
+<section id="sub-articles-in-the-bus-systems-unit" aria-labelledby="heading-sub-articles-in-the-bus-systems-unit">
+<h2 id="heading-sub-articles-in-the-bus-systems-unit">Sub-Articles in the Bus Systems unit</h2>
+<p>This specialist page belongs to a <strong>20-article Level 5 collection</strong>. The following are neighboring specialist entries from the prescribed directory, linked to their intended extensionless MGU addresses, whether or not each child has been deployed:</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-topologies-and-interconnect-hierarchies">Bus Topologies and Interconnect Hierarchies</a> — physical and logical organization across bridges and switches.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/serial-and-point-to-point-interconnects">Serial and Point-to-Point Interconnects</a> — electrical links, lanes, signaling, and training.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/switched-fabrics-and-packet-based-interconnects">Switched Fabrics and Packet-Based Interconnects</a> — general switching, routing, and flow control.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-transactions-and-protocol-phases">Bus Transactions and Protocol Phases</a> — generalized request/response lifecycles.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/direct-memory-access-and-bus-mastering">Direct Memory Access and Bus Mastering</a> — memory transfers initiated by DMA devices.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects">Interrupt Signaling over System Interconnects</a> — MSI/MSI-X and other event delivery.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence">Transaction Ordering and Memory Coherence</a> — ordering, visibility, and coherent versus noncoherent fabrics.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/on-chip-buses-and-networks-on-chip">On-Chip Buses and Networks-on-Chip</a> — intra-SoC packet and bus fabrics.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-isolation-and-device-security">Interconnect Isolation and Device Security</a> — DMA and access-control boundaries.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-error-detection-diagnostics-and-recovery">Bus Error Detection, Diagnostics, and Recovery</a> — independent fault and recovery topic.</li>
+</ul>
+
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/computer-architecture-overview">Computer Architecture Overview</a> — processors, memory, buses, and system organization.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems parent overview</a> — conceptual introduction to bus roles and interfaces.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> — cache and memory-system latency and bandwidth.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — internal CPU datapaths and execution.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/parallel-architecture">Parallel Architecture</a> — parallel system topology and communication.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/motherboards-and-buses">Motherboards and Buses</a> — slots, connectors, physical boards, and host integration.</li>
+<li><a href="/library/encyclopedia/computer-science/software-systems/device-and-io-management">Device and I/O Management</a> — operating-system drivers and device coordination.</li>
+</ul>
+
+</section>
+<section id="editorial-scope-and-publication-status" aria-labelledby="heading-editorial-scope-and-publication-status">
+<h2 id="heading-editorial-scope-and-publication-status">Editorial scope and publication status</h2>
+<p><strong>Level:</strong> MGU Computer Science Encyclopedia, Computer Architecture division, Bus Systems unit, specialist subarticle <strong>14 of 20</strong>. <strong>Physical filename:</strong> <code>computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow.html</code>. <strong>Public URL:</strong> <code>/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow</code>.</p>
+<p><strong>Boundary:</strong> This article explains PCIe's physical/data-link/transaction organization, topology, routing, and representative system flows. Its scope is neither a standards-compliance certification nor a substitute for the complete member-access PCIe Base Specification. Examples use stated simplifying assumptions. <strong>Publication:</strong> the article file is authored for local placement; its availability on the live MGU website is not asserted. The Level 4 unit index and neighboring files are unchanged.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

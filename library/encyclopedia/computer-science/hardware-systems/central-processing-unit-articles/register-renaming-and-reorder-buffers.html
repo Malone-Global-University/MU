@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register Renaming and Reorder Buffers | MGU Computer Science Encyclopedia | Malone Global University</title>
+<meta name="description" content="In-depth MGU Encyclopedia study of register renaming and reorder buffers: dependency tracking, physical register files, rename maps, free lists, stale destinations, in-order retirement, speculative checkpoints, precise exceptions, and recovery.">
+<meta name="keywords" content="CPU register renaming, reorder buffer, architectural state, physical register file, rename map table, register alias table, RAT, free list, stale destination, commit, speculative recovery, precise exceptions, out-of-order CPU">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Register Renaming and Reorder Buffers | MGU Encyclopedia">
+<meta property="og:description" content="Physical register version mapping and age-ordered in-flight bookkeeping for correct speculative CPU execution and precise in-order retirement.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Register Renaming and Reorder Buffers</h1>
+<p class="subtitle">Architectural versus physical registers, rename maps, free lists, ROB age order, checkpoints, precise exceptions, and resource-lifetime guarantees.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-purpose-and-scope">Definition, Purpose, and Scope</a></li>
+<li><a href="#learning-objectives">Learning Objectives</a></li>
+<li><a href="#the-architectural-state-contract">The Architectural State Contract</a></li>
+<li><a href="#why-reused-register-names-create-false-dependencies">Why Reused Register Names Create False Dependencies</a></li>
+<li><a href="#a-four-instruction-version-trace">A Four-Instruction Version Trace</a></li>
+<li><a href="#the-speculative-rename-map-table">The Speculative Rename Map Table</a></li>
+<li><a href="#reading-sources-before-renaming-destinations">Reading Sources Before Renaming Destinations</a></li>
+<li><a href="#same-cycle-wide-renaming-and-intra-group-bypass">Same-Cycle Wide Renaming and Intra-Group Bypass</a></li>
+<li><a href="#physical-register-files-and-alternative-organizations">Physical Register Files and Alternative Organizations</a></li>
+<li><a href="#rename-stage-block-diagram">Rename-Stage Block Diagram</a></li>
+<li><a href="#a-physical-register-is-a-value-version-not-a-software-variable">A Physical Register Is a Value Version, Not a Software Variable</a></li>
+<li><a href="#busy-tables-readiness-and-producer-tags">Busy Tables, Readiness, and Producer Tags</a></li>
+<li><a href="#free-lists-and-allocation-discipline">Free Lists and Allocation Discipline</a></li>
+<li><a href="#the-stale-destination-and-safe-reclamation">The Stale Destination and Safe Reclamation</a></li>
+<li><a href="#demonstrating-when-a-stale-register-becomes-free">Demonstrating When a Stale Register Becomes Free</a></li>
+<li><a href="#the-reorder-buffer-as-program-age-ledger">The Reorder Buffer as Program-Age Ledger</a></li>
+<li><a href="#rob-head-tail-and-circular-capacity">ROB Head, Tail, and Circular Capacity</a></li>
+<li><a href="#rob-entries-are-not-necessarily-result-buffers">ROB Entries Are Not Necessarily Result Buffers</a></li>
+<li><a href="#dispatch-execute-writeback-and-retire">Dispatch, Execute, Writeback, and Retire</a></li>
+<li><a href="#completing-younger-instructions-while-the-head-is-blocked">Completing Younger Instructions While the Head Is Blocked</a></li>
+<li><a href="#multiple-retirement-per-cycle-and-consecutive-readiness">Multiple Retirement per Cycle and Consecutive Readiness</a></li>
+<li><a href="#architectural-and-speculative-maps">Architectural and Speculative Maps</a></li>
+<li><a href="#rollback-by-undoing-rename-history">Rollback by Undoing Rename History</a></li>
+<li><a href="#branch-checkpoints-and-fast-wrong-path-recovery">Branch Checkpoints and Fast Wrong-Path Recovery</a></li>
+<li><a href="#branch-recovery-trace-with-a-map-checkpoint">Branch Recovery Trace with a Map Checkpoint</a></li>
+<li><a href="#free-list-recovery-and-the-register-leak-trap">Free-List Recovery and the Register-Leak Trap</a></li>
+<li><a href="#allocation-invariants-and-ownership-sets">Allocation Invariants and Ownership Sets</a></li>
+<li><a href="#precise-exceptions-and-faulting-operations">Precise Exceptions and Faulting Operations</a></li>
+<li><a href="#a-faulting-rob-head-example">A Faulting ROB-Head Example</a></li>
+<li><a href="#stores-memory-visibility-and-the-commit-boundary">Stores, Memory Visibility, and the Commit Boundary</a></li>
+<li><a href="#register-renaming-cannot-eliminate-memory-dependencies">Register Renaming Cannot Eliminate Memory Dependencies</a></li>
+<li><a href="#interrupt-admission-and-serializing-instructions">Interrupt Admission and Serializing Instructions</a></li>
+<li><a href="#mis-speculated-memory-operations-and-replay">Mis-speculated Memory Operations and Replay</a></li>
+<li><a href="#renaming-and-the-physical-zero-register">Renaming and the Physical Zero Register</a></li>
+<li><a href="#architectural-flags-and-partial-register-writes">Architectural Flags and Partial Register Writes</a></li>
+<li><a href="#floating-point-and-vector-register-rename-classes">Floating-Point and Vector Register Rename Classes</a></li>
+<li><a href="#simultaneous-multithreading-and-per-thread-maps">Simultaneous Multithreading and Per-Thread Maps</a></li>
+<li><a href="#capacity-planning-rob-versus-physical-register-limits">Capacity Planning: ROB versus Physical Register Limits</a></li>
+<li><a href="#checkpoint-capacity-and-recovery-latency-trade-offs">Checkpoint Capacity and Recovery-Latency Trade-offs</a></li>
+<li><a href="#rename-bandwidth-and-timing-critical-paths">Rename Bandwidth and Timing Critical Paths</a></li>
+<li><a href="#rob-read-and-write-port-organization">ROB Read and Write Port Organization</a></li>
+<li><a href="#energy-area-and-wire-cost-considerations">Energy, Area, and Wire-Cost Considerations</a></li>
+<li><a href="#security-boundaries-and-speculative-state">Security Boundaries and Speculative State</a></li>
+<li><a href="#verification-rename-map-reference-model">Verification: Rename-Map Reference Model</a></li>
+<li><a href="#verification-tag-ownership-and-reuse">Verification: Tag Ownership and Reuse</a></li>
+<li><a href="#verification-sequential-retirement-equivalence">Verification: Sequential Retirement Equivalence</a></li>
+<li><a href="#concurrency-and-formal-properties">Concurrency and Formal Properties</a></li>
+<li><a href="#performance-counters-and-investigation-strategy">Performance Counters and Investigation Strategy</a></li>
+<li><a href="#worked-scenario-1-false-write-dependencies-in-a-tight-loop">Worked Scenario 1 — False Write Dependencies in a Tight Loop</a></li>
+<li><a href="#worked-scenario-2-a-long-latency-load-blocks-retirement">Worked Scenario 2 — A Long-Latency Load Blocks Retirement</a></li>
+<li><a href="#worked-scenario-3-branch-misprediction-and-renamed-destinations">Worked Scenario 3 — Branch Misprediction and Renamed Destinations</a></li>
+<li><a href="#worked-scenario-4-full-pipeline-flush-on-an-exception">Worked Scenario 4 — Full Pipeline Flush on an Exception</a></li>
+<li><a href="#worked-scenario-5-wide-rename-dependency-inside-a-bundle">Worked Scenario 5 — Wide Rename Dependency Inside a Bundle</a></li>
+<li><a href="#worked-scenario-6-physical-register-exhaustion-with-spare-rob-space">Worked Scenario 6 — Physical-Register Exhaustion with Spare ROB Space</a></li>
+<li><a href="#ten-gate-engineering-and-evaluation-framework">Ten-Gate Engineering and Evaluation Framework</a></li>
+<li><a href="#common-design-misconceptions">Common Design Misconceptions</a></li>
+<li><a href="#review-questions-and-guided-exercises">Review Questions and Guided Exercises</a></li>
+<li><a href="#glossary-of-key-terms">Glossary of Key Terms</a></li>
+<li><a href="#suggested-study-pathways">Suggested Study Pathways</a></li>
+<li><a href="#complete-cpu-specialist-directory">Complete CPU Specialist Directory</a></li>
+<li><a href="#related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</a></li>
+<li><a href="#primary-documentation-and-further-reading">Primary Documentation and Further Reading</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="definition-purpose-and-scope" aria-labelledby="heading-definition-purpose-and-scope"><h2 id="heading-definition-purpose-and-scope">Definition, Purpose, and Scope</h2>
+<p><strong>Register renaming</strong> assigns internal storage identities to the values named by architectural registers. A programmer might refer to <code>r1</code> dozens of times; an out-of-order core can assign successive writes to <code>r1</code> different physical-register identities so that older readers and younger writers do not accidentally interfere. A <strong>reorder buffer</strong> (ROB) separately remembers which instructions entered the speculative machine, in original program order, whether they have completed, and whether they can safely retire. Together, these mechanisms permit execution to overlap while preserving the architectural contract of sequential instruction effects and precise exceptions.</p>
+<p>Renaming and retirement are not the same operation. Renaming happens before the instruction executes and establishes a dependency graph over <em>versions</em> of values. Retirement happens after execution and determines when an instruction's results become committed architectural state. The ROB is neither necessarily the storage location of all computed register values nor a ready-instruction scheduler. Designs differ in whether speculative data resides in a physical register file, ROB entries, or other structures. Those distinctions matter for performance, hardware cost, recovery, and verification.</p>
+<p>This Level 5 CPU specialist article deepens the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a> article. The separate <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> article addresses the general commit boundary; the present treatment concentrates on the <em>joint</em> lifecycle of register mappings, physical resources, ROB entries and recovery state.</p>
+
+</section>
+<section id="learning-objectives" aria-labelledby="heading-learning-objectives"><h2 id="heading-learning-objectives">Learning Objectives</h2>
+<p>A reader completing this article should be able to trace architectural-to-physical mappings one instruction at a time; distinguish RAW true dependencies from WAR and WAW name dependencies; identify why each source register must be renamed before the same instruction's destination; explain map tables, free lists, busy tables, scheduler queues and reorder buffers without conflating them; compute a physical register's safe reclamation point; distinguish execution completion from in-order retirement; and derive a precise rollback strategy after misprediction, exception or replay.</p>
+<p>An engineering reader should additionally be able to compare explicit physical-register-file and data-in-ROB organizations, reason about same-cycle wide rename bypass, estimate capacity limits, construct invariants for allocation and recovery, and recognize which performance counter reflects a particular bottleneck. The Python exercises below are executable <strong>teaching models</strong>, not cycle-accurate implementations of any named CPU.</p>
+
+</section>
+<section id="the-architectural-state-contract" aria-labelledby="heading-the-architectural-state-contract"><h2 id="heading-the-architectural-state-contract">The Architectural State Contract</h2>
+<p>An instruction set architecture specifies the values and behaviors software can rely on: general-purpose and special-purpose registers, program-counter behavior, privilege-related state, and the architectural effects of instructions. A core can hold numerous speculative versions of register values internally, but it must produce results consistent with the permitted architectural execution order. This is the contract that lets a compiler and operating system ignore many choices made by the physical implementation.</p>
+<p>For an ordinary sequential thread, the conceptual state after instruction <em>i</em> is the result of applying instructions through <em>i</em> in program order, subject to the ISA's semantics and specified memory model. A CPU can finish instruction <em>i + 3</em> before <em>i</em>, but cannot let a fault or branch mistake expose the younger instruction's prohibited architectural side effects. Architectural register state is therefore distinct from speculative physical data and from transient execution-unit outputs. Some ISAs prescribe special handling for a constant-zero register; this matters because allocating a destination for a write that cannot change architectural state would waste resources.</p>
+
+</section>
+<section id="why-reused-register-names-create-false-dependencies" aria-labelledby="heading-why-reused-register-names-create-false-dependencies"><h2 id="heading-why-reused-register-names-create-false-dependencies">Why Reused Register Names Create False Dependencies</h2>
+<p>Program instructions often reuse the same small bank of architectural register names. Three kinds of relationship arise when instructions read and write those names. A <strong>read-after-write (RAW)</strong> edge connects a producer to its actual consumer and cannot be ignored. A <strong>write-after-read (WAR)</strong> edge can appear if a later writer would overwrite the named storage before an earlier read consumes the original value. A <strong>write-after-write (WAW)</strong> edge can appear when two writes to the same name must not reverse their observable final order. Renaming removes the name-based WAR and WAW restrictions by assigning distinct destinations, while tracking the genuine RAW producer.</p>
+<table>
+<thead>
+<tr>
+  <th>Relationship</th>
+  <th>Sequence</th>
+  <th>Why it matters</th>
+  <th>Renaming result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>RAW</td>
+  <td><code>r2 = r1 + 1</code>; <code>r3 = r2 * 2</code></td>
+  <td>Consumer needs the new <code>r2</code></td>
+  <td>Remains a dependency on the producer's physical tag</td>
+</tr>
+<tr>
+  <td>WAR</td>
+  <td><code>r3 = r1 + 1</code>; <code>r1 = r4 + 2</code></td>
+  <td>Earlier reader needs old <code>r1</code></td>
+  <td>Reader retains old tag; writer receives a new tag</td>
+</tr>
+<tr>
+  <td>WAW</td>
+  <td><code>r1 = r2 + 1</code>; <code>r1 = r3 + 2</code></td>
+  <td>Newest <code>r1</code> should be architectural winner</td>
+  <td>Two separate physical destinations; retirement preserves age</td>
+</tr>
+<tr>
+  <td>RAR</td>
+  <td>Two instructions read <code>r1</code></td>
+  <td>Neither read changes the value</td>
+  <td>No ordering edge is required merely by the shared name</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="a-four-instruction-version-trace" aria-labelledby="heading-a-four-instruction-version-trace"><h2 id="heading-a-four-instruction-version-trace">A Four-Instruction Version Trace</h2>
+<p>Consider these instructions, in program order: <code>I0: r1 = r2 + r3</code>; <code>I1: r4 = r1 * r5</code>; <code>I2: r1 = r6 - r7</code>; <code>I3: r8 = r1 + r9</code>. Assume the initial mapping of architectural register <code>r1</code> points at <code>p1</code> and that <code>p10</code> and <code>p11</code> are available for new destinations. Rename <code>I0</code>: its sources capture the versions of <code>r2</code> and <code>r3</code>, its destination becomes <code>p10</code>, and <code>map[r1]</code> changes to <code>p10</code>. Rename <code>I1</code>: its source <code>r1</code> becomes <strong>p10</strong>. Rename <code>I2</code>: allocate <strong>p11</strong> and update <code>map[r1]</code> to p11. Rename <code>I3</code>: its <code>r1</code> source is now <strong>p11</strong>.</p>
+<p>The two versions of <code>r1</code> are separate. <code>I1</code> must wait for <code>I0</code>, but it need not wait for <code>I2</code>; <code>I3</code> waits for <code>I2</code>, not <code>I0</code>. Renaming does not make the algorithm independent where a real data edge exists. It also does not authorize younger instructions to retire ahead of older unresolved instructions. The ROB keeps the four operations in <code>I0, I1, I2, I3</code> age order while the scheduler may execute independent work in another order.</p>
+<pre><code class="language-python">mapping = {&quot;r1&quot;: &quot;p1&quot;, &quot;r2&quot;: &quot;p2&quot;, &quot;r3&quot;: &quot;p3&quot;, &quot;r4&quot;: &quot;p4&quot;, &quot;r5&quot;: &quot;p5&quot;, &quot;r6&quot;: &quot;p6&quot;, &quot;r7&quot;: &quot;p7&quot;, &quot;r8&quot;: &quot;p8&quot;, &quot;r9&quot;: &quot;p9&quot;}
+free = iter([&quot;p10&quot;, &quot;p11&quot;, &quot;p12&quot;, &quot;p13&quot;])
+program = [(&quot;I0&quot;, (&quot;r2&quot;, &quot;r3&quot;), &quot;r1&quot;),
+           (&quot;I1&quot;, (&quot;r1&quot;, &quot;r5&quot;), &quot;r4&quot;),
+           (&quot;I2&quot;, (&quot;r6&quot;, &quot;r7&quot;), &quot;r1&quot;),
+           (&quot;I3&quot;, (&quot;r1&quot;, &quot;r9&quot;), &quot;r8&quot;)]
+trace = []
+for name, src, dst in program:
+    physical_sources = tuple(mapping[s] for s in src)  # Read sources FIRST
+    old = mapping[dst]
+    new = next(free)
+    mapping[dst] = new
+    trace.append((name, physical_sources, new, old))
+assert trace[1][1][0] == &quot;p10&quot;
+assert trace[3][1][0] == &quot;p12&quot;   # I1 wrote r4-&gt;p11; I2 wrote r1-&gt;p12
+assert mapping[&quot;r1&quot;] == &quot;p12&quot;
+print(trace)
+</code></pre>
+<p>The example's allocated sequence deliberately includes another instruction's destination (<code>r4</code>), demonstrating why a physical tag cannot be inferred from the architectural name alone. The old mapping recorded for each destination will be important when the instruction eventually commits or is discarded.</p>
+
+</section>
+<section id="the-speculative-rename-map-table" aria-labelledby="heading-the-speculative-rename-map-table"><h2 id="heading-the-speculative-rename-map-table">The Speculative Rename Map Table</h2>
+<p>A <strong>rename map table</strong>, also called a register-alias table or RAT, maps each eligible architectural destination to a physical register holding its currently selected <em>speculative</em> version. When an instruction is renamed, source operands read the table; the destination allocation then updates the table. Source-read-before-destination-update is essential for instructions such as <code>add r1, r1, r2</code>: the left source must see the old version while the result obtains a fresh one. The map table contains identities, not necessarily register values. The actual data and readiness may reside elsewhere.</p>
+<p>Many pipelines maintain distinct classes of maps for integer, floating-point and vector registers. Privileged state, flags, partial-register writes and certain special instructions may need more elaborate bookkeeping. A rename map is a dependency-resolution mechanism, not an ISA requirement: an in-order core can execute the same program with a different internal organization. The number of physical registers, number of map read/write ports and how many renames can occur per cycle are all concrete implementation choices that can constrain width and frequency.</p>
+
+</section>
+<section id="reading-sources-before-renaming-destinations" aria-labelledby="heading-reading-sources-before-renaming-destinations"><h2 id="heading-reading-sources-before-renaming-destinations">Reading Sources Before Renaming Destinations</h2>
+<p>A common modeling mistake is to overwrite <code>map[dst]</code> before looking up an instruction's inputs. For <code>r1 = r1 + 1</code>, this makes the instruction depend on its own newly allocated destination. Real rename logic must preserve the prior producer tag for the source and only then install the new producer tag. For a two-source instruction, both inputs must see the map corresponding to their correct position in program order, including updates from older instructions in the same rename group.</p>
+<pre><code class="language-python">mapping = {&quot;x1&quot;: &quot;p1&quot;, &quot;x2&quot;: &quot;p2&quot;}
+source = mapping[&quot;x1&quot;]
+old_destination = mapping[&quot;x1&quot;]
+mapping[&quot;x1&quot;] = &quot;p20&quot;
+assert source == &quot;p1&quot;
+assert old_destination == &quot;p1&quot;
+assert mapping[&quot;x1&quot;] == &quot;p20&quot;
+# The new p20 is busy until the instruction produces its result.
+print(&quot;source:&quot;, source, &quot;new destination:&quot;, mapping[&quot;x1&quot;])
+</code></pre>
+<p>This rule is simple in a one-wide model but requires explicit map bypassing or sequential composition when multiple instructions enter the rename stage together. Treating an entire group as if each instruction read an unchanged start-of-cycle map loses true dependencies between adjacent operations.</p>
+
+</section>
+<section id="same-cycle-wide-renaming-and-intra-group-bypass" aria-labelledby="heading-same-cycle-wide-renaming-and-intra-group-bypass"><h2 id="heading-same-cycle-wide-renaming-and-intra-group-bypass">Same-Cycle Wide Renaming and Intra-Group Bypass</h2>
+<p>A machine that renames several instructions per cycle has to resolve dependencies <em>within</em> that bundle. Suppose slot 0 writes <code>r3</code>, and slot 1 reads <code>r3</code>. Slot 1 must receive the freshly allocated tag from slot 0, even though both arrived in the same cycle. One implementation uses bypass comparators to forward older-in-bundle mappings; another logically computes successive map updates through staged table accesses or an equivalent circuit. Wide rename expands read ports, write ports and bypass complexity, potentially becoming a timing bottleneck.</p>
+<pre><code class="language-python">start = {&quot;r1&quot;: &quot;p1&quot;, &quot;r3&quot;: &quot;p3&quot;, &quot;r4&quot;: &quot;p4&quot;}
+bundle = [(&quot;r3&quot;, (&quot;r1&quot;,)), (&quot;r4&quot;, (&quot;r3&quot;,))]
+physical = iter([&quot;p10&quot;, &quot;p11&quot;])
+tmp = start.copy()
+renamed = []
+for dst, src in bundle:
+    source_tags = tuple(tmp[s] for s in src)
+    new = next(physical)
+    renamed.append((source_tags, new))
+    tmp[dst] = new
+assert renamed == [(('p1',), 'p10'), (('p10',), 'p11')]
+print(renamed)
+</code></pre>
+<p>A superscalar CPU cannot increase its effective rename width simply by replicating a one-wide lookup without a rule for updates and dependencies. Broad implementations may restrict which instruction combinations enter a cycle, bank map storage, or pay the circuit cost for wider forwarding.</p>
+
+</section>
+<section id="physical-register-files-and-alternative-organizations" aria-labelledby="heading-physical-register-files-and-alternative-organizations"><h2 id="heading-physical-register-files-and-alternative-organizations">Physical Register Files and Alternative Organizations</h2>
+<p>In an <strong>explicit-renaming</strong> design, a physical register file (PRF) holds values, and renamed instructions refer directly to physical tags. Both committed and speculative values can reside in the PRF. The map table selects the current versions, and completion signals mark specific physical entries ready. In one family of <strong>implicit</strong> or <strong>data-in-ROB</strong> designs, committed values are kept in an architectural register file while speculative results are held in ROB-related storage until commitment. These are broad organization patterns rather than a universal classification of every product.</p>
+<p>BOOM documents an explicit PRF approach and contrasts it with data-in-ROB designs; gem5's O3 model likewise uses physical registers and a free list. Whether a ROB itself stores the actual result, a tag, or bookkeeping information affects write ports, bypass networks and capacity. Never equate “ROB entry” with “physical data register” without specifying the design. A processor may also handle flags and vector state with mechanisms different from general-purpose integer state.</p>
+
+</section>
+<section id="rename-stage-block-diagram" aria-labelledby="heading-rename-stage-block-diagram"><h2 id="heading-rename-stage-block-diagram">Rename-Stage Block Diagram</h2>
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="rtr-title rtr-desc" viewBox="0 0 1140 600" style="display:block;max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px" fill="none" stroke="currentColor" stroke-width="2">
+<title id="rtr-title">Rename maps, physical registers, and reorder buffer with in-order commit</title>
+<desc id="rtr-desc">The diagram contains three stacked phases. First, architectural sources from decode read a speculative rename map, while a free list provides a new physical destination. Second, the instruction enters an age-ordered ROB and an issue queue; data results write a physical register file and wake dependent operations. Third, the ROB commits a completed oldest prefix, updates committed mappings, releases stale physical destinations, and coordinates rollback of speculative mappings on a fault or branch misprediction.</desc>
+<defs><marker id="rtr-arrow" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor" stroke="none"/></marker></defs>
+<g>
+<rect x="27" y="75" width="193" height="91" rx="9"/><rect x="255" y="75" width="196" height="91" rx="9"/><rect x="486" y="75" width="200" height="91" rx="9"/><rect x="723" y="75" width="190" height="91" rx="9"/>
+<path d="M220 121 H255 M451 121 H486 M686 121 H723" marker-end="url(#rtr-arrow)"/>
+<rect x="255" y="249" width="260" height="121" rx="9"/><rect x="621" y="249" width="263" height="121" rx="9"/>
+<path d="M824 166 V216 H385 V249 M824 216 H753 V249" marker-end="url(#rtr-arrow)"/>
+<path d="M515 309 H621" marker-end="url(#rtr-arrow)"/>
+<rect x="59" y="452" width="285" height="100" rx="9"/><rect x="416" y="452" width="300" height="100" rx="9"/><rect x="793" y="452" width="297" height="100" rx="9"/>
+<path d="M385 370 V417 H201 V452 M752 370 V419 H569 V452" marker-end="url(#rtr-arrow)"/>
+<path d="M344 502 H416 M716 502 H793" marker-end="url(#rtr-arrow)"/>
+<path d="M930 452 V391 H1056 V55 H356 V75" stroke-dasharray="7 5" marker-end="url(#rtr-arrow)"/>
+</g>
+<g fill="currentColor" stroke="none" font-family="system-ui,sans-serif" text-anchor="middle">
+<text x="571" y="29" font-size="23" font-weight="700">Ordered rename → dynamic execution → in-order retirement</text>
+<text x="126" y="108" font-size="19" font-weight="700">Decode</text><text x="126" y="137" font-size="14">architectural names</text>
+<text x="353" y="105" font-size="19" font-weight="700">Rename map</text><text x="353" y="132" font-size="14">source producer tags</text>
+<text x="586" y="105" font-size="19" font-weight="700">Free list</text><text x="586" y="132" font-size="14">new destination tag</text>
+<text x="817" y="103" font-size="19" font-weight="700">Dispatch</text><text x="817" y="132" font-size="14">age + stale destination</text>
+<text x="385" y="286" font-size="22" font-weight="700">Reorder Buffer</text><text x="385" y="312" font-size="15">inflight program order</text><text x="385" y="337" font-size="14">completion / fault flags</text>
+<text x="753" y="286" font-size="22" font-weight="700">Issue + Physical File</text><text x="753" y="312" font-size="15">ready tags, results</text><text x="753" y="337" font-size="14">out-of-order execution</text>
+<text x="201" y="487" font-size="19" font-weight="700">Commit oldest prefix</text><text x="201" y="518" font-size="14">precise exceptions</text>
+<text x="566" y="487" font-size="19" font-weight="700">Committed map</text><text x="566" y="518" font-size="14">architectural versions</text>
+<text x="941" y="484" font-size="19" font-weight="700">Reclaim / Recover</text><text x="941" y="513" font-size="14">free stale tags; rollback</text><text x="941" y="534" font-size="13">dashed line: recovery path</text>
+</g></svg>
+<figcaption>Conceptual explicit-renaming organization. The rename map tracks speculative producer tags, the physical register file holds values, and the ROB preserves age ordering at retirement. The recovery loop and allocation policies are simplified; real designs may bank structures or use data-in-ROB storage instead.</figcaption></figure>
+
+<p>The illustration models an explicit-renaming CPU. The map table translates architectural sources; a free list allocates a new destination tag; a busy table identifies pending values; the instruction and old destination identity enter the ROB; an issue queue retains operation readiness; results write the PRF; and the ROB's head governs retirement. A separate committed map or log can support recovery. The dashed recovery path represents control logic, not a claim that the same hardware connection exists in every core.</p>
+
+</section>
+<section id="a-physical-register-is-a-value-version-not-a-software-variable" aria-labelledby="heading-a-physical-register-is-a-value-version-not-a-software-variable"><h2 id="heading-a-physical-register-is-a-value-version-not-a-software-variable">A Physical Register Is a Value Version, Not a Software Variable</h2>
+<p>An architectural register name denotes a defined register in the ISA. A physical register number is a private resource name assigned by the microarchitecture to a <em>particular version</em> of a value. The physical register can later be reused for an unrelated architectural register after its old version becomes unneeded. Thus <code>p17</code> is not “the hardware location of x5” forever. It may hold the old x5 value, then the new x8 value, then a later x2 value at different times.</p>
+<p>This distinction explains why debug tools, context switching and operating-system ABIs ordinarily express state in architectural terms. A process switch saves and restores the ISA-defined state, not an arbitrary enumeration of currently allocated physical tags. Committed state must be reconstructible even when the speculative map contains newer versions. Physical-register lifetime errors are severe: premature reuse can corrupt an in-flight source, and failure to reclaim tags can stall dispatch permanently.</p>
+
+</section>
+<section id="busy-tables-readiness-and-producer-tags" aria-labelledby="heading-busy-tables-readiness-and-producer-tags"><h2 id="heading-busy-tables-readiness-and-producer-tags">Busy Tables, Readiness, and Producer Tags</h2>
+<p>A map entry answers <strong>which physical value</strong> an instruction should consume. A <strong>busy table</strong> or readiness structure answers <strong>whether that value is available</strong>. On destination allocation, the new tag normally starts not ready; after the corresponding execution result is written, it becomes ready. An issue queue can wait for a tag's readiness and then issue an instruction when all its operands and an appropriate execution resource are available. Some architectures employ a scoreboard, wakeup broadcasts or local reservation-station state; the meaning is related but the implementation varies.</p>
+<pre><code class="language-python">ready = {&quot;p1&quot;: True, &quot;p2&quot;: True, &quot;p20&quot;: False}
+consumers = {&quot;add_old&quot;: (&quot;p1&quot;, &quot;p2&quot;), &quot;mul_new&quot;: (&quot;p20&quot;, &quot;p2&quot;)}
+def can_issue(tags):
+    return all(ready.get(tag, False) for tag in tags)
+assert can_issue(consumers[&quot;add_old&quot;])
+assert not can_issue(consumers[&quot;mul_new&quot;])
+ready[&quot;p20&quot;] = True
+assert can_issue(consumers[&quot;mul_new&quot;])
+print(&quot;consumer now ready&quot;)
+</code></pre>
+<p>The busy table does not determine <em>which operation is oldest</em> or <em>which result may retire</em>. Those are separate ordering decisions. Keeping readiness, scheduling, and architectural commitment as distinct concerns is essential for understanding an out-of-order datapath.</p>
+
+</section>
+<section id="free-lists-and-allocation-discipline" aria-labelledby="heading-free-lists-and-allocation-discipline"><h2 id="heading-free-lists-and-allocation-discipline">Free Lists and Allocation Discipline</h2>
+<p>A <strong>free list</strong> tracks physical registers that no surviving map, in-flight instruction or pending recovery state needs. When a normal destination-bearing instruction is renamed, it takes an eligible tag from the free list. Allocation may stall if the correct register class is exhausted. That stall can occur even with idle execution units or free ROB entries: each finite structure bounds how many speculative values the core can keep simultaneously. Implementations may use queues, bitmaps, priority encoders, banked pools or other policies, and may reserve special tags.</p>
+<pre><code class="language-python">from collections import deque
+free = deque([&quot;p20&quot;, &quot;p21&quot;])
+allocated = set()
+def allocate():
+    if not free:
+        return None
+    tag = free.popleft()
+    assert tag not in allocated
+    allocated.add(tag)
+    return tag
+assert allocate() == &quot;p20&quot;
+assert allocate() == &quot;p21&quot;
+assert allocate() is None
+allocated.remove(&quot;p20&quot;)
+free.append(&quot;p20&quot;)
+assert allocate() == &quot;p20&quot;
+print(&quot;allocation and reclamation checked&quot;)
+</code></pre>
+<p>This tiny exercise demonstrates the mechanics only. It does <em>not</em> establish when reclamation is safe; in a real core that condition must be justified by the committed and speculative mappings, outstanding readers, and recovery design.</p>
+
+</section>
+<section id="the-stale-destination-and-safe-reclamation" aria-labelledby="heading-the-stale-destination-and-safe-reclamation"><h2 id="heading-the-stale-destination-and-safe-reclamation">The Stale Destination and Safe Reclamation</h2>
+<p>Before a destination instruction updates an architectural register's rename-map entry, the old physical mapping is recorded as its <strong>stale destination</strong>. The new destination will hold the newly computed value. In an explicit PRF design such as BOOM, the old mapping normally becomes reclaimable when the overwriting instruction commits. At that point older consumers have already retired in order, so the previous architectural version is no longer needed by those instructions. Younger surviving instructions were renamed against the new map or their appropriate older versions.</p>
+<p>The subtlety is speculation. A branch can later invalidate younger instructions, and its recovery checkpoint may still name an older value. A destination must not be returned to the free list merely because its speculative mapping was superseded. Invariant-driven reclamation needs to account for every live mapping and the age of retirement. A common implementation records <code>(architectural destination, new physical destination, stale physical destination)</code> in the instruction's rename/ROB metadata and uses the stale tag during commit or the inverse update during rollback.</p>
+
+</section>
+<section id="demonstrating-when-a-stale-register-becomes-free" aria-labelledby="heading-demonstrating-when-a-stale-register-becomes-free"><h2 id="heading-demonstrating-when-a-stale-register-becomes-free">Demonstrating When a Stale Register Becomes Free</h2>
+<p>Assume committed <code>r1</code> is <code>p1</code>. Instruction <code>I0</code> renames a write to <code>r1</code>, allocating <code>p10</code> and storing stale tag <code>p1</code>. Instruction <code>I1</code> reads <code>r1</code> and therefore captures <code>p10</code>. Instruction <code>I2</code> also writes <code>r1</code>, allocating <code>p11</code> and storing stale tag <code>p10</code>. Neither <code>p1</code> nor <code>p10</code> can be reclaimed merely at rename. When <code>I0</code> retires, <code>p1</code> can be freed under the explicit-renaming rules just described; when <code>I2</code> retires, <code>p10</code> can be freed. The younger consumer <code>I1</code> must be older than the instruction that finally invalidates its source at retirement, or recovery must preserve the value through its relevant lifetime.</p>
+<pre><code class="language-python">retirement = [
+    {&quot;name&quot;: &quot;I0&quot;, &quot;dst&quot;: &quot;r1&quot;, &quot;new&quot;: &quot;p10&quot;, &quot;stale&quot;: &quot;p1&quot;},
+    {&quot;name&quot;: &quot;I1&quot;, &quot;dst&quot;: None, &quot;new&quot;: None, &quot;stale&quot;: None},
+    {&quot;name&quot;: &quot;I2&quot;, &quot;dst&quot;: &quot;r1&quot;, &quot;new&quot;: &quot;p11&quot;, &quot;stale&quot;: &quot;p10&quot;},
+]
+released = []
+for entry in retirement:
+    if entry[&quot;dst&quot;] is not None:
+        released.append((entry[&quot;name&quot;], entry[&quot;stale&quot;]))
+assert released == [(&quot;I0&quot;, &quot;p1&quot;), (&quot;I2&quot;, &quot;p10&quot;)]
+print(&quot;old versions freed at overwriting instruction retirement:&quot;, released)
+</code></pre>
+<p>This example assumes all three instructions are valid, have completed as needed, and retire in order. A branch squash or fault changes which instructions are permitted to commit and therefore which destinations or stale tags may be released.</p>
+
+</section>
+<section id="the-reorder-buffer-as-program-age-ledger" aria-labelledby="heading-the-reorder-buffer-as-program-age-ledger"><h2 id="heading-the-reorder-buffer-as-program-age-ledger">The Reorder Buffer as Program-Age Ledger</h2>
+<p>The ROB is a finite sequence of in-flight instructions in program order. A <strong>tail</strong> accepts newly dispatched operations, while a <strong>head</strong> identifies the oldest instruction awaiting retirement. Each entry records enough state to determine whether execution has completed, whether a fault or misprediction requires recovery, and what bookkeeping must accompany commitment. A branch may carry prediction metadata, a destination-writing instruction can carry logical/physical destination identities, and a store can need coordination with the load/store queue. Different designs store different fields and can factor information into shared structures.</p>
+<p>The ROB's critical abstraction is <em>age order</em>: it knows that a younger arithmetic instruction cannot retire past an older fault, regardless of when execution finishes. It is not the same thing as a scheduler or issue queue, which searches for ready operations and may choose younger ones first. In particular, a completed instruction can leave the scheduler yet remain in the ROB until it becomes the oldest committable instruction. ROB capacity therefore tracks unfinished <strong>and finished-but-unretired</strong> instructions.</p>
+
+</section>
+<section id="rob-head-tail-and-circular-capacity" aria-labelledby="heading-rob-head-tail-and-circular-capacity"><h2 id="heading-rob-head-tail-and-circular-capacity">ROB Head, Tail, and Circular Capacity</h2>
+<p>A textbook ROB is often represented as a circular array of <code>N</code> entries. Dispatch adds at the tail in age order; retirement removes from the head in the same order. A circular index alone does not distinguish full from empty when head equals tail. Designs track a count, phase bit or equivalent validity information. Superscalar implementations may bank entries and share a PC per group. BOOM, for example, organizes multiple entries per row rather than requiring every implementation to have exactly one monolithic entry per instruction.</p>
+<pre><code class="language-python">from collections import deque
+class ROB:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.entries = deque()
+    def dispatch(self, name):
+        if len(self.entries) == self.capacity:
+            return False
+        self.entries.append({&quot;name&quot;: name, &quot;done&quot;: False})
+        return True
+    def finish(self, name):
+        next(e for e in self.entries if e[&quot;name&quot;] == name)[&quot;done&quot;] = True
+    def retire(self):
+        if self.entries and self.entries[0][&quot;done&quot;]:
+            return self.entries.popleft()[&quot;name&quot;]
+        return None
+q = ROB(2)
+assert q.dispatch(&quot;older&quot;) and q.dispatch(&quot;younger&quot;)
+assert not q.dispatch(&quot;blocked&quot;)
+q.finish(&quot;younger&quot;)
+assert q.retire() is None
+q.finish(&quot;older&quot;)
+assert [q.retire(), q.retire()] == [&quot;older&quot;, &quot;younger&quot;]
+print(&quot;age-order retirement preserved&quot;)
+</code></pre>
+
+</section>
+<section id="rob-entries-are-not-necessarily-result-buffers" aria-labelledby="heading-rob-entries-are-not-necessarily-result-buffers"><h2 id="heading-rob-entries-are-not-necessarily-result-buffers">ROB Entries Are Not Necessarily Result Buffers</h2>
+<p>Some textbooks show a ROB as if every entry stores the computed value that will eventually enter the architectural register file. That is a useful model for a data-in-ROB organization, but it is inaccurate as a universal statement about out-of-order cores. BOOM's explicit PRF writes results into physical register storage and keeps relatively small per-instruction state in its ROB. Other designs may use different data paths, checkpoint schemes and retirement mapping logic.</p>
+<table>
+<thead>
+<tr>
+  <th>Structure</th>
+  <th>Principal responsibility</th>
+  <th>Typical data</th>
+  <th>Can it reorder work?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Rename map</td>
+  <td>Find current producer version for each architectural name</td>
+  <td>Architectural-to-physical tags</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>Free list</td>
+  <td>Provide unallocated physical destinations</td>
+  <td>Free physical tags or bitmap bits</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>Busy/ready table</td>
+  <td>Identify results not yet produced</td>
+  <td>Per-tag readiness</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>Issue queue</td>
+  <td>Hold and select ready operations</td>
+  <td>Operand tags, age, port and readiness</td>
+  <td>Yes, for execution issue</td>
+</tr>
+<tr>
+  <td>Physical register file</td>
+  <td>Hold internal value versions</td>
+  <td>Data values associated with tags</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>ROB</td>
+  <td>Track in-flight age and retire correctly</td>
+  <td>Valid/busy, exception, rename metadata</td>
+  <td>No, retirement remains ordered</td>
+</tr>
+<tr>
+  <td>Load/store queue</td>
+  <td>Track memory operations and dependencies</td>
+  <td>Addresses, data, ordering state</td>
+  <td>May schedule or complete memory work out of order under rules</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="dispatch-execute-writeback-and-retire" aria-labelledby="heading-dispatch-execute-writeback-and-retire"><h2 id="heading-dispatch-execute-writeback-and-retire">Dispatch, Execute, Writeback, and Retire</h2>
+<p>After rename, dispatch allocates the operation's ROB and applicable scheduler or memory-queue resources. <strong>Issue</strong> selects an operation whose inputs and execution port are ready. <strong>Execute</strong> performs the computation or memory action. <strong>Writeback</strong> makes the result available to dependent operations and marks completion as appropriate. <strong>Retirement</strong> later makes the instruction's architectural effects committed. These transitions are not guaranteed to correspond to one clock cycle each, and some pipelines combine functions or split them across stages.</p>
+<p>A long-latency load may prevent head retirement while younger independent ALU instructions finish and wait. Conversely, a physical register can contain a completed speculative value while the committed architectural map still points to a prior value. A correct tracer should show both <em>execution state</em> and <em>retirement state</em>. Calling an instruction “done” without specifying the stage conceals precisely the distinction that the ROB is designed to maintain.</p>
+
+</section>
+<section id="completing-younger-instructions-while-the-head-is-blocked" aria-labelledby="heading-completing-younger-instructions-while-the-head-is-blocked"><h2 id="heading-completing-younger-instructions-while-the-head-is-blocked">Completing Younger Instructions While the Head Is Blocked</h2>
+<p>Consider a three-entry ROB holding an older cache-missing load followed by two independent integer additions. The additions may finish during the miss, write their speculative physical results, and wake consumers. Yet neither can retire while the older load remains the head and has not completed. This condition is often called <strong>head-of-line blocking</strong>. It is not necessarily a pipeline bug: it is the cost of maintaining an in-order architectural commitment boundary. The scheduler, rather than the ROB, decides whether younger ready work can use execution ports meanwhile.</p>
+<pre><code class="language-python">from collections import deque
+rob = deque([{&quot;id&quot;: &quot;load&quot;, &quot;done&quot;: False},
+             {&quot;id&quot;: &quot;addA&quot;, &quot;done&quot;: True},
+             {&quot;id&quot;: &quot;addB&quot;, &quot;done&quot;: True}])
+retired = []
+while rob and rob[0][&quot;done&quot;]:
+    retired.append(rob.popleft()[&quot;id&quot;])
+assert retired == []
+rob[0][&quot;done&quot;] = True
+while rob and rob[0][&quot;done&quot;]:
+    retired.append(rob.popleft()[&quot;id&quot;])
+assert retired == [&quot;load&quot;, &quot;addA&quot;, &quot;addB&quot;]
+print(retired)
+</code></pre>
+<p>If a processor spends many cycles with the ROB head blocked on a long-latency load, a wider retirement datapath does not remove that particular bottleneck. More memory-level parallelism, earlier data delivery, larger windows or different scheduling may help depending on which other resources are limiting.</p>
+
+</section>
+<section id="multiple-retirement-per-cycle-and-consecutive-readiness" aria-labelledby="heading-multiple-retirement-per-cycle-and-consecutive-readiness"><h2 id="heading-multiple-retirement-per-cycle-and-consecutive-readiness">Multiple Retirement per Cycle and Consecutive Readiness</h2>
+<p>A superscalar ROB may retire up to <code>W</code> instructions in a cycle, but it can only retire a <strong>consecutive valid, completed and nonfaulting prefix from the oldest entry</strong> under a straightforward in-order rule. If the first two of four head entries are done and the third is busy, only the first two can retire even if the fourth is complete. Real designs can add grouping and restrictions: some bank rows have empty slots, some commit operations require special processing, and certain privileged instructions serialize at retirement.</p>
+<pre><code class="language-python">status = [True, True, False, True, True]
+width = 4
+count = 0
+for done in status[:width]:
+    if not done:
+        break
+    count += 1
+assert count == 2
+assert count != sum(status[:width])
+print(&quot;retired this cycle:&quot;, count)
+</code></pre>
+<p>The arithmetic of theoretical peak throughput is easy: a four-wide retirement stage can commit at most four accounting units per cycle when fully supplied. Sustained throughput is controlled by workload dependencies, execution latencies, branch behavior, memory system, front-end delivery and the real pipeline's definition of an instruction or micro-operation.</p>
+
+</section>
+<section id="architectural-and-speculative-maps" aria-labelledby="heading-architectural-and-speculative-maps"><h2 id="heading-architectural-and-speculative-maps">Architectural and Speculative Maps</h2>
+<p>An explicit PRF core can maintain a <strong>speculative map</strong> representing the newest renamed version of every architectural register, and optionally a <strong>committed map</strong> representing the last retired version. Those maps diverge whenever a younger instruction has been renamed but has not yet retired. The committed map supplies a robust recovery point for exceptions and full pipeline flushes; a branch snapshot can restore the map to a different, younger program point when only wrong-path descendants must be discarded.</p>
+<p>An implementation does not have to duplicate a full committed map. Alternative recovery algorithms walk a rename history or ROB backward, restoring each stale destination, until the correct boundary is reached. Either approach must produce the mappings implied by the surviving ordered instruction prefix. Merely resetting the speculative map to an initial boot mapping would discard valid retired updates and be incorrect.</p>
+<pre><code class="language-python">committed = {&quot;r1&quot;: &quot;p1&quot;, &quot;r2&quot;: &quot;p2&quot;}
+speculative = committed.copy()
+speculative[&quot;r1&quot;] = &quot;p20&quot;
+assert committed[&quot;r1&quot;] == &quot;p1&quot;
+assert speculative[&quot;r1&quot;] == &quot;p20&quot;
+# A full exception flush returns to the last retired state.
+speculative = committed.copy()
+assert speculative == committed
+print(&quot;precise committed mapping restored&quot;)
+</code></pre>
+
+</section>
+<section id="rollback-by-undoing-rename-history" aria-labelledby="heading-rollback-by-undoing-rename-history"><h2 id="heading-rollback-by-undoing-rename-history">Rollback by Undoing Rename History</h2>
+<p>A rename log can record each update as <code>(destination, old tag, new tag)</code>. On squash, replay those records in <strong>reverse rename order</strong>. Reverse ordering is crucial when several discarded instructions write the same architectural register. If updates were performed <code>r1: p1→p10</code> and then <code>r1: p10→p11</code>, the reverse undo sequence restores <code>p11→p10</code> and then <code>p10→p1</code>. Undoing in the opposite direction would incorrectly leave the map at p10.</p>
+<pre><code class="language-python">mapping = {&quot;r1&quot;: &quot;p1&quot;}
+log = []
+for new in [&quot;p10&quot;, &quot;p11&quot;, &quot;p12&quot;]:
+    old = mapping[&quot;r1&quot;]
+    mapping[&quot;r1&quot;] = new
+    log.append((&quot;r1&quot;, old, new))
+assert mapping[&quot;r1&quot;] == &quot;p12&quot;
+for arch, old, new in reversed(log):
+    assert mapping[arch] == new
+    mapping[arch] = old
+assert mapping[&quot;r1&quot;] == &quot;p1&quot;
+print(&quot;reverse-order undo restored initial version&quot;)
+</code></pre>
+<p>This model shows mapping restoration, not a complete allocator recovery protocol. Freed tags must also be returned exactly once, and the design must preserve older committed mappings and any branches that remain valid. An implementation can use historical logs, checkpointing, or a combination.</p>
+
+</section>
+<section id="branch-checkpoints-and-fast-wrong-path-recovery" aria-labelledby="heading-branch-checkpoints-and-fast-wrong-path-recovery"><h2 id="heading-branch-checkpoints-and-fast-wrong-path-recovery">Branch Checkpoints and Fast Wrong-Path Recovery</h2>
+<p>When a branch is renamed, a core may capture a checkpoint of the speculative map and associated allocation metadata. If execution later finds the branch prediction wrong, the machine discards younger work and restores the state that existed at the branch's correct recovery boundary. A checkpoint can avoid walking a long rename history, but storing and accessing many checkpoints consumes hardware resources. The number of unresolved branches and checkpoint entries can limit speculation depth.</p>
+<p>A correct checkpoint is a <strong>snapshot of dependency identities</strong>, not just a saved PC. It determines which versions surviving instructions should see when fetching restarts. If a branch is older than three renamed register writes, wrong-path versions from those writes must not remain as architectural candidates. If a younger branch also has a checkpoint, its metadata must be discarded when it becomes invalid. Implementations differ on exactly which point in the rename sequence is captured and how side effects are quarantined.</p>
+
+</section>
+<section id="branch-recovery-trace-with-a-map-checkpoint" aria-labelledby="heading-branch-recovery-trace-with-a-map-checkpoint"><h2 id="heading-branch-recovery-trace-with-a-map-checkpoint">Branch Recovery Trace with a Map Checkpoint</h2>
+<p>Start with <code>r1→p1, r2→p2</code>. An older arithmetic instruction allocates <code>r1→p10</code>; a branch follows and records a checkpoint. Predicted-path instructions then allocate <code>r2→p11</code> and <code>r1→p12</code>. When the branch resolves as mispredicted, only its younger descendants are invalidated. Restore <code>r1→p10</code> and <code>r2→p2</code>, preserving the older arithmetic result's tag while rejecting both wrong-path destinations. The next correct-path instruction's <code>r1</code> source must read p10.</p>
+<pre><code class="language-python">mapping = {&quot;r1&quot;: &quot;p1&quot;, &quot;r2&quot;: &quot;p2&quot;}
+mapping[&quot;r1&quot;] = &quot;p10&quot;           # older than branch
+checkpoint = mapping.copy()     # branch recovery boundary
+mapping[&quot;r2&quot;] = &quot;p11&quot;           # wrong path
+mapping[&quot;r1&quot;] = &quot;p12&quot;           # wrong path
+assert mapping != checkpoint
+mapping = checkpoint.copy()
+assert mapping == {&quot;r1&quot;: &quot;p10&quot;, &quot;r2&quot;: &quot;p2&quot;}
+assert mapping[&quot;r1&quot;] == &quot;p10&quot;
+print(&quot;surviving branch-boundary state:&quot;, mapping)
+</code></pre>
+<p>The example intentionally excludes the physical-register reclamation logic. The correct recovery protocol must reclaim allocations made by discarded instructions without also releasing any still-live tag in the checkpoint or committed state.</p>
+
+</section>
+<section id="free-list-recovery-and-the-register-leak-trap" aria-labelledby="heading-free-list-recovery-and-the-register-leak-trap"><h2 id="heading-free-list-recovery-and-the-register-leak-trap">Free-List Recovery and the Register-Leak Trap</h2>
+<p>Free-list checkpointing is more subtle than copying a bitmap. Imagine a register was unavailable when a branch checkpoint was taken; an older instruction then commits, freeing that register; a younger wrong-path instruction reallocates it; and the branch is finally found wrong. Restoring an old “free” bitmap naively may lose or duplicate the register, depending on how intervening frees and allocations were recorded. BOOM explicitly documents why it uses <strong>per-branch allocation lists</strong>, rather than naively snapshotting and replacing the free list.</p>
+<p>A safe general principle is that the free pool, speculative map, committed map, unresolved branch checkpoints, and in-flight source tags must agree on ownership. No physical tag may appear simultaneously as an allocatable free resource and as a value that any surviving instruction could consume. Every allocation eventually must be accounted for by a surviving committed mapping or a safe return to the pool. Errors can manifest as rare corruptions, eventual exhaustion, or incorrect recovery only under precise timing sequences.</p>
+
+</section>
+<section id="allocation-invariants-and-ownership-sets" aria-labelledby="heading-allocation-invariants-and-ownership-sets"><h2 id="heading-allocation-invariants-and-ownership-sets">Allocation Invariants and Ownership Sets</h2>
+<p>An invariant is a property that must hold in every reachable implementation state. For a simplified explicit-renaming model, define <code>live</code> as the union of tags appearing in committed mappings, speculative mappings, or the protected source/destination sets of surviving instructions and checkpoints. The free pool must be disjoint from <code>live</code>. If every allocatable tag belongs to exactly one ownership class, then allocations and reclamations cannot silently lose a register. Real designs may have temporary transitions during a cycle, but their externally sampled state should satisfy the designed ownership accounting.</p>
+<pre><code class="language-python">all_tags = set(range(1, 17))
+committed = {1, 2, 3, 4}
+speculative = {5, 6, 7, 8}
+older_sources = {2, 5}
+protected = committed | speculative | older_sources
+free = all_tags - protected
+assert free.isdisjoint(protected)
+assert free | protected == all_tags
+assert len(free) + len(protected) == len(all_tags)
+print(&quot;free tags:&quot;, sorted(free))
+</code></pre>
+<p>For verification, it is often better to track tag ownership with unique sequence numbers or epochs as well as physical indices. An index may be reused after retirement, but a stale completion event for an earlier allocation must never be mistaken for a valid writeback to the newly allocated version.</p>
+
+</section>
+<section id="precise-exceptions-and-faulting-operations" aria-labelledby="heading-precise-exceptions-and-faulting-operations"><h2 id="heading-precise-exceptions-and-faulting-operations">Precise Exceptions and Faulting Operations</h2>
+<p>A fault discovered during speculative execution is not automatically an architectural trap. A younger instruction may fault on a path that will soon be squashed by an older branch. To preserve precise exceptions, the processor must associate the fault with its instruction and defer architectural trap delivery until that instruction is the oldest relevant entry, or otherwise ensure no prohibited younger state has been committed. The ROB provides an age-ordered place to decide whether the exception becomes architecturally observable.</p>
+<p>When a fault is committed, the CPU must present the ISA-defined state as if all earlier instructions had completed and the faulting and younger instructions had not committed their ordinary effects. Recovery then resets speculative mappings, discards wrong-side-effect candidates, updates architectural trap state and redirects control appropriately. The exact treatment of instruction-boundary state, PC, interrupt priority and restart behavior belongs to the relevant ISA and exception-control specification.</p>
+
+</section>
+<section id="a-faulting-rob-head-example" aria-labelledby="heading-a-faulting-rob-head-example"><h2 id="heading-a-faulting-rob-head-example">A Faulting ROB-Head Example</h2>
+<p>Consider <code>I0: r1 = r2 + 1</code>, <code>I1: load r3, [bad_address]</code>, <code>I2: r4 = r5 + 1</code>. Suppose <code>I2</code> executes and writes a speculative physical result before <code>I1</code> finishes address translation and faults. <code>I0</code> may retire normally. When <code>I1</code> reaches the head with its fault flag set, it cannot retire as an ordinary load. The machine must deliver the trap at the permitted point and squash <code>I2</code>. The value in I2's physical destination is discarded, even if it was computed correctly.</p>
+<pre><code class="language-python">entries = [{&quot;id&quot;: &quot;I0&quot;, &quot;done&quot;: True, &quot;fault&quot;: False},
+           {&quot;id&quot;: &quot;I1&quot;, &quot;done&quot;: True, &quot;fault&quot;: True},
+           {&quot;id&quot;: &quot;I2&quot;, &quot;done&quot;: True, &quot;fault&quot;: False}]
+retired = []
+while entries:
+    head = entries[0]
+    if head[&quot;fault&quot;]:
+        trapped = head[&quot;id&quot;]
+        break
+    if not head[&quot;done&quot;]:
+        break
+    retired.append(entries.pop(0)[&quot;id&quot;])
+assert retired == [&quot;I0&quot;]
+assert trapped == &quot;I1&quot;
+assert any(e[&quot;id&quot;] == &quot;I2&quot; for e in entries)
+print(&quot;trap before younger retirement&quot;)
+</code></pre>
+<p>The code does not model actual memory requests, trap-CSR updates or squashed-store cancellation. It isolates the ordering property that any complete implementation must preserve.</p>
+
+</section>
+<section id="stores-memory-visibility-and-the-commit-boundary" aria-labelledby="heading-stores-memory-visibility-and-the-commit-boundary"><h2 id="heading-stores-memory-visibility-and-the-commit-boundary">Stores, Memory Visibility, and the Commit Boundary</h2>
+<p>Register renaming handles register-value versions; it does <strong>not</strong> independently enforce memory ordering. Loads and stores use load/store queues, dependency prediction, address checks, forwarding and sometimes replay. A store may compute its address and data while speculative, but the core must restrict externally visible effects until it is permitted to commit. After an in-order store commitment, a separate store buffer may drain the write to cache later; <strong>retired</strong> does not necessarily mean <strong>globally visible to all cores at that instant</strong> under the memory model.</p>
+<p>A ROB entry for a store often interacts with the load/store unit to mark the operation architecturally committed when eligible. The store buffer then handles ordered or otherwise memory-model-compliant propagation. Treating every store as if it simply writes a physical register on completion misses the essential mechanism. This article focuses on why the ROB establishes the authorization boundary; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load–Store Units and Memory Ordering</a> covers the specialized memory machinery.</p>
+
+</section>
+<section id="register-renaming-cannot-eliminate-memory-dependencies" aria-labelledby="heading-register-renaming-cannot-eliminate-memory-dependencies"><h2 id="heading-register-renaming-cannot-eliminate-memory-dependencies">Register Renaming Cannot Eliminate Memory Dependencies</h2>
+<p>Two instructions using different architectural register names can still conflict through memory. A load may read a location written by an older store. A younger store could write the same location as an older load or store. Those relationships do not disappear by remapping registers: the memory-address aliasing problem remains. Modern out-of-order cores may execute some loads early, speculate on disambiguation, and replay younger work if the assumption proves wrong. Conversely, two instructions sharing an architectural register name may be entirely independent after renaming.</p>
+<p>For example, <code>store [r10], r1</code> and <code>load r2, [r11]</code> could reference the same physical address even though their register identifiers differ. A register-only dependency DAG would miss that possibility. Performance analysis must therefore separate register RAW chains from memory-order dependencies and from scheduling capacity limitations. None of these categories can be replaced wholesale by a single “ROB dependency check.”</p>
+
+</section>
+<section id="interrupt-admission-and-serializing-instructions" aria-labelledby="heading-interrupt-admission-and-serializing-instructions"><h2 id="heading-interrupt-admission-and-serializing-instructions">Interrupt Admission and Serializing Instructions</h2>
+<p>Interrupts are asynchronous events relative to the executing instruction stream. A processor generally takes them at a permitted architectural boundary, ensuring that the saved state corresponds to a precise retired prefix or an ISA-approved exception/interrupt point. ROB and rename recovery are involved because younger speculative instructions may already have executed. The interrupt controller decides pending and enabled conditions; ROB or commit control ensures an acceptable point to change architectural state.</p>
+<p>Serializing or privileged instructions may have stricter requirements. For example, changing address translation or certain control registers can require draining older operations, blocking younger dispatch, or special tracking of side effects. The mechanism depends on the ISA and microarchitecture. A general rename trace that treats every instruction as a normal register-writing ALU operation would be insufficient for system-level correctness.</p>
+
+</section>
+<section id="mis-speculated-memory-operations-and-replay" aria-labelledby="heading-mis-speculated-memory-operations-and-replay"><h2 id="heading-mis-speculated-memory-operations-and-replay">Mis-speculated Memory Operations and Replay</h2>
+<p>Some memory-order predictions permit a load to issue before an older store's address is known. If the addresses later conflict, the load may have consumed an incorrect value, and younger dependent work must be replayed or squashed. Register tags alone do not detect this condition. The load/store unit detects the violation; recovery logic decides where to restart and how to restore the rename state. The ROB helps locate the affected age boundary and prevent invalid work from retiring.</p>
+<p>A replay is conceptually different from an architecturally delivered exception: no software trap must occur if the processor can transparently re-execute the sequence under a corrected ordering. A correct performance model should count the wasted operations, allocation and free-list effects, and potential extra cache traffic without claiming that the ISA sees a distinct fault. The exact mechanism varies among designs.</p>
+
+</section>
+<section id="renaming-and-the-physical-zero-register" aria-labelledby="heading-renaming-and-the-physical-zero-register"><h2 id="heading-renaming-and-the-physical-zero-register">Renaming and the Physical Zero Register</h2>
+<p>Some instruction sets have a constant-zero register, such as <code>x0</code> in RISC-V. Writes to that architectural name do not change the architecturally read value; allocating a new physical destination would usually be pointless. A rename implementation can map it to a fixed zero-producing physical identity and treat the write as destinationless for ordinary data-flow purposes. The precise semantics of instructions with a discarded destination still need to be honored: for example, a memory access must not be skipped merely because its destination register ignores the result.</p>
+<pre><code class="language-python">mapping = {&quot;x0&quot;: &quot;p0&quot;, &quot;x1&quot;: &quot;p1&quot;}
+free = [&quot;p20&quot;]
+def rename_dest(arch):
+    if arch == &quot;x0&quot;:
+        return &quot;p0&quot;  # constant architectural destination
+    new = free.pop(0)
+    mapping[arch] = new
+    return new
+assert rename_dest(&quot;x0&quot;) == &quot;p0&quot;
+assert free == [&quot;p20&quot;]
+assert rename_dest(&quot;x1&quot;) == &quot;p20&quot;
+print(mapping)
+</code></pre>
+<p>The no-allocation rule is one design choice for modeling RISC-V's zero register; implementation details can vary. The core lesson is to derive the renamer's behavior from the ISA-defined meaning of the destination, not from the superficial presence of a register-number field.</p>
+
+</section>
+<section id="architectural-flags-and-partial-register-writes" aria-labelledby="heading-architectural-flags-and-partial-register-writes"><h2 id="heading-architectural-flags-and-partial-register-writes">Architectural Flags and Partial Register Writes</h2>
+<p>Not all architectures expose only full-width general-purpose registers. Some have condition flags, partially overlapping register names, scalar/vector aliases, or instructions that update subsets of an architectural destination. Renaming must represent which portions of state each instruction produces and consumes. Some designs use separate flag renaming or dependency tags; others synthesize merging operations or restrict certain combinations. The exact behavior is architecture- and core-specific.</p>
+<p>A partial-width write can be especially expensive if it creates a hidden dependence on the previous wider value; some ISAs define that a narrower write zero-extends, removing that requirement. x86-64, for instance, has width-dependent general-purpose register semantics. An article about physical registers should not claim that one new destination tag always replaces <em>every</em> architectural subfield in the same way. The production design requires explicit handling of the register model specified by the ISA.</p>
+
+</section>
+<section id="floating-point-and-vector-register-rename-classes" aria-labelledby="heading-floating-point-and-vector-register-rename-classes"><h2 id="heading-floating-point-and-vector-register-rename-classes">Floating-Point and Vector Register Rename Classes</h2>
+<p>Integer, floating-point and vector register files can differ substantially in width, port count, physical organization and allocation policy. A vector operation may represent a much larger state footprint than a scalar addition; some cores use separate register files or shared physical storage with class-specific constraints. Fused arithmetic, vector-length state and floating-point status updates may require careful retirement semantics. A wide physical-register file can dominate energy and wiring costs.</p>
+<p>A capacity model should not simply multiply the count of integer architectural registers by an assumed one-size-fits-all physical-register ratio. Instead, identify the actual register classes, rename granularity, physical allocation units, number of in-flight destination versions, and per-cycle read/write bandwidth. For certain instructions, additional committed state or side effects may be tracked outside the ordinary register renamer.</p>
+
+</section>
+<section id="simultaneous-multithreading-and-per-thread-maps" aria-labelledby="heading-simultaneous-multithreading-and-per-thread-maps"><h2 id="heading-simultaneous-multithreading-and-per-thread-maps">Simultaneous Multithreading and Per-Thread Maps</h2>
+<p>A core supporting simultaneous multithreading may maintain separate architectural and speculative mappings for each hardware thread while sharing portions of the physical register file, ROB or issue scheduler. Fairness, allocation quotas, age ordering and partitioning become design questions. The ROB may be shared or partitioned; in either case, architectural retirement must maintain each thread's specified sequential order, even while independent threads execute concurrently.</p>
+<p>A starvation hazard can arise if one thread uses most free physical registers or ROB entries. Static reservation, dynamic limits or policies accounting for per-thread progress can mitigate it, but their performance consequences vary by workload. A per-thread register-map tag must not be mistaken for global physical ownership; physical tags and recovery state must be correctly associated with the thread and instruction generation that created them.</p>
+
+</section>
+<section id="capacity-planning-rob-versus-physical-register-limits" aria-labelledby="heading-capacity-planning-rob-versus-physical-register-limits"><h2 id="heading-capacity-planning-rob-versus-physical-register-limits">Capacity Planning: ROB versus Physical Register Limits</h2>
+<p>The ROB holds all in-flight operations, including branches, stores and instructions with no general-purpose destination. Physical-register allocation primarily grows when instructions produce new renamed values. Accordingly, <strong>ROB occupancy and physical-register pressure are related but not identical</strong>. A store-heavy stream may run out of ROB or store-queue capacity without exhausting scalar physical destinations; a destination-heavy stream may exhaust the free list while ROB slots remain. Issue-queue and load/store-queue capacities impose further independent bounds.</p>
+<p>A simplified capacity estimate uses <code>inflight ≤ min(ROB entries, physical allocations available / average new destinations per instruction, other queue limits)</code>, interpreting the ratio as a bound only when the average and allocation rules are meaningful. Real pipelines are bursty and have variable instruction expansion into micro-operations, varying allocation classes, and head-of-line restrictions. Resource planning should measure occupancy histograms and the fraction of cycles stalled by each cause, not merely compare headline buffer sizes.</p>
+<pre><code class="language-python">rob_slots = 192
+free_int_registers = 64
+int_dest_fraction = 0.65
+approx_from_regs = free_int_registers / int_dest_fraction
+upper_bound = min(rob_slots, approx_from_regs)
+assert 98 &lt; upper_bound &lt; 99
+print(&quot;illustrative capacity bound:&quot;, round(upper_bound, 1))
+</code></pre>
+<p>This constructed arithmetic is not a prediction of a particular processor's IPC or sustainable window size. It omits per-cycle reclamation, integer/floating-point classes, branches, vector allocation, memory queues and exact dispatch conditions.</p>
+
+</section>
+<section id="checkpoint-capacity-and-recovery-latency-trade-offs" aria-labelledby="heading-checkpoint-capacity-and-recovery-latency-trade-offs"><h2 id="heading-checkpoint-capacity-and-recovery-latency-trade-offs">Checkpoint Capacity and Recovery-Latency Trade-offs</h2>
+<p>One recovery strategy creates a full or compressed rename-map checkpoint for each unresolved branch. That can restore the correct tags quickly, but consumes storage and may cap how many control-flow predictions are outstanding. Another strategy restores mappings by walking ROB or history entries; it may require less checkpoint storage but more recovery cycles. A committed map makes full pipeline-reset recovery fast while still leaving branch-local restoration as a separate design choice.</p>
+<p>A disciplined comparison reports <strong>which recovery case</strong> is measured. A branch misprediction that invalidates only younger instructions is different from an exception that must restore the last committed prefix. Checkpoint read/write bandwidth, free-list reconstruction, map-port contention and pipeline restart latency determine the total performance effect. “Single-cycle recovery” can refer only to a particular map reset operation and does not imply that fetch, decoding and useful execution resume without additional cycles.</p>
+
+</section>
+<section id="rename-bandwidth-and-timing-critical-paths" aria-labelledby="heading-rename-bandwidth-and-timing-critical-paths"><h2 id="heading-rename-bandwidth-and-timing-critical-paths">Rename Bandwidth and Timing Critical Paths</h2>
+<p>An N-wide rename stage often needs multiple architectural source reads, several destination allocations, ordered intra-bundle update bypasses, and multiple map writes. This can create a long combinational path, particularly if the design attempts to rename many operations in one cycle while maintaining precise source-version semantics. Some cores split rename into multiple pipeline stages; others optimize the map organization, allocate in banks, restrict certain cases, or use dependency-detection structures to simplify bypass logic.</p>
+<p>The trade-off affects <strong>latency</strong> and <strong>throughput</strong> differently. Inserting a pipeline stage can improve clock frequency while adding cycles between decode and dispatch; a wider design can improve peak throughput but increase energy, wire distance and verification burden. The correct architecture depends on the target frequency, workload, silicon budget and speculative recovery strategy. A table of ISA register names does not reveal these implementation constraints.</p>
+
+</section>
+<section id="rob-read-and-write-port-organization" aria-labelledby="heading-rob-read-and-write-port-organization"><h2 id="heading-rob-read-and-write-port-organization">ROB Read and Write Port Organization</h2>
+<p>A wide ROB must admit several operations and potentially commit several per cycle, update completion status arriving from multiple execution units, and expose entries to recovery logic. Designers may use banks, rows, shared PC storage or specialized metadata arrays to reduce cost. The banking arrangement can create constraints: even if the nominal commit width is four, only a restricted set of positions may retire together in some implementations, and branches can leave unused entries in a row.</p>
+<p>BOOM's documented ROB organizes entries in banks associated with dispatch/commit width; this provides a concrete illustration of why physically storing <code>W</code> unrelated full entries with unlimited ports is not free. Other cores make different choices. A review should check head/tail wraparound, partial-group dispatch, exception priority among multiple completions, and sustained retirement under misaligned entry occupancy, not only the ideal full-row case.</p>
+
+</section>
+<section id="energy-area-and-wire-cost-considerations" aria-labelledby="heading-energy-area-and-wire-cost-considerations"><h2 id="heading-energy-area-and-wire-cost-considerations">Energy, Area, and Wire-Cost Considerations</h2>
+<p>Physical register files with many read and write ports, wide bypass networks, mapping comparators, and large ROBs consume area and energy. The power cost of tagging and waking many consumers can be significant even when an individual operation is small. Conversely, over-constraining the machine to save energy may leave execution ports unused or increase time spent waiting for memory. Designers trade larger windows against frequency, heat, wire delay, speculation waste and the fraction of workload that exposes useful independent work.</p>
+<p>An evaluation should keep mechanisms separate: increasing physical-register capacity helps only if the renamer is the binding resource; expanding the ROB helps only if the in-flight instruction window is the binding resource; and increasing issue width cannot bypass an instruction chain of unavoidable RAW dependencies. Frequency scaling may also change absolute latency and energy per completed task, making comparisons based on unnormalized cycles misleading.</p>
+
+</section>
+<section id="security-boundaries-and-speculative-state" aria-labelledby="heading-security-boundaries-and-speculative-state"><h2 id="heading-security-boundaries-and-speculative-state">Security Boundaries and Speculative State</h2>
+<p>Speculative execution may alter microarchitectural state before the associated instruction is architecturally committed. Physical register contents, cache residency, predictor state and transient execution behavior can have security consequences even if a wrong-path instruction is later squashed. Precise retirement protects the <em>architectural</em> view but does not by itself prevent all side channels through timing or shared hardware resources. Register renaming is therefore neither a substitute for isolation nor a universal speculative-execution security mitigation.</p>
+<p>A security assessment must consider information exposure across privilege domains and between hardware threads, transient-data forwarding paths, stale-tag hazards, initialization or overwrite of recycled storage, and predictor/memory-system interactions. Exact vulnerabilities and mitigations are specific to implementations and threat models. The neighboring <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security, Isolation, and Speculative Side Channels</a> specialist article addresses these questions in greater depth.</p>
+
+</section>
+<section id="verification-rename-map-reference-model" aria-labelledby="heading-verification-rename-map-reference-model"><h2 id="heading-verification-rename-map-reference-model">Verification: Rename-Map Reference Model</h2>
+<p>A practical verification environment can maintain a reference version history for each architectural register. On rename, record the current producer of every source before installing the new destination. On execution, check that each consumer reads the value associated with its captured producer. On retirement, compare the committed architectural state against a sequential ISA reference model. On flush, verify that invalidated destinations are not visible and that the surviving map corresponds to the instruction prefix that remains.</p>
+<p>This methodology catches bugs that a simple end-of-program checksum may miss: a stale mapping can appear correct if a particular register is overwritten again before observation, and a free-list leak may not manifest until a long run exhausts capacity. Verification should cover many repeated writes to one architectural register, simultaneous renames, wraparound of the ROB, consecutive branches, exceptions at multiple ages, interrupts, and memory-replay boundaries.</p>
+
+</section>
+<section id="verification-tag-ownership-and-reuse" aria-labelledby="heading-verification-tag-ownership-and-reuse"><h2 id="heading-verification-tag-ownership-and-reuse">Verification: Tag Ownership and Reuse</h2>
+<p>A physical register should not be reallocated while any surviving consumer depends on its old value. Conversely, each destination allocation should eventually be retired into a committed map or released during recovery. Track a <em>generation</em> for each physical tag in a testbench so that the same index used at different times is distinguishable. Completion messages or wakeup signals referring to an earlier generation must not be accepted as results for a later allocation.</p>
+<pre><code class="language-python">next_generation = {&quot;p10&quot;: 1}
+def token(phys):
+    return (phys, next_generation[phys])
+producer_a = token(&quot;p10&quot;)
+next_generation[&quot;p10&quot;] += 1  # only after prior generation is safe to retire
+producer_b = token(&quot;p10&quot;)
+assert producer_a != producer_b
+stale_completion = producer_a
+assert stale_completion != producer_b
+print(&quot;reused index does not alias old producer generation&quot;)
+</code></pre>
+<p>The generation tag is a verification technique, not a requirement that each commercial CPU attach exactly such a counter to its physical registers. Equivalent correctness can be achieved with carefully constrained lifetimes and pipeline cancellation.</p>
+
+</section>
+<section id="verification-sequential-retirement-equivalence" aria-labelledby="heading-verification-sequential-retirement-equivalence"><h2 id="heading-verification-sequential-retirement-equivalence">Verification: Sequential Retirement Equivalence</h2>
+<p>To test correctness, the architectural effect of a legal committed prefix can be compared with an interpreter that executes the same instructions in order. For the register-only case, a reference model can update integer values using simple operations; a separate simulated out-of-order engine may calculate results in different orders but must deliver the same committed register map at the end, assuming the same instruction stream and absent unspecified behavior. Interrupt and memory-model checks require a more complete reference.</p>
+<pre><code class="language-python">program = [(&quot;set&quot;, &quot;r1&quot;, 4), (&quot;add&quot;, &quot;r1&quot;, 3),
+           (&quot;set&quot;, &quot;r2&quot;, 9), (&quot;add&quot;, &quot;r1&quot;, 2)]
+state = {&quot;r1&quot;: 0, &quot;r2&quot;: 0}
+for op, dst, value in program:
+    if op == &quot;set&quot;:
+        state[dst] = value
+    else:
+        state[dst] += value
+assert state == {&quot;r1&quot;: 9, &quot;r2&quot;: 9}
+# The same architectural result is required after all four valid instructions retire.
+print(state)
+</code></pre>
+<p>This reference interpreter is intentionally small; it cannot prove that a physical implementation is correct. Its role is to establish an observable target and motivate richer differential and formal testing.</p>
+
+</section>
+<section id="concurrency-and-formal-properties" aria-labelledby="heading-concurrency-and-formal-properties"><h2 id="heading-concurrency-and-formal-properties">Concurrency and Formal Properties</h2>
+<p>The rename, issue, completion, commit and squash subsystems often operate concurrently in hardware. A branch result and an execution completion may arrive in the same cycle that the commit stage frees stale registers and dispatch attempts new allocations. The implementation must define a precise ordering or correct simultaneous semantics for those events. A verification strategy should model the operation priority, not assume every conceptual step happens atomically in the obvious sequence.</p>
+<p>Useful formal properties include: no free physical tag is referenced by a surviving operation; the speculative map equals sequential application of the surviving rename log to the committed map; the ROB's head-to-tail order matches program sequence among surviving in-flight operations; retirement never crosses a blocked or faulting head; a squashed operation cannot retire; every retired instruction has satisfied all prerequisite execution conditions; and the number of live plus free allocation units is conserved as specified.</p>
+
+</section>
+<section id="performance-counters-and-investigation-strategy" aria-labelledby="heading-performance-counters-and-investigation-strategy"><h2 id="heading-performance-counters-and-investigation-strategy">Performance Counters and Investigation Strategy</h2>
+<p>Counters can distinguish rename stalls, ROB-full stalls, scheduler-full stalls, physical-register shortages, branch recoveries, load misses and retirement stalls—but actual event names and accounting rules vary by CPU family. An observed low IPC is not sufficient evidence of a renaming bottleneck. Look for a causal chain: how frequently is allocation blocked, what structure is full, which instruction keeps the ROB head busy, and does freeing or enlarging the suspected structure plausibly expose more useful instructions?</p>
+<p>A useful experiment changes one factor at a time: dependent arithmetic versus independent arithmetic, a high-destination-write stream versus a mostly branch/store stream, short versus long-latency loads, and predictable versus hard-to-predict branches. Compare throughput alongside power, instructions retired, wrong-path work and physical-register pressure. Beware interpreting micro-operation counts as architectural instruction counts when decoding/fusion varies.</p>
+
+</section>
+<section id="worked-scenario-1-false-write-dependencies-in-a-tight-loop" aria-labelledby="heading-worked-scenario-1-false-write-dependencies-in-a-tight-loop"><h2 id="heading-worked-scenario-1-false-write-dependencies-in-a-tight-loop">Worked Scenario 1 — False Write Dependencies in a Tight Loop</h2>
+<p>A compiler emits repeated updates to a temporary architectural register within an unrolled loop. A naïve scheduler that treats every reuse of that name as a dependence would serialize otherwise independent calculations. Renaming allocates separate physical versions and lets independent operations overlap. Correctness still requires each read to bind to the intended version. If the loop reuses <code>r1</code> for genuinely dependent accumulations, those RAW chains remain serialized regardless of renaming width.</p>
+<p>To review the case, draw the program-order instruction list, record the live-in mapping, and identify each read's most recent preceding write. Build a rename trace and then mark the unavoidable RAW edges. The measured benefit depends on execution resources, dispatch width and available free tags. A loop may be computation-bound even after the false dependencies are removed, so do not attribute all residual stalls to the register map.</p>
+
+</section>
+<section id="worked-scenario-2-a-long-latency-load-blocks-retirement" aria-labelledby="heading-worked-scenario-2-a-long-latency-load-blocks-retirement"><h2 id="heading-worked-scenario-2-a-long-latency-load-blocks-retirement">Worked Scenario 2 — A Long-Latency Load Blocks Retirement</h2>
+<p>An older load misses the last-level cache while several younger independent additions finish quickly. The scheduler successfully hides part of the memory latency by executing younger work; the ROB nonetheless fills with completed-but-not-retired instructions because the head is still waiting for the load. Eventually dispatch may stall for ROB capacity, even though arithmetic units are idle at that moment. A second constraint might be physical-register exhaustion if the younger arithmetic stream produces many destination versions.</p>
+<p>The investigation should compare ROB occupancy, oldest-instruction latency and free-register availability. A wider retirement stage cannot pass an unfinished head. Better cache behavior, useful memory-level parallelism, different data layout or a larger window may alter throughput, but the outcome must be measured. The exact point at which a store or load completes and retires depends on the memory hierarchy and memory-ordering design.</p>
+
+</section>
+<section id="worked-scenario-3-branch-misprediction-and-renamed-destinations" aria-labelledby="heading-worked-scenario-3-branch-misprediction-and-renamed-destinations"><h2 id="heading-worked-scenario-3-branch-misprediction-and-renamed-destinations">Worked Scenario 3 — Branch Misprediction and Renamed Destinations</h2>
+<p>A branch is predicted taken, and its speculative successors overwrite several architectural registers. Before the branch resolves, those successors allocate new physical registers and some complete. The branch is actually not taken. The core must squash younger wrong-path operations, restore the rename map that applies at the correct branch boundary, and reclaim discarded allocations without releasing tags belonging to older surviving instructions. Younger completed values must not enter committed state.</p>
+<p>The critical acceptance test is not merely “PC redirected.” Check that the first correct-path instruction reads the same physical versions it would have read if the wrong-path instructions had never been renamed. Then verify allocation accounting after repeated cycles of predict/allocate/squash/retry; a leak may require thousands of mispredictions to reveal itself. Branch checkpoint policies determine the recovery latency, not the architecture's commitment contract.</p>
+
+</section>
+<section id="worked-scenario-4-full-pipeline-flush-on-an-exception" aria-labelledby="heading-worked-scenario-4-full-pipeline-flush-on-an-exception"><h2 id="heading-worked-scenario-4-full-pipeline-flush-on-an-exception">Worked Scenario 4 — Full Pipeline Flush on an Exception</h2>
+<p>An instruction faults while younger operations have already modified speculative physical registers. The ROB retires all valid older instructions first, then delivers the trap when the faulting instruction becomes architecturally eligible. The machine restores its rename map to the last committed state, cancels younger work and sends control to the appropriate handler. A committed map makes this conceptually direct; history-based designs reconstruct the same mapping by undoing discarded changes.</p>
+<p>Verification must inspect the exception PC, committed register values, reclamation of faulting/younger destinations, memory side effects and the handler's view of state. An implementation that simply clears the ROB but leaves the speculative map pointing at younger values has broken precise exception semantics even if the fault handler runs at the correct address.</p>
+
+</section>
+<section id="worked-scenario-5-wide-rename-dependency-inside-a-bundle" aria-labelledby="heading-worked-scenario-5-wide-rename-dependency-inside-a-bundle"><h2 id="heading-worked-scenario-5-wide-rename-dependency-inside-a-bundle">Worked Scenario 5 — Wide Rename Dependency Inside a Bundle</h2>
+<p>A four-wide front end encounters <code>I0: r7 = r1 + 1</code>, immediately followed by <code>I1: r8 = r7 * 2</code>. If both rename in the same cycle, I1 must capture the physical destination allocated for I0. If the implementation reads all sources from the map table before applying any bundle writes, I1 incorrectly captures the old value of <code>r7</code>. The bug may disappear when throughput drops to one-wide, making it especially important to test at maximum dispatch width.</p>
+<p>The correct design applies sequential rename semantics within a simultaneous hardware bundle using bypass or an equivalent dependency-resolution circuit. Directed testing should include multiple writes to the same name within one group, source-equals-destination instructions, and combinations of destinationless branches or stores. It should also check that every slot's recorded stale destination matches the mapping before that slot's own write, not necessarily the map from the beginning of the cycle.</p>
+
+</section>
+<section id="worked-scenario-6-physical-register-exhaustion-with-spare-rob-space" aria-labelledby="heading-worked-scenario-6-physical-register-exhaustion-with-spare-rob-space"><h2 id="heading-worked-scenario-6-physical-register-exhaustion-with-spare-rob-space">Worked Scenario 6 — Physical-Register Exhaustion with Spare ROB Space</h2>
+<p>A stream repeatedly produces new register results while older operations take long enough to delay retirement and stale-tag release. The free pool empties even though some ROB slots remain unused. Rename stalls because a new destination cannot be safely allocated. Increasing ROB depth alone cannot fix this shortage; additional physical registers, faster retirement, reduced speculative depth or changes in operation mix might help. A register-class-specific shortage can arise even if unused tags remain in another class.</p>
+<p>The relevant measurements are free-list occupancy, destination allocation rate, stale-tag reclamation rate and the fraction of cycles stalled for that cause. Verify that the shortage is legitimate capacity pressure rather than a free-list leak during recovery. A recovery leak may gradually reduce available tags after repeated squashes, while ordinary pressure fluctuates with workload and retired progress.</p>
+
+</section>
+<section id="ten-gate-engineering-and-evaluation-framework" aria-labelledby="heading-ten-gate-engineering-and-evaluation-framework"><h2 id="heading-ten-gate-engineering-and-evaluation-framework">Ten-Gate Engineering and Evaluation Framework</h2>
+<p>A register-renaming and ROB design should pass the following gates before a performance claim is treated as meaningful.</p>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Design question</th>
+  <th>Required evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. ISA contract</td>
+  <td>What architectural registers, zero registers, flags and privileged state exist?</td>
+  <td>Explicit state and instruction-semantics specification</td>
+</tr>
+<tr>
+  <td>2. Rename mapping</td>
+  <td>Do sources bind to the most recent older writer?</td>
+  <td>Reference rename traces including source=destination</td>
+</tr>
+<tr>
+  <td>3. Wide rename</td>
+  <td>Are intra-bundle dependencies forwarded correctly?</td>
+  <td>Directed simultaneous-rename tests</td>
+</tr>
+<tr>
+  <td>4. Allocation</td>
+  <td>Can the free pool supply each class without aliasing?</td>
+  <td>Ownership invariants, coverage of exhaustion</td>
+</tr>
+<tr>
+  <td>5. Completion</td>
+  <td>Are result availability and scheduling independent from retirement?</td>
+  <td>Wakeup/ready behavior and ROB state checks</td>
+</tr>
+<tr>
+  <td>6. Retirement</td>
+  <td>Can only a completed nonfaulting oldest prefix commit?</td>
+  <td>Head-blocking, width and exception tests</td>
+</tr>
+<tr>
+  <td>7. Recovery</td>
+  <td>Are maps and allocations restored to the correct boundary?</td>
+  <td>Misprediction, exception and nested-recovery tests</td>
+</tr>
+<tr>
+  <td>8. Memory</td>
+  <td>Are stores and speculative loads constrained by correct ordering?</td>
+  <td>Load/store queue and memory-model checking</td>
+</tr>
+<tr>
+  <td>9. Resource fit</td>
+  <td>Which structure limits useful in-flight work?</td>
+  <td>ROB, PRF, IQ and LSQ occupancy and stall measurements</td>
+</tr>
+<tr>
+  <td>10. Deployment assurance</td>
+  <td>Are power, security and corner cases acceptable?</td>
+  <td>Formal properties, stress tests, implementation review</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="common-design-misconceptions" aria-labelledby="heading-common-design-misconceptions"><h2 id="heading-common-design-misconceptions">Common Design Misconceptions</h2>
+<p><strong>“Register renaming eliminates all dependencies.”</strong> It eliminates false name dependencies, not true RAW dependencies or memory aliasing. <strong>“All physical registers are speculative.”</strong> An explicit PRF can hold committed and speculative versions simultaneously. <strong>“The ROB schedules execution.”</strong> Scheduling is a different structure; the ROB governs in-flight age and retirement. <strong>“A completed operation can immediately become architectural.”</strong> It may need to wait behind an older unfinished or faulting instruction. <strong>“A wrong branch only changes the PC.”</strong> It also requires recovery of mappings, allocations and dependent speculative work.</p>
+<p><strong>“Physical registers can be freed when the map changes.”</strong> A map change may be speculative; safe lifetime depends on surviving readers and recovery. <strong>“A full ROB means there are not enough physical registers.”</strong> ROB and free-list capacity can bind independently. <strong>“A committed store must already be visible to every core.”</strong> Global visibility is governed by the memory system and memory model, not simply the register ROB. <strong>“One implementation diagram describes every CPU.”</strong> BOOM, gem5 and other cores make different design choices.</p>
+
+</section>
+<section id="review-questions-and-guided-exercises" aria-labelledby="heading-review-questions-and-guided-exercises"><h2 id="heading-review-questions-and-guided-exercises">Review Questions and Guided Exercises</h2>
+<ol>
+<li>Trace the source physical tags and stale destinations for three consecutive writes to the same architectural register; then add one intervening reader and identify its producer.</li>
+<li>Explain why an instruction that reads and writes <code>r1</code> must capture its sources before its destination changes the map.</li>
+<li>Build a four-entry ROB with completion order 3, 1, 4, 2. Which prefixes can retire after each completion event?</li>
+<li>Show which tags remain live after a branch checkpoint, two wrong-path renames and a misprediction.</li>
+<li>Propose a property that detects double allocation and a property that detects physical-register leaks after repeated squashes.</li>
+<li>Distinguish a rename-map table from a physical register file, an issue queue and a ROB using one sentence for each.</li>
+<li>Given ROB capacity 64 and only eight free destination tags, explain why a destination-heavy instruction stream may stall early.</li>
+<li>Describe how a fault discovered in a younger operation can be discarded when an older branch invalidates that path.</li>
+<li>Explain why a ROB can be full of completed operations even when the execution units are temporarily idle.</li>
+<li>Compare a committed-map reset with reverse-order rename-history rollback for exception recovery.</li>
+<li>Identify at least two properties that need per-thread treatment in a simultaneous multithreading core.</li>
+<li>Design a reproducible experiment to distinguish physical-register pressure from a cache-miss-induced ROB-head bottleneck.</li>
+</ol>
+<p>A strong answer states the architectural boundary and the specific implementation assumptions. For code tasks, verify your result with assertions, include a case that triggers a stall or squash, and explain what your simplified model deliberately omits. An exercise that merely asserts a final register value does not prove that the intermediate dependency and reclamation logic was valid.</p>
+
+</section>
+<section id="glossary-of-key-terms" aria-labelledby="heading-glossary-of-key-terms"><h2 id="heading-glossary-of-key-terms">Glossary of Key Terms</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Architectural register</td>
+  <td>Programmer-visible name and behavior defined by the ISA</td>
+</tr>
+<tr>
+  <td>Physical register</td>
+  <td>Internal storage identity for a particular register-value version</td>
+</tr>
+<tr>
+  <td>Rename map / RAT</td>
+  <td>Association from architectural register names to current physical producer tags</td>
+</tr>
+<tr>
+  <td>Committed map</td>
+  <td>Map of the last architecturally retired register versions</td>
+</tr>
+<tr>
+  <td>Speculative map</td>
+  <td>Map incorporating not-yet-retired instruction renames</td>
+</tr>
+<tr>
+  <td>RAW dependence</td>
+  <td>True producer-to-consumer data dependence</td>
+</tr>
+<tr>
+  <td>WAR / WAW</td>
+  <td>False anti-dependence / output dependence from reusing names</td>
+</tr>
+<tr>
+  <td>Stale destination</td>
+  <td>Physical tag replaced by an instruction's new destination mapping</td>
+</tr>
+<tr>
+  <td>Free list</td>
+  <td>Pool or bitmap of allocatable physical register identities</td>
+</tr>
+<tr>
+  <td>Busy table</td>
+  <td>Data indicating whether a physical result is pending</td>
+</tr>
+<tr>
+  <td>ROB</td>
+  <td>Age-ordered record of in-flight instructions and retirement conditions</td>
+</tr>
+<tr>
+  <td>ROB head / tail</td>
+  <td>Oldest retirement position / next allocation position</td>
+</tr>
+<tr>
+  <td>Issue queue</td>
+  <td>Structure selecting operand-ready operations for execution resources</td>
+</tr>
+<tr>
+  <td>Writeback</td>
+  <td>Internal result availability and completion notification</td>
+</tr>
+<tr>
+  <td>Retirement / commit</td>
+  <td>Transition into architecturally committed instruction state</td>
+</tr>
+<tr>
+  <td>Checkpoint</td>
+  <td>Saved recovery information for speculative control-flow boundaries</td>
+</tr>
+<tr>
+  <td>Squash</td>
+  <td>Invalidation of discarded speculative work</td>
+</tr>
+<tr>
+  <td>Precise exception</td>
+  <td>Fault delivery with an exact allowable committed instruction prefix</td>
+</tr>
+<tr>
+  <td>PRF</td>
+  <td>Physical register file storing internal value versions</td>
+</tr>
+<tr>
+  <td>Data-in-ROB</td>
+  <td>Organization in which speculative result data is held with ROB-related entries</td>
+</tr>
+<tr>
+  <td>Reclamation</td>
+  <td>Safe return of an obsolete physical destination to the free pool</td>
+</tr>
+<tr>
+  <td>Head-of-line blocking</td>
+  <td>Retirement blocked by an older unfinished instruction despite younger completions</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="suggested-study-pathways" aria-labelledby="heading-suggested-study-pathways"><h2 id="heading-suggested-study-pathways">Suggested Study Pathways</h2>
+<p><strong>New CPU students:</strong> Read <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a> to define the ISA-visible result, then <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a> to see how instructions use registers and execution units. Return here to follow value versions and finish with <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>.</p>
+<p><strong>Microarchitecture students:</strong> Begin with <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a>, then trace renaming, scheduling, retirement and recovery in this article. Continue with <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load–Store Units and Memory Ordering</a>.</p>
+<p><strong>Verification and performance engineers:</strong> Reproduce the supplied map and ROB models. Expand them with a bounded physical-register allocator, branch checkpoint stack, per-operation generation and random sequence of retire/squash events; then enforce the ownership and prefix-retirement properties. Consult <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a> for measurement interpretation and <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/">Microarchitecture specialist directory</a> for neighboring theoretical material.</p>
+
+</section>
+<section id="complete-cpu-specialist-directory" aria-labelledby="heading-complete-cpu-specialist-directory"><h2 id="heading-complete-cpu-specialist-directory">Complete CPU Specialist Directory</h2>
+<p>These are the <strong>24 specialist destinations</strong> prescribed by the governing CPU unit index. Active planned-child links do not mean that every linked page is already published.</p><ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers" aria-current="page">Register Renaming and Reorder Buffers</a> — Current article.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a>.</li></ol><p>Return to the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">Central Processing Unit specialist index</a> for the governing taxonomy, or the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">CPU parent overview</a> for a general introduction.</p>
+</section>
+<section id="related-encyclopedia-topics-and-taxonomy-boundaries" aria-labelledby="heading-related-encyclopedia-topics-and-taxonomy-boundaries"><h2 id="heading-related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</h2>
+<p>This article owns <strong>physical-register mapping, version tracking, stale-tag release, ROB age ordering, and recovery bookkeeping</strong> in CPU implementations. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a> unit owns broader dynamic scheduling and instruction-level parallelism; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> owns completion-to-commit policy in wider detail; and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> owns trap control and privilege transitions.</p>
+<p>Neighboring division material includes <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a>, <a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing">Pipeline Processing</a>, and <a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a>. Hardware implementation details should not be presented as requirements of every ISA. A chapter on the CPU register file should distinguish architectural state, physical version allocation, and general system memory rather than combining them into a single “register storage” topic.</p>
+
+</section>
+<section id="primary-documentation-and-further-reading" aria-labelledby="heading-primary-documentation-and-further-reading"><h2 id="heading-primary-documentation-and-further-reading">Primary Documentation and Further Reading</h2>
+<ol>
+<li><a href="https://docs.boom-core.org/en/latest/sections/rename-stage.html">Berkeley Out-of-Order Machine (BOOM), “The Rename Stage.”</a> Primary implementation documentation for map tables, free lists, busy tables, branch checkpoints and stale destinations. Accessed November 2026.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/reorder-buffer.html">BOOM, “The Reorder Buffer (ROB) and the Dispatch Stage.”</a> Details ROB organization, commitment, exception state, rollback and recovery. Accessed November 2026.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/intro-overview/boom-pipeline.html">BOOM, “The BOOM Pipeline.”</a> Concrete stage and store-commit behavior. Accessed November 2026.</li>
+<li><a href="https://www.gem5.org/documentation/general_docs/cpu_models/O3CPU">gem5 Documentation, “O3CPU.”</a> Simulator-stage organization and resource modeling; the page was updated in October 2026. Accessed November 2026.</li>
+<li><a href="https://gem5.googlesource.com/public/gem5/+/refs/heads/stable/src/cpu/o3/rename.hh">gem5 source, rename-stage interface.</a> Implementation-level artifact for rename map histories and resource feedback; source revision may change. Accessed November 2026.</li>
+<li><a href="https://cdrdv2-public.intel.com/821614/356477-Optimization-Reference-Manual-V2-050.pdf">Intel, Optimization Reference Manual, Volume 2.</a> Processor-family-specific discussion of register renaming and ROB concepts; consult the applicable processor generation rather than assuming identical behavior.</li>
+<li>Hennessy, John L., and David A. Patterson. <em>Computer Architecture: A Quantitative Approach</em>. Morgan Kaufmann. Conceptual treatments of dynamic scheduling, register renaming, precise exceptions and implementation trade-offs.</li>
+<li>Tomasulo, R. M. “An Efficient Algorithm for Exploiting Multiple Arithmetic Units.” <em>IBM Journal of Research and Development</em> 11, no. 1 (1967): 25–33. A foundational work in dynamic scheduling and register-tagged dependency resolution; not a description of every modern ROB design.</li>
+</ol>
+
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope"><h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Prepared November 23, 2026:</strong> This completes the Level 5 HTML manuscript for <code>register-renaming-and-reorder-buffers.html</code>, the ninth destination prescribed by the existing Central Processing Unit specialist index. It includes conceptual and executable models for register version tracking, wide rename, resource allocation, ROB retirement, exception rollback, and branch checkpoint recovery. The article links intentionally to all CPU specialist destinations, including planned pages not yet installed.</p>
+<p>The deliverable ZIP contains the physical file under <code>library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/</code>. Extracting the archive at <code>C:\MGU\</code> restores the intended location. The canonical public URL intentionally omits <code>.html</code>; the file on disk retains that extension. All teaching examples describe limited, stated models and are not substitutes for silicon-level validation. The existing CPU index and neighboring HTML files are unchanged.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

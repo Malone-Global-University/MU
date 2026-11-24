@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interconnect Isolation and Device Security | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="A specialist guide to interconnect isolation: IOMMU and SMMU DMA protection, PCIe ACS, ATS, PRI, PASID, device assignment, SPDM attestation, IDE, security verification and fault containment.">
+<meta name="keywords" content="interconnect security,IOMMU,SMMU,DMA isolation,PCIe ACS,ATS,PRI,PASID,interrupt remapping,SR-IOV,VFIO,SPDM,PCIe IDE,peer-to-peer DMA,hardware isolation,device security">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-isolation-and-device-security">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Interconnect Isolation and Device Security | MGU Encyclopedia">
+<meta property="og:description" content="Authorization, device-originated memory access, PCIe peer controls, component trust, virtualization and fault containment in hardware fabrics.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-isolation-and-device-security">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Interconnect Isolation and Device Security</h1>
+<p class="subtitle">Hardware trust boundaries for DMA, peripheral identities, address permissions, peer routing, virtualization, device attestation and fault containment.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#scope-and-place-in-the-bus-systems-unit">Scope and place in the Bus Systems unit</a></li>
+<li><a href="#why-an-interconnect-is-a-security-boundary">Why an interconnect is a security boundary</a></li>
+<li><a href="#security-objectives-confidentiality-integrity-availability-and-containment">Security objectives: confidentiality, integrity, availability, and containment</a></li>
+<li><a href="#threat-model-and-assumptions">Threat model and assumptions</a></li>
+<li><a href="#four-independent-security-questions">Four independent security questions</a></li>
+<li><a href="#cpu-access-mmio-and-device-initiated-dma">CPU access, MMIO, and device-initiated DMA</a></li>
+<li><a href="#device-visible-physical-and-virtual-addresses">Device-visible, physical, and virtual addresses</a></li>
+<li><a href="#end-to-end-dma-authorization-path">End-to-end DMA authorization path</a></li>
+<li><a href="#iommu-architecture-and-purpose">IOMMU architecture and purpose</a></li>
+<li><a href="#translation-domains-page-tables-and-permissions">Translation domains, page tables, and permissions</a></li>
+<li><a href="#mapping-granularity-padding-and-adjacent-memory">Mapping granularity, padding, and adjacent memory</a></li>
+<li><a href="#default-deny-mapping-and-controlled-lifetimes">Default-deny mapping and controlled lifetimes</a></li>
+<li><a href="#requester-identity-and-provenance">Requester identity and provenance</a></li>
+<li><a href="#pcie-access-control-services-and-routing-boundaries">PCIe Access Control Services and routing boundaries</a></li>
+<li><a href="#iommu-groups-and-the-practical-isolation-unit">IOMMU groups and the practical isolation unit</a></li>
+<li><a href="#address-translation-services-ats">Address Translation Services (ATS)</a></li>
+<li><a href="#page-request-interface-and-demand-paging">Page Request Interface and demand paging</a></li>
+<li><a href="#process-address-space-ids-and-shared-virtual-addressing">Process Address Space IDs and shared virtual addressing</a></li>
+<li><a href="#arm-smmu-streams-and-contexts">Arm SMMU streams and contexts</a></li>
+<li><a href="#intel-vt-d-amd-iommu-and-implementation-variance">Intel VT-d, AMD IOMMU, and implementation variance</a></li>
+<li><a href="#device-lifecycle-from-discovery-to-decommissioning">Device lifecycle from discovery to decommissioning</a></li>
+<li><a href="#descriptor-rings-doorbells-and-limited-authority">Descriptor rings, doorbells, and limited authority</a></li>
+<li><a href="#cache-coherence-buffer-visibility-and-isolation">Cache coherence, buffer visibility, and isolation</a></li>
+<li><a href="#memory-ordering-and-revocation-races">Memory ordering and revocation races</a></li>
+<li><a href="#interrupt-remapping-and-event-injection">Interrupt remapping and event injection</a></li>
+<li><a href="#sr-iov-physical-and-virtual-functions">SR-IOV physical and virtual functions</a></li>
+<li><a href="#whole-device-assignment-to-a-virtual-machine">Whole-device assignment to a virtual machine</a></li>
+<li><a href="#nested-translation-and-virtual-iommus">Nested translation and virtual IOMMUs</a></li>
+<li><a href="#mediated-devices-and-shared-accelerators">Mediated devices and shared accelerators</a></li>
+<li><a href="#external-peripherals-and-hot-plug-exposure">External peripherals and hot-plug exposure</a></li>
+<li><a href="#on-chip-interconnect-firewalls-and-protection-attributes">On-chip interconnect firewalls and protection attributes</a></li>
+<li><a href="#mmio-register-access-and-control-plane-security">MMIO register access and control-plane security</a></li>
+<li><a href="#peer-to-peer-memory-transactions">Peer-to-peer memory transactions</a></li>
+<li><a href="#device-firmware-and-the-difference-between-identity-and-trust">Device firmware and the difference between identity and trust</a></li>
+<li><a href="#component-authentication-and-measurement-spdm">Component authentication and measurement: SPDM</a></li>
+<li><a href="#pcie-doe-and-link-confidentiality-with-ide">PCIe DOE and link confidentiality with IDE</a></li>
+<li><a href="#coherent-i-o-shared-memory-and-cxl-style-fabrics">Coherent I/O, shared memory, and CXL-style fabrics</a></li>
+<li><a href="#denial-of-service-and-shared-resource-exhaustion">Denial of service and shared resource exhaustion</a></li>
+<li><a href="#handling-unauthorized-transactions-and-hardware-faults">Handling unauthorized transactions and hardware faults</a></li>
+<li><a href="#quarantine-reset-and-safe-reassignment">Quarantine, reset, and safe reassignment</a></li>
+<li><a href="#observability-and-auditable-security-state">Observability and auditable security state</a></li>
+<li><a href="#performance-costs-and-security-trade-offs">Performance costs and security trade-offs</a></li>
+<li><a href="#security-design-checklist">Security design checklist</a></li>
+<li><a href="#comparative-security-control-matrix">Comparative security-control matrix</a></li>
+<li><a href="#fault-triage-and-decision-matrix">Fault triage and decision matrix</a></li>
+<li><a href="#worked-example-1-an-allowed-dma-range-and-its-boundary">Worked example 1 — An allowed DMA range and its boundary</a></li>
+<li><a href="#worked-example-2-two-domains-reuse-the-same-iova">Worked example 2 — Two domains reuse the same IOVA</a></li>
+<li><a href="#worked-example-3-mapping-a-tiny-object-exposes-a-full-page">Worked example 3 — Mapping a tiny object exposes a full page</a></li>
+<li><a href="#worked-example-4-permission-directions-on-a-descriptor-queue">Worked example 4 — Permission directions on a descriptor queue</a></li>
+<li><a href="#worked-example-5-a-buffer-revoked-before-the-transfer-is-drained">Worked example 5 — A buffer revoked before the transfer is drained</a></li>
+<li><a href="#worked-example-6-peer-to-peer-routing-avoids-the-host-memory-path">Worked example 6 — Peer-to-peer routing avoids the host-memory path</a></li>
+<li><a href="#worked-example-7-group-assignment-in-virtualization">Worked example 7 — Group assignment in virtualization</a></li>
+<li><a href="#worked-example-8-translation-table-size-and-permission-trade-off">Worked example 8 — Translation-table size and permission trade-off</a></li>
+<li><a href="#worked-example-9-tiny-dma-buffers-and-mapping-cost">Worked example 9 — Tiny DMA buffers and mapping cost</a></li>
+<li><a href="#worked-example-10-iotlb-miss-cost-in-a-simplified-model">Worked example 10 — IOTLB miss cost in a simplified model</a></li>
+<li><a href="#worked-example-11-a-hot-plug-authorization-sequence">Worked example 11 — A hot-plug authorization sequence</a></li>
+<li><a href="#worked-example-12-attested-but-overprivileged-device">Worked example 12 — Attested but overprivileged device</a></li>
+<li><a href="#worked-example-13-fault-rate-monitoring">Worked example 13 — Fault-rate monitoring</a></li>
+<li><a href="#worked-example-14-shared-bandwidth-denial-of-service">Worked example 14 — Shared-bandwidth denial of service</a></li>
+<li><a href="#worked-example-15-a-defensible-virtual-function-handoff">Worked example 15 — A defensible virtual-function handoff</a></li>
+<li><a href="#worked-example-16-a-complete-isolation-acceptance-test">Worked example 16 — A complete isolation acceptance test</a></li>
+<li><a href="#specialist-glossary">Specialist glossary</a></li>
+<li><a href="#sources-and-technical-references">Sources and technical references</a></li>
+<li><a href="#other-specialist-articles-in-this-bus-systems-unit">Other specialist articles in this Bus Systems unit</a></li>
+<li><a href="#related-encyclopedia-topics">Related encyclopedia topics</a></li>
+<li><a href="#editorial-scope-and-publication-status">Editorial scope and publication status</a></li>
+</ol>
+</section>
+<section id="scope-and-place-in-the-bus-systems-unit" aria-labelledby="heading-scope-and-place-in-the-bus-systems-unit">
+<h2 id="heading-scope-and-place-in-the-bus-systems-unit">Scope and place in the Bus Systems unit</h2>
+<p>This specialist article examines the security of communication <strong>between hardware agents</strong>: processors, controllers, accelerators, expansion devices, memory, and the switches or bridges that join them. Its organizing question is not simply whether an interface can move data, but <strong>which initiator may access which address, with what permissions, through which route, and under whose authority</strong>. A device can be electrically compatible, correctly enumerated, and capable of transferring valid packets while still being an inappropriate participant in a given trust domain. Conversely, a fault reported by an isolation mechanism does not automatically prove hostile conduct; software configuration errors and stale mappings can produce the same symptom.</p>
+<p>The parent <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems</a> article introduces interconnect functions. The <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/direct-memory-access-and-bus-mastering">DMA and Bus Mastering</a> specialist treats transfers and buffer ownership; <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence">Transaction Ordering and Memory Coherence</a> treats visibility. Here, the primary subject is <strong>authorization, hardware enforcement, containment, and evidence of compliance</strong>. This Level 5 page is article 19 of 20 in the <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/">Bus Systems specialist directory</a>. The next and final sibling treats error detection, diagnostics, and recovery broadly rather than access control alone.</p>
+
+</section>
+<section id="why-an-interconnect-is-a-security-boundary" aria-labelledby="heading-why-an-interconnect-is-a-security-boundary">
+<h2 id="heading-why-an-interconnect-is-a-security-boundary">Why an interconnect is a security boundary</h2>
+<p>A system bus or fabric allows one component to send requests that change the state of another. A processor may read a controller's registers, a network adapter may write packets into host memory, and a storage controller may fetch command descriptors. Each operation crosses a boundary between agents with different privileges and responsibilities. Permission checks performed by an application are not sufficient if a device can issue memory transactions without passing through the application's software checks. That is why the path from a device's request to a memory controller must be examined independently of the CPU's virtual-memory path.</p>
+<p>Modern systems employ <strong>layered authorization</strong>: firmware and operating-system policy decide which device or driver is trusted; I/O address translation constrains device access to system memory; fabric rules govern peer routes; interrupt-remapping facilities govern device-generated interrupt destinations; and physical-link security may protect traffic on exposed connections. These controls have different failure modes. A platform with an IOMMU that is disabled during early boot, bypassed by a peer transaction, or configured with an overly broad domain is not equivalent to a platform enforcing narrow mappings throughout the device lifecycle.</p>
+
+</section>
+<section id="security-objectives-confidentiality-integrity-availability-and-containment" aria-labelledby="heading-security-objectives-confidentiality-integrity-availability-and-containment">
+<h2 id="heading-security-objectives-confidentiality-integrity-availability-and-containment">Security objectives: confidentiality, integrity, availability, and containment</h2>
+<p>Confidentiality means one agent must not read another agent's protected data. Integrity means an agent must not modify data or control state beyond its authorization. Availability means the platform should continue providing service despite failures, congestion, or abusive traffic, subject to its resource and fault model. <strong>Containment</strong> means damage from a failing agent remains inside an intended boundary; it is not a synonym for error detection. An IOMMU permission fault may stop an unauthorized write but cannot by itself guarantee that the device will stop submitting requests or that an upstream switch remains responsive.</p>
+<p>Trust boundaries must also be <strong>time-dependent</strong>. A buffer legitimately writable during an incoming packet transfer should stop being writable once the host revokes that grant and all relevant device translations have been invalidated. A hot-plugged device has different privileges before authorization, after driver binding, during operation, and after shutdown. The strongest designs define behavior at all of these transitions rather than checking only steady-state access.</p>
+
+</section>
+<section id="threat-model-and-assumptions" aria-labelledby="heading-threat-model-and-assumptions">
+<h2 id="heading-threat-model-and-assumptions">Threat model and assumptions</h2>
+<p>Security design starts with a threat model. Relevant agents include a malfunctioning peripheral, compromised device firmware, a driver that supplies incorrect DMA addresses, an untrusted tenant assigned a virtual function, an externally attached PCIe-capable device, and a physically present adversary able to observe an exposed link. Their capabilities differ: an ordinary device may issue transactions using permitted requester identities, whereas a malicious bridge or hardware design might evade assumptions about identifiers or routing. A compromised kernel typically has much broader control than an isolated user-space application, and a physical attacker with access to unprotected memory chips falls outside what an interconnect IOMMU alone can solve.</p>
+<p>An effective threat statement records the accessible ports, whether the device is hot-pluggable, its firmware update authority, expected request types, peer-to-peer paths, DMA windows, interruption privileges, and consequences of failure. It then identifies what the hardware actually enforces. A security conclusion valid for an integrated SoC IP block with immutable stream identification may not carry over to an arbitrary expansion bridge or an endpoint sharing routing resources with other devices.</p>
+
+</section>
+<section id="four-independent-security-questions" aria-labelledby="heading-four-independent-security-questions">
+<h2 id="heading-four-independent-security-questions">Four independent security questions</h2>
+<p>A useful review separates four questions. <strong>Identification:</strong> how does the fabric label the origin of a request? <strong>Authorization:</strong> which addresses and operations are permitted for that identity? <strong>Transport protection:</strong> can parties on the link view or alter data in transit? <strong>Recovery:</strong> what happens if the requester violates a rule or fails mid-transaction? PCIe Requester IDs or Arm StreamIDs serve an identification role; an IOMMU domain and permission bits serve an authorization role; mechanisms such as PCIe Integrity and Data Encryption serve certain transport-protection roles; and error reporting, reset control, and device quiescence support recovery.</p>
+<p>No single affirmative answer proves the whole system secure. A correctly tagged requester whose firmware is compromised can still misuse its allowed memory region. An encrypted link can convey a perfectly authenticated transaction to a memory address that the device should never have been authorized to reach. A system may prevent unauthorized DMA yet allow a device to exhaust shared bandwidth. Isolation policy must therefore name every protected asset and the control that enforces it.</p>
+
+</section>
+<section id="cpu-access-mmio-and-device-initiated-dma" aria-labelledby="heading-cpu-access-mmio-and-device-initiated-dma">
+<h2 id="heading-cpu-access-mmio-and-device-initiated-dma">CPU access, MMIO, and device-initiated DMA</h2>
+<p>Processor-generated memory transactions are usually interpreted through CPU privilege and virtual-memory rules. <strong>Memory-mapped I/O (MMIO)</strong> lets a CPU access a device's control registers through an address aperture, typically with special memory attributes and ordering requirements. <strong>DMA</strong> reverses the direction of agency: an I/O component initiates a read or write to an address it was given or derived. PCIe bus mastering and many on-chip DMA engines can perform this work without a CPU instruction for each transferred byte.</p>
+<p>Therefore, a CPU page table marking a process page inaccessible does <strong>not</strong> alone prevent an attached device from reaching the underlying physical memory. The I/O side needs an enforcement mechanism that understands the device's requester and permissions. Likewise, an IOMMU that restricts DMA to RAM does not automatically prevent a privileged CPU driver from writing unsafe values into the device's own MMIO control registers. These are related but separate control planes; both require appropriate software policy.</p>
+
+</section>
+<section id="device-visible-physical-and-virtual-addresses" aria-labelledby="heading-device-visible-physical-and-virtual-addresses">
+<h2 id="heading-device-visible-physical-and-virtual-addresses">Device-visible, physical, and virtual addresses</h2>
+<p>A DMA-capable device may receive an <strong>I/O virtual address (IOVA)</strong> that is not the CPU virtual address and need not equal the host physical address. The operating system or virtualization software arranges an I/O translation from the device-visible address to permitted target pages. A driver ordinarily uses its platform's DMA-mapping interface rather than assuming that the pointer used by the CPU can be placed directly in a hardware descriptor. Devices may also be limited by address width, bus bridge apertures, alignment requirements, and coherent versus streaming mapping rules.</p>
+<p>An address is only meaningful inside its domain. The same numeric IOVA can refer to different physical buffers in two isolated DMA domains. For example, IOVA <code>0x4000</code> may map to physical page A for one adapter and physical page B for another, or be unmapped in the second domain. Such reuse does not imply a collision if requester identification and translation contexts are correctly enforced. The dangerous condition is a mistaken domain assignment, bypass path, or stale translation that causes a request to be interpreted using a more privileged mapping than intended.</p>
+
+</section>
+<section id="end-to-end-dma-authorization-path" aria-labelledby="heading-end-to-end-dma-authorization-path">
+<h2 id="heading-end-to-end-dma-authorization-path">End-to-end DMA authorization path</h2>
+<p>A typical authorized write follows this conceptual route: <strong>device endpoint → fabric request carrying requester information → routing and isolation checks → IOMMU translation and permission check → memory target</strong>. In a system with IOMMU translation, the IOVA is looked up in the appropriate device domain; an allowed write obtains its host-physical destination; a disallowed write should be rejected or faulted according to platform rules. Exact order and placement of checks depends on the root complex, integrated bridge, IOMMU hardware, and whether the transaction targets RAM or another device.</p>
+<p>For a driver-created mapping, the lifecycle begins earlier. The software allocates or pins a buffer, establishes a DMA mapping, places the resulting device-visible address into a descriptor, and allows the engine to run. After completion and appropriate synchronization, it revokes or reuses the mapping according to the API contract. Linux's <a href="https://docs.kernel.org/core-api/dma-api-howto.html">DMA API HOWTO</a> explicitly describes why drivers should use device-specific DMA mapping and why mappings have a controlled lifetime. This software/hardware contract is as important to security as the translation table's nominal permissions.</p>
+
+</section>
+<section id="iommu-architecture-and-purpose" aria-labelledby="heading-iommu-architecture-and-purpose">
+<h2 id="heading-iommu-architecture-and-purpose">IOMMU architecture and purpose</h2>
+<p>An <strong>input/output memory management unit (IOMMU)</strong> associates incoming DMA requests with translation and protection rules. It can provide address remapping, access-permission enforcement, translation caching, reporting of forbidden accesses, and—in supported configurations—features used by virtualization or shared address spaces. Analogous facilities appear under names such as Intel VT-d, AMD IOMMU/AMD-Vi, and Arm SMMU. The feature set, isolation granularity, and path coverage vary by product and firmware configuration.</p>
+<p>An IOMMU is not a general-purpose firewall for every packet in a platform. Its primary remit is selected I/O address and protection operations; devices may have MMIO paths, peer routes, special windows, or privileged platform channels governed elsewhere. A deployment review should identify which requester identifiers reach which translation contexts, what regions can be accessed without translation, and whether the IOMMU is enabled at the point an untrusted device can initiate traffic. <strong>Presence of the hardware feature does not prove that it was used effectively.</strong></p>
+
+</section>
+<section id="translation-domains-page-tables-and-permissions" aria-labelledby="heading-translation-domains-page-tables-and-permissions">
+<h2 id="heading-translation-domains-page-tables-and-permissions">Translation domains, page tables, and permissions</h2>
+<p>An I/O domain contains a set of permitted device-visible address ranges and their backing mappings. Hardware page-table entries commonly encode a target physical page together with permissions such as read or write; actual formats vary. A read-only descriptor region, for example, need not be writable by the consuming engine. Device requests that fall outside an enabled mapping, or attempt disallowed access types, may generate IOMMU faults. Enforcement depends on correctly associating each request with its domain and ensuring stale device-side or IOMMU-cached translations cannot persist after a revocation.</p>
+<p>Permissions should be <strong>least-privilege and purpose-specific</strong>. A storage device reading a command queue should not automatically receive write access to that queue. A network receive buffer may legitimately need device write access but not arbitrary access to kernel page tables. Coarse identity-based domains that map all of host RAM for convenience defeat much of the expected protection even though the platform's IOMMU might technically be active.</p>
+
+</section>
+<section id="mapping-granularity-padding-and-adjacent-memory" aria-labelledby="heading-mapping-granularity-padding-and-adjacent-memory">
+<h2 id="heading-mapping-granularity-padding-and-adjacent-memory">Mapping granularity, padding, and adjacent memory</h2>
+<p>IOMMU permissions commonly operate at page-based granularity, such as 4 KiB base pages on a particular platform. A small logical buffer can share a translation page with unrelated bytes. If an entire page is mapped to a device, an implementation that does not provide finer subpage controls can expose all bytes in that mapped page to the device regardless of the logical object length. Correct buffer layout therefore matters. Sensitive and untrusted DMA data should not inadvertently occupy the same device-accessible page when that would violate the intended isolation boundary.</p>
+<p>Guard pages, separate allocations, copy buffers, page-aligned rings, and suitably limited mappings can reduce unnecessary exposure, though they add memory or copying overhead. Large IOMMU pages may reduce translation pressure while increasing the minimum range of access. Alignment and isolation are distinct: a 64-byte-aligned descriptor need not reside alone on a 4 KiB page; an engineer must explicitly account for the allocation and mapping granularity that is actually enforced.</p>
+
+</section>
+<section id="default-deny-mapping-and-controlled-lifetimes" aria-labelledby="heading-default-deny-mapping-and-controlled-lifetimes">
+<h2 id="heading-default-deny-mapping-and-controlled-lifetimes">Default-deny mapping and controlled lifetimes</h2>
+<p>A robust design begins with no broad DMA access for an untrusted device, introduces only the ranges required for its current operation, and revokes mappings when the operation completes or the device loses authorization. Real operating systems may optimize this model through reusable mappings, pinned memory pools, or long-lived coherent allocations. Those choices can be valid, but they change the window of exposure and should be documented instead of described simply as temporary grants.</p>
+<p>Revocation is not necessarily instantaneous. Software may need to stop new submissions, wait for outstanding operations, invalidate IOMMU translation caches, invalidate device address-translation caches if used, and ensure the hardware has acknowledged the relevant invalidation before reclaiming or reassigning memory. Otherwise, a buffer could be mapped to a new owner while an old device still holds a usable translation or pending write. The details follow the IOMMU implementation and operating system; security checks must assess the full transition rather than just the page-table update.</p>
+
+</section>
+<section id="requester-identity-and-provenance" aria-labelledby="heading-requester-identity-and-provenance">
+<h2 id="heading-requester-identity-and-provenance">Requester identity and provenance</h2>
+<p>PCIe commonly uses a <strong>Requester ID</strong> based on bus/device/function identification for transactions. On-chip systems may use stream IDs, protection IDs, privilege attributes, or source labels propagated through the fabric. The intended result is a stable association between an initiator and the permissions selected for its traffic. <strong>Identity used for routing is not the same as authenticated identity.</strong> A configuration-space identity tells system software how a PCIe function is addressed; it does not by itself prove the firmware's provenance or that the endpoint behaves honestly.</p>
+<p>Provenance also depends on the path. Bridges and switches must preserve or appropriately transform origin information. If a fabric accepts device-supplied identifiers without enforcing that they correspond to the input port, malicious or defective hardware may create attribution problems. ACS source validation and platform-specific request filtering are relevant here. A security review should ask who sets the source identifier, who can change it, and at which hardware boundary the asserted identity becomes trustworthy.</p>
+
+</section>
+<section id="pcie-access-control-services-and-routing-boundaries" aria-labelledby="heading-pcie-access-control-services-and-routing-boundaries">
+<h2 id="heading-pcie-access-control-services-and-routing-boundaries">PCIe Access Control Services and routing boundaries</h2>
+<p><strong>PCI Express Access Control Services (ACS)</strong> provides standardized controls used by capable components to constrain and redirect certain peer traffic and validate certain source characteristics. For example, peer-to-peer request or completion routing decisions can determine whether traffic reaches an upstream path where other protections operate, instead of moving directly between endpoints below a switch. ACS capability and configuration vary among root ports, switches, and endpoints; not all topologies expose the same isolation behavior.</p>
+<p>An IOMMU guarding the path to system memory does not automatically inspect a peer-to-peer transaction handled entirely within a downstream switching hierarchy. A routing review must therefore ask whether peer transactions are possible, which ACS controls apply, and whether the device is in an isolation group with other functions. ACS is <strong>not encryption or device firmware authentication</strong>. The Linux <a href="https://docs.kernel.org/driver-api/pci/p2pdma.html">PCI peer-to-peer DMA documentation</a> emphasizes topology and ACS effects when reasoning about path support and routing.</p>
+
+</section>
+<section id="iommu-groups-and-the-practical-isolation-unit" aria-labelledby="heading-iommu-groups-and-the-practical-isolation-unit">
+<h2 id="heading-iommu-groups-and-the-practical-isolation-unit">IOMMU groups and the practical isolation unit</h2>
+<p>An individual PCIe function is not always independently isolatable. Two functions may share hidden state, an insufficiently isolated upstream path, or a bridge that permits traffic to bypass the expected boundary. The Linux <strong>IOMMU group</strong> concept represents the set of devices that cannot safely be separated for a particular DMA-isolation purpose under the known hardware topology. This is why device assignment to a virtual machine can be rejected or constrained even when a distinct PCI function number exists for each endpoint.</p>
+<p>The group is a <strong>platform isolation assessment</strong>, not merely a numbering convenience. An operating-system listing with two devices in one group is a reason to investigate shared paths, not to assume either device is malicious. Conversely, manually splitting groups through unsafe overrides does not create missing hardware isolation. The Linux <a href="https://docs.kernel.org/driver-api/vfio.html">VFIO documentation</a> explains these group-based concerns and the role of ACS-capable bridges. Newer software interfaces may represent device ownership differently, but the underlying hardware isolation question remains.</p>
+
+</section>
+<section id="address-translation-services-ats" aria-labelledby="heading-address-translation-services-ats">
+<h2 id="heading-address-translation-services-ats">Address Translation Services (ATS)</h2>
+<p><strong>Address Translation Services (ATS)</strong> can let a compatible PCIe device request translations and retain them in a device-local address translation cache. This can improve some workloads by avoiding repeated host translation work, but it changes the security and maintenance model. A cached translation must remain bound to the proper requester context and be invalidated when the host changes or revokes access. Hosts must not treat a device's claim about translation status as proof that a memory access is authorized.</p>
+<p>ATS support, enablement, and filtering are platform-dependent. In particular, translated requests and any associated source/context metadata must be evaluated against the host's supported security model. A firmware or driver configuration that enables translation caching without reliable invalidation or domain separation can undermine revocation. The lesson is not that ATS is intrinsically unsafe, but that its performance benefit carries an explicit translation-lifecycle obligation.</p>
+
+</section>
+<section id="page-request-interface-and-demand-paging" aria-labelledby="heading-page-request-interface-and-demand-paging">
+<h2 id="heading-page-request-interface-and-demand-paging">Page Request Interface and demand paging</h2>
+<p>The <strong>PCIe Page Request Interface (PRI)</strong> permits supported devices to request assistance when a translation is unavailable or needs software intervention, enabling more flexible memory-management arrangements. A page request is not an authorization to ignore protection or to invent physical mappings. The host's memory manager decides whether the requested access is valid and, if appropriate, establishes or resolves the backing translation before the device proceeds.</p>
+<p>PRI introduces queues, delays, and failure paths: a request might need a page to be made resident; it might be rejected for insufficient permissions; or it might time out when a process exits. A device that supports many outstanding memory operations may generate heavy page-request traffic. Rate limiting, attribution, orderly cancellation, and clear fault reporting are necessary to ensure the paging mechanism does not become an uncontrolled resource or availability risk.</p>
+
+</section>
+<section id="process-address-space-ids-and-shared-virtual-addressing" aria-labelledby="heading-process-address-space-ids-and-shared-virtual-addressing">
+<h2 id="heading-process-address-space-ids-and-shared-virtual-addressing">Process Address Space IDs and shared virtual addressing</h2>
+<p>A <strong>Process Address Space ID (PASID)</strong> can distinguish address spaces or subcontexts for transactions from a compatible device. In a shared virtual addressing arrangement, a device may participate in processing memory references associated with a host process, subject to the supported translation, permission, and lifetime controls. Multiple processes can thereby use a device without necessarily putting all their memory into one undifferentiated DMA domain.</p>
+<p>This feature is not automatic isolation. The platform must bind a PASID to the right process or translation context, prevent a request from selecting an unauthorized identity, coordinate page invalidations, and retire activity before the process address space disappears. Some devices and operating-system configurations support only a subset of ATS, PRI, PASID, and shared virtual memory features. The correct security assessment is feature-specific rather than a blanket claim that all modern PCIe devices offer per-process DMA protection.</p>
+
+</section>
+<section id="arm-smmu-streams-and-contexts" aria-labelledby="heading-arm-smmu-streams-and-contexts">
+<h2 id="heading-arm-smmu-streams-and-contexts">Arm SMMU streams and contexts</h2>
+<p>In Arm-based systems, the <strong>System Memory Management Unit (SMMU)</strong> associates an incoming transaction with a stream and its applicable translation or protection configuration. SMMUv3 uses structures such as stream table entries, and may use context descriptors and multiple translation stages depending on configuration. The StreamID is a sideband origin label supplied by system integration; its trustworthiness depends on how the fabric generates and preserves that label. Platform integration can be as important as the SMMU's page-table engine.</p>
+<p>For example, a shared DMA controller might generate traffic on behalf of multiple clients. If it always uses one StreamID, the SMMU may see a coarser security domain than the software considers distinct. Some designs use substream information to provide finer differentiation. Arm's <a href="https://support.arm.com/documentation/109242/0100/Operation-of-an-SMMU/Translation-process-overview">SMMU Software Guide</a> describes the translation flow. Reviewers must examine the actual SoC wiring and stream assignments rather than assuming one device, one stream, one trust domain.</p>
+
+</section>
+<section id="intel-vt-d-amd-iommu-and-implementation-variance" aria-labelledby="heading-intel-vt-d-amd-iommu-and-implementation-variance">
+<h2 id="heading-intel-vt-d-amd-iommu-and-implementation-variance">Intel VT-d, AMD IOMMU, and implementation variance</h2>
+<p>On many x86 platforms, Intel <strong>VT-d</strong> or an <strong>AMD IOMMU</strong> provides the machinery used by operating systems and hypervisors to manage device address translation and, when supported, interrupt remapping. Support varies by chipset, processor generation, firmware configuration, driver, and topology. Even products from the same vendor can differ in how many domains or address widths they support, whether external ports are protected early enough, and how faults are reported.</p>
+<p>Practical verification therefore starts with the platform's exposed capabilities and operating-system status, not marketing labels. It should identify which devices are translated, whether pass-through or identity-mapping exceptions exist, whether trusted devices are intentionally granted broad windows, and whether assignments preserve separation across all relevant transaction types. Translation is a necessary building block for many secure DMA deployments; it is not a guarantee of secure firmware, safe drivers, confidential links, or freedom from denial of service.</p>
+
+</section>
+<section id="device-lifecycle-from-discovery-to-decommissioning" aria-labelledby="heading-device-lifecycle-from-discovery-to-decommissioning">
+<h2 id="heading-device-lifecycle-from-discovery-to-decommissioning">Device lifecycle from discovery to decommissioning</h2>
+<p>Every DMA-capable component passes through distinct trust states. During discovery, the platform identifies the device and determines its available resources. Before substantial bus mastering, firmware or the OS must establish a suitable isolation context or intentionally classify the hardware as trusted. Driver initialization configures MMIO apertures, DMA masks, descriptor rings, interrupt routes, and potentially device-specific firmware. Normal operation maps controlled buffers. Suspension, reset, hot-unplug, and device assignment change which requests remain valid.</p>
+<p>A secure lifecycle is not simply <strong>allow once, trust forever</strong>. Changing from a host driver to a guest driver or restarting an accelerator can leave outstanding transactions and cached translations. A correct handoff ordinarily stops new work, reaches a quiescent state or enforces isolation despite misbehavior, revokes mappings, reinitializes device state, and grants new access. The exact ordering varies by platform. A useful engineering artifact is a state table showing, for every lifecycle phase, whether the device can initiate DMA and which protections are active.</p>
+
+</section>
+<section id="descriptor-rings-doorbells-and-limited-authority" aria-labelledby="heading-descriptor-rings-doorbells-and-limited-authority">
+<h2 id="heading-descriptor-rings-doorbells-and-limited-authority">Descriptor rings, doorbells, and limited authority</h2>
+<p>A DMA descriptor is a compact statement of the device's work: a buffer address, length, direction, and control flags. Submission and completion rings provide a software/hardware contract that may be memory-mapped to the host or managed through coherent allocations. The driver must not publish descriptors containing stale or unauthorized device-visible addresses. The DMA mapping must exist, be correctly sized, and have the intended access permissions before a doorbell or tail-pointer update tells the device that work is available.</p>
+<p>The descriptor is <strong>not itself a security token</strong> unless the hardware and host enforce its scope. A buggy or malicious engine might ignore a length field or follow an altered next pointer. The IOMMU is valuable precisely because it constrains what is reachable even if the device behaves incorrectly. Descriptor validation, page layout, queue ownership, and hardware-enforced DMA windows work together; none is a complete substitute for the others.</p>
+
+</section>
+<section id="cache-coherence-buffer-visibility-and-isolation" aria-labelledby="heading-cache-coherence-buffer-visibility-and-isolation">
+<h2 id="heading-cache-coherence-buffer-visibility-and-isolation">Cache coherence, buffer visibility, and isolation</h2>
+<p>Cache coherence and access authorization answer different questions. Coherence coordinates which agent sees an up-to-date memory value; the IOMMU determines whether an agent may access a mapped region. A <strong>coherent DMA</strong> device still needs a valid mapping and should still respect authorization boundaries. A <strong>noncoherent DMA</strong> device can have perfectly appropriate IOMMU permissions and nevertheless read stale data if the host fails to synchronize CPU caches or use the required DMA API ownership transitions.</p>
+<p>Memory visibility can also affect security. An old descriptor left visible to a device after software believes the ring has been retired may point to memory that is now allocated for something else. Systems should establish the required ordering between data initialization, descriptor publication, doorbell writes, completion observation, and unmapping. Do not confuse a completed MMIO store at the CPU with the device having finished all DMA writes; posted transactions, store buffers, and endpoint-specific completion rules make those events distinct.</p>
+
+</section>
+<section id="memory-ordering-and-revocation-races" aria-labelledby="heading-memory-ordering-and-revocation-races">
+<h2 id="heading-memory-ordering-and-revocation-races">Memory ordering and revocation races</h2>
+<p>Suppose a driver updates an IOMMU page table to remove a buffer and immediately returns the physical page to an allocator. A device might still have a transaction in flight or hold an older cached translation until invalidation is complete. A separate synchronization sequence can be needed to ensure that no permitted old transaction can touch the reclaimed page. The same challenge arises when transitioning a device from one VM to another or when freeing a long-lived ring during driver unload.</p>
+<p>A robust review asks four questions: <strong>Was the device stopped from issuing new requests? Were in-flight requests drained or otherwise contained? Were relevant translation caches invalidated with completion established? Was the physical memory recycled only afterward?</strong> A successful software call to remove a mapping is only one part of this end-to-end guarantee. Different architectures offer different fencing and invalidation mechanisms, so the article states the general obligation rather than implying a universal instruction sequence.</p>
+
+</section>
+<section id="interrupt-remapping-and-event-injection" aria-labelledby="heading-interrupt-remapping-and-event-injection">
+<h2 id="heading-interrupt-remapping-and-event-injection">Interrupt remapping and event injection</h2>
+<p>Some peripherals notify processors with message-signaled interrupts, in which an interrupt request is represented by a write-like bus transaction. <strong>Interrupt remapping</strong> can help restrict or translate the target of device-originated interrupt traffic and provide a boundary relevant to virtual-machine assignment. A device's DMA read/write permissions and its allowed interrupt destinations are not identical; mapping a memory buffer does not necessarily authorize arbitrary interrupt vectors.</p>
+<p>On platforms with suitable interrupt-remapping support, software can associate an interrupt source with permitted targets and manage the assignment as a device moves between guests or CPU cores. On other platforms, device notification is controlled through different interrupt controllers or fabric-specific mechanisms. The distinction is especially important for pass-through virtualization, where an assigned guest may legitimately receive device events but must not thereby gain control of unrelated host or guest interrupt state. Consult the neighboring <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects">Interrupt Signaling</a> article for the full event-delivery model.</p>
+
+</section>
+<section id="sr-iov-physical-and-virtual-functions" aria-labelledby="heading-sr-iov-physical-and-virtual-functions">
+<h2 id="heading-sr-iov-physical-and-virtual-functions">SR-IOV physical and virtual functions</h2>
+<p><strong>Single Root I/O Virtualization (SR-IOV)</strong> permits supported PCIe devices to expose a physical function (PF) and multiple virtual functions (VFs). A hypervisor can potentially assign different VFs to different guests while the underlying adapter shares scheduling logic, queues, firmware, on-card memory, and a physical upstream link. The IOMMU can help segregate host-memory addresses by function; the device itself must correctly enforce any isolation promised between virtual functions and the privileged PF.</p>
+<p>A VF being a distinct PCIe function does not imply the physical adapter is free from cross-tenant leakage or denial-of-service concerns. PF firmware defects, shared buffers, insufficient internal access checks, and contention can compromise separation. Tenant workloads may observe performance changes even when memory permissions are correctly enforced. Reviews should therefore combine IOMMU mappings, PCIe topology, firmware provenance, on-device isolation architecture, and resource-governance testing.</p>
+
+</section>
+<section id="whole-device-assignment-to-a-virtual-machine" aria-labelledby="heading-whole-device-assignment-to-a-virtual-machine">
+<h2 id="heading-whole-device-assignment-to-a-virtual-machine">Whole-device assignment to a virtual machine</h2>
+<p>With PCIe device pass-through, a guest is allowed to operate real hardware through a virtualization boundary. The hypervisor typically controls assignment, memory pinning and I/O mappings, while the guest manages device queues and MMIO within approved constraints. A secure configuration considers not just the endpoint's PCI address, but its IOMMU group, reset behavior, interrupt routing, peer-to-peer pathways, and any platform firmware services touching the hardware.</p>
+<p>Whole-device assignment trades software emulation overhead for stronger guest access to the device. The guest is not thereby entitled to arbitrary host memory. It should have access only to the guest's permitted backing pages, and the host must ensure stale device activity cannot survive reassignment. If an endpoint cannot be reliably reset or belongs to a nonisolatable group, refusing the assignment may be safer than treating the presence of a separate PCI function as sufficient proof of isolation.</p>
+
+</section>
+<section id="nested-translation-and-virtual-iommus" aria-labelledby="heading-nested-translation-and-virtual-iommus">
+<h2 id="heading-nested-translation-and-virtual-iommus">Nested translation and virtual IOMMUs</h2>
+<p>A guest operating system may believe it controls a virtual IOMMU and its own device-visible translations. The host hypervisor must still enforce the outer security boundary that prevents a guest or assigned device from reaching host or other guests' memory. Systems can compose or translate guest-managed views into a physical IOMMU configuration, subject to hardware support for nested translation and the virtualization interface being used.</p>
+<p>Terminology matters: <strong>guest virtual address</strong>, <strong>guest physical address</strong>, <strong>device-visible IOVA</strong>, and <strong>host physical address</strong> can represent different stages in one request. A mapping correct at the guest level may not be legal in the host. If a nested path permits a guest to select unauthorized host mappings, the virtualization boundary has failed. Linux's <a href="https://docs.kernel.org/userspace-api/iommufd.html">IOMMUFD documentation</a> explains hardware page-table and virtual-IOMMU abstractions used in contemporary userspace-managed I/O virtualization.</p>
+
+</section>
+<section id="mediated-devices-and-shared-accelerators" aria-labelledby="heading-mediated-devices-and-shared-accelerators">
+<h2 id="heading-mediated-devices-and-shared-accelerators">Mediated devices and shared accelerators</h2>
+<p>Not every shared device exposes independent PCIe virtual functions. A <strong>mediated device</strong>, a kernel-managed accelerator context, or a driver-operated command queue may multiplex a physical resource across users or VMs. Software can be responsible for validating commands, partitioning buffers, assigning translation contexts, and serializing access to privileged control registers. Hardware may add per-context address translation, protected execution queues, or internal memory firewalls.</p>
+<p>The security boundary must be evaluated at the actual enforcement point. If all contexts share one DMA requester identity and one broad memory domain, claims of strong per-process isolation require additional on-device enforcement. If a device can select a PASID or equivalent substream, the platform must prevent a tenant from using another tenant's identifier. Performance fairness is another separate concern: an authenticated client might still overwhelm common hardware queues without quotas or scheduling controls.</p>
+
+</section>
+<section id="external-peripherals-and-hot-plug-exposure" aria-labelledby="heading-external-peripherals-and-hot-plug-exposure">
+<h2 id="heading-external-peripherals-and-hot-plug-exposure">External peripherals and hot-plug exposure</h2>
+<p>Thunderbolt and USB4 systems can expose PCIe-tunneled peripherals through physically accessible ports, depending on platform and configuration. An adversary with physical access may connect a device capable of requesting memory transactions. Security controls can include device authorization, IOMMU remapping, hot-plug policy, and restrictions that apply before a trusted driver is ready. <strong>The vulnerable window may be during boot, sleep transition, wake, or before user sign-in</strong>, not only when the desktop is fully operational.</p>
+<p>Microsoft's <a href="https://learn.microsoft.com/en-us/windows/security/hardware-security/kernel-dma-protection-for-thunderbolt">Kernel DMA Protection documentation</a> explains Windows policy for capable external DMA devices, while the Linux <a href="https://docs.kernel.org/admin-guide/thunderbolt.html">USB4 and Thunderbolt guide</a> describes authorization and IOMMU-related behavior on supported systems. Neither document implies every machine or peripheral supports identical protection. Platform firmware, boot policy, driver compatibility, and device topology must be assessed together.</p>
+
+</section>
+<section id="on-chip-interconnect-firewalls-and-protection-attributes" aria-labelledby="heading-on-chip-interconnect-firewalls-and-protection-attributes">
+<h2 id="heading-on-chip-interconnect-firewalls-and-protection-attributes">On-chip interconnect firewalls and protection attributes</h2>
+<p>Systems-on-chip often contain a fabric controller or <strong>interconnect firewall</strong> that accepts or rejects transactions by initiator identity, target address, privilege, security state, or protection attributes. This can protect on-chip SRAM, boot ROM, cryptographic engines, and control registers from devices that share the same SoC. These mechanisms sometimes operate independently of, or in addition to, an SMMU. An IP block may have permission to access its designated buffer but not the key-storage region or another subsystem's control space.</p>
+<p>The hardest question is frequently <strong>who supplies the protection attribute</strong>. A bit carried on an internal bus is not a trustworthy security label if an untrusted master can freely set it to privileged. The SoC integration must bind the attribute to a hardware-enforced origin, enforce filtering at trustworthy points, and define defaults for unmapped or malformed requests. Designs should also address bridge translation, debug ports, boot-time ownership, and DMA engines that service multiple clients with different permissions.</p>
+
+</section>
+<section id="mmio-register-access-and-control-plane-security" aria-labelledby="heading-mmio-register-access-and-control-plane-security">
+<h2 id="heading-mmio-register-access-and-control-plane-security">MMIO register access and control-plane security</h2>
+<p>Memory-mapped device registers can confer enormous authority: enabling bus mastering, resetting a security engine, changing interrupt destinations, reprogramming descriptor bases, or exposing sensitive diagnostics. The operating system must restrict which drivers and privilege domains can map those register ranges, even if the DMA engine's access to RAM is independently constrained by an IOMMU. Device register windows can also be aliased, remapped through bridges, or opened by firmware before the OS establishes its final policy.</p>
+<p>A good register-security plan separates normal operational registers from privileged configuration; validates register ranges and reserved fields; avoids mapping entire physical address regions to untrusted processes; and defines how control is transferred during virtualization. It also recognizes that <strong>read access may disclose secrets</strong> and that <strong>write access may alter later DMA policy</strong>, not just immediate device state. The companion <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/memory-mapped-io-and-address-decoding">Memory-Mapped I/O and Address Decoding</a> article covers decoding details.</p>
+
+</section>
+<section id="peer-to-peer-memory-transactions" aria-labelledby="heading-peer-to-peer-memory-transactions">
+<h2 id="heading-peer-to-peer-memory-transactions">Peer-to-peer memory transactions</h2>
+<p>Peer-to-peer (P2P) DMA allows one device to access resources associated with another without necessarily sending the payload through main memory. This can be valuable for storage-to-accelerator transfers and other data-intensive workflows. Yet a P2P route changes the security observation path. A request that stays inside a PCIe switch hierarchy may not traverse the IOMMU that protects system RAM. Permission decisions can instead depend on ACS routing, endpoint capability, device-local access controls, and the topology of the host bridge.</p>
+<p><strong>Fast path does not mean safe path.</strong> Two devices belonging to different tenants must not become implicitly authorized to read or modify one another's BAR memory merely because their switch supports direct routing. A design review should draw the complete path for each approved P2P transfer and identify the enforcement point along that path. Where a trustworthy check is absent, the appropriate answer may be to disallow direct P2P or co-locate the participants within a shared trust domain rather than pretending the normal host-memory IOMMU provides coverage.</p>
+
+</section>
+<section id="device-firmware-and-the-difference-between-identity-and-trust" aria-labelledby="heading-device-firmware-and-the-difference-between-identity-and-trust">
+<h2 id="heading-device-firmware-and-the-difference-between-identity-and-trust">Device firmware and the difference between identity and trust</h2>
+<p>An endpoint's advertised vendor and device identifiers identify a product interface for enumeration; they do not cryptographically establish its current firmware, manufacturing provenance, or configuration. Device firmware may parse host command queues, manage internal memory, run embedded processors, and hold persistent state. Its failure or compromise can influence permitted DMA operations even when external permissions are enforced correctly. A malicious device need not violate an IOMMU mapping to steal data if software legitimately gives it sensitive buffers for processing.</p>
+<p>Defensive controls include appropriately scoped device privileges, authenticated updates where supported, signed and measured firmware, controlled recovery modes, secure boot chains, and auditability of hardware inventory. NIST <a href="https://csrc.nist.gov/pubs/sp/800/193/final">SP 800-193</a> provides broader guidance on platform firmware resiliency. It does not replace vendor-specific device-security validation, but it is useful for structuring protection, detection, and recovery expectations for firmware components.</p>
+
+</section>
+<section id="component-authentication-and-measurement-spdm" aria-labelledby="heading-component-authentication-and-measurement-spdm">
+<h2 id="heading-component-authentication-and-measurement-spdm">Component authentication and measurement: SPDM</h2>
+<p>The <strong>Security Protocol and Data Model (SPDM)</strong> developed by DMTF offers mechanisms for component authentication, measurement reporting, key exchange, and secured messaging when supported by the relevant transport and device implementation. An attestation flow can provide evidence about a component's cryptographic identity and measured state to a verifier applying a policy. However, the verifier still must decide which identities, measurements, versions, and security claims it accepts.</p>
+<p><strong>Attestation is not I/O authorization.</strong> A successfully authenticated device should not automatically receive broad DMA mappings, and a device with carefully restricted mappings is not thereby proven genuine. Certificate-chain verification, measurement freshness, replay protection, and protection of the attestation keys all matter. See DMTF's <a href="https://www.dmtf.org/sites/default/files/standards/documents/DSP2058_1.2.0.pdf">SPDM Architecture White Paper</a> and PCI-SIG's <a href="https://pcisig.com/PCI%20Express/ECN/Base/ComponentMeasurementandAuthentication">Component Measurement and Authentication</a> work for standards context.</p>
+
+</section>
+<section id="pcie-doe-and-link-confidentiality-with-ide" aria-labelledby="heading-pcie-doe-and-link-confidentiality-with-ide">
+<h2 id="heading-pcie-doe-and-link-confidentiality-with-ide">PCIe DOE and link confidentiality with IDE</h2>
+<p>PCIe's <strong>Data Object Exchange (DOE)</strong> provides a standardized device communication facility that can carry supported data objects used by protocols such as component measurement/authentication. PCIe <strong>Integrity and Data Encryption (IDE)</strong> targets selected physical-link security threats, providing confidentiality and integrity protection for supported traffic under the specified deployment model. Key establishment and provisioning are separate operational duties; standards can define mechanisms without guaranteeing that a given link has them enabled.</p>
+<p>An encrypted and integrity-protected link still carries transactions that must obey IOMMU and peer-routing permissions. Likewise, an IOMMU does not protect a cable against physical eavesdropping. IDE should not be confused with the ordinary link CRC: a CRC is intended to detect accidental corruption, whereas cryptographic integrity addresses an adversary who can deliberately modify traffic. PCI-SIG's <a href="https://pcisig.com/PCI%20Express/ECN/Base/IntegrityandDataEncryption_A">IDE revision document</a> discusses the physical-link threat model and related secured-message considerations.</p>
+
+</section>
+<section id="coherent-i-o-shared-memory-and-cxl-style-fabrics" aria-labelledby="heading-coherent-i-o-shared-memory-and-cxl-style-fabrics">
+<h2 id="heading-coherent-i-o-shared-memory-and-cxl-style-fabrics">Coherent I/O, shared memory, and CXL-style fabrics</h2>
+<p>Coherent interconnects can permit devices, accelerators, and processor clusters to observe shared memory with additional cache-state coordination. Coherence does not eliminate authorization; it means valid accesses are kept appropriately synchronized under the memory model. Memory expansion and accelerator fabrics may add endpoint-managed memory, multiple address spaces, routing, or host-managed regions that require separate ownership and access checks. The security design must identify which agent owns a page, who can map it, and when ownership changes.</p>
+<p>A coherent device can still be compromised, a shared-memory aperture can still be too broad, and high-speed access can still produce denial of service. The specific isolation techniques depend on the implementation's translation units, switch controls, coherency protocol, management firmware, and device capability. It would be inaccurate to infer that every coherent fabric offers the same IOMMU or encryption semantics as PCIe, or that support for a newer interconnect generation automatically enables stronger cross-tenant isolation.</p>
+
+</section>
+<section id="denial-of-service-and-shared-resource-exhaustion" aria-labelledby="heading-denial-of-service-and-shared-resource-exhaustion">
+<h2 id="heading-denial-of-service-and-shared-resource-exhaustion">Denial of service and shared resource exhaustion</h2>
+<p>Address-based isolation primarily protects which memory can be accessed; it does not necessarily limit <strong>how often</strong> an authorized device can access it. A misbehaving endpoint may saturate an uplink, create bursts of IOMMU faults, exhaust page-request queues, overload interrupt delivery, or consume arbitration slots. Such behavior can degrade unrelated workloads even when no confidential data is directly exposed. A security evaluation that checks only whether out-of-range addresses fault misses this availability boundary.</p>
+<p>Possible controls include QoS policies, interrupt moderation, request-rate limits, fault-rate limits, PCIe or SoC traffic-class scheduling, partitioned queues, and administrative device quarantine. Their effectiveness is topology-dependent. If two tenants share a physical function, independent IOMMU domains will not necessarily prevent shared scheduler or firmware contention. Service guarantees require workload measurements as well as permission tests.</p>
+
+</section>
+<section id="handling-unauthorized-transactions-and-hardware-faults" aria-labelledby="heading-handling-unauthorized-transactions-and-hardware-faults">
+<h2 id="heading-handling-unauthorized-transactions-and-hardware-faults">Handling unauthorized transactions and hardware faults</h2>
+<p>An unauthorized request can produce an IOMMU fault, a fabric permission error, an unsupported request completion, or another platform-specific outcome. An error report should ideally identify the source, offending IOVA or address, access type, translation context, and reason. However, device firmware, bridges, and host controllers may report errors at different layers; not every transaction failure is attributable to a security policy. Error logs should be correlated with outstanding work, reset state, and the expected memory map.</p>
+<p>Fault handling policies distinguish a recoverable driver mistake from repeated suspicious behavior. A system might reject one request and log it, then quarantine a device after repeated violations. A fatal error might require an endpoint reset or whole-bus recovery. <strong>Resetting without first controlling outstanding transactions can create new hazards</strong>, especially if shared memory is recycled or another tenant is assigned the device. Recovery must preserve the same isolation guarantees that normal operation depends on.</p>
+
+</section>
+<section id="quarantine-reset-and-safe-reassignment" aria-labelledby="heading-quarantine-reset-and-safe-reassignment">
+<h2 id="heading-quarantine-reset-and-safe-reassignment">Quarantine, reset, and safe reassignment</h2>
+<p>Device quarantine means reducing an endpoint's ability to affect the rest of the platform while investigation or recovery proceeds. It may include blocking bus mastering, removing DMA mappings, disabling interrupts, preventing new queues from starting, or detaching a port. Exact containment tools vary: a faulty endpoint may ignore software commands, so isolation cannot rely exclusively on cooperation from its firmware. Hardware-level blocking at a trustworthy root or interconnect boundary is preferable where available.</p>
+<p>Before reassigning the device, the platform should determine whether function-level reset, bus reset, power cycle, or firmware recovery actually clears its internal queues and translation caches. Some reset types affect sibling functions or devices sharing a bridge. An engineer should document which other workloads are disrupted by a containment action. Device availability, host integrity, and fault containment must be treated as related but distinct objectives.</p>
+
+</section>
+<section id="observability-and-auditable-security-state" aria-labelledby="heading-observability-and-auditable-security-state">
+<h2 id="heading-observability-and-auditable-security-state">Observability and auditable security state</h2>
+<p>A defensible isolation claim needs measurable evidence. Relevant artifacts include enabled IOMMU status; which endpoints use which protection domains; mapping lifetimes; ACS capability and policy along the route; interrupt-remapping status; assigned guest or process contexts; device firmware and attestation state; hot-plug authorization policy; and fault counters. A kernel log that simply reports &quot;IOMMU enabled&quot; is insufficient to prove every external port is covered or that every peer path is filtered.</p>
+<p>Good telemetry preserves timestamps, device identifiers, domain or PASID context where available, transaction direction, and error reason without exposing sensitive memory contents unnecessarily. Diagnostics should be designed to handle a device that creates an error flood: reporting must not itself exhaust the host. Periodic configuration review is necessary because firmware upgrades, new adapters, bridge replacements, and hypervisor settings can change isolation topology even when no application software has changed.</p>
+
+</section>
+<section id="performance-costs-and-security-trade-offs" aria-labelledby="heading-performance-costs-and-security-trade-offs">
+<h2 id="heading-performance-costs-and-security-trade-offs">Performance costs and security trade-offs</h2>
+<p>Translation adds lookup and management work, though IOMMU caches and efficient mapping strategies can reduce steady-state overhead. Mapping and unmapping many tiny buffers may cost more CPU time than reusing carefully managed pools, while long-lived mappings expose memory for longer periods. Large pages can improve translation reach but also increase the minimum accessible region. ATS reduces some translation traffic at the cost of stronger invalidation obligations. Peer-to-peer routing can save data movement while bypassing an enforcement point otherwise present on a host-memory path.</p>
+<p>No single performance number describes all deployments. Evaluate throughput, small-message latency, mapping rate, translation misses, IOTLB behavior, device context switches, CPU overhead, and isolation-fault behavior under representative workloads. Optimization should start from the minimal required security boundary, then choose engineering mechanisms that preserve it. Deliberately disabling DMA protection to improve benchmark scores is not a neutral optimization when devices or tenants are untrusted.</p>
+
+</section>
+<section id="security-design-checklist" aria-labelledby="heading-security-design-checklist">
+<h2 id="heading-security-design-checklist">Security design checklist</h2>
+<p>For a new platform or integration, record <strong>(1)</strong> each DMA-capable initiator; <strong>(2)</strong> each protected target; <strong>(3)</strong> which identity labels a request; <strong>(4)</strong> the trustworthy hardware point that enforces that label; <strong>(5)</strong> the permitted address ranges and permissions; <strong>(6)</strong> IOMMU or firewall mapping and invalidation procedures; <strong>(7)</strong> peer paths, bridges, and ACS policy; <strong>(8)</strong> interrupt routes; <strong>(9)</strong> firmware and authentication assumptions; <strong>(10)</strong> reset and reassignment sequence; and <strong>(11)</strong> fault reporting and resource-exhaustion limits. This is a threat-modeling checklist, not proof that every platform exposes identical features.</p>
+<p>Require testable acceptance statements. For example, &quot;Adapter A can write only its allocated receive-buffer pages while its queue is active,&quot; or &quot;A VM-assigned function cannot perform DMA to a host-only page and cannot signal another guest's interrupt route.&quot; These are much stronger than the vague statement &quot;DMA security is enabled.&quot; Each claim should name the protected memory, lifecycle phase, tested action, and evidence source.</p>
+
+</section>
+<section id="comparative-security-control-matrix" aria-labelledby="heading-comparative-security-control-matrix">
+<h2 id="heading-comparative-security-control-matrix">Comparative security-control matrix</h2>
+<table>
+<thead>
+<tr>
+  <th>Mechanism</th>
+  <th>Primary boundary</th>
+  <th>Typical strength</th>
+  <th>Not a substitute for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>IOMMU / SMMU DMA remapping</td>
+  <td>Device-visible access to mapped memory</td>
+  <td>Per-domain translation and access permissions</td>
+  <td>Device firmware trust, peer routing and link secrecy</td>
+</tr>
+<tr>
+  <td>PCIe ACS</td>
+  <td>Selected inter-device routing and source controls</td>
+  <td>Separation of certain PCIe peer paths</td>
+  <td>RAM DMA mapping or cryptographic device identity</td>
+</tr>
+<tr>
+  <td>MMIO access controls</td>
+  <td>Who may program device registers</td>
+  <td>Software/hardware privilege separation</td>
+  <td>Endpoint memory access filtering</td>
+</tr>
+<tr>
+  <td>Interrupt remapping</td>
+  <td>Device-originated event targets</td>
+  <td>Restricted interrupt delivery</td>
+  <td>DMA address permissions</td>
+</tr>
+<tr>
+  <td>SPDM-based attestation</td>
+  <td>Evidence of component identity/state</td>
+  <td>Authenticated measurements where supported</td>
+  <td>Runtime DMA least privilege</td>
+</tr>
+<tr>
+  <td>PCIe IDE</td>
+  <td>Selected traffic on protected links</td>
+  <td>Cryptographic link confidentiality/integrity</td>
+  <td>Device authorization, local memory confidentiality</td>
+</tr>
+<tr>
+  <td>On-chip firewall</td>
+  <td>IP-block to memory/peripheral path</td>
+  <td>Source/target/protection-attribute enforcement</td>
+  <td>Secure source-identity generation unless integrated</td>
+</tr>
+<tr>
+  <td>QoS and rate limits</td>
+  <td>Shared bandwidth/queue resources</td>
+  <td>Limits resource abuse or contention</td>
+  <td>Confidentiality and memory-permission checks</td>
+</tr>
+</tbody>
+</table>
+<p>The entries describe functions, not universal implementation guarantees. A mechanism's absence, disabled status, or incomplete path coverage can change its contribution to the overall security case.</p>
+
+</section>
+<section id="fault-triage-and-decision-matrix" aria-labelledby="heading-fault-triage-and-decision-matrix">
+<h2 id="heading-fault-triage-and-decision-matrix">Fault triage and decision matrix</h2>
+<table>
+<thead>
+<tr>
+  <th>Observed symptom</th>
+  <th>Possible explanation</th>
+  <th>First defensible investigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>IOMMU fault for an unmapped IOVA</td>
+  <td>Stale descriptor, premature unmap, invalid device access</td>
+  <td>Confirm mapping lifetime and requester/domain association</td>
+</tr>
+<tr>
+  <td>Guest cannot assign a PCIe function alone</td>
+  <td>Shared IOMMU group or insufficient topology separation</td>
+  <td>Inspect bridge and ACS topology before changing assignment policy</td>
+</tr>
+<tr>
+  <td>DMA works but CPU reads stale data</td>
+  <td>Cache synchronization or visibility error</td>
+  <td>Verify DMA API ownership and memory-order rules</td>
+</tr>
+<tr>
+  <td>Two devices interfere despite distinct IOVA spaces</td>
+  <td>Shared hardware queues or peer path</td>
+  <td>Inspect peer routing and resource scheduling, not just page tables</td>
+</tr>
+<tr>
+  <td>External device blocked after hot-plug</td>
+  <td>Kernel DMA policy and driver compatibility</td>
+  <td>Confirm supported DMA remapping and authorization state</td>
+</tr>
+<tr>
+  <td>Repeated translated-request failures</td>
+  <td>ATS invalidation, context mismatch, or device defect</td>
+  <td>Correlate translation cache lifecycle and fault telemetry</td>
+</tr>
+<tr>
+  <td>Unexpected interrupt routing</td>
+  <td>MSI programming or interrupt-remap configuration</td>
+  <td>Trace source and authorized event destination</td>
+</tr>
+<tr>
+  <td>Access succeeds after software revocation</td>
+  <td>In-flight traffic, stale translation, or bypass</td>
+  <td>Validate invalidation completion and physical request path</td>
+</tr>
+</tbody>
+</table>
+<p>A symptom is evidence to investigate, not an automatic security verdict. A production diagnostic procedure should preserve the system state needed to reproduce the behavior safely while keeping sensitive device and host data protected.</p>
+
+</section>
+<section id="worked-example-1-an-allowed-dma-range-and-its-boundary" aria-labelledby="heading-worked-example-1-an-allowed-dma-range-and-its-boundary">
+<h2 id="heading-worked-example-1-an-allowed-dma-range-and-its-boundary">Worked example 1 — An allowed DMA range and its boundary</h2>
+<p><strong>Constructed scenario:</strong> Device A has permission to write one 4 KiB IOVA page beginning at <code>0x00004000</code>. Because 4096 decimal equals <code>0x1000</code>, the authorized half-open interval is <code>[0x4000, 0x5000)</code>, or <code>0x4000</code> through <code>0x4FFF</code> inclusive. A four-byte write beginning at <code>0x4FFC</code> addresses bytes <code>0x4FFC</code>–<code>0x4FFF</code> and is wholly inside the mapped page. A four-byte write beginning at <code>0x4FFE</code> extends through <code>0x5001</code> and crosses the boundary.</p>
+<p><strong>Interpretation:</strong> A correctly enforced boundary must not permit the unauthorized part of the crossing write. The precise outcome—rejection of the whole request, partial processing, or an error reported by a particular hardware layer—depends on transaction rules, so software must never assume a cross-boundary access is safely atomic. A descriptor length check in device firmware is not sufficient; the hardware mapping supplies a second, independent boundary. The example is a teaching address calculation, not a characterization of any particular IOMMU's split-request behavior.</p>
+
+</section>
+<section id="worked-example-2-two-domains-reuse-the-same-iova" aria-labelledby="heading-worked-example-2-two-domains-reuse-the-same-iova">
+<h2 id="heading-worked-example-2-two-domains-reuse-the-same-iova">Worked example 2 — Two domains reuse the same IOVA</h2>
+<p><strong>Constructed scenario:</strong> A network adapter in Domain A and an accelerator in Domain B both receive IOVA <code>0x20000</code>. A maps <code>0x20000</code> to host physical <code>0x810000</code>, while B maps the same IOVA to host physical <code>0x940000</code>. Both address ranges are valid within their own translation domains. If A's request is tagged and translated as A, it reaches <code>0x810000</code>; if B's request is tagged and translated as B, it reaches <code>0x940000</code>.</p>
+<p><strong>Interpretation:</strong> Unique numeric DMA addresses across the entire computer are not necessary when translation identities provide separation. The failure mode is not the repeated IOVA, but <strong>misattribution</strong>: an A request using B's translation context, an accidental shared domain, or a bypass path. This example shows why security logging should capture both the offending IOVA and its requester or protection-domain context. A bare address value without the domain is insufficient to diagnose the violation.</p>
+
+</section>
+<section id="worked-example-3-mapping-a-tiny-object-exposes-a-full-page" aria-labelledby="heading-worked-example-3-mapping-a-tiny-object-exposes-a-full-page">
+<h2 id="heading-worked-example-3-mapping-a-tiny-object-exposes-a-full-page">Worked example 3 — Mapping a tiny object exposes a full page</h2>
+<p><strong>Constructed scenario:</strong> A 128-byte command record sits somewhere inside a 4096-byte page. An IOMMU implementation allows or denies access at 4096-byte page granularity, and software maps the containing page writable for a device. The intended object occupies <code>128 / 4096 = 3.125%</code> of the page. The remaining <code>4096 - 128 = 3968</code> bytes may be writable at the same hardware permission granularity, even if device software is told to ignore them.</p>
+<p><strong>Interpretation:</strong> A logically small buffer can have a much larger hardware access envelope. The designer can place DMA-visible records in dedicated pages, use guarded pools, or copy data through an isolated buffer when the trust boundary requires it. These techniques spend memory or CPU work to reduce unintended access. Some architectures provide finer controls or different page sizes; the example specifically assumes page-granular permission checking and no additional subpage firewall.</p>
+
+</section>
+<section id="worked-example-4-permission-directions-on-a-descriptor-queue" aria-labelledby="heading-worked-example-4-permission-directions-on-a-descriptor-queue">
+<h2 id="heading-worked-example-4-permission-directions-on-a-descriptor-queue">Worked example 4 — Permission directions on a descriptor queue</h2>
+<p><strong>Constructed scenario:</strong> Host software publishes a list of transmit descriptors and expects the device only to read them. Payload buffers should likewise be readable by the device; a completion-status page must be writable. An idealized design creates three permissions: <strong>descriptors: device read</strong>, <strong>payload: device read</strong>, <strong>status: device write</strong>. If the same broad domain marks all three regions read/write, a malfunctioning endpoint can modify data the host intended it only to consume.</p>
+<p><strong>Interpretation:</strong> Separating read and write permission can narrow damage without changing the function of the bus. Real hardware may require writable ownership bits or in-place completion descriptors, so a specific implementation can use a combined ring with careful layout. The engineering task is to assign each range the minimum rights required by the actual protocol, not to impose a universally read-only descriptor format. A design review should state those protocol requirements explicitly.</p>
+
+</section>
+<section id="worked-example-5-a-buffer-revoked-before-the-transfer-is-drained" aria-labelledby="heading-worked-example-5-a-buffer-revoked-before-the-transfer-is-drained">
+<h2 id="heading-worked-example-5-a-buffer-revoked-before-the-transfer-is-drained">Worked example 5 — A buffer revoked before the transfer is drained</h2>
+<p><strong>Constructed scenario:</strong> A driver posts a receive buffer, then sends an unmap request immediately after observing a software timeout. Unknown to the driver, a DMA write is already in flight; a device address-translation cache may also retain a translation. If the allocator reuses the physical page for secret host state before transaction draining and invalidation are complete, the old device may still reach that page under an earlier authorization.</p>
+<p><strong>Interpretation:</strong> Revocation is a <strong>sequence</strong>, not merely a page-table edit. The platform must establish which operations have committed, control subsequent requests, process IOMMU/ATS invalidation, and only then release the memory for a different use. Some architectures make portions of this ordering automatic; others require explicit driver and platform operations. The correct implementation must follow the documented DMA API and device reset semantics. This is a hypothetical race analysis, not instructions for exploiting a particular system.</p>
+
+</section>
+<section id="worked-example-6-peer-to-peer-routing-avoids-the-host-memory-path" aria-labelledby="heading-worked-example-6-peer-to-peer-routing-avoids-the-host-memory-path">
+<h2 id="heading-worked-example-6-peer-to-peer-routing-avoids-the-host-memory-path">Worked example 6 — Peer-to-peer routing avoids the host-memory path</h2>
+<p><strong>Constructed scenario:</strong> SSD S and accelerator G reside beneath one PCIe switch. The platform allows a direct transaction route between their endpoint resource windows. A request from S to G can be switched locally rather than traveling upstream through the host-memory IOMMU. Even if S has a narrow IOMMU domain for system RAM, that domain alone does not decide whether G should accept S's peer memory request.</p>
+<p><strong>Interpretation:</strong> The review must inspect switch ACS controls, peer resource ownership, endpoint-local access rules, and any host policy that governs the route. If the devices belong to different guests and the platform cannot demonstrate appropriate separation, the safe design may prohibit such P2P traffic. Whether the route exists at all depends on the actual topology and software support. The example illustrates a protection-path gap, not a blanket claim that every PCIe switch routes peer traffic in this way.</p>
+
+</section>
+<section id="worked-example-7-group-assignment-in-virtualization" aria-labelledby="heading-worked-example-7-group-assignment-in-virtualization">
+<h2 id="heading-worked-example-7-group-assignment-in-virtualization">Worked example 7 — Group assignment in virtualization</h2>
+<p><strong>Constructed scenario:</strong> A platform presents a four-function adapter. The OS finds that two functions share an IOMMU group because their upstream path does not provide adequate independent isolation, while the other two functions are independently groupable. A proposed assignment would give Function 0 to VM A and Function 1 to VM B, even though both are in the first group.</p>
+<p><strong>Interpretation:</strong> Distinct function numbers are not enough to establish two independent security boundaries. The operator should reject or redesign the assignment unless the platform offers a validated means of separation. Placing both functions in one VM, assigning the whole group to one trusted owner, or choosing hardware with stronger function isolation are examples of different policy responses. Unsafe topology overrides do not create missing physical enforcement. The result is a group-level review, not evidence that the adapter's function numbering is invalid.</p>
+
+</section>
+<section id="worked-example-8-translation-table-size-and-permission-trade-off" aria-labelledby="heading-worked-example-8-translation-table-size-and-permission-trade-off">
+<h2 id="heading-worked-example-8-translation-table-size-and-permission-trade-off">Worked example 8 — Translation-table size and permission trade-off</h2>
+<p><strong>Constructed scenario:</strong> A device needs temporary access to a 64 KiB buffer using 4 KiB IOMMU pages. The mapping requires <code>64 KiB / 4 KiB = 16</code> base-page translations, ignoring upper-level page-table structures. If a hypothetical hardware implementation instead uses one supported 64 KiB mapping, fewer leaf entries might be involved. However, a single large mapping may be undesirable if only a subset of the 64 KiB is intended for the device.</p>
+<p><strong>Interpretation:</strong> Translation efficiency is not an automatic reason to widen a security boundary. The designer should weigh mapping operations, IOTLB reach, alignment, and the amount of extra memory exposed. Other IOMMU page sizes and table formats exist, so the number 16 applies only to this simplified 4 KiB setup. Page-table entry counts are not a direct measurement of power, latency, or actual memory consumption.</p>
+
+</section>
+<section id="worked-example-9-tiny-dma-buffers-and-mapping-cost" aria-labelledby="heading-worked-example-9-tiny-dma-buffers-and-mapping-cost">
+<h2 id="heading-worked-example-9-tiny-dma-buffers-and-mapping-cost">Worked example 9 — Tiny DMA buffers and mapping cost</h2>
+<p><strong>Constructed scenario:</strong> A driver submits 100,000 DMA transfers per second. Each transfer requires a map and unmap cycle, and together those operations take an assumed 0.6 microseconds of CPU time per transfer. The mapping work therefore consumes <code>100,000 × 0.6 µs = 60,000 µs</code>, or <strong>60 milliseconds of CPU time per second</strong>. That equals 6% of one CPU core's time under the stated serial accounting. This excludes interrupt handling, descriptor setup, and application work.</p>
+<p><strong>Interpretation:</strong> Batching or reuse of appropriately protected buffers might reduce the management overhead, but can keep pages mapped longer. A performance optimization should compare reduced CPU work with the changed lifetime and scope of device access. The 0.6-microsecond cost is fictional and not a benchmark claim. Actual mapping cost depends on the DMA API, IOMMU implementation, invalidation pattern, CPU, and workload.</p>
+
+</section>
+<section id="worked-example-10-iotlb-miss-cost-in-a-simplified-model" aria-labelledby="heading-worked-example-10-iotlb-miss-cost-in-a-simplified-model">
+<h2 id="heading-worked-example-10-iotlb-miss-cost-in-a-simplified-model">Worked example 10 — IOTLB miss cost in a simplified model</h2>
+<p><strong>Constructed scenario:</strong> An engine performs 256 independent DMA address translations, of which one misses in an I/O translation cache. Assume the miss adds 100 nanoseconds of serialized, nonoverlapped delay while cache hits add no additional modeled delay. The mean extra cost is <code>100 ns / 256 = 0.390625 ns</code> per request. If the misses or accesses overlap, this mean-cost model no longer predicts observed completion time directly.</p>
+<p><strong>Interpretation:</strong> This simple average shows why translations can matter to throughput without implying that each DMA transaction stalls for a full page walk. Real effects also depend on request concurrency, ATS caching, prefetching of translations, memory hierarchy, and queue occupancy. Security-relevant design choices—page size, protection domains, and invalidation policy—can affect translation performance. The measurement must isolate those effects rather than assuming a universal IOMMU penalty.</p>
+
+</section>
+<section id="worked-example-11-a-hot-plug-authorization-sequence" aria-labelledby="heading-worked-example-11-a-hot-plug-authorization-sequence">
+<h2 id="heading-worked-example-11-a-hot-plug-authorization-sequence">Worked example 11 — A hot-plug authorization sequence</h2>
+<p><strong>Constructed scenario:</strong> An unfamiliar PCIe-capable external device is attached to a laptop through a supported tunneling interface. The device becomes visible to the system, but policy does not yet authorize unrestricted DMA. The OS evaluates whether it has a compatible driver and a protected DMA-remapping path. Only after establishing the accepted policy does the device receive the limited access needed for its normal function.</p>
+<p><strong>Interpretation:</strong> Enumeration, driver binding, and authorization are different lifecycle steps. On an unprotected platform, early-boot or wake transitions might have different risk. On a protected platform, a newly attached device can legitimately be blocked even if it is electrically functional. This example illustrates why a security check should record firmware settings and OS state at the exact moment of attachment rather than only testing after the machine has been running for several minutes.</p>
+
+</section>
+<section id="worked-example-12-attested-but-overprivileged-device" aria-labelledby="heading-worked-example-12-attested-but-overprivileged-device">
+<h2 id="heading-worked-example-12-attested-but-overprivileged-device">Worked example 12 — Attested but overprivileged device</h2>
+<p><strong>Constructed scenario:</strong> A PCIe storage controller presents a valid SPDM identity and acceptable firmware measurements. The host then erroneously grants that controller write access to every host-physical page. The attestation result can be genuine and the memory-access policy still dangerously broad. If the controller malfunctions, it has the opportunity to corrupt memory outside its workload even though its component identity was checked successfully.</p>
+<p><strong>Interpretation:</strong> Trust evidence and permission scope must be separate approvals. A useful policy is <strong>authenticate the endpoint, assess its state, then grant only the resources needed for its task</strong>. The converse also matters: a device may have narrowly scoped DMA permissions yet lack cryptographic provenance. Neither condition independently satisfies a security requirement that demands both. This example distinguishes authentication from runtime authorization without presuming any particular firmware vulnerability.</p>
+
+</section>
+<section id="worked-example-13-fault-rate-monitoring" aria-labelledby="heading-worked-example-13-fault-rate-monitoring">
+<h2 id="heading-worked-example-13-fault-rate-monitoring">Worked example 13 — Fault-rate monitoring</h2>
+<p><strong>Constructed scenario:</strong> A controller reports 120 IOMMU permission faults in a 30-second interval. Its average fault rate is <code>120 / 30 = 4 faults per second</code>. That number alone does not identify the cause. It could reflect a broken descriptor ring, stale address mapping, a race during device reset, or a device trying to access a forbidden region. The timing, requester identity, and access type must be correlated with driver and application activity.</p>
+<p><strong>Interpretation:</strong> A useful monitoring policy may look for sudden changes in fault rate or repeated accesses to host-only regions. Quarantine should consider whether the device is needed for essential I/O, whether isolation remains intact, and the risk of leaving it active. A single numerical threshold should not be presented as a universal standard. Rate measurement is an entry point for diagnosis, not a substitute for incident context.</p>
+
+</section>
+<section id="worked-example-14-shared-bandwidth-denial-of-service" aria-labelledby="heading-worked-example-14-shared-bandwidth-denial-of-service">
+<h2 id="heading-worked-example-14-shared-bandwidth-denial-of-service">Worked example 14 — Shared-bandwidth denial of service</h2>
+<p><strong>Constructed scenario:</strong> Two accelerator tenants share a 32 GB/s upstream data path. A device belonging to Tenant A generates 28 GB/s of sustained traffic, while Tenant B wants 12 GB/s. The combined demand is 40 GB/s, exceeding the path's nominal 32 GB/s limit by <strong>8 GB/s</strong> before protocol overhead. At least one workload must be throttled, queued, or denied part of its demand; memory permissions can remain correct throughout.</p>
+<p><strong>Interpretation:</strong> This is an availability and scheduling problem, not necessarily a DMA address-isolation violation. Fair-share arbitration, per-tenant quotas, and traffic-class policies may be needed to enforce a service objective. The actual outcomes depend on direction, payload efficiency, competing resources, and hardware arbitration. The example illustrates why a multi-tenant security assessment must measure interference in addition to testing for unauthorized memory reads and writes.</p>
+
+</section>
+<section id="worked-example-15-a-defensible-virtual-function-handoff" aria-labelledby="heading-worked-example-15-a-defensible-virtual-function-handoff">
+<h2 id="heading-worked-example-15-a-defensible-virtual-function-handoff">Worked example 15 — A defensible virtual-function handoff</h2>
+<p><strong>Constructed scenario:</strong> A network VF is reassigned from VM A to VM B. The host prevents new submissions from A, waits for or contains outstanding DMA, clears or resets the function state using a platform-validated method, revokes A's mappings and translation caches, reprograms interrupt-remapping and I/O domains, and then allows B to initialize its queues and buffers. The host also verifies that the PF and sibling VFs cannot access the new guest's state through shared internal resources contrary to policy.</p>
+<p><strong>Interpretation:</strong> Merely changing the guest's PCI device assignment is not sufficient. The trust boundary includes in-flight transactions, on-device queues, cached translations, interrupt targets, and shared-function firmware. A device with unreliable reset isolation may not be suitable for frequent reassignment. This is an illustrative sequence; concrete implementations must use documented OS and hardware APIs and may require additional steps or different ordering.</p>
+
+</section>
+<section id="worked-example-16-a-complete-isolation-acceptance-test" aria-labelledby="heading-worked-example-16-a-complete-isolation-acceptance-test">
+<h2 id="heading-worked-example-16-a-complete-isolation-acceptance-test">Worked example 16 — A complete isolation acceptance test</h2>
+<p><strong>Constructed scenario:</strong> A design specification states that Controller C may read a 16 KiB descriptor table, write a 64 KiB receive pool, and signal a dedicated completion interrupt. The acceptance test first verifies those intended operations work. It then exercises a read from the receive pool where read permission is intentionally absent, a write outside the pool, an invalid requester context, a revoked mapping after transaction drain, and an interrupt to a disallowed destination. Each negative test should be performed in a safe, isolated validation environment that cannot corrupt production data.</p>
+<p><strong>Interpretation:</strong> Passing the positive cases proves function, not enforcement. Passing the negative cases provides stronger evidence, but only for the paths and states actually tested. The test must also consider peer-to-peer routes, reset, hot-plug, firmware state, and concurrency if they are in scope. Reviewers should record observed faults, whether the device was contained, and whether legitimate traffic recovered. This is the difference between checking a feature flag and validating an end-to-end hardware security contract.</p>
+
+</section>
+<section id="specialist-glossary" aria-labelledby="heading-specialist-glossary">
+<h2 id="heading-specialist-glossary">Specialist glossary</h2>
+<ul>
+<li><strong>Access Control Services (ACS):</strong> PCIe facilities for selected peer-routing and source-validation controls, implemented and configured according to component capability.</li>
+<li><strong>Address aperture:</strong> Region of an address space through which particular memory or device resources can be reached.</li>
+<li><strong>Address Translation Services (ATS):</strong> PCIe capability that allows supported endpoints to request and cache translations under host-managed rules.</li>
+<li><strong>Attestation:</strong> Protocol-backed process in which a component provides evidence about identity or measured state for evaluation by a verifier.</li>
+<li><strong>Authorization:</strong> Decision about which operations an identified actor may perform on a specified resource.</li>
+<li><strong>Backpressure:</strong> Flow-control signal or mechanism that delays new work when downstream resources are occupied.</li>
+<li><strong>BAR (Base Address Register):</strong> PCIe configuration-space register that describes a function's requested memory or I/O aperture.</li>
+<li><strong>Bounce buffer:</strong> Intermediate memory used when device addressing or coherence limitations prevent direct use of an original buffer.</li>
+<li><strong>Bus mastering:</strong> Capability of a hardware agent to originate bus transactions rather than only respond to host requests.</li>
+<li><strong>Cache coherence:</strong> Mechanisms governing consistent views of cached memory values among participating agents.</li>
+<li><strong>CMA:</strong> Component Measurement and Authentication, a PCI-SIG-defined adaptation of relevant component security protocols.</li>
+<li><strong>Completion queue:</strong> Data structure through which a device records finished operations for software consumption.</li>
+<li><strong>Context descriptor:</strong> A configuration structure associated with a particular SMMU or other I/O translation context where supported.</li>
+<li><strong>Data Object Exchange (DOE):</strong> PCIe communication facility for standardized device data objects used by supported protocols.</li>
+<li><strong>Default deny:</strong> Policy under which access is refused unless a specific rule permits it.</li>
+<li><strong>Descriptor ring:</strong> Reusable sequence of DMA work descriptions managed between host and device.</li>
+<li><strong>Device identity:</strong> Label or cryptographic identity representing a hardware endpoint; the term must be qualified by how it is established.</li>
+<li><strong>Device quarantine:</strong> Policy and mechanism that restrict a failing or untrusted endpoint's effects while diagnosis or recovery proceeds.</li>
+<li><strong>DMA:</strong> Direct memory access, a device or controller transfer that does not require CPU copying of every individual payload item.</li>
+<li><strong>DMA domain:</strong> Security and translation context specifying what DMA operations an associated requester may perform.</li>
+<li><strong>DMA mapping:</strong> Authorized association between a device-visible address and underlying memory according to a platform's DMA rules.</li>
+<li><strong>Doorbell:</strong> Register or notification mechanism by which software tells a device that new work is ready.</li>
+<li><strong>Endpoint:</strong> Device-side participant at a termination point of an interconnect connection.</li>
+<li><strong>Firmware:</strong> Software or data embedded in or loaded into a hardware component for low-level operation.</li>
+<li><strong>Function-level reset (FLR):</strong> Standardized reset capability for certain PCIe functions, subject to implementation and shared-resource limits.</li>
+<li><strong>Guest physical address:</strong> Address used to represent memory from a virtual machine's perspective, potentially translated further by the host.</li>
+<li><strong>Hardware firewall:</strong> Interconnect protection logic that allows or rejects transactions according to source, target, and privilege rules.</li>
+<li><strong>Host physical address:</strong> Physical memory address used at the host or system-memory level.</li>
+<li><strong>Hot plug:</strong> Attachment or removal of a device while the platform is powered and capable of detecting the change.</li>
+<li><strong>Identity mapping:</strong> Translation arrangement in which input and output address values are equal over a configured range.</li>
+<li><strong>Input/output memory management unit (IOMMU):</strong> Hardware that provides selected I/O address translation, protection, and related features.</li>
+<li><strong>Integrity and Data Encryption (IDE):</strong> PCIe security mechanism designed to protect selected link traffic against supported confidentiality and integrity threats.</li>
+<li><strong>Interrupt remapping:</strong> Hardware and software control over translation or restriction of device-generated interrupt targets.</li>
+<li><strong>IOVA:</strong> I/O virtual address used by a DMA requester, interpreted in the appropriate I/O translation context.</li>
+<li><strong>IOTLB:</strong> I/O translation lookaside buffer, a cache of address-translation information used by an IOMMU or related engine.</li>
+<li><strong>Isolation domain:</strong> Set of initiators and target resources intentionally placed within one trusted enforcement boundary.</li>
+<li><strong>Least privilege:</strong> Principle of granting only the access needed for a defined task and duration.</li>
+<li><strong>Link encryption:</strong> Cryptographic protection of data transported across a link; does not by itself authorize the carried operation.</li>
+<li><strong>Mediated device:</strong> Software-managed abstraction of hardware resources shared among multiple consumers under additional controls.</li>
+<li><strong>Memory consistency:</strong> Rules describing the order in which operations become observable to participants in a memory system.</li>
+<li><strong>Memory-mapped I/O (MMIO):</strong> Address-based access to device control or data registers through a processor-visible space.</li>
+<li><strong>MSI/MSI-X:</strong> PCIe interrupt mechanisms that deliver device events through message-signaled transactions.</li>
+<li><strong>Nested translation:</strong> Composition of translation stages, often used in virtualized I/O address spaces.</li>
+<li><strong>Noncoherent DMA:</strong> Device memory access for which explicit cache synchronization may be required.</li>
+<li><strong>On-chip interconnect:</strong> Communication fabric connecting processor, memory, and peripheral blocks within an SoC.</li>
+<li><strong>Page Request Interface (PRI):</strong> PCIe capability for supported device page requests and translation-resolution workflows.</li>
+<li><strong>PASID:</strong> Process Address Space ID, used to distinguish supported device address-space contexts.</li>
+<li><strong>Peer-to-peer DMA (P2P):</strong> Device-to-device data movement that may avoid a path through system DRAM.</li>
+<li><strong>Permission fault:</strong> Event indicating an attempted access violates the configured access rules.</li>
+<li><strong>Physical function (PF):</strong> Privileged physical PCIe function that may control underlying SR-IOV resources and virtual functions.</li>
+<li><strong>Posted write:</strong> Write transaction whose transport may not provide a matching end-to-end completion response to the initiator.</li>
+<li><strong>Protection attribute:</strong> Metadata conveying a request's privilege, security state, or other filtering category.</li>
+<li><strong>Requester ID:</strong> PCIe origin identifier used in transaction routing, translation and control; not necessarily cryptographic identity.</li>
+<li><strong>Reset domain:</strong> Set of components whose state is affected by a particular reset operation.</li>
+<li><strong>Root complex:</strong> Host-side PCIe structure that connects processor/memory resources and the PCIe hierarchy.</li>
+<li><strong>SMMU:</strong> Arm System Memory Management Unit, implementing I/O translation and protection as supported by the design.</li>
+<li><strong>SPDM:</strong> DMTF Security Protocol and Data Model, supporting component authentication and secured communication mechanisms.</li>
+<li><strong>SR-IOV:</strong> Single Root I/O Virtualization, a capability for exposing virtual PCIe functions from supported physical hardware.</li>
+<li><strong>StreamID:</strong> Identifier attached to applicable Arm SMMU transactions, commonly selecting the stream-level protection context.</li>
+<li><strong>Substream:</strong> Finer transaction identity below a stream, used by certain I/O translation arrangements.</li>
+<li><strong>Submission queue:</strong> Host/device work queue holding commands or descriptors ready for device consumption.</li>
+<li><strong>Translation cache invalidation:</strong> Operation that makes old address translations unusable in affected caches according to architecture rules.</li>
+<li><strong>Translation context:</strong> Hardware-selected rules for interpreting an IOVA and access permissions.</li>
+<li><strong>Trusted path:</strong> Route whose participants and enforcement points satisfy the relevant system's threat model.</li>
+<li><strong>Virtual function (VF):</strong> Lightweight PCIe function exposed by an SR-IOV-capable device for separate assignment or use.</li>
+<li><strong>Virtual IOMMU:</strong> Guest-visible abstraction of I/O translation facilities managed by virtualization software.</li>
+<li><strong>VFIO:</strong> Linux device access and assignment infrastructure emphasizing controlled device ownership and DMA isolation.</li>
+</ul>
+
+</section>
+<section id="sources-and-technical-references" aria-labelledby="heading-sources-and-technical-references">
+<h2 id="heading-sources-and-technical-references">Sources and technical references</h2>
+<p>The references below provide publicly available, authoritative documentation for the topics in this specialist treatment. They are not a claim that one vendor's rules apply unchanged across all processor and interconnect families. Some standards and capabilities depend on purchased or member-only specifications, licensed implementations, firmware support, and platform configuration.</p>
+<ol>
+<li>Linux Kernel, <a href="https://docs.kernel.org/core-api/dma-api-howto.html">Dynamic DMA Mapping Guide</a>. Device-visible addresses, mapping lifetimes, permissions, cache considerations, and correct driver responsibilities.</li>
+<li>Linux Kernel, <a href="https://docs.kernel.org/core-api/dma-api.html">Dynamic DMA Mapping API</a>. DMA-mapping interface contracts and supporting operations.</li>
+<li>Linux Kernel, <a href="https://docs.kernel.org/driver-api/vfio.html">VFIO: Virtual Function I/O</a>. Hardware IOMMU isolation, PCIe topology, device groups, and assignment implications.</li>
+<li>Linux Kernel, <a href="https://docs.kernel.org/userspace-api/iommufd.html">IOMMUFD Userspace API</a>. I/O address spaces, attached devices, hardware page tables, and virtualization abstractions.</li>
+<li>Linux Kernel, <a href="https://docs.kernel.org/driver-api/pci/p2pdma.html">PCI Peer-to-Peer DMA Support</a>. Routing topology, ACS interactions, P2P resources, and supported use cases.</li>
+<li>Linux Kernel, <a href="https://docs.kernel.org/admin-guide/thunderbolt.html">USB4 and Thunderbolt</a>. Device authorization, PCIe tunneling, and the role of supported DMA protection.</li>
+<li>Arm, <a href="https://support.arm.com/documentation/109242/0100/Operation-of-an-SMMU/Translation-process-overview">Learn the Architecture: SMMU Software Guide — Translation Process Overview</a>. SMMU stream configuration, contexts, and translation behavior.</li>
+<li>Microsoft, <a href="https://learn.microsoft.com/en-us/windows/security/hardware-security/kernel-dma-protection-for-thunderbolt">Kernel DMA Protection</a>. Windows external DMA-remapping policy and protection conditions.</li>
+<li>Microsoft, <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/pci/enabling-dma-remapping-for-device-drivers">Enable DMA Remapping for Device Drivers</a>. Driver and policy aspects of DMA isolation.</li>
+<li>Microsoft, <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/display/iommu-dma-remapping">IOMMU DMA Remapping</a>. Hardware remapping concepts in the graphics and OS interface.</li>
+<li>DMTF, <a href="https://www.dmtf.org/sites/default/files/standards/documents/DSP2058_1.2.0.pdf">SPDM Architecture White Paper DSP2058</a>. Component identity, measurements, and authenticated communication model.</li>
+<li>PCI-SIG, <a href="https://pcisig.com/PCI%20Express/ECN/Base/ComponentMeasurementandAuthentication">Component Measurement and Authentication (CMA)</a>. Adaptation of component measurement and authentication mechanisms for PCIe.</li>
+<li>PCI-SIG, <a href="https://pcisig.com/PCI%20Express/ECN/Base/ComponentMeasurementandAuthenticationRevised">Component Measurement and Authentication (CMA-SPDM), Revised</a>. Revised PCIe SPDM alignment and DOE considerations.</li>
+<li>PCI-SIG, <a href="https://pcisig.com/PCI%20Express/ECN/Base/IntegrityandDataEncryption_A">PCIe Integrity and Data Encryption, Revision A</a>. Selected confidentiality/integrity threats on protected physical links.</li>
+<li>PCI-SIG, <a href="https://pcisig.com/PCIExpress/ECN/Base/AccessControlServicesACSSourceValidationClarification">Access Control Services Source Validation Clarification</a>. PCIe source-validation specification context.</li>
+<li>NIST, <a href="https://csrc.nist.gov/pubs/sp/800/193/final">SP 800-193, Platform Firmware Resiliency Guidelines</a>. Protection, detection, and recovery requirements for platform firmware.</li>
+<li>Microsoft, <a href="https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/architecture">Hyper-V Architecture</a>. Device and IOMMU roles in virtualization.</li>
+<li>PCI-SIG, <a href="https://pcisig.com/specifications">Specification Library and ECN Index</a>. Current publication and revision identifiers for PCIe-related capabilities.</li>
+</ol>
+
+</section>
+<section id="other-specialist-articles-in-this-bus-systems-unit" aria-labelledby="heading-other-specialist-articles-in-this-bus-systems-unit">
+<h2 id="heading-other-specialist-articles-in-this-bus-systems-unit">Other specialist articles in this Bus Systems unit</h2>
+<p>These are <strong>Level 5 siblings</strong> belonging to the Bus Systems unit, not companion children beneath this article. Planned destinations remain active even where a page has not yet been deployed.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/data-address-and-control-buses">Data, Address, and Control Buses</a> — transaction roles and physical signal organization.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-transactions-and-protocol-phases">Bus Transactions and Protocol Phases</a> — request, response, completion, and error semantics.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/memory-mapped-io-and-address-decoding">Memory-Mapped I/O and Address Decoding</a> — address windows and target selection.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-topologies-and-interconnect-hierarchies">Bus Topologies and Interconnect Hierarchies</a> — bridge and interconnect routes.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-arbitration-and-access-priority">Bus Arbitration and Access Priority</a> — fair sharing and denial-of-service trade-offs.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/direct-memory-access-and-bus-mastering">Direct Memory Access and Bus Mastering</a> — operational DMA contracts and descriptor lifecycle.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects">Interrupt Signaling over System Interconnects</a> — event delivery and interrupt routing.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence">Transaction Ordering and Memory Coherence</a> — visibility, ownership, and memory barriers.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow">PCI Express Architecture and Transaction Flow</a> — PCIe layers, topology, and transaction behavior.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/on-chip-buses-and-networks-on-chip">On-Chip Buses and Networks-on-Chip</a> — SoC routers, interconnect protection, and coherency.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/processor-memory-and-storage-interconnects">Processor, Memory, and Storage Interconnects</a> — interconnect purposes across system domains.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-latency-throughput-and-contention">Interconnect Latency, Throughput, and Contention</a> — queues, throughput, and shared-resource interference.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-signal-integrity-and-electrical-constraints">Bus Signal Integrity and Electrical Constraints</a> — physical path and fault margins.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-error-detection-diagnostics-and-recovery">Bus Error Detection, Diagnostics, and Recovery</a> — general link errors, retries, reporting, and recovery.</li>
+</ul>
+
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related encyclopedia topics</h2>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems</a> — parent overview.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/computer-architecture-overview">Computer Architecture Overview</a> — machine-level resource organization.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — processor-internal mechanisms and boundaries.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> — cache structure, memory latency, and locality.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/parallel-architecture">Parallel Architecture</a> — shared and distributed compute/memory architectures.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/motherboards-and-buses">Motherboards and Buses</a> — physical platform integration.</li>
+<li><a href="/library/encyclopedia/computer-science/software-systems/device-and-io-management">Device and I/O Management</a> — operating-system driver responsibilities.</li>
+<li><a href="/library/encyclopedia/computer-science/basics/cybersecurity">Cybersecurity</a> — introductory threat, prevention, and response concepts.</li>
+</ul>
+
+</section>
+<section id="editorial-scope-and-publication-status" aria-labelledby="heading-editorial-scope-and-publication-status">
+<h2 id="heading-editorial-scope-and-publication-status">Editorial scope and publication status</h2>
+<p><strong>This deliverable:</strong> standalone Level 5 specialist article 19 of 20, with interconnect security terminology, distinct enforcement boundaries, an implementation comparison, a fault-triage table, sixteen constructed examples, a specialist glossary, standards-oriented references, and hierarchical navigation. It does not replace the parent Bus Systems overview, alter other sibling files, or create a separate technical-audit document.</p>
+<p><strong>Next article:</strong> <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-error-detection-diagnostics-and-recovery">Bus Error Detection, Diagnostics, and Recovery</a> (20 of 20). Its subject will be protocol-error detection, diagnosis, and recovery for accidental and systematic faults, not a duplicate of the permission and trust-boundary treatment here.</p>
+<p>All numeric examples and specific incidents in this page are illustrative. Production behavior depends on the named protocol revision, operating-system rules, device design, and hardware configuration. The MGU canonical public URL is extensionless; the on-disk filename remains <code>.html</code>. A linked planned page is not represented as live merely because its link is present. Server deployment and runtime rendering of shared components are outside the scope of this package.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

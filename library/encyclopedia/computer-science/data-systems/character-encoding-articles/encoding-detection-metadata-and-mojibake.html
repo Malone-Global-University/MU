@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Encoding Detection, Metadata, and Mojibake | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Investigating character encoding declarations, byte signatures, UTF-8 validity, charset heuristics, mojibake recovery, and preservation of original digital evidence.">
+<meta name="keywords" content="character encoding detection, charset metadata, BOM, mojibake, Windows-1252, UTF-8, Unicode 18, HTML sniffing, recovery, archival data, Python, PowerShell 5.1">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/character-encoding-articles/encoding-detection-metadata-and-mojibake">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Encoding Detection, Metadata, and Mojibake | MGU Encyclopedia">
+<meta property="og:description" content="Investigating character encoding declarations, byte signatures, UTF-8 validity, charset heuristics, mojibake recovery, and preservation of original digital evidence.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/character-encoding-articles/encoding-detection-metadata-and-mojibake">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== SHARED HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Encoding Detection, Metadata, and Mojibake</h1>
+<p class="subtitle">Identifying the right text decoder, tracing corrupted characters, and preserving byte-level evidence during recovery.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#1-scope-purpose-and-governing-principle">1. Scope, Purpose, and Governing Principle</a></li>
+<li><a href="#2-learning-outcomes-and-diagnostic-questions">2. Learning Outcomes and Diagnostic Questions</a></li>
+<li><a href="#3-the-four-layer-model-bytes-labels-characters-and-display">3. The Four-Layer Model: Bytes, Labels, Characters, and Display</a></li>
+<li><a href="#4-evidence-hierarchy-contracts-before-guesswork">4. Evidence Hierarchy: Contracts Before Guesswork</a></li>
+<li><a href="#5-encoding-labels-are-not-the-encoding-itself">5. Encoding Labels Are Not the Encoding Itself</a></li>
+<li><a href="#6-mime-types-declarations-and-precedence-are-format-specific">6. MIME Types, Declarations, and Precedence Are Format-Specific</a></li>
+<li><a href="#7-byte-order-marks-and-other-byte-level-signatures">7. Byte-Order Marks and Other Byte-Level Signatures</a></li>
+<li><a href="#8-strict-utf-8-validation-what-it-proves-and-what-it-does-not">8. Strict UTF-8 Validation: What It Proves and What It Does Not</a></li>
+<li><a href="#9-ascii-only-data-and-under-determination">9. ASCII-Only Data and Under-Determination</a></li>
+<li><a href="#10-legacy-single-byte-and-multibyte-candidate-families">10. Legacy Single-Byte and Multibyte Candidate Families</a></li>
+<li><a href="#11-statistical-heuristics-and-their-limits">11. Statistical Heuristics and Their Limits</a></li>
+<li><a href="#12-recognizing-common-mojibake-signatures">12. Recognizing Common Mojibake Signatures</a></li>
+<li><a href="#13-worked-case-study-a-mislabelled-customer-name">13. Worked Case Study: A Mislabelled Customer Name</a></li>
+<li><a href="#14-byte-exact-reversal-of-one-documented-misdecode">14. Byte-Exact Reversal of One Documented Misdecode</a></li>
+<li><a href="#15-multiple-corruption-stages-and-why-repairs-can-compound-errors">15. Multiple Corruption Stages and Why Repairs Can Compound Errors</a></li>
+<li><a href="#16-irreversible-loss-replacement-dropped-bytes-and-uncertain-sources">16. Irreversible Loss: Replacement, Dropped Bytes, and Uncertain Sources</a></li>
+<li><a href="#17-why-re-encoding-a-file-does-not-automatically-repair-its-contents">17. Why Re-encoding a File Does Not Automatically Repair Its Contents</a></li>
+<li><a href="#18-detection-in-html-and-web-responses">18. Detection in HTML and Web Responses</a></li>
+<li><a href="#19-xml-json-and-api-interoperability">19. XML, JSON, and API Interoperability</a></li>
+<li><a href="#20-text-files-csv-exports-and-archival-packages">20. Text Files, CSV Exports, and Archival Packages</a></li>
+<li><a href="#21-database-imports-etl-and-system-boundaries">21. Database Imports, ETL, and System Boundaries</a></li>
+<li><a href="#22-python-example-byte-evidence-and-candidate-decoders">22. Python Example: Byte Evidence and Candidate Decoders</a></li>
+<li><a href="#23-python-example-reproduce-and-reverse-a-single-error">23. Python Example: Reproduce and Reverse a Single Error</a></li>
+<li><a href="#24-python-example-candidate-repair-with-explicit-approval">24. Python Example: Candidate Repair With Explicit Approval</a></li>
+<li><a href="#25-javascript-example-browser-defined-decoder-behavior">25. JavaScript Example: Browser-Defined Decoder Behavior</a></li>
+<li><a href="#26-windows-powershell-5-1-example-inspect-before-decoding">26. Windows PowerShell 5.1 Example: Inspect Before Decoding</a></li>
+<li><a href="#27-a-controlled-intake-decision-tree">27. A Controlled Intake Decision Tree</a></li>
+<li><a href="#28-candidate-ranking-without-pretending-to-know-the-answer">28. Candidate Ranking Without Pretending to Know the Answer</a></li>
+<li><a href="#29-content-specific-repair-risks-and-false-positives">29. Content-Specific Repair Risks and False Positives</a></li>
+<li><a href="#30-security-decoder-differentials-and-trust-boundaries">30. Security: Decoder Differentials and Trust Boundaries</a></li>
+<li><a href="#31-privacy-provenance-and-evidence-preservation">31. Privacy, Provenance, and Evidence Preservation</a></li>
+<li><a href="#32-acceptance-tests-and-regression-fixtures">32. Acceptance Tests and Regression Fixtures</a></li>
+<li><a href="#33-worked-migration-historical-membership-records">33. Worked Migration: Historical Membership Records</a></li>
+<li><a href="#34-troubleshooting-by-visible-symptom">34. Troubleshooting by Visible Symptom</a></li>
+<li><a href="#35-practical-study-activities">35. Practical Study Activities</a></li>
+<li><a href="#36-review-questions-and-model-answers">36. Review Questions and Model Answers</a></li>
+<li><a href="#37-glossary-and-conceptual-summary">37. Glossary and Conceptual Summary</a></li>
+<li><a href="#38-sub-articles-related-topics-and-study-sequence">38. Sub-Articles, Related Topics, and Study Sequence</a></li>
+<li><a href="#39-technical-references-and-further-reading">39. Technical References and Further Reading</a></li>
+<li><a href="#40-conclusion-detection-is-a-decision-with-evidence">40. Conclusion: Detection Is a Decision With Evidence</a></li>
+</ol>
+</section>
+<section aria-labelledby="heading-1-scope-purpose-and-governing-principle" id="1-scope-purpose-and-governing-principle"><h2 id="heading-1-scope-purpose-and-governing-principle">1. Scope, Purpose, and Governing Principle</h2>
+<p><strong>Encoding detection</strong> is the process of deciding how a sequence of stored or transmitted bytes should be interpreted as text. <strong>Encoding metadata</strong> is information supplied by a format, protocol, file inventory, application, or operator that identifies the intended character encoding. <strong>Mojibake</strong> is readable-looking but incorrect text produced when a byte sequence is decoded using the wrong character encoding, or when an already corrupted character sequence is encoded and decoded again. These ideas are related but not interchangeable: a detector may infer a plausible decoder; metadata may be right or wrong; and mojibake may persist even after a string has been correctly saved in UTF-8.</p>
+<p>The central rule is <strong>preserve the original bytes, establish the intended interpretation from evidence, and treat repair as a documented transformation</strong>. The presence of familiar accents or a clean UTF-8 decode is not conclusive proof of source encoding. Conversely, the appearance of replacement characters, odd punctuation, or unexpected scripts may support an investigation without uniquely identifying the error. A reliable workflow names what was observed, what was inferred, what was changed, and what could not be recovered.</p>
+<p>This Level 5 article extends the <a href="/library/encyclopedia/computer-science/data-systems/character-encoding">Character Encoding overview</a> and its <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/">unit directory</a>. It concentrates on source identification, evidence quality, and corruption diagnosis. The mechanics of individual encodings, transcoding, web declarations, and database contracts are treated in greater detail in their designated sibling articles. References follow the Unicode Standard, the WHATWG Encoding and HTML standards, W3C Internationalization guidance, Python documentation, and relevant IETF specifications.</p>
+</section>
+<section aria-labelledby="heading-2-learning-outcomes-and-diagnostic-questions" id="2-learning-outcomes-and-diagnostic-questions"><h2 id="heading-2-learning-outcomes-and-diagnostic-questions">2. Learning Outcomes and Diagnostic Questions</h2>
+<p>At the end of this study, readers should be able to distinguish an encoding <strong>claim</strong> from proof about bytes; recognize UTF BOMs; validate a candidate UTF-8 sequence strictly; explain why ASCII-only samples are ambiguous; identify the characteristic <code>CafÃ©</code> corruption pattern; reconstruct a reversible single-stage misdecode; document cases where replacement caused permanent information loss; and design a cautious intake process for legacy documents. They should be able to answer a business question such as “Can this archive be converted to UTF-8 without changing its names and identifiers?” with a reproducible test rather than an impression about how the file looks.</p>
+<p>The diagnostic questions are: <strong>What are the original bytes?</strong> Where did they come from? Did a protocol, file format, or producer explicitly declare a codec? Do the bytes contain a Unicode signature? Which candidate decoders reject them? Which accept them but produce implausible content? Is the apparent corruption already embedded in a Unicode string? Has any prior step inserted U+FFFD or discarded bytes? Which tests distinguish competing explanations? Who can authorize a lossy repair?</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Investigation stage</th>
+<th scope="col">Required evidence</th>
+<th scope="col">Common error</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Acquisition</td>
+<td>Original bytes and SHA-256 digest</td>
+<td>Opening and resaving before examination</td>
+</tr>
+<tr>
+<td>Context</td>
+<td>Format, source application, date, locale, declared charset</td>
+<td>Treating a filename or guess as a format contract</td>
+</tr>
+<tr>
+<td>Validation</td>
+<td>Strict decoding and known-good examples</td>
+<td>Assuming decoding success proves intended encoding</td>
+</tr>
+<tr>
+<td>Diagnosis</td>
+<td>Candidate mappings and byte-by-byte explanation</td>
+<td>Repairing a string because it merely looks unusual</td>
+</tr>
+<tr>
+<td>Transformation</td>
+<td>Explicit codec, fallback and repair rule</td>
+<td>Silent replacement or blanket normalization</td>
+</tr>
+<tr>
+<td>Acceptance</td>
+<td>Source-aware tests and approval record</td>
+<td>Approving only by visual inspection</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-3-the-four-layer-model-bytes-labels-characters-and-display" id="3-the-four-layer-model-bytes-labels-characters-and-display"><h2 id="heading-3-the-four-layer-model-bytes-labels-characters-and-display">3. The Four-Layer Model: Bytes, Labels, Characters, and Display</h2>
+<p>An encoding problem is easier to reason about when its layers are separated. First, there is the <strong>byte stream</strong>: the exact octets on disk or on a wire. Second, there is an <strong>encoding label</strong> supplied by metadata or inference. Third, a <strong>decoder</strong> maps bytes into a Unicode character sequence or reports errors. Fourth, text software applies normalization, layout, fonts, shaping, and display conventions. An error at one layer should not be diagnosed as a fault of another layer without evidence.</p>
+<p>For example, bytes <code>43 61 66 C3 A9</code> decode as <code>Café</code> under UTF-8 but <code>CafÃ©</code> under Windows-1252. Once the second interpretation is stored as valid UTF-8 bytes <code>43 61 66 C3 83 C2 A9</code>, a strict UTF-8 decoder will accept that text perfectly; the mistake was made <strong>before</strong> those bytes were written. Character-set validation alone cannot recognize this semantic corruption. Similarly, correctly decoded Arabic text may appear visually confusing because of bidirectional layout; reversing characters or changing the decoder would be the wrong intervention.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Layer</th>
+<th scope="col">Example</th>
+<th scope="col">Question to resolve</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Source bytes</td>
+<td><code>43 61 66 C3 A9</code></td>
+<td>Are these preserved exactly?</td>
+</tr>
+<tr>
+<td>Encoding claim</td>
+<td><code>charset=windows-1252</code></td>
+<td>Who supplied it, and can it be trusted?</td>
+</tr>
+<tr>
+<td>Decoder output</td>
+<td><code>CafÃ©</code></td>
+<td>Does the claim explain the result?</td>
+</tr>
+<tr>
+<td>Intended text</td>
+<td><code>Café</code></td>
+<td>What independent source supports this reading?</td>
+</tr>
+<tr>
+<td>Display</td>
+<td>Rendered glyphs</td>
+<td>Are fonts, layout, and normalization factors separate?</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-4-evidence-hierarchy-contracts-before-guesswork" id="4-evidence-hierarchy-contracts-before-guesswork"><h2 id="heading-4-evidence-hierarchy-contracts-before-guesswork">4. Evidence Hierarchy: Contracts Before Guesswork</h2>
+<p>The strongest operational evidence usually comes from a specific, authoritative <strong>format contract</strong>: an external specification mandating UTF-8, a known record-layout definition, a well-documented producer, or verified export settings. A valid BOM at the start may be strong evidence for a Unicode encoding scheme, depending on the format's rules. Transport <code>Content-Type</code> metadata and an internal encoding declaration can also be decisive, but their priority depends on the governing format. Producer documentation, preserved sample files, application logs, and matching sibling files can corroborate an interpretation. Byte-distribution heuristics are last-resort evidence, not a substitute for a contract.</p>
+<p>Metadata can lie. A web server may send <code>charset=utf-8</code> while serving Windows-1252 bytes; a CSV filename may be misleading; a user may have changed the character encoding field in a spreadsheet import without changing the original file. Treat conflicts as a reason to stop and investigate, not as permission to pick whichever decoder displays fewer unusual characters. Record every candidate and its reason for inclusion.</p>
+<p>A good decision record has at least an <strong>observed encoding declaration</strong>, a <strong>verified or inferred source encoding</strong>, a <strong>validation method</strong>, a <strong>confidence/uncertainty statement</strong>, and a <strong>retained immutable original</strong>. “Automatically detected” is not a complete finding: it says nothing about the algorithm, sample size, language model, or consequences of a wrong selection.</p>
+</section>
+<section aria-labelledby="heading-5-encoding-labels-are-not-the-encoding-itself" id="5-encoding-labels-are-not-the-encoding-itself"><h2 id="heading-5-encoding-labels-are-not-the-encoding-itself">5. Encoding Labels Are Not the Encoding Itself</h2>
+<p>An encoding label is a name interpreted under a particular registry or API. Examples include <code>utf-8</code>, <code>windows-1252</code>, <code>ISO-8859-1</code>, <code>Shift_JIS</code>, and <code>cp437</code>. These are not universal synonyms for one another, and different platforms may map labels differently. A browser-oriented implementation follows the <a href="https://encoding.spec.whatwg.org/">WHATWG Encoding Standard</a> and its label aliases. Other systems, including Python codecs and certain operating-system libraries, implement historically distinct codecs under labels that look similar.</p>
+<p>A notorious example is the browser's legacy handling of <code>iso-8859-1</code>: within the WHATWG model, that label maps to the <strong>windows-1252</strong> encoding. In a typical Python codec invocation, <code>bytes.decode('iso-8859-1')</code> instead applies the actual ISO-8859-1 mapping, so <code>0x80</code> becomes U+0080, a control character, rather than U+20AC EURO SIGN. The byte-level distinction matters when validating a web migration against archival records. The phrase “ISO-8859-1 input” is insufficient without the parsing environment or the governing specification.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Context</th>
+<th scope="col">Interpretation of label <code>iso-8859-1</code></th>
+<th scope="col">Byte <code>80</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WHATWG web decoding</td>
+<td>maps to windows-1252</td>
+<td>U+20AC EURO SIGN</td>
+</tr>
+<tr>
+<td>Python <code>iso-8859-1</code> codec</td>
+<td>ISO-8859-1 mapping</td>
+<td>U+0080 control</td>
+</tr>
+<tr>
+<td>Python <code>cp1252</code> codec</td>
+<td>Windows-1252 mapping</td>
+<td>U+20AC EURO SIGN</td>
+</tr>
+<tr>
+<td>Strict UTF-8 decoding</td>
+<td>Invalid standalone lead/continuation byte</td>
+<td>Error</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-6-mime-types-declarations-and-precedence-are-format-specific" id="6-mime-types-declarations-and-precedence-are-format-specific"><h2 id="heading-6-mime-types-declarations-and-precedence-are-format-specific">6. MIME Types, Declarations, and Precedence Are Format-Specific</h2>
+<p>A character encoding can be indicated outside a document (an HTTP <code>Content-Type</code> parameter, database column, archive manifest, application-export specification) or inside it (HTML <code>meta</code> declaration, an XML declaration, a format header, a BOM). <strong>There is no universal winner across all formats.</strong> Browsers apply the HTML encoding-sniffing algorithm, whereas XML processors, JSON consumers, compilers, and CSV import tools have their own rules. An archive with multiple formats may need a separate encoding policy for each contained member.</p>
+<p>For HTML documents, a recognized UTF BOM is considered at an early, high-priority stage of the HTML sniffing algorithm; a transport-provided charset is considered by the appropriate branch when no controlling BOM determines the encoding, and an in-document <code>meta charset</code> may be used during a prescan. The <a href="https://html.spec.whatwg.org/multipage/parsing.html#determining-the-character-encoding">HTML Standard</a> describes the precise processing order and confidence states. This does <strong>not</strong> mean that arbitrary text-file readers, CSV importers, or API clients will use the same precedence.</p>
+<p>The audit question is not simply “What does the header say?” but “Which exact parser consumes this resource, and which encoding-selection rule does that parser implement?” Capture both the raw header and the raw response body if a web-page rendering failure is under investigation. Never assume that a successful page display proves the origin bytes were valid under the advertised encoding.</p>
+</section>
+<section aria-labelledby="heading-7-byte-order-marks-and-other-byte-level-signatures" id="7-byte-order-marks-and-other-byte-level-signatures"><h2 id="heading-7-byte-order-marks-and-other-byte-level-signatures">7. Byte-Order Marks and Other Byte-Level Signatures</h2>
+<p>A Unicode byte-order mark (BOM) at the beginning of a file can identify a Unicode encoding scheme and, for UTF-16 or UTF-32, byte order. The canonical signatures are shown below. Detect four-byte signatures <strong>before</strong> testing shorter prefixes: <code>FF FE 00 00</code> begins with the UTF-16LE BOM <code>FF FE</code> but conventionally signifies UTF-32LE. Check the exact file-format rules before treating a signature as dispositive.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Scheme</th>
+<th scope="col">Leading bytes (hex)</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UTF-8 with signature</td>
+<td><code>EF BB BF</code></td>
+<td>UTF-8 signature; not needed for byte order</td>
+</tr>
+<tr>
+<td>UTF-16BE</td>
+<td><code>FE FF</code></td>
+<td>Big-endian 16-bit code units</td>
+</tr>
+<tr>
+<td>UTF-16LE</td>
+<td><code>FF FE</code></td>
+<td>Little-endian 16-bit code units</td>
+</tr>
+<tr>
+<td>UTF-32BE</td>
+<td><code>00 00 FE FF</code></td>
+<td>Big-endian 32-bit code units</td>
+</tr>
+<tr>
+<td>UTF-32LE</td>
+<td><code>FF FE 00 00</code></td>
+<td>Little-endian 32-bit code units</td>
+</tr>
+</tbody>
+</table>
+<p>An absent BOM does not prove “not Unicode.” UTF-8 normally needs no BOM, and explicit-endian UTF-16/UTF-32 data may be specified by an enclosing format rather than an in-stream marker. A BOM found in the <strong>middle</strong> of a stream is not automatically a file signature; it may represent the U+FEFF character and should be handled according to the format and processing context. Do not indiscriminately remove <code>EF BB BF</code> from every offset in an evidence file.</p>
+</section>
+<section aria-labelledby="heading-8-strict-utf-8-validation-what-it-proves-and-what-it-does-not" id="8-strict-utf-8-validation-what-it-proves-and-what-it-does-not"><h2 id="heading-8-strict-utf-8-validation-what-it-proves-and-what-it-does-not">8. Strict UTF-8 Validation: What It Proves and What It Does Not</h2>
+<p>Strict UTF-8 validity means the bytes form well-formed sequences representing Unicode scalar values. A valid encoder does not use overlong sequences, surrogate code points, or values above U+10FFFF. The classic UTF-8 examples <code>C0 AF</code> (overlong encoding) and <code>ED A0 80</code> (a surrogate) must be rejected by a conforming decoder. Validity is a <strong>necessary</strong> condition for declaring raw data to be UTF-8, but not sufficient evidence that UTF-8 was originally intended.</p>
+<p>An all-ASCII file is valid UTF-8 and also valid under many unrelated ASCII-compatible encodings. Some non-ASCII sequences are valid under more than one candidate encoding and mean different things. Moreover, once mojibake has been serialized as UTF-8, the damaged string may be technically perfect UTF-8. <code>CafÃ©</code> encoded in UTF-8 has no malformed sequences. An encoding detector that reports “100% valid UTF-8” is addressing syntactic validity, not intended-language correctness.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Byte sample</th>
+<th scope="col">Valid UTF-8?</th>
+<th scope="col">Other observations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>41 42 43</code></td>
+<td>Yes</td>
+<td>Ambiguous among many ASCII-compatible encodings</td>
+</tr>
+<tr>
+<td><code>43 61 66 C3 A9</code></td>
+<td>Yes</td>
+<td><code>Café</code> in UTF-8; may look like <code>CafÃ©</code> if misdecoded</td>
+</tr>
+<tr>
+<td><code>43 61 66 E9</code></td>
+<td>No</td>
+<td>May be <code>Café</code> in Windows-1252 or ISO-8859-1</td>
+</tr>
+<tr>
+<td><code>C0 AF</code></td>
+<td>No</td>
+<td>Overlong sequence prohibited</td>
+</tr>
+<tr>
+<td><code>ED A0 80</code></td>
+<td>No</td>
+<td>Encodes surrogate; prohibited</td>
+</tr>
+<tr>
+<td><code>EF BB BF 41</code></td>
+<td>Yes</td>
+<td>UTF-8 BOM followed by <code>A</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-9-ascii-only-data-and-under-determination" id="9-ascii-only-data-and-under-determination"><h2 id="heading-9-ascii-only-data-and-under-determination">9. ASCII-Only Data and Under-Determination</h2>
+<p>An encoding is <strong>underdetermined</strong> when the available bytes do not distinguish several possible decoders. A source containing only <code>0x20–0x7E</code> can appear identical under ASCII, UTF-8, Windows-1252, ISO-8859-1, and many other schemes. It is therefore misleading to assign a high-confidence legacy code page solely from an ASCII-only sample. A detector should return a set of plausible candidates or an explicitly “unknown” status when the evidence cannot discriminate.</p>
+<p>This problem is not merely theoretical. A database dump may contain millions of ASCII-only identifiers and a few names with diacritics. Testing only the first thousand bytes can yield a false sense of certainty. Sample the whole file where feasible, or include representative non-ASCII records and known values from each expected language. Keep record boundaries intact: sampling arbitrary chunks of a multibyte stream can create artificial decoding errors at chunk edges unless a streaming decoder carries state across chunks.</p>
+<p>The best response to ambiguity is <strong>documenting it</strong>, not choosing the most fashionable default. UTF-8 may be an appropriate contract for newly produced data, but labeling an unknown historical file as UTF-8 does not retroactively prove its source encoding.</p>
+</section>
+<section aria-labelledby="heading-10-legacy-single-byte-and-multibyte-candidate-families" id="10-legacy-single-byte-and-multibyte-candidate-families"><h2 id="heading-10-legacy-single-byte-and-multibyte-candidate-families">10. Legacy Single-Byte and Multibyte Candidate Families</h2>
+<p>Candidate encodings should be selected from the source's historical and linguistic context. Western European material may require Windows-1252, ISO-8859-1, Macintosh Roman, or DOS code pages. Cyrillic text might use Windows-1251, KOI8-R, or CP866. Japanese documents can involve Shift_JIS, EUC-JP, or ISO-2022-JP, while certain Chinese and Korean environments have their own historical encoding families. EBCDIC and record-oriented mainframe exports call for their specific code pages and record layouts, not a generic browser guess.</p>
+<p>A one-byte encoding often accepts most or all byte values, which makes strict-decoding success a weak discriminant. Windows-1252 also contains undefined positions in Python's strict codec; how these are represented depends on the implementation and API. State-dependent and multibyte encodings can produce different validity or plausibility signals. A probabilistic detector that performs well on long natural-language paragraphs may fail on short filenames, product codes, currency symbols, mixed languages, or technical logs.</p>
+<p>Candidate selection should be <strong>narrow but inclusive</strong>: narrow enough to avoid spurious interpretations, inclusive enough to represent the source population. Do not train or configure a production detector on a single language if records routinely contain multiple scripts.</p>
+</section>
+<section aria-labelledby="heading-11-statistical-heuristics-and-their-limits" id="11-statistical-heuristics-and-their-limits"><h2 id="heading-11-statistical-heuristics-and-their-limits">11. Statistical Heuristics and Their Limits</h2>
+<p>Heuristic detectors often combine byte-frequency profiles, invalid-sequence rejection, characteristic byte patterns, language models, and frequency of plausible characters. Some models rank candidates by likelihood; others assign a confidence score. Such scores are conditional on a tool's training data and assumptions, not universal probabilities that an encoding claim is true. A report of “95% confidence” may be poorly calibrated for a specialized archive that differs from the benchmark corpus.</p>
+<p>Good candidate evaluation checks more than the number of replacement characters. Consider meaningful word boundaries, expected scripts, known names, punctuation, and sample consistency. For long files, evaluate separate regions: an export may concatenate mixed encodings from different historical datasets. Beware of <strong>selection bias</strong> from hand-picking readable portions or using human reviewers unfamiliar with the source language.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Signal</th>
+<th scope="col">Useful for</th>
+<th scope="col">Cannot establish by itself</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Valid UTF-8</td>
+<td>Excluding malformed UTF-8 candidates</td>
+<td>Original intent or semantic accuracy</td>
+</tr>
+<tr>
+<td>BOM</td>
+<td>Identifying an in-stream Unicode signature</td>
+<td>Source authenticity or document correctness</td>
+</tr>
+<tr>
+<td><code>charset</code> label</td>
+<td>Finding the producer/parser's declared contract</td>
+<td>That the body bytes obey the label</td>
+</tr>
+<tr>
+<td>Language plausibility</td>
+<td>Ranking hypotheses</td>
+<td>Exact encoding without independent context</td>
+</tr>
+<tr>
+<td><code>Ã</code>, <code>â€</code>, <code>ï»¿</code> sequences</td>
+<td>Triggering mojibake investigation</td>
+<td>That all such strings are corrupt</td>
+</tr>
+<tr>
+<td>Round-trip through candidate codec</td>
+<td>Testing a reversible reconstruction</td>
+<td>That reconstructed text matches the historical original</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-12-recognizing-common-mojibake-signatures" id="12-recognizing-common-mojibake-signatures"><h2 id="heading-12-recognizing-common-mojibake-signatures">12. Recognizing Common Mojibake Signatures</h2>
+<p>Mojibake has recognizable patterns because UTF-8 multibyte sequences, when interpreted through a Western single-byte codec, often turn into pairs or triples of unrelated characters. UTF-8 <code>C3 A9</code> for <code>é</code> becomes <code>Ã©</code> under Windows-1252. UTF-8 <code>E2 80 99</code> for a curly apostrophe U+2019 becomes <code>â€™</code>. A UTF-8 BOM <code>EF BB BF</code>, misread as Windows-1252, appears as <code>ï»¿</code>. These are <strong>diagnostic clues</strong>, not automatic proof. A user might legitimately include those symbols when discussing encoding errors or quoting damaged material.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Intended text</th>
+<th scope="col">Correct UTF-8 bytes</th>
+<th scope="col">Wrong Windows-1252 interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>é</code></td>
+<td><code>C3 A9</code></td>
+<td><code>Ã©</code></td>
+</tr>
+<tr>
+<td><code>ñ</code></td>
+<td><code>C3 B1</code></td>
+<td><code>Ã±</code></td>
+</tr>
+<tr>
+<td><code>’</code> (U+2019)</td>
+<td><code>E2 80 99</code></td>
+<td><code>â€™</code></td>
+</tr>
+<tr>
+<td><code>€</code></td>
+<td><code>E2 82 AC</code></td>
+<td><code>â‚¬</code></td>
+</tr>
+<tr>
+<td>U+FEFF at start</td>
+<td><code>EF BB BF</code></td>
+<td><code>ï»¿</code></td>
+</tr>
+</tbody>
+</table>
+<p>In the opposite direction, native Windows-1252 bytes <code>E9</code> or <code>80</code> fed into a strict UTF-8 decoder produce errors. If a decoder replaces them with U+FFFD, the familiar accented letter or euro sign may be lost rather than converted to the two-character patterns above. Therefore the same source/document history can yield very different symptoms depending on the chosen error policy.</p>
+</section>
+<section aria-labelledby="heading-13-worked-case-study-a-mislabelled-customer-name" id="13-worked-case-study-a-mislabelled-customer-name"><h2 id="heading-13-worked-case-study-a-mislabelled-customer-name">13. Worked Case Study: A Mislabelled Customer Name</h2>
+<p>An inventory import receives a five-byte field with the values <code>43 61 66 C3 A9</code>. Its historical export instructions specify UTF-8, but a legacy importer wrongly invokes a Windows-1252 decoder. The importer produces the Unicode sequence <code>CafÃ©</code>, then stores that sequence in a Unicode database. Both the incorrect rendering and the later database storage are mechanically valid operations; the error lies in the original decoding choice.</p>
+<p><strong>The correct interpretation:</strong> <code>43</code> C, <code>61</code> a, <code>66</code> f, and <code>C3 A9</code> decode together to U+00E9 é, yielding <code>Café</code>.</p>
+<p><strong>The incorrect interpretation:</strong> <code>C3</code> maps to U+00C3 Ã; <code>A9</code> maps to U+00A9 ©. The importer obtains <code>CafÃ©</code> and, when saved as UTF-8, records <code>43 61 66 C3 83 C2 A9</code>. A downstream system can now claim the field is valid UTF-8 even though the text is corrupted.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Stage</th>
+<th scope="col">Bytes or characters</th>
+<th scope="col">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Original field</td>
+<td><code>43 61 66 C3 A9</code></td>
+<td>Valid UTF-8 bytes</td>
+</tr>
+<tr>
+<td>Intended decode</td>
+<td><code>Café</code></td>
+<td>Correct Unicode text</td>
+</tr>
+<tr>
+<td>Wrong decoder</td>
+<td><code>CafÃ©</code></td>
+<td>Mojibake (valid Unicode characters)</td>
+</tr>
+<tr>
+<td>Re-encoded wrong text</td>
+<td><code>43 61 66 C3 83 C2 A9</code></td>
+<td>Valid UTF-8 storing the wrong text</td>
+</tr>
+<tr>
+<td>Evidence-based reversal</td>
+<td><code>Café</code></td>
+<td>Possible if the faulty stage is known and reversible</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-14-byte-exact-reversal-of-one-documented-misdecode" id="14-byte-exact-reversal-of-one-documented-misdecode"><h2 id="heading-14-byte-exact-reversal-of-one-documented-misdecode">14. Byte-Exact Reversal of One Documented Misdecode</h2>
+<p>If it is independently established that original UTF-8 bytes were wrongly decoded as Windows-1252 <strong>once</strong>, reversing the wrong decode is straightforward. Encode the corrupted Unicode string using Windows-1252 to recover the byte stream that the bad decoder saw, and strictly decode those bytes as UTF-8. For the worked example, <code>"CafÃ©".encode("cp1252")</code> yields <code>43 61 66 C3 A9</code>, which decodes as <code>Café</code> under UTF-8.</p>
+<p>This is a <strong>conditional inverse</strong>, not a general-purpose spelling correction. It fails if the mojibake string contains code points that cannot be encoded as Windows-1252, if the wrong stage used a different mapping, if replacement characters were inserted, or if the data was deliberately mixed. It can also create false repairs when <code>Ã©</code> was genuinely intended text. Establish provenance, confirm representative samples, and preserve a before/after record. Do not apply an inverse across a complete collection merely because one filename becomes readable.</p>
+<p>In a high-assurance environment, a deterministic byte transformation and documented approvals are preferable to unreviewed probabilistic repair, even when an automated repair library appears to produce attractive results.</p>
+</section>
+<section aria-labelledby="heading-15-multiple-corruption-stages-and-why-repairs-can-compound-errors" id="15-multiple-corruption-stages-and-why-repairs-can-compound-errors"><h2 id="heading-15-multiple-corruption-stages-and-why-repairs-can-compound-errors">15. Multiple Corruption Stages and Why Repairs Can Compound Errors</h2>
+<p>Corrupted text can pass through multiple incorrect decode/encode cycles. If <code>Café</code> becomes <code>CafÃ©</code>, and that corrupted text is re-encoded as UTF-8 then misdecoded as Windows-1252 again, the result becomes <code>CafÃƒÂ©</code>. Each cycle increases the number of misleading characters, but the visible pattern alone does not establish the precise number of stages or whether some bytes were modified along the way.</p>
+<p>A diagnostician can test staged inverses against known source facts, preserving each intermediate as a separate candidate. However, repeatedly “fixing” a string until it looks readable invites accidental content modification, particularly where the original legitimately includes non-Latin scripts, mathematics, or quoted mojibake. One-stage and two-stage repair proposals should be <strong>explicit hypotheses</strong>, with the source code-page mapping and a replayable byte trace.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Hypothesis</th>
+<th scope="col">Example</th>
+<th scope="col">What evidence is needed?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No error</td>
+<td><code>Café</code></td>
+<td>Known-good source or correctly decoded bytes</td>
+</tr>
+<tr>
+<td>One UTF-8/Windows-1252 mismatch</td>
+<td><code>CafÃ©</code></td>
+<td>Proven UTF-8 source and wrong cp1252 decode</td>
+</tr>
+<tr>
+<td>Two mismatches</td>
+<td><code>CafÃƒÂ©</code></td>
+<td>Evidence of repeated encode/decode history</td>
+</tr>
+<tr>
+<td>Replacement during decode</td>
+<td><code>Caf�</code></td>
+<td>Original bytes may be required; inverse often impossible</td>
+</tr>
+<tr>
+<td>Partial field corruption</td>
+<td><code>CafÃ©; 你好</code></td>
+<td>Field- or segment-level provenance, not global substitution</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-16-irreversible-loss-replacement-dropped-bytes-and-uncertain-sources" id="16-irreversible-loss-replacement-dropped-bytes-and-uncertain-sources"><h2 id="heading-16-irreversible-loss-replacement-dropped-bytes-and-uncertain-sources">16. Irreversible Loss: Replacement, Dropped Bytes, and Uncertain Sources</h2>
+<p>Not every damaged string is recoverable. If Windows-1252 <code>E9</code> was decoded as UTF-8 with replacement, the result might contain <code>Caf�</code>. The replacement character U+FFFD records neither the original byte nor the intended character. Many invalid source sequences can yield the same replacement. Unless an immutable copy of the original bytes survives, the mapping may be information-theoretically underdetermined. “Repairing” <code>Caf�</code> to <code>Café</code> is a contextual guess, not a reversible encoding correction.</p>
+<p>Other irreversible operations include dropping characters using an <code>ignore</code> error handler, transliteration, truncation, inappropriate normalization or sanitization, and splitting multibyte sequences across uncoordinated chunks. Even if a reconstructed string is convincing to a human reviewer, the archive should distinguish <strong>restoration from evidence</strong> and <strong>editorial reconstruction</strong>. The former can be verified by exact source bytes and a known decoder; the latter needs an uncertainty statement and usually human approval.</p>
+<p>Do not automatically use the presence of U+FFFD as proof of corruption, either: it is a valid Unicode character and could appear intentionally in a teaching file or technical log.</p>
+</section>
+<section aria-labelledby="heading-17-why-re-encoding-a-file-does-not-automatically-repair-its-contents" id="17-why-re-encoding-a-file-does-not-automatically-repair-its-contents"><h2 id="heading-17-why-re-encoding-a-file-does-not-automatically-repair-its-contents">17. Why Re-encoding a File Does Not Automatically Repair Its Contents</h2>
+<p>Re-saving a document as UTF-8 changes its physical representation, not the meaning of the Unicode string currently held by the editor. If the editor has already read <code>CafÃ©</code>, exporting that same string as UTF-8 creates syntactically valid Unicode bytes that preserve the mistake. Similarly, changing an HTTP charset header or adding <code>&lt;meta charset="utf-8"&gt;</code> cannot fix a body whose bytes are actually Windows-1252; it can make the mismatch more apparent.</p>
+<p>An effective repair must identify the broken stage. When the problem is <strong>wrong decoding of intact source bytes</strong>, change the decoder and reimport. When the problem is <strong>mojibake embedded in stored Unicode text</strong>, repair may require a validated inverse transformation with source verification. When the problem is <strong>malformed bytes with replacement already applied</strong>, locate the original or mark the resulting record uncertain. When the problem is <strong>font, directionality, or normalization</strong>, investigate those layers rather than running an arbitrary codec conversion.</p>
+<p>A migration acceptance test must inspect both decoded characters and byte-level examples, not merely whether the output file declares UTF-8.</p>
+</section>
+<section aria-labelledby="heading-18-detection-in-html-and-web-responses" id="18-detection-in-html-and-web-responses"><h2 id="heading-18-detection-in-html-and-web-responses">18. Detection in HTML and Web Responses</h2>
+<p>Web content introduces several declarations: HTTP <code>Content-Type</code>, an optional BOM, and in-document metadata such as <code>&lt;meta charset="utf-8"&gt;</code>. The HTML parser selects an encoding using a specified sniffing algorithm; a simple text-editor preview or byte-detection library need not make the same choice. An HTML document should declare UTF-8 early and be <strong>actually encoded</strong> in UTF-8. Publishing inconsistent header and document declarations is a defect even if the page looks correct in one browser.</p>
+<p>For diagnosis, capture the response body as <strong>raw bytes</strong>, record the final URL and exact <code>Content-Type</code>, and inspect the first portion of the byte stream in hexadecimal. A tool that prints already-decoded response text may conceal where an incorrect decoder was chosen. Where a deployed page shows <code>ï»¿</code> at the beginning, inspect for an actual UTF-8 BOM that was wrongly treated as printable bytes; do not blindly delete that visible string from the canonical source file.</p>
+<p>This article introduces the principle. The sibling article <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/html-http-and-text-file-encoding-declarations">HTML, HTTP, and Text-File Encoding Declarations</a> studies those declaration systems and format priorities in detail.</p>
+</section>
+<section aria-labelledby="heading-19-xml-json-and-api-interoperability" id="19-xml-json-and-api-interoperability"><h2 id="heading-19-xml-json-and-api-interoperability">19. XML, JSON, and API Interoperability</h2>
+<p>Different formats place different constraints on encoding. <a href="https://www.rfc-editor.org/rfc/rfc8259">RFC 8259</a> requires UTF-8 for JSON exchanged between systems that are not part of a closed ecosystem. A JSON document with malformed UTF-8 or an incorrectly labeled legacy body is not made interoperable by appending a <code>charset</code> parameter to an unrelated configuration field. XML has its own encoding declaration and processor rules, which should be applied according to the applicable XML specification; do not substitute HTML sniffing behavior.</p>
+<p>A robust API should specify the accepted input encoding, reject malformed byte sequences, log the boundary of failure, and return a predictable error. If historical client compatibility requires another encoding, implement that exception explicitly and test it. At internal service boundaries, avoid implicit conversions through process-default locales or command-shell settings. Provenance should survive an ETL pipeline: a database that contains correctly formed UTF-8 can still preserve user-visible errors created on ingestion.</p>
+</section>
+<section aria-labelledby="heading-20-text-files-csv-exports-and-archival-packages" id="20-text-files-csv-exports-and-archival-packages"><h2 id="heading-20-text-files-csv-exports-and-archival-packages">20. Text Files, CSV Exports, and Archival Packages</h2>
+<p>Text files and CSV documents frequently lack an internal byte-level declaration. CSV itself does not universally determine a character encoding in every historical interchange setting; applications may depend on user selection, transport metadata, system locale, or import options. A UTF-8 BOM may be used as a compatibility hint by some spreadsheet applications, but its presence is not a general requirement for UTF-8, and output rules should be specified for the target consumer.</p>
+<p>Archive manifests can document the encoding of each member file, and preservation metadata can distinguish producer-era code pages from the UTF-8 encoding used for a modern access copy. Where a collection contains thousands of legacy documents, store a <strong>manifest of source encoding decisions</strong> rather than assuming all files in the same ZIP or directory share one codec. Record the sampling method and confidence; do not overwrite source bytes during an automated “cleanup.”</p>
+<p>The presence of binary fields, compressed members, or a record-oriented mainframe structure changes the problem. Text decoding should apply only to fields or stream segments designated as text by the enclosing format.</p>
+</section>
+<section aria-labelledby="heading-21-database-imports-etl-and-system-boundaries" id="21-database-imports-etl-and-system-boundaries"><h2 id="heading-21-database-imports-etl-and-system-boundaries">21. Database Imports, ETL, and System Boundaries</h2>
+<p>A database column's declared Unicode storage format does not prove that inbound character data was decoded correctly. The earliest conversion boundary—file reader, connector, driver, API gateway, or user input handler—may already have introduced mojibake. Each transition from bytes to strings should carry a source-encoding contract, validation policy, and evidence of field-level transformation.</p>
+<p>In data engineering, establish a raw-data <strong>landing zone</strong> and a separate canonical text layer. Keep input hashes, ingest timestamps, file manifests, code-page decisions, and metrics on decoding failures. If source records are mixed, split them by documented provenance rather than applying one guessed decoder to all. Treat names, identifiers, URLs, customer records, and financial descriptions as high-sensitivity fields: an accidental conversion can split deduplication keys or corrupt audit evidence.</p>
+<p>A reversible backfill or replay procedure is often safer than editing a production database's already-corrupted strings in place. If a repair is approved, record the original value, proposed new value, transformation ID, approver, and rollback path.</p>
+</section>
+<section aria-labelledby="heading-22-python-example-byte-evidence-and-candidate-decoders" id="22-python-example-byte-evidence-and-candidate-decoders"><h2 id="heading-22-python-example-byte-evidence-and-candidate-decoders">22. Python Example: Byte Evidence and Candidate Decoders</h2>
+<p>The following complete Python program demonstrates preserving an input sample, checking BOMs in longest-first order, validating UTF-8, and comparing candidate interpretations. <strong>It does not claim to auto-detect a historically correct codec</strong>. The source sample intentionally contains a Windows-1252 encoded <code>é</code> and <code>€</code>, so strict UTF-8 validation must fail. The code captures both outcomes instead of silently replacing errors.</p>
+<pre><code class="language-python">import hashlib
+
+raw = bytes.fromhex("43 61 66 E9 20 80")  # Café € under cp1252
+signatures = [
+    ("utf-32-le", bytes.fromhex("FF FE 00 00")),
+    ("utf-32-be", bytes.fromhex("00 00 FE FF")),
+    ("utf-8-sig", bytes.fromhex("EF BB BF")),
+    ("utf-16-le", bytes.fromhex("FF FE")),
+    ("utf-16-be", bytes.fromhex("FE FF")),
+]
+found = next((name for name, prefix in signatures if raw.startswith(prefix)), None)
+print("raw:", raw.hex(" ").upper())
+print("SHA256:", hashlib.sha256(raw).hexdigest())
+print("BOM:", found or "none")
+
+for codec in ("utf-8", "cp1252", "iso-8859-1"):
+    try:
+        value = raw.decode(codec, errors="strict")
+        print(codec, "=&gt;", ascii(value))
+    except UnicodeDecodeError as err:
+        print(codec, "=&gt; rejected at byte", err.start)
+
+assert found is None
+try:
+    raw.decode("utf-8", errors="strict")
+except UnicodeDecodeError:
+    pass
+else:
+    raise AssertionError("This source is not valid UTF-8")
+assert raw.decode("cp1252") == "Café €"
+assert raw.decode("iso-8859-1") != "Café €"
+</code></pre>
+<p>The ISO-8859-1 candidate succeeds syntactically yet yields a control character at <code>0x80</code>; that outcome is a useful discriminant if independent context expects a euro sign. However, the context remains part of the argument. A generic decoder cannot infer from the hex dump alone that <code>0x80</code> was meant as a euro sign rather than a control.</p>
+</section>
+<section aria-labelledby="heading-23-python-example-reproduce-and-reverse-a-single-error" id="23-python-example-reproduce-and-reverse-a-single-error"><h2 id="heading-23-python-example-reproduce-and-reverse-a-single-error">23. Python Example: Reproduce and Reverse a Single Error</h2>
+<p>This executable demonstration constructs mojibake and then reverses exactly the error that it intentionally introduced. Its assertions show both byte fidelity and the requirement that the inverse codec be explicitly named. It also illustrates why UTF-8 validation of the stored corrupted string is uninformative about the earlier stage.</p>
+<pre><code class="language-python">intended = "Café — €"
+original = intended.encode("utf-8")
+wrong = original.decode("cp1252")  # Intentionally wrong
+stored = wrong.encode("utf-8")
+
+print("original UTF-8:", original.hex(" ").upper())
+print("wrong Unicode:", wrong)
+print("stored UTF-8:", stored.hex(" ").upper())
+
+# Only justified when this exact mistaken decode is independently established.
+recovered_bytes = wrong.encode("cp1252", errors="strict")
+recovered_text = recovered_bytes.decode("utf-8", errors="strict")
+assert recovered_bytes == original
+assert recovered_text == intended
+assert stored.decode("utf-8", errors="strict") == wrong
+print("recovered:", recovered_text)
+
+# A common irreversible case: a bad UTF-8 decoder inserts U+FFFD.
+lost = bytes.fromhex("43 61 66 E9").decode("utf-8", errors="replace")
+assert lost == "Caf\ufffd"
+print("lossy:", repr(lost))
+</code></pre>
+<p>In practice, repair should operate on a <strong>copy</strong>, with exact source identifiers and an independent verification sample. A broad <code>try: encode('cp1252').decode('utf-8')</code> applied unconditionally to a customer table is unsafe: some legitimate strings will happen to satisfy the inverse and change unexpectedly.</p>
+</section>
+<section aria-labelledby="heading-24-python-example-candidate-repair-with-explicit-approval" id="24-python-example-candidate-repair-with-explicit-approval"><h2 id="heading-24-python-example-candidate-repair-with-explicit-approval">24. Python Example: Candidate Repair With Explicit Approval</h2>
+<p>The next helper presents a candidate, not an automatic rewrite. It refuses strings that cannot be inverted under the proposed single-stage model; it also requires a separate source check before the caller commits any change. The implementation is intentionally small because the key safeguard is the <strong>approval boundary</strong>, not a sophisticated guessing algorithm.</p>
+<pre><code class="language-python">def candidate_repair(text: str):
+    try:
+        reconstructed = text.encode("cp1252", errors="strict")
+        proposed = reconstructed.decode("utf-8", errors="strict")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return None
+    return proposed if proposed != text else None
+
+assert candidate_repair("CafÃ©") == "Café"
+assert candidate_repair("Café") is None
+assert candidate_repair("ABC") is None
+assert candidate_repair("Caf\ufffd") is None
+
+# Investigation output only; do not save the proposal automatically.
+record_id = "example-001"
+proposed = candidate_repair("CafÃ©")
+print({"record_id": record_id, "before": "CafÃ©", "proposal": proposed,
+       "action": "manual source verification required"})
+</code></pre>
+<p>The output is intentionally labeled <strong>proposal</strong>. A real migration should attach original-byte evidence or another authoritative independent record and document why the chosen inverse represents an actual historical error. Do not treat visual plausibility or a single reference sentence as sufficient approval for high-impact fields.</p>
+</section>
+<section aria-labelledby="heading-25-javascript-example-browser-defined-decoder-behavior" id="25-javascript-example-browser-defined-decoder-behavior"><h2 id="heading-25-javascript-example-browser-defined-decoder-behavior">25. JavaScript Example: Browser-Defined Decoder Behavior</h2>
+<p>Browsers expose <code>TextDecoder</code> with encoding labels defined by the WHATWG Standard. <code>fatal: true</code> requests an error when the decoder encounters an invalid sequence; it does <strong>not</strong> automatically identify the source encoding. The next example demonstrates a known UTF-8 field, a wrongly selected Windows-1252 decoder, and the legacy-label alias used by web systems. JavaScript <code>TextEncoder</code> emits UTF-8, so reconstructing historical Windows code-page bytes generally requires an appropriate separate encoder or a validated archival library.</p>
+<pre><code class="language-javascript">const raw = Uint8Array.from([0x43, 0x61, 0x66, 0xc3, 0xa9]);
+const utf8 = new TextDecoder('utf-8', { fatal: true }).decode(raw);
+const wrong = new TextDecoder('windows-1252', { fatal: true }).decode(raw);
+const webAlias = new TextDecoder('iso-8859-1', { fatal: true });
+console.log({ utf8, wrong, alias: webAlias.encoding });
+if (utf8 !== 'Café') throw new Error('Wrong UTF-8 interpretation');
+if (wrong !== 'CafÃ©') throw new Error('Wrong Windows-1252 interpretation');
+if (webAlias.encoding !== 'windows-1252') throw new Error('Unexpected web alias');
+</code></pre>
+<p>When platform behavior matters, test the exact browser or runtime version. The browser API's label aliases and BOM-handling rules are separate from Python's codec registry and a given Windows application's native file-reading policy. Avoid assuming that JavaScript, .NET, and Python will decode every legacy label identically.</p>
+</section>
+<section aria-labelledby="heading-26-windows-powershell-5-1-example-inspect-before-decoding" id="26-windows-powershell-5-1-example-inspect-before-decoding"><h2 id="heading-26-windows-powershell-5-1-example-inspect-before-decoding">26. Windows PowerShell 5.1 Example: Inspect Before Decoding</h2>
+<p>PowerShell 5.1 can inspect raw bytes without relying on the terminal's current character encoding. This example constructs an in-memory test value, applies a strict UTF-8 decoder, and then compares it to the known Windows-1252 mapping. It uses .NET Framework encoding classes available in Windows PowerShell 5.1. <strong>The example does not modify any actual file.</strong></p>
+<pre><code class="language-powershell"># Windows PowerShell 5.1; in-memory, read-only demonstration.
+[byte[]]$bytes = 0x43,0x61,0x66,0xE9,0x20,0x80
+$hex = ($bytes | ForEach-Object { $_.ToString('X2') }) -join ' '
+$strictUtf8 = [System.Text.UTF8Encoding]::new($false, $true)
+$cp1252 = [System.Text.Encoding]::GetEncoding(1252)
+
+Write-Output "Bytes: $hex"
+try {
+    Write-Output $strictUtf8.GetString($bytes)
+} catch [System.Text.DecoderFallbackException] {
+    Write-Output "Strict UTF-8 rejects this sample."
+}
+Write-Output "Windows-1252: $($cp1252.GetString($bytes))"
+
+# To inspect a real file without altering it:
+# $bytes = [System.IO.File]::ReadAllBytes('C:\path\to\archive.dat')
+# $sha = (Get-FileHash -Algorithm SHA256 'C:\path\to\archive.dat').Hash
+</code></pre>
+<p>PowerShell console rendering is an additional layer. If printed characters appear wrong, confirm the <strong>decoded string values</strong> and their code points, not only the displayed glyphs. Do not change the console encoding and assume the file was repaired. For strict legacy decoding, explicitly create an appropriate decoder exception fallback rather than relying on default replacement behavior.</p>
+</section>
+<section aria-labelledby="heading-27-a-controlled-intake-decision-tree" id="27-a-controlled-intake-decision-tree"><h2 id="heading-27-a-controlled-intake-decision-tree">27. A Controlled Intake Decision Tree</h2>
+<p>A trustworthy pipeline can implement the following decision process. <strong>Step 1:</strong> ingest the file as bytes and record its digest and source. <strong>Step 2:</strong> identify whether the file is text at all; do not feed arbitrary binary into text detection. <strong>Step 3:</strong> apply format-specific mandated encodings and authoritative metadata. <strong>Step 4:</strong> check for recognized leading Unicode signatures using correct prefix order. <strong>Step 5:</strong> validate the selected encoding strictly and record errors with byte offsets. <strong>Step 6:</strong> if claims conflict or no contract exists, evaluate approved candidate encodings with historical and language evidence. <strong>Step 7:</strong> quarantine unresolved ambiguity rather than hiding it with replacement. <strong>Step 8:</strong> store the canonical Unicode result separately from the immutable original, alongside an interpretation manifest.</p>
+<p>A multi-file import should permit different source encodings per file or per documented record family. It should not infer a global code page from one representative sample if the dataset has mixed origins. Successful import means the decoded characters satisfy the <strong>source contract and acceptance tests</strong>, not simply that the converter emitted a file.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Decision point</th>
+<th scope="col">Safe action</th>
+<th scope="col">Unsafe shortcut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Declared charset conflicts with bytes</td>
+<td>Quarantine and inspect source</td>
+<td>Override silently</td>
+</tr>
+<tr>
+<td>No BOM, all ASCII</td>
+<td>Record ambiguity</td>
+<td>Declare “definitely UTF-8”</td>
+</tr>
+<tr>
+<td>Strong mojibake pattern</td>
+<td>Compare source and reversible hypotheses</td>
+<td>Global string replacement</td>
+</tr>
+<tr>
+<td>U+FFFD already stored</td>
+<td>Recover original bytes if available</td>
+<td>Guess missing characters as fact</td>
+</tr>
+<tr>
+<td>Mixed legacy imports</td>
+<td>Partition by proven provenance</td>
+<td>Apply one decoder to all records</td>
+</tr>
+<tr>
+<td>Conversion approved</td>
+<td>Version output, verify, retain original</td>
+<td>Overwrite archive in place</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-28-candidate-ranking-without-pretending-to-know-the-answer" id="28-candidate-ranking-without-pretending-to-know-the-answer"><h2 id="heading-28-candidate-ranking-without-pretending-to-know-the-answer">28. Candidate Ranking Without Pretending to Know the Answer</h2>
+<p>A diagnostic report may rank interpretations without asserting certainty. A useful candidate score can include strict-decoder validity, compatibility with the producer's documentation, language plausibility, presence of known names, absence of suspicious controls, and agreement with other fields. The weights must reflect the collection's purpose and should be validated on known-good data. A punctuation-heavy engineering log requires different assumptions from a corpus of Portuguese literary paragraphs.</p>
+<p><strong>Do not reward a decoder merely for returning no errors</strong>: permissive single-byte encodings may decode nearly anything. <strong>Do not penalize legitimate uncommon text</strong>: mathematical symbols, code, Cyrillic, combining marks, or mixed-language records can look anomalous to a generic English-language model. <strong>Do not treat confidence output as a promise</strong>: model scores are usually uncalibrated outside the training distribution.</p>
+<p>Where uncertainty is material, retain the top candidates, their exact preview strings and strict-validation results, and the human decision. A repeatable “unknown/needs-review” outcome is a valuable feature, not a software defect.</p>
+</section>
+<section aria-labelledby="heading-29-content-specific-repair-risks-and-false-positives" id="29-content-specific-repair-risks-and-false-positives"><h2 id="heading-29-content-specific-repair-risks-and-false-positives">29. Content-Specific Repair Risks and False Positives</h2>
+<p>Automatic mojibake repair can damage legitimate text. A Unicode textbook might intentionally show <code>CafÃ©</code> to explain a conversion error; an artist's name could include unusual characters; a programming tutorial could contain literal byte patterns; or a scraped excerpt might quote a broken website. A tool that transforms every occurrence of <code>Ã</code> or <code>â€</code> without knowing the intended content will corrupt some records.</p>
+<p>Even when a candidate inverse is syntactically possible, consider <strong>scope</strong>: one field may be damaged, another may be correct, and a third may have passed through a different code page. Repair at a verified source/field boundary, not by blanket search-and-replace. Maintain explicit allowlists or review samples for high-risk data, and provide a no-change path for ambiguous cases. For large datasets, report a count of modified, unchanged, rejected, and uncertain records; spot-check by language, source system, and date.</p>
+<p>Text normalization, case folding, and transliteration are separate transformations. Their ability to make strings compare more consistently does not mean they repair mojibake or preserve original bytes. Keep each step independently auditable.</p>
+</section>
+<section aria-labelledby="heading-30-security-decoder-differentials-and-trust-boundaries" id="30-security-decoder-differentials-and-trust-boundaries"><h2 id="heading-30-security-decoder-differentials-and-trust-boundaries">30. Security: Decoder Differentials and Trust Boundaries</h2>
+<p>Different components that decode the same bytes differently can disagree about the meaning of identifiers, input separators, paths, or markup. This is a security concern when one component validates input under one interpretation and a downstream component interprets it under another. Strict UTF-8 validation and one canonical encoding contract at a trust boundary reduce opportunities for such disagreement. Avoid permissive or obsolete UTF-8 decoders that accept overlong sequences or surrogate values; their outputs may not match conforming parsers.</p>
+<p>Malformed input should not be silently accepted into authoritative systems through a replacement policy. If replacement is necessary for user-facing diagnostics, separate the display rendering from the validated canonical field used for authorization or business logic. For filenames and archival evidence, store original bytes as needed and use escaped, bounded displays. For logs, ensure a malicious input cannot inject line breaks, control sequences, or deceptive directionality without being represented safely.</p>
+<p>Encoding detection should also be bounded by resource limits. An attacker can supply enormous malformed inputs, exhaustively expensive candidate sets, or data intended to fool language heuristics. Apply size limits, cancellation and time budgets, and parse only the fields or files that a trusted format contract designates as text.</p>
+</section>
+<section aria-labelledby="heading-31-privacy-provenance-and-evidence-preservation" id="31-privacy-provenance-and-evidence-preservation"><h2 id="heading-31-privacy-provenance-and-evidence-preservation">31. Privacy, Provenance, and Evidence Preservation</h2>
+<p>An encoding investigation may involve names, employment records, payment details, institutional archives, or private correspondence. Avoid sending full source files to third-party “repair” websites without a data-governance decision. When using automated tools, prefer local deterministic processing for sensitive records and limit diagnostic logs to hashes, byte offsets, bounded context, and approved sample fields. A visible mojibake string may itself reveal personal information even if a tool considers it merely corrupted text.</p>
+<p>For regulated or scholarly preservation, keep an immutable source copy with recorded collection date, provenance, hash, and access controls. Store transformed outputs under new identifiers, with a machine-readable manifest describing the source encoding, selected decoder version, error handling, normalization policy, transformation scripts, test evidence, and review status. Do not confuse the hash of a corrected output with proof about the hash of the original source; both are needed when byte fidelity matters.</p>
+<p>An audit trail should also identify which decisions were <strong>assumptions</strong> rather than verified facts. For example, “Windows-1252 selected from archive provenance and tested sample names” is stronger and more honest than “encoding auto-detected as Windows-1252.”</p>
+</section>
+<section aria-labelledby="heading-32-acceptance-tests-and-regression-fixtures" id="32-acceptance-tests-and-regression-fixtures"><h2 id="heading-32-acceptance-tests-and-regression-fixtures">32. Acceptance Tests and Regression Fixtures</h2>
+<p>A production converter should have unit tests for each supported legacy codec, UTF-8 strict validation, BOM signatures, unknown labels, intentionally conflicting metadata, malformed UTF-8, truncated multibyte sequences, mixed-encoding input, and mojibake embedded in otherwise valid UTF-8. Create fixtures with known original bytes and expected Unicode scalar sequences, including international languages and punctuation. Test that any repair mechanism leaves known-good content unchanged.</p>
+<p>For an established file format, include both well-formed boundary samples and adversarial cases: very short files, all-ASCII files, bytes that produce plausible output in competing decoders, unused Windows-1252 positions, zero bytes, extremely long records, and partial stream chunks. Verify that a file's raw hash remains constant while the conversion writes to a new destination. Check that the output encoding and declared metadata agree.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Test</th>
+<th scope="col">Input condition</th>
+<th scope="col">Expected behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Known UTF-8</td>
+<td><code>43 61 66 C3 A9</code></td>
+<td>Strict UTF-8 yields <code>Café</code></td>
+</tr>
+<tr>
+<td>Legacy source</td>
+<td><code>43 61 66 E9</code> with proven cp1252 origin</td>
+<td>Decodes <code>Café</code>; rejects strict UTF-8</td>
+</tr>
+<tr>
+<td>ASCII-only</td>
+<td><code>41 42 43</code> with no metadata</td>
+<td>Report multiple plausible candidates</td>
+</tr>
+<tr>
+<td>UTF-8 BOM</td>
+<td><code>EF BB BF 41</code></td>
+<td>Signature handled per selected format</td>
+</tr>
+<tr>
+<td>Declared/actual mismatch</td>
+<td>cp1252 bytes with UTF-8 claim</td>
+<td>Reject or quarantine</td>
+</tr>
+<tr>
+<td>Reversible mojibake</td>
+<td><code>CafÃ©</code> with proven error history</td>
+<td>Propose <code>Café</code> and preserve before/after</td>
+</tr>
+<tr>
+<td>Lost bytes</td>
+<td><code>Caf�</code> without original</td>
+<td>No claim of byte-perfect recovery</td>
+</tr>
+<tr>
+<td>Legitimate example text</td>
+<td>Quoted <code>CafÃ©</code> in a manual</td>
+<td>Do not “repair” without evidence</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-33-worked-migration-historical-membership-records" id="33-worked-migration-historical-membership-records"><h2 id="heading-33-worked-migration-historical-membership-records">33. Worked Migration: Historical Membership Records</h2>
+<p>Consider a membership archive assembled from three independent sources: a modern UTF-8 web export, a 1990s Windows-1252 desktop database, and a third-party CSV with no documentation. A preliminary system reports hundreds of names with <code>Ã</code>, <code>â€</code>, and unexpected control characters. A naive solution would reinterpret all fields as Windows-1252, apply a string-repair function, and overwrite the archive. That approach would risk corrupting the modern Unicode data and fabricating names in the unknown CSV.</p>
+<p>A controlled plan starts by collecting all original exports as immutable byte streams, recording SHA-256 hashes and dates. The UTF-8 export is strictly validated under its documented format. The legacy database is decoded using Windows-1252 after confirming version, region, and sample names against retained application records. The undocumented CSV is quarantined for source investigation and candidate comparison. Fields that are already stored as <code>CafÃ©</code> receive proposed, <strong>not automatic</strong>, inverse repairs when an authoritative original source confirms the intended spelling. U+FFFD substitutions without underlying source bytes are flagged as unresolved; an administrator may supply corrected values but should not classify them as byte-verified restoration.</p>
+<p>The final migration produces a source-to-output manifest and aggregate metrics: bytes processed, records accepted without change, conversions performed, repairs approved, ambiguous records quarantined, and malformed records rejected. Stakeholders can now explain why each class of record was treated differently, and the original files remain available to reproduce or challenge the decision.</p>
+</section>
+<section aria-labelledby="heading-34-troubleshooting-by-visible-symptom" id="34-troubleshooting-by-visible-symptom"><h2 id="heading-34-troubleshooting-by-visible-symptom">34. Troubleshooting by Visible Symptom</h2>
+<table>
+<thead>
+<tr>
+<th scope="col">Symptom</th>
+<th scope="col">Possible explanation</th>
+<th scope="col">First investigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CafÃ©</code></td>
+<td>UTF-8 bytes misread as cp1252; stored mojibake</td>
+<td>Compare raw source bytes and decode history</td>
+</tr>
+<tr>
+<td><code>â€™</code></td>
+<td>Curly apostrophe UTF-8 bytes misread as cp1252</td>
+<td>Inspect <code>E2 80 99</code> history</td>
+</tr>
+<tr>
+<td><code>ï»¿</code> at beginning</td>
+<td>UTF-8 BOM exposed as text</td>
+<td>Inspect first three source bytes</td>
+</tr>
+<tr>
+<td><code>Caf�</code></td>
+<td>Malformed bytes replaced or intentional U+FFFD</td>
+<td>Retrieve immutable original bytes</td>
+</tr>
+<tr>
+<td>Readable ASCII but corrupt accents</td>
+<td>Sample-biased or wrong legacy decoder</td>
+<td>Test non-ASCII records against source contract</td>
+</tr>
+<tr>
+<td>Gibberish only in terminal</td>
+<td>Console output encoding/font or stream boundary</td>
+<td>Inspect code points and file bytes separately</td>
+</tr>
+<tr>
+<td>Same filename appears different after migration</td>
+<td>Normalization, case handling or encoding issue</td>
+<td>Compare scalar sequences and raw path provenance</td>
+</tr>
+<tr>
+<td>Different languages fail in different files</td>
+<td>Mixed source encodings</td>
+<td>Partition by source/export chronology</td>
+</tr>
+<tr>
+<td>Correct after manual browser override</td>
+<td>HTTP/meta label conflict or wrong original bytes</td>
+<td>Capture raw response and headers</td>
+</tr>
+</tbody>
+</table>
+<p>Troubleshooting should be reversible. Record each hypothesis and its result, preserve the raw stream, and stop when two interpretations remain plausible without external evidence. Repeated trial-and-error conversion can produce aesthetically pleasing but false records.</p>
+</section>
+<section aria-labelledby="heading-35-practical-study-activities" id="35-practical-study-activities"><h2 id="heading-35-practical-study-activities">35. Practical Study Activities</h2>
+<p><strong>Activity A — An ambiguous sample.</strong> Create a three-byte file <code>41 42 43</code>. List three encodings under which it is valid, explain why a valid UTF-8 detector cannot identify historical intent, and propose one additional source of evidence that could resolve the ambiguity.</p>
+<p><strong>Activity B — BOM inspection.</strong> Write the five Unicode signature sequences from Section 7. Explain why checking <code>FF FE</code> before <code>FF FE 00 00</code> can misclassify a UTF-32LE file, and why removing <code>EF BB BF</code> from every occurrence within a stream is unsafe.</p>
+<p><strong>Activity C — Reversible mojibake.</strong> Start with <code>Café</code> as Unicode text, encode it in UTF-8, decode those bytes incorrectly as cp1252, then prove that an inverse reconstruction returns the original bytes. Record both the raw hex and code points.</p>
+<p><strong>Activity D — Irreversible corruption.</strong> Decode <code>43 61 66 E9</code> as UTF-8 using replacement. Explain exactly which information cannot be recovered from <code>Caf�</code> alone and describe what archival evidence would be needed.</p>
+<p><strong>Activity E — Web metadata mismatch.</strong> Draft a test HTML response whose header declares <code>utf-8</code> but whose payload contains <code>E9</code> as a lone legacy character. Predict a strict decoder's response; then explain why declaring UTF-8 does not change that byte.</p>
+<p><strong>Activity F — Approval policy.</strong> Write a five-field incident log for an encoding mismatch, distinguishing observation, proposed cause, repair proposal, evidence source, and reviewer disposition. Refuse an unsupported global rewrite.</p>
+</section>
+<section aria-labelledby="heading-36-review-questions-and-model-answers" id="36-review-questions-and-model-answers"><h2 id="heading-36-review-questions-and-model-answers">36. Review Questions and Model Answers</h2>
+<ol>
+<li><strong>Why can a UTF-8-valid file still contain mojibake?</strong> A wrong earlier decoder may have produced an incorrect Unicode sequence that was subsequently encoded correctly as UTF-8.</li>
+<li><strong>Why is a BOM not universal proof?</strong> Its interpretation depends on position and format rules, and bytes can be spoofed or occur by chance; a BOM identifies an encoding signature, not source authenticity.</li>
+<li><strong>What distinguishes strict validation from heuristic detection?</strong> Validation tests whether bytes obey one encoding's syntax; a heuristic ranks interpretations using context and statistical patterns.</li>
+<li><strong>What does an ASCII-only file prove?</strong> It proves compatibility with ASCII and many ASCII-compatible schemes, not a unique original encoding.</li>
+<li><strong>Why do web and Python <code>iso-8859-1</code> results sometimes differ?</strong> WHATWG label handling maps that label to Windows-1252; Python's codec interprets it as ISO-8859-1.</li>
+<li><strong>What error produced <code>CafÃ©</code> from <code>Café</code>?</strong> UTF-8 bytes were interpreted using a Western single-byte codec such as Windows-1252.</li>
+<li><strong>When is a one-stage inverse justified?</strong> Only when source history supports the specific mistaken decoding stage and the transformation is demonstrably reversible on the affected values.</li>
+<li><strong>Why is U+FFFD not an invertible representation of invalid bytes?</strong> Multiple malformed inputs can lead to the same replacement character, so original bytes are not encoded in it.</li>
+<li><strong>What must a migration preserve?</strong> At minimum, original bytes and provenance; for high-assurance cases, source manifests, code choices, transformation logs, verification records, and approvals.</li>
+<li><strong>What should happen when two decoders remain plausible?</strong> Mark uncertainty or quarantine rather than silently selecting one for critical data.</li>
+</ol>
+</section>
+<section aria-labelledby="heading-37-glossary-and-conceptual-summary" id="37-glossary-and-conceptual-summary"><h2 id="heading-37-glossary-and-conceptual-summary">37. Glossary and Conceptual Summary</h2>
+<table>
+<thead>
+<tr>
+<th scope="col">Term</th>
+<th scope="col">Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Character encoding</td>
+<td>Defined mapping between text elements/code points and encoded units or bytes</td>
+</tr>
+<tr>
+<td>Decoder</td>
+<td>Procedure interpreting bytes under a named codec</td>
+</tr>
+<tr>
+<td>Charset label</td>
+<td>Metadata name resolved according to a format or implementation's rules</td>
+</tr>
+<tr>
+<td>BOM</td>
+<td>Leading Unicode signature used for recognition and, for some schemes, byte order</td>
+</tr>
+<tr>
+<td>Encoding sniffing</td>
+<td>Format-defined process of selecting an encoding from evidence and rules</td>
+</tr>
+<tr>
+<td>Heuristic detector</td>
+<td>Model ranking candidate encodings using observed patterns</td>
+</tr>
+<tr>
+<td>UTF-8 validity</td>
+<td>Compliance with UTF-8 byte-sequence rules; not a semantic guarantee</td>
+</tr>
+<tr>
+<td>Mojibake</td>
+<td>Incorrect characters resulting from a mismatched decode/encode history</td>
+</tr>
+<tr>
+<td>Double mojibake</td>
+<td>More than one misinterpretation or re-encoding stage</td>
+</tr>
+<tr>
+<td>Transcoding</td>
+<td>Converting from one encoded representation to another</td>
+</tr>
+<tr>
+<td>U+FFFD</td>
+<td>Unicode replacement character, often used for decoding failures</td>
+</tr>
+<tr>
+<td>Lossless restoration</td>
+<td>Verifiable recovery without information loss under a stated contract</td>
+</tr>
+<tr>
+<td>Provenance</td>
+<td>Evidence documenting original source and transformation history</td>
+</tr>
+<tr>
+<td>Quarantine</td>
+<td>Holding ambiguous or malformed input outside authoritative output</td>
+</tr>
+<tr>
+<td>Round-trip</td>
+<td>Re-encoding and decoding under explicit mappings to test fidelity</td>
+</tr>
+<tr>
+<td>Canonical layer</td>
+<td>Governed internal text representation after validated ingestion</td>
+</tr>
+</tbody>
+</table>
+<p>A reliable encoding decision is a chain of claims supported by evidence, not an attractive decoded preview. The exact same bytes can carry different characters under different code pages; the same Unicode characters can be serialized under different encodings; and corrupted Unicode text can be stored in completely valid UTF-8. This distinction is the conceptual foundation for the workflows in this article.</p>
+</section>
+<section aria-labelledby="heading-38-sub-articles-related-topics-and-study-sequence" id="38-sub-articles-related-topics-and-study-sequence"><h2 id="heading-38-sub-articles-related-topics-and-study-sequence">38. Sub-Articles, Related Topics, and Study Sequence</h2>
+<p><strong>Taxonomy position.</strong> This is a Level 5 subarticle of <a href="/library/encyclopedia/computer-science/data-systems/character-encoding">Character Encoding</a>, within the <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/">Character Encoding subarticle directory</a>. The current unit index is the governing roster. Any future Level 6 treatment should specialize a distinct narrow problem rather than duplicating this page.</p>
+<p><strong>Recommended preceding articles:</strong> <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/legacy-single-byte-encodings-and-code-pages">Legacy Single-Byte Encodings and Code Pages</a>, <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/iso-8859-and-windows-1252-compatibility">ISO-8859 and Windows-1252 Compatibility</a>, <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/utf-8-encoding-and-byte-sequence-validity">UTF-8 Encoding and Byte-Sequence Validity</a>, <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/unicode-byte-order-marks-and-endianness">Unicode Byte-Order Marks and Endianness</a>, and <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/character-transcoding-and-unrepresentable-text">Character Transcoding and Unrepresentable Text</a>.</p>
+<p><strong>Next planned articles:</strong> <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/html-http-and-text-file-encoding-declarations">HTML, HTTP, and Text-File Encoding Declarations</a>, <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/database-api-and-json-text-encoding-contracts">Database, API, and JSON Text Encoding Contracts</a>, and <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/text-input-validation-confusables-and-unicode-security">Text Input Validation, Confusables, and Unicode Security</a>. Links to planned destinations are intentional, not representations of deployed publication.</p>
+<p><strong>Related encyclopedia topics:</strong> <a href="/library/encyclopedia/computer-science/data-systems/binary-data">Binary Data</a>, <a href="/library/encyclopedia/computer-science/data-systems/data-engineering-articles/data-transformation">Data Transformation</a>, <a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a>, <a href="/library/encyclopedia/computer-science/data-systems/data-catalogs-and-metadata-management">Data Catalogs and Metadata Management</a>, <a href="/library/encyclopedia/computer-science/data-systems/information-retrieval">Information Retrieval</a>, and <a href="/library/encyclopedia/computer-science/data-systems/data-encryption">Data Encryption</a>.</p>
+</section>
+<section aria-labelledby="heading-39-technical-references-and-further-reading" id="39-technical-references-and-further-reading"><h2 id="heading-39-technical-references-and-further-reading">39. Technical References and Further Reading</h2>
+<ol>
+<li>WHATWG. <em>Encoding Standard</em>. Encoding labels, legacy mappings, replacement behavior, BOM sniffing, and <code>TextDecoder</code>. <a href="https://encoding.spec.whatwg.org/">Official specification</a>.</li>
+<li>WHATWG. <em>HTML Standard</em>, “Determining the Character Encoding.” The authoritative HTML encoding-sniffing decision process. <a href="https://html.spec.whatwg.org/multipage/parsing.html#determining-the-character-encoding">Official specification</a>.</li>
+<li>W3C Internationalization. <em>Declaring character encodings in HTML</em>. Header and in-document declarations, byte-order marks, and authoring guidance. <a href="https://www.w3.org/International/questions/qa-html-encoding-declarations.en.html">Official guidance</a>.</li>
+<li>W3C Internationalization. <em>The byte-order mark (BOM) in HTML</em>. BOM precedence and visible <code>ï»¿</code> symptoms. <a href="https://www.w3.org/International/questions/qa-byte-order-mark">Official guidance</a>.</li>
+<li>Unicode Consortium. <em>The Unicode Standard, Version 18.0</em>, Chapters 3 and 5. UTF conversion, conformance, and replacement. <a href="https://www.unicode.org/versions/Unicode18.0.0/core-spec/chapter-3/">Chapter 3</a>, <a href="https://www.unicode.org/versions/Unicode18.0.0/core-spec/chapter-5/">Chapter 5</a>.</li>
+<li>IETF. <em>RFC 3629: UTF-8, a Transformation Format of ISO 10646</em>. Byte-sequence rules and malformed-sequence constraints. <a href="https://www.rfc-editor.org/rfc/rfc3629">RFC 3629</a>.</li>
+<li>IETF. <em>RFC 8259: The JavaScript Object Notation (JSON) Data Interchange Format</em>. Encoding for interoperable JSON exchange. <a href="https://www.rfc-editor.org/rfc/rfc8259">RFC 8259</a>.</li>
+<li>Python Software Foundation. <em>Python Standard Library: codecs</em>. Strict decoding, error handlers, and source/target coding. <a href="https://docs.python.org/3/library/codecs.html">Documentation</a>.</li>
+<li>Python Software Foundation. <em>Unicode HOWTO</em>. Introduction to encoding, Unicode processing, and decoding errors. <a href="https://docs.python.org/3/howto/unicode.html">Documentation</a>.</li>
+<li>Microsoft. <em>.NET System.Text.Encoding</em>. Code-page decoders, encoding fallback, and Windows interoperability. <a href="https://learn.microsoft.com/en-us/dotnet/api/system.text.encoding">Documentation</a>.</li>
+<li>MDN Web Docs. <em>TextDecoder</em>. Browser decoding and error behavior, including the <code>fatal</code> option. <a href="https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder">Documentation</a>.</li>
+<li>W3C Internationalization. <em>Choosing and applying a character encoding</em>. Modern UTF-8 defaults and the distinction between encoding choice and declarations. <a href="https://www.w3.org/International/questions/qa-choosing-encodings">Official guidance</a>.</li>
+</ol>
+</section>
+<section aria-labelledby="heading-40-conclusion-detection-is-a-decision-with-evidence" id="40-conclusion-detection-is-a-decision-with-evidence"><h2 id="heading-40-conclusion-detection-is-a-decision-with-evidence">40. Conclusion: Detection Is a Decision With Evidence</h2>
+<p>A sound encoding workflow begins with the bytes and their provenance. It selects a decoder under the governing format rules, tests its validity, evaluates conflicting metadata and plausible alternatives, and records uncertainty when the original intent cannot be established. Mojibake is an explanation for a particular history of incorrect interpretation; it is not a synonym for every odd character. Recoverable cases demand a proven inverse and preserved originals; replacement, deletion, and undocumented prior conversions may make perfect restoration impossible.</p>
+<p>For MGU's historical, scientific, and institutional holdings, the strongest operational policy is to <strong>retain source bytes, validate strictly, standardize new outputs to an explicit Unicode contract, and never conceal uncertain repairs</strong>. In the canonical worked example, <code>43 61 66 C3 A9</code> should become <code>Café</code> under UTF-8. Reading the same bytes as Windows-1252 yields <code>CafÃ©</code>. The difference is explainable and testable. That standard—an identifiable cause, a reproducible byte-level demonstration, and an auditable correction—is what separates trustworthy text preservation from guesswork.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== SHARED FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Address Translation and Translation Lookaside Buffers | MGU Computer Science Encyclopedia | Malone Global University</title>
+<meta name="description" content="Virtual-to-physical address translation, TLB organization, page-table walking, protection, invalidation, and execution costs in modern CPUs.">
+<meta name="keywords" content="virtual memory, MMU, address translation, TLB, page-table walk, Sv39, ASID, PCID, SFENCE.VMA, TLB shootdown, huge pages, memory protection">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Address Translation and Translation Lookaside Buffers | MGU Encyclopedia">
+<meta property="og:description" content="Virtual-to-physical address translation, TLB organization, page-table walking, protection, invalidation, and execution costs in modern CPUs.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero"><h1>Address Translation and Translation Lookaside Buffers</h1><p class="subtitle">Virtual-to-physical address translation, TLB organization, page-table walking, protection, invalidation, and execution costs in modern CPUs.</p></section>
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#scope-and-central-question">Scope and Central Question</a></li>
+<li><a href="#learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</a></li>
+<li><a href="#virtual-addresses-physical-addresses-and-address-spaces">Virtual Addresses, Physical Addresses, and Address Spaces</a></li>
+<li><a href="#the-cpu-translation-path-at-a-glance">The CPU Translation Path at a Glance</a></li>
+<li><a href="#address-translation-datapath-diagram">Address Translation Datapath Diagram</a></li>
+<li><a href="#page-numbers-page-offsets-and-frames">Page Numbers, Page Offsets, and Frames</a></li>
+<li><a href="#worked-example-split-and-recombine-an-address">Worked Example: Split and Recombine an Address</a></li>
+<li><a href="#why-page-tables-are-hierarchical">Why Page Tables Are Hierarchical</a></li>
+<li><a href="#risc-v-sv39-as-a-concrete-teaching-model">RISC-V Sv39 as a Concrete Teaching Model</a></li>
+<li><a href="#worked-example-extract-sv39-indices">Worked Example: Extract Sv39 Indices</a></li>
+<li><a href="#canonical-addresses-and-address-size-validation">Canonical Addresses and Address-Size Validation</a></li>
+<li><a href="#worked-example-canonical-sv39-validation">Worked Example: Canonical Sv39 Validation</a></li>
+<li><a href="#page-table-entry-contents-and-permissions">Page-Table Entry Contents and Permissions</a></li>
+<li><a href="#a-permission-matrix-for-teaching">A Permission Matrix for Teaching</a></li>
+<li><a href="#accessed-and-dirty-state">Accessed and Dirty State</a></li>
+<li><a href="#instruction-and-data-tlbs">Instruction and Data TLBs</a></li>
+<li><a href="#the-fast-path-tlb-hits">The Fast Path: TLB Hits</a></li>
+<li><a href="#the-slow-path-tlb-misses-and-hardware-page-walks">The Slow Path: TLB Misses and Hardware Page Walks</a></li>
+<li><a href="#three-outcomes-that-must-never-be-confused">Three Outcomes That Must Never Be Confused</a></li>
+<li><a href="#a-small-translation-cache-model">A Small Translation Cache Model</a></li>
+<li><a href="#the-page-walk-cache-and-cached-intermediate-descriptors">The Page-Walk Cache and Cached Intermediate Descriptors</a></li>
+<li><a href="#page-walks-are-memory-workloads">Page Walks Are Memory Workloads</a></li>
+<li><a href="#tlb-reach-and-the-working-set">TLB Reach and the Working Set</a></li>
+<li><a href="#worked-example-calculate-translation-coverage">Worked Example: Calculate Translation Coverage</a></li>
+<li><a href="#page-sizes-and-the-superpage-trade-off">Page Sizes and the Superpage Trade-Off</a></li>
+<li><a href="#superpage-alignment-and-page-offset-arithmetic">Superpage Alignment and Page-Offset Arithmetic</a></li>
+<li><a href="#mixed-page-sizes-in-one-address-space">Mixed Page Sizes in One Address Space</a></li>
+<li><a href="#calculating-a-simplified-hit-rate-cost-model">Calculating a Simplified Hit-Rate Cost Model</a></li>
+<li><a href="#miss-rate-walk-rate-and-walk-duration">Miss Rate, Walk Rate, and Walk Duration</a></li>
+<li><a href="#address-space-identifiers-and-process-isolation">Address-Space Identifiers and Process Isolation</a></li>
+<li><a href="#worked-example-why-an-untagged-cache-fails">Worked Example: Why an Untagged Cache Fails</a></li>
+<li><a href="#context-switching-and-translation-retention">Context Switching and Translation Retention</a></li>
+<li><a href="#global-mappings-and-shared-kernel-regions">Global Mappings and Shared Kernel Regions</a></li>
+<li><a href="#tlb-invalidation-after-mapping-changes">TLB Invalidation After Mapping Changes</a></li>
+<li><a href="#a-stale-translation-example">A Stale Translation Example</a></li>
+<li><a href="#multicore-shootdowns-and-translation-consistency">Multicore Shootdowns and Translation Consistency</a></li>
+<li><a href="#a-safe-unmap-protocol-conceptual-sequence">A Safe Unmap Protocol: Conceptual Sequence</a></li>
+<li><a href="#why-cross-core-invalidation-becomes-expensive">Why Cross-Core Invalidation Becomes Expensive</a></li>
+<li><a href="#risc-v-satp-asids-and-sfence-vma">RISC-V satp, ASIDs, and SFENCE.VMA</a></li>
+<li><a href="#x86-paging-pcids-and-invalidation">x86 Paging, PCIDs, and Invalidation</a></li>
+<li><a href="#arm-translation-granules-asids-and-tlbi">Arm Translation Granules, ASIDs, and TLBI</a></li>
+<li><a href="#architecture-comparison-translation-controls">Architecture Comparison: Translation Controls</a></li>
+<li><a href="#tlb-miss-versus-demand-page-fault">TLB Miss Versus Demand Page Fault</a></li>
+<li><a href="#page-fault-handling-timeline">Page Fault Handling Timeline</a></li>
+<li><a href="#copy-on-write-and-shared-mapping-examples">Copy-on-Write and Shared Mapping Examples</a></li>
+<li><a href="#multi-stage-translation-in-virtual-machines">Multi-Stage Translation in Virtual Machines</a></li>
+<li><a href="#worked-example-a-two-stage-mapping">Worked Example: A Two-Stage Mapping</a></li>
+<li><a href="#device-translation-and-the-iommu-boundary">Device Translation and the IOMMU Boundary</a></li>
+<li><a href="#virtual-indexing-physical-tagging-and-cache-aliases">Virtual Indexing, Physical Tagging, and Cache Aliases</a></li>
+<li><a href="#shared-memory-aliasing-and-physical-identity">Shared Memory, Aliasing, and Physical Identity</a></li>
+<li><a href="#security-boundaries-user-supervisor-and-execute-permission">Security Boundaries: User, Supervisor, and Execute Permission</a></li>
+<li><a href="#speculative-translation-and-side-channel-risks">Speculative Translation and Side-Channel Risks</a></li>
+<li><a href="#nonuniform-memory-access-and-page-placement">Nonuniform Memory Access and Page Placement</a></li>
+<li><a href="#translation-pressure-in-pointer-chasing-workloads">Translation Pressure in Pointer-Chasing Workloads</a></li>
+<li><a href="#a-synthetic-workload-page-count-versus-byte-count">A Synthetic Workload: Page Count Versus Byte Count</a></li>
+<li><a href="#translation-lookups-and-concurrent-pipeline-work">Translation Lookups and Concurrent Pipeline Work</a></li>
+<li><a href="#worked-example-walker-throughput-as-a-bound">Worked Example: Walker Throughput as a Bound</a></li>
+<li><a href="#correctness-invariants-of-a-translation-unit">Correctness Invariants of a Translation Unit</a></li>
+<li><a href="#a-translation-test-matrix">A Translation Test Matrix</a></li>
+<li><a href="#diagnosing-a-translation-bottleneck">Diagnosing a Translation Bottleneck</a></li>
+<li><a href="#a-ten-gate-engineering-evaluation-framework">A Ten-Gate Engineering Evaluation Framework</a></li>
+<li><a href="#applied-scenario-1-a-database-scan-with-high-dtlb-misses">Applied Scenario 1 — A Database Scan With High dTLB Misses</a></li>
+<li><a href="#applied-scenario-2-a-context-switch-reuses-a-virtual-address">Applied Scenario 2 — A Context Switch Reuses a Virtual Address</a></li>
+<li><a href="#applied-scenario-3-unmapping-a-page-on-a-64-core-server">Applied Scenario 3 — Unmapping a Page on a 64-Core Server</a></li>
+<li><a href="#applied-scenario-4-a-large-page-must-be-split">Applied Scenario 4 — A Large Page Must Be Split</a></li>
+<li><a href="#applied-scenario-5-a-guest-vm-suffers-translation-walk-pressure">Applied Scenario 5 — A Guest VM Suffers Translation Walk Pressure</a></li>
+<li><a href="#applied-scenario-6-a-security-patch-changes-mapping-rules">Applied Scenario 6 — A Security Patch Changes Mapping Rules</a></li>
+<li><a href="#guided-exercise-1-decode-a-three-level-virtual-address">Guided Exercise 1 — Decode a Three-Level Virtual Address</a></li>
+<li><a href="#guided-exercise-2-distinguish-tlb-misses-from-page-faults">Guided Exercise 2 — Distinguish TLB Misses From Page Faults</a></li>
+<li><a href="#guided-exercise-3-estimate-translation-coverage">Guided Exercise 3 — Estimate Translation Coverage</a></li>
+<li><a href="#guided-exercise-4-design-an-invalidation-test">Guided Exercise 4 — Design an Invalidation Test</a></li>
+<li><a href="#guided-exercise-5-compare-two-stage-translation">Guided Exercise 5 — Compare Two-Stage Translation</a></li>
+<li><a href="#review-questions">Review Questions</a></li>
+<li><a href="#glossary">Glossary</a></li>
+<li><a href="#complete-cpu-specialist-directory">Complete CPU Specialist Directory</a></li>
+<li><a href="#related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</a></li>
+<li><a href="#primary-documentation-and-further-reading">Primary Documentation and Further Reading</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="scope-and-central-question" aria-labelledby="heading-scope-and-central-question"><h2 id="heading-scope-and-central-question">Scope and Central Question</h2>
+<p>A central processing unit does not normally use the addresses written by a user program as direct coordinates in physical memory. A load, store, or instruction fetch commonly begins with a <strong>virtual address</strong> whose meaning depends on the active address space, privilege, translation configuration, and access type. Hardware associated with the memory-management unit (MMU) translates that address, checks applicable architectural permissions, and supplies a physical address for the ensuing memory transaction. A <strong>translation lookaside buffer</strong> (TLB) accelerates this operation by retaining recently useful translation information so that every memory reference need not perform a multi-level page-table walk.</p>
+<p>This specialist article examines the CPU machinery that implements that process: address formation, translation caches, page walkers, translation permissions, tagging and invalidation, large pages, multiple translation stages, and execution costs. It emphasizes the hardware/software contract: operating systems establish and change mappings, while processors enforce the architecture's rules and may implement them with very different internal structures. A TLB is not a data cache, virtual memory is not synonymous with swapping, and translating an address is not a complete security policy.</p>
+
+</section>
+<section id="learning-objectives-and-prerequisites" aria-labelledby="heading-learning-objectives-and-prerequisites"><h2 id="heading-learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</h2>
+<p>After studying this article, a reader should be able to: separate virtual, physical, and guest-physical addresses; split an address into a virtual page number and page offset; trace a TLB hit and a TLB miss; explain a hardware page walk and a fault; distinguish permission failures from missing translation-cache entries; calculate TLB reach; explain the need for address-space tags and multicore shootdowns; and evaluate performance and isolation trade-offs involving page size, speculative execution, and virtualization.</p>
+<p>Useful prerequisites include <strong>Processor Cores and Datapaths</strong>, <strong>Instruction Fetch and Decode</strong>, <strong>CPU Cache Hierarchies and Locality</strong>, and <strong>Load/Store Units and Memory Ordering</strong>. The article uses a simplified three-level, 4 KiB-page translation scheme inspired by RISC-V Sv39. The examples are teaching models, not a complete implementation of the current RISC-V, Arm, x86, or Linux specification. Where exact architectural requirements matter, consult the primary documents at the end.</p>
+
+</section>
+<section id="virtual-addresses-physical-addresses-and-address-spaces" aria-labelledby="heading-virtual-addresses-physical-addresses-and-address-spaces"><h2 id="heading-virtual-addresses-physical-addresses-and-address-spaces">Virtual Addresses, Physical Addresses, and Address Spaces</h2>
+<p>A <strong>virtual address</strong> identifies a byte within an address space defined for a process or other translation context. A <strong>physical address</strong> identifies an address in the physical address system seen by the processor's memory interconnect; it can designate DRAM or a device-mapped region, depending on the platform. A particular virtual address can map to different physical pages in two processes. Conversely, different virtual addresses—even in different processes—can map to the same physical frame when shared memory or an alias is intentional.</p>
+<p>The same hex value is therefore insufficient to identify a memory location without its translation context. Operating systems commonly provide distinct user mappings and controlled kernel mappings. Page permissions, supervisor/user privilege, memory type, and translation invalidation affect whether a mapping is usable. The software virtual-memory abstraction also encompasses allocation, page faults, file-backed mappings, copy-on-write, and placement; a TLB covers only one hardware acceleration component of that larger system.</p>
+
+</section>
+<section id="the-cpu-translation-path-at-a-glance" aria-labelledby="heading-the-cpu-translation-path-at-a-glance"><h2 id="heading-the-cpu-translation-path-at-a-glance">The CPU Translation Path at a Glance</h2>
+<p>For an ordinary translated memory reference, the processor forms an effective address; determines the active translation context; checks a relevant TLB; either obtains a cached translation or initiates a page walk; establishes applicable permissions; constructs a physical address; and proceeds with the instruction-fetch, load, or store path. Some implementations overlap translation with cache lookup or start speculative work before all checks finish. None of these optimizations may permit a forbidden access to become an architecturally committed result.</p>
+<p>In a simplified diagram, the TLB is a <strong>cache of mappings</strong>, not a second data store. On a hit, the mapping and permissions are available promptly. On a miss, the hardware page walker reads translation tables from the memory hierarchy. The completed walk can insert a mapping into the TLB, after which the original access may continue. An invalid or forbidden mapping produces an architecturally defined fault or other exception rather than a valid address.</p>
+
+</section>
+<section id="address-translation-datapath-diagram" aria-labelledby="heading-address-translation-datapath-diagram"><h2 id="heading-address-translation-datapath-diagram">Address Translation Datapath Diagram</h2>
+<p>The figure below separates the fast translation-cache lookup from the slower walk path. The actual number of TLB levels, page-walk caches, permission checks, and simultaneous requests differs across processor designs; this is a conceptual pipeline rather than a cycle-accurate implementation.</p>
+<div class="figure-block">
+<svg viewBox="0 0 960 375" width="100%" role="img" aria-labelledby="address-translation-fig-title address-translation-fig-desc" xmlns="http://www.w3.org/2000/svg">
+<title id="address-translation-fig-title">Virtual-address translation and TLB hit or miss</title>
+<desc id="address-translation-fig-desc">Instruction fetch or load/store creates a virtual address. The MMU checks a TLB. On a hit, a translation and permissions are used. On a miss, a page-table walk accesses page tables and fills the TLB. Permission failures or invalid mappings cause faults. Successful translation supplies a physical address to the cache or memory.</desc>
+<defs><marker id="tip" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="currentColor"/></marker></defs>
+<g fill="none" stroke="currentColor" stroke-width="2" marker-end="url(#tip)">
+<path d="M172 77H230"/><path d="M402 77H458"/><path d="M655 77H710"/><path d="M326 110V206H445"/><path d="M645 242H711V108"/><path d="M550 202V132"/><path d="M808 110V274"/>
+</g>
+<g fill="#e8f0fe" stroke="#526b94" stroke-width="2">
+<rect x="16" y="42" width="156" height="72" rx="9"/>
+<rect x="230" y="42" width="172" height="72" rx="9"/>
+<rect x="458" y="42" width="197" height="72" rx="9"/>
+<rect x="711" y="42" width="230" height="72" rx="9"/>
+<rect x="445" y="206" width="200" height="76" rx="9"/>
+<rect x="711" y="274" width="230" height="70" rx="9"/>
+</g>
+<g fill="#172d51" font-family="Arial, sans-serif" font-size="18" text-anchor="middle">
+<text x="94" y="70">Fetch / LSU</text><text x="94" y="92" font-size="14">virtual address</text>
+<text x="316" y="69">TLB lookup</text><text x="316" y="91" font-size="14">VPN + context</text>
+<text x="556" y="69">Permissions</text><text x="556" y="91" font-size="14">and physical frame</text>
+<text x="826" y="69">Physical address</text><text x="826" y="91" font-size="14">cache / memory path</text>
+<text x="545" y="233">Page-table walk</text><text x="545" y="256" font-size="14">miss / translation refill</text>
+<text x="826" y="303">Access completes</text><text x="826" y="323" font-size="14">or exception is reported</text>
+</g>
+<g fill="currentColor" font-family="Arial, sans-serif" font-size="14"><text x="417" y="64">hit</text><text x="336" y="170">miss</text><text x="572" y="162">refill</text></g>
+</svg>
+<p><strong>Figure 1.</strong> Conceptual translation flow. Permission violations or invalid page-table entries take an exception path; a TLB miss by itself does not.</p>
+</div>
+
+
+</section>
+<section id="page-numbers-page-offsets-and-frames" aria-labelledby="heading-page-numbers-page-offsets-and-frames"><h2 id="heading-page-numbers-page-offsets-and-frames">Page Numbers, Page Offsets, and Frames</h2>
+<p>With a 4 KiB page, the low 12 address bits are the byte offset within that page because 4,096 equals 2¹². The remaining address bits select a <strong>virtual page number</strong> (VPN). A successful mapping substitutes a <strong>physical page number</strong> (PPN) while retaining the offset: physical address = physical frame base + page offset. The offset is unchanged because a mapping preserves the byte's relative position inside the aligned frame. In a simple model, <code>VPN = VA // page_size</code> and <code>offset = VA % page_size</code>.</p>
+<p>For example, virtual address <code>0x12345ABC</code> has a VPN of <code>0x12345</code> and an offset of <code>0xABC</code>. If that virtual page maps to physical frame <code>0x8F012</code>, the physical address becomes <code>0x8F012ABC</code>. This arithmetic is only the last step; real processors must first validate the mapping and check that its page size, privilege, and access permissions allow the operation.</p>
+
+</section>
+<section id="worked-example-split-and-recombine-an-address" aria-labelledby="heading-worked-example-split-and-recombine-an-address"><h2 id="heading-worked-example-split-and-recombine-an-address">Worked Example: Split and Recombine an Address</h2>
+<pre><code class="language-python">PAGE_SIZE = 4096
+virtual_address = 0x12345ABC
+virtual_page, offset = divmod(virtual_address, PAGE_SIZE)
+physical_page = 0x8F012
+physical_address = physical_page * PAGE_SIZE + offset
+assert virtual_page == 0x12345
+assert offset == 0xABC
+assert physical_address == 0x8F012ABC
+print(hex(physical_address))
+</code></pre>
+<p>This example is useful for reasoning about alignment and page crossings. If an eight-byte access begins three bytes before the end of a 4 KiB page, it spans two virtual pages and may require two translations with potentially different permissions. The instruction's architecturally defined fault and atomicity behavior still depends on the ISA, access type, and platform—not merely on the arithmetic above.</p>
+
+</section>
+<section id="why-page-tables-are-hierarchical" aria-labelledby="heading-why-page-tables-are-hierarchical"><h2 id="heading-why-page-tables-are-hierarchical">Why Page Tables Are Hierarchical</h2>
+<p>A flat table assigning a physical frame and protection bits to every possible virtual page could be prohibitively large, especially for sparse address spaces. Multi-level page tables split the VPN into successive indices and allocate lower-level tables only when portions of the address space are in use. At each level, a page-table entry either identifies the next table, represents a leaf mapping at an allowed page size, or indicates a nonpresent/invalid mapping. The number of levels and descriptor encodings are architecture-specific.</p>
+<p>A page walk starts from a privileged root pointer, reads an entry from the table for the highest index, follows a next-table pointer as needed, and reaches a leaf. The page tables are themselves stored in memory and consume bandwidth and cache capacity. Some processors cache intermediate walk information; others may have multiple page walkers or coalesce compatible requests. The abstract description “three reads for a three-level walk” does not mean three DRAM accesses on every miss: data-cache hits, walk-cache hits, parallelism, and page size change actual latency.</p>
+
+</section>
+<section id="risc-v-sv39-as-a-concrete-teaching-model" aria-labelledby="heading-risc-v-sv39-as-a-concrete-teaching-model"><h2 id="heading-risc-v-sv39-as-a-concrete-teaching-model">RISC-V Sv39 as a Concrete Teaching Model</h2>
+<p>The RISC-V Sv39 translation scheme uses a 39-bit sign-extended virtual-address form, three 9-bit page-table indices, and a 12-bit offset for 4 KiB pages. Each basic page-table entry is eight bytes. A leaf at the lowest level maps 4 KiB, while valid higher-level leaves can map 2 MiB or 1 GiB if alignment and other rules hold. The <code>satp</code> register supplies translation mode, address-space identifier, and root-table information for supervisor page-based translation.</p>
+<p>This is not a template to impose on other machines. x86-64 commonly uses four- or five-level paging depending on enabled hardware and software configuration; Arm systems permit multiple translation granules and differently structured control registers. The lesson is a reusable method: split the address into indices, walk from the configured root, validate each descriptor, and combine a leaf frame with the appropriate lower address bits.</p>
+
+</section>
+<section id="worked-example-extract-sv39-indices" aria-labelledby="heading-worked-example-extract-sv39-indices"><h2 id="heading-worked-example-extract-sv39-indices">Worked Example: Extract Sv39 Indices</h2>
+<pre><code class="language-python">PAGE_SHIFT = 12
+INDEX_MASK = 0x1FF  # nine bits
+
+def sv39_fields(virtual_address):
+    low = virtual_address &amp; ((1 &lt;&lt; 39) - 1)
+    vpn0 = (low &gt;&gt; 12) &amp; INDEX_MASK
+    vpn1 = (low &gt;&gt; 21) &amp; INDEX_MASK
+    vpn2 = (low &gt;&gt; 30) &amp; INDEX_MASK
+    return (vpn2, vpn1, vpn0, low &amp; 0xFFF)
+
+assert sv39_fields(0x12345678) == (0, 145, 325, 0x678)
+print(sv39_fields(0x12345678))
+</code></pre>
+<p>The function deliberately extracts fields without validating canonical address form. A conforming Sv39 hardware translation rejects virtual addresses whose upper bits do not equal the sign extension of bit 38. Treat this small function as an address-layout exercise, not a complete MMU permission or page-walk model.</p>
+
+</section>
+<section id="canonical-addresses-and-address-size-validation" aria-labelledby="heading-canonical-addresses-and-address-size-validation"><h2 id="heading-canonical-addresses-and-address-size-validation">Canonical Addresses and Address-Size Validation</h2>
+<p>The effective address presented to translation must fit the ISA's canonical or supported address rules. In Sv39, bits above bit 38 must replicate bit 38; a value with incompatible upper bits is not a valid Sv39 virtual-address representation. In common x86-64 paging modes, “canonical” likewise means that high bits replicate an architecture-defined most-significant implemented linear-address bit. A wide software pointer does not imply that all bit patterns in that width are currently meaningful virtual addresses.</p>
+<p>Address validation should be treated separately from lookup. A TLB cannot legalize an architecturally invalid address. For a page walker, checking only low-level VPN indices but forgetting the canonicality rule is a classic teaching-model bug. On real systems, the exception class and stage at which invalid-address behavior is reported vary by architecture and whether the attempted operation is an instruction fetch, data read, or data write.</p>
+
+</section>
+<section id="worked-example-canonical-sv39-validation" aria-labelledby="heading-worked-example-canonical-sv39-validation"><h2 id="heading-worked-example-canonical-sv39-validation">Worked Example: Canonical Sv39 Validation</h2>
+<pre><code class="language-python">def sv39_is_canonical(va):
+    if not 0 &lt;= va &lt; (1 &lt;&lt; 64):
+        return False
+    sign = (va &gt;&gt; 38) &amp; 1
+    upper = va &gt;&gt; 39
+    return upper == ((1 &lt;&lt; 25) - 1 if sign else 0)
+
+assert sv39_is_canonical(0x0000000000001234)
+assert sv39_is_canonical(0xFFFFFFC000001234)
+assert not sv39_is_canonical(0x0000008000000000)
+assert not sv39_is_canonical(0xFFFFFF8000000000)
+print('Sv39 canonical-address checks passed')
+</code></pre>
+
+</section>
+<section id="page-table-entry-contents-and-permissions" aria-labelledby="heading-page-table-entry-contents-and-permissions"><h2 id="heading-page-table-entry-contents-and-permissions">Page-Table Entry Contents and Permissions</h2>
+<p>A leaf mapping carries more than a physical frame number. It commonly provides read, write, execute, privilege, validity, and status information. A RISC-V leaf uses <code>R</code>, <code>W</code>, <code>X</code>, <code>U</code>, <code>G</code>, <code>A</code>, and <code>D</code> concepts, subject to architecture extensions and mode rules. For example, the Sv39 base format treats <code>W=1, R=0</code> as a reserved invalid combination. A non-leaf pointer is not the same as a readable data page. Some implementations update accessed/dirty state through hardware; alternatives may raise faults that software services.</p>
+<p>Other ISAs have their own permission hierarchies, execute-disable bits, access flag rules, and privileged overrides. An operating system selects permissions while constructing page tables, but a CPU also enforces effective privilege and access type. The question is not simply “is the PTE present?”; it is “is the complete translation path valid for <strong>this</strong> operation in <strong>this</strong> context?”</p>
+
+</section>
+<section id="a-permission-matrix-for-teaching" aria-labelledby="heading-a-permission-matrix-for-teaching"><h2 id="heading-a-permission-matrix-for-teaching">A Permission Matrix for Teaching</h2>
+<table>
+<thead>
+<tr>
+  <th>Page mapping</th>
+  <th>User read</th>
+  <th>User write</th>
+  <th>User execute</th>
+  <th>Typical intent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>User read-only data</td>
+  <td>Allowed if otherwise valid</td>
+  <td>Denied</td>
+  <td>Denied</td>
+  <td>Immutable user data</td>
+</tr>
+<tr>
+  <td>User read-write data</td>
+  <td>Allowed</td>
+  <td>Allowed</td>
+  <td>Denied</td>
+  <td>Stack or heap data</td>
+</tr>
+<tr>
+  <td>User execute/read code</td>
+  <td>Allowed</td>
+  <td>Denied</td>
+  <td>Allowed</td>
+  <td>Program text</td>
+</tr>
+<tr>
+  <td>Supervisor-only mapping</td>
+  <td>Denied from user mode</td>
+  <td>Denied from user mode</td>
+  <td>Denied from user mode</td>
+  <td>Kernel-private data/code</td>
+</tr>
+<tr>
+  <td>Unmapped page</td>
+  <td>Fault on access</td>
+  <td>Fault on access</td>
+  <td>Fault on access</td>
+  <td>Absent mapping</td>
+</tr>
+</tbody>
+</table>
+<p>The table is an intentionally simplified policy example, not a universal instruction-set permission table. A real ISA might provide additional access controls, data-execution rules, supervisor access mechanisms, and stage-two permissions. Execute access, read access, and speculative cache activity must not be conflated.</p>
+
+</section>
+<section id="accessed-and-dirty-state" aria-labelledby="heading-accessed-and-dirty-state"><h2 id="heading-accessed-and-dirty-state">Accessed and Dirty State</h2>
+<p><strong>Accessed</strong> state records that a translation was used; <strong>dirty</strong> state records that a page was written, under the selected architecture's rules. These bits can help an operating system approximate page usage, prioritize eviction, or decide whether modified contents need to be written back. Their precise meaning depends on whether software and hardware cooperate to set them, whether speculative accesses may set them, and which translation stages are active.</p>
+<p>Hardware can sometimes update translation entries as part of a walk. Other designs can fault and let software update the page table before retrying. Because page-table pages may be shared or concurrently updated, precise ordering and atomicity requirements matter. An educational page walker should not silently claim that reading a PTE always changes accessed state or that changing an A/D bit always forces a full page fault; consult the architecture's selected implementation mode.</p>
+
+</section>
+<section id="instruction-and-data-tlbs" aria-labelledby="heading-instruction-and-data-tlbs"><h2 id="heading-instruction-and-data-tlbs">Instruction and Data TLBs</h2>
+<p>Processors frequently separate the first-level <strong>instruction TLB</strong> (iTLB) from the <strong>data TLB</strong> (dTLB) because instruction fetch and load/store paths have different throughput and timing requirements. A later shared translation cache or second-level TLB may service misses from either path. Multiple page sizes, associativity, replacement policies, and protection tags can affect effective capacity. No common capacity, latency, or organization is guaranteed across CPU families.</p>
+<p>A user may observe an instruction-TLB miss even while the data-TLB hit rate is excellent; code footprint and data footprint are different. Conversely, large database scans, pointer chasing, or sparse random access can stress dTLB capacity even when all instructions fit within a small code segment. Some published performance counters distinguish different kinds of translation misses and page-walker activity; names and semantics must be read from that processor's performance-monitoring documentation.</p>
+
+</section>
+<section id="the-fast-path-tlb-hits" aria-labelledby="heading-the-fast-path-tlb-hits"><h2 id="heading-the-fast-path-tlb-hits">The Fast Path: TLB Hits</h2>
+<p>On a TLB hit, the CPU locates an entry matching the virtual page or larger-page range and the appropriate address-space or global-context tags. The entry yields a physical frame and relevant permission information. On a hit, lower address bits are combined with the mapped frame according to the entry's page size; permissions and other controls must still be enforced. Most reads and writes benefit only if hit handling is placed efficiently in the memory pipeline.</p>
+<p>The phrase “TLB hit” means a translation-cache lookup succeeded, <strong>not</strong> that data was found in the L1 cache. A hit can be followed by an L1 miss, an LLC miss, or a DRAM access. Likewise, the TLB and data cache can be accessed partly in parallel in some designs, but the translation result must be available before a physically tagged cache hit is confirmed and permission-dependent results become architectural.</p>
+
+</section>
+<section id="the-slow-path-tlb-misses-and-hardware-page-walks" aria-labelledby="heading-the-slow-path-tlb-misses-and-hardware-page-walks"><h2 id="heading-the-slow-path-tlb-misses-and-hardware-page-walks">The Slow Path: TLB Misses and Hardware Page Walks</h2>
+<p>On a TLB miss, a hardware walker usually reads the required page-table entries under the active translation root, or invokes an architecture-specific software-managed TLB refill path. A successful walk creates or validates a translation, inserts cacheable metadata into some translation structure, and restarts or continues the waiting operation. In a multi-level hierarchy, page-walk caches and data caches often supply upper-level entries; in virtualized systems, an additional translation stage may affect every access to a guest table.</p>
+<p>The <strong>miss penalty</strong> is not a constant. It depends on translation-level hits, page-table residency, memory contention, frequency, page size, parallel walkers, and existing pipeline pressure. When a walk cannot establish a legal mapping, the CPU instead reports a fault or permission violation. The operating system may repair the situation and retry the instruction, or it may reject the access permanently.</p>
+
+</section>
+<section id="three-outcomes-that-must-never-be-confused" aria-labelledby="heading-three-outcomes-that-must-never-be-confused"><h2 id="heading-three-outcomes-that-must-never-be-confused">Three Outcomes That Must Never Be Confused</h2>
+<table>
+<thead>
+<tr>
+  <th>Outcome</th>
+  <th>Translation result</th>
+  <th>Typical next action</th>
+  <th>Architecturally visible?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>TLB hit</td>
+  <td>Cached valid mapping found</td>
+  <td>Continue memory access</td>
+  <td>Usually no exception merely from lookup</td>
+</tr>
+<tr>
+  <td>TLB miss, valid page tables</td>
+  <td>Walker resolves mapping</td>
+  <td>Fill translation cache and retry/continue</td>
+  <td>Usually transparent to program</td>
+</tr>
+<tr>
+  <td>Missing, malformed, or forbidden mapping</td>
+  <td>Walk or permission validation fails</td>
+  <td>Raise the specified fault/exception</td>
+  <td>Yes; handled by privileged software or other agent</td>
+</tr>
+</tbody>
+</table>
+<p>The page fault is about the <strong>mapping or access permission</strong>, not the presence of the mapping in a fast cache. This distinction is critical in performance diagnostics: a high TLB-miss count is not automatically a high operating-system page-fault count.</p>
+
+</section>
+<section id="a-small-translation-cache-model" aria-labelledby="heading-a-small-translation-cache-model"><h2 id="heading-a-small-translation-cache-model">A Small Translation Cache Model</h2>
+<pre><code class="language-python">from collections import OrderedDict
+
+class SimpleTLB:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.entries = OrderedDict()
+    def translate(self, asid, address, page_table):
+        vpn, offset = divmod(address, 4096)
+        key = (asid, vpn)
+        if key in self.entries:
+            ppn = self.entries.pop(key)
+            self.entries[key] = ppn
+            return ppn * 4096 + offset, 'hit'
+        ppn = page_table.get(key)
+        if ppn is None:
+            raise MemoryError('translation fault, not merely a TLB miss')
+        if len(self.entries) == self.capacity:
+            self.entries.popitem(last=False)
+        self.entries[key] = ppn
+        return ppn * 4096 + offset, 'walk'
+
+tlb = SimpleTLB(2)
+pt = {(7, 0x10): 0x80, (7, 0x11): 0x81}
+assert tlb.translate(7, 0x10008, pt) == (0x80008, 'walk')
+assert tlb.translate(7, 0x1000C, pt) == (0x8000C, 'hit')
+assert tlb.translate(7, 0x11000, pt) == (0x81000, 'walk')
+print('hit and walk paths behave as modeled')
+</code></pre>
+<p>This model demonstrates lookup, refill, and context tags. It intentionally omits page-table hierarchy, global entries, permission checks, invalidation, large pages, concurrent walkers, and replacement details. It must not be mistaken for a security-validating MMU implementation.</p>
+
+</section>
+<section id="the-page-walk-cache-and-cached-intermediate-descriptors" aria-labelledby="heading-the-page-walk-cache-and-cached-intermediate-descriptors"><h2 id="heading-the-page-walk-cache-and-cached-intermediate-descriptors">The Page-Walk Cache and Cached Intermediate Descriptors</h2>
+<p>Processors may store not only final VA-to-PA translations but also information about upper-level page-table traversals. Such caches reduce repeated visits to common ancestors in a multi-level mapping tree. For example, many nearby 4 KiB virtual pages can share the same upper-level entries; keeping those intermediate entries avoids some repeated lower-level address calculations and memory reads.</p>
+<p>Intermediate translation caches also complicate invalidation rules: modifying a higher-level mapping can leave stale intermediate information, not just a stale final TLB entry. An architecture defines how software must order writes, invalidations, and synchronization. A software page-table edit without the required invalidation protocol is insufficient to establish what subsequent CPUs are permitted to see.</p>
+
+</section>
+<section id="page-walks-are-memory-workloads" aria-labelledby="heading-page-walks-are-memory-workloads"><h2 id="heading-page-walks-are-memory-workloads">Page Walks Are Memory Workloads</h2>
+<p>A page-table walker itself uses memory bandwidth, caches, and sometimes dedicated translation pipelines. Under frequent misses, translation traffic can displace application data in shared caches and contend for resources. A pointer-heavy workload might stall on an ordinary data cache miss, a TLB miss, or both. A single-level performance counter rarely reveals the entire path.</p>
+<p>A practical trace should distinguish: misses satisfied in the shared TLB; page walks satisfied by cached PTE data; long-latency walks requiring off-core memory; and accesses that truly fault into the OS. Increasing a data cache may not improve a translation-dominated workload if the bottleneck is a separate walker limit or too-small TLB reach.</p>
+
+</section>
+<section id="tlb-reach-and-the-working-set" aria-labelledby="heading-tlb-reach-and-the-working-set"><h2 id="heading-tlb-reach-and-the-working-set">TLB Reach and the Working Set</h2>
+<p><strong>TLB reach</strong> is the approximate memory span that a set of independent TLB entries can cover if each maps a distinct page: number of entries × page size. A 64-entry cache of 4 KiB translations covers at most 256 KiB of distinct pages; 64 entries of 2 MiB translations could cover 128 MiB. Real reach depends on page-size support, sharing, associativity, context tags, simultaneous threads, conflicts, and the actual address distribution.</p>
+<p>A process with a working set much larger than effective TLB reach may cause misses even if its entire dataset fits in last-level cache. Increasing page size can reduce the number of translations required, but can also cause memory waste, allocation difficulties, and coarse-grained access control. Therefore <strong>large-page coverage</strong> is an optimization to evaluate, not a universal command to convert all mappings.</p>
+
+</section>
+<section id="worked-example-calculate-translation-coverage" aria-labelledby="heading-worked-example-calculate-translation-coverage"><h2 id="heading-worked-example-calculate-translation-coverage">Worked Example: Calculate Translation Coverage</h2>
+<pre><code class="language-python">def coverage_mib(entries, page_size_bytes):
+    return entries * page_size_bytes / (1024 * 1024)
+
+assert coverage_mib(64, 4096) == 0.25
+assert coverage_mib(64, 2 * 1024 * 1024) == 128
+assert coverage_mib(32, 1024 * 1024 * 1024) == 32768
+print('64 × 4 KiB = 0.25 MiB; 64 × 2 MiB = 128 MiB')
+</code></pre>
+<p>The numbers are illustrative capacities, not claims about a particular CPU's available TLB entries. Some machines place large-page entries in different banks or support multiple simultaneous page-size mappings. Coverage alone does not measure latency or throughput.</p>
+
+</section>
+<section id="page-sizes-and-the-superpage-trade-off" aria-labelledby="heading-page-sizes-and-the-superpage-trade-off"><h2 id="heading-page-sizes-and-the-superpage-trade-off">Page Sizes and the Superpage Trade-Off</h2>
+<p>Translation structures often support more than one page size. A base page such as 4 KiB offers fine-grained allocation, sharing, protection, and copy-on-write. A large mapping such as 2 MiB or 1 GiB can represent many base pages with one translation entry, potentially lowering TLB pressure and page-table memory overhead. Supported sizes and the term <strong>huge page</strong>, <strong>large page</strong>, or <strong>superpage</strong> vary across OS and ISA families. Some kernels automatically coalesce eligible memory into transparent huge pages; others provide explicit allocation interfaces.</p>
+<p>The trade-off is operational. A larger page can waste memory when only a small part is used, make contiguous allocation harder, increase cost to split or migrate a mapping, and enlarge the granularity of permission changes. A large page containing mixed hot and cold regions might harm placement decisions. Performance claims require measured translation-miss improvement, not a page-size specification alone.</p>
+
+</section>
+<section id="superpage-alignment-and-page-offset-arithmetic" aria-labelledby="heading-superpage-alignment-and-page-offset-arithmetic"><h2 id="heading-superpage-alignment-and-page-offset-arithmetic">Superpage Alignment and Page-Offset Arithmetic</h2>
+<p>A higher-level page-table leaf spans a larger range, so its physical frame base must satisfy the size-specific alignment rule. In a simple contiguous mapping, the lower <code>log₂(page_size)</code> bits of the virtual address become the offset. A 2 MiB page has a 21-bit offset; a 1 GiB page has a 30-bit offset. CPU hardware must check that the leaf frame is aligned as required and that the mapping is legal under the active translation format.</p>
+<pre><code class="language-python">def translated_address(va, base_pa, size):
+    assert size &gt; 0 and (size &amp; (size - 1)) == 0
+    assert base_pa % size == 0
+    return base_pa | (va &amp; (size - 1))
+
+assert translated_address(0x123456, 0x80000000, 2 * 1024 * 1024) == 0x80123456
+assert translated_address(0x3FFFFFFF, 0x40000000, 1024 * 1024 * 1024) == 0x7FFFFFFF
+print('Superpage offset combination verified')
+</code></pre>
+<p>This example assumes the virtual address lies within the chosen page and ignores intermediate page-table validation. The alignment assertion protects the simplified model from accidentally overlapping physical frame and offset bits.</p>
+
+</section>
+<section id="mixed-page-sizes-in-one-address-space" aria-labelledby="heading-mixed-page-sizes-in-one-address-space"><h2 id="heading-mixed-page-sizes-in-one-address-space">Mixed Page Sizes in One Address Space</h2>
+<p>A real process can map code with base pages, a large anonymous heap region with huge pages, and file-backed data with independently chosen sizes. Translators must therefore distinguish page-size classes during lookup. Some microarchitectures use separate TLB resources or page-size-sensitive matching. An access on a 2 MiB mapping must match on the appropriate larger VPN prefix; treating it as an ordinary 4 KiB mapping would be incorrect.</p>
+<p>When an operating system splits a large mapping, it may create many smaller page-table leaves and invalidate the old large-page translation. When it collapses pages, it must establish a valid large mapping and ensure stale smaller translations cannot be used inconsistently. Cross-core consistency and permission transitions matter at least as much as the mechanics of inserting new table entries.</p>
+
+</section>
+<section id="calculating-a-simplified-hit-rate-cost-model" aria-labelledby="heading-calculating-a-simplified-hit-rate-cost-model"><h2 id="heading-calculating-a-simplified-hit-rate-cost-model">Calculating a Simplified Hit-Rate Cost Model</h2>
+<p>Translation latency can be approximated for teaching by separating hits and misses. Suppose a hypothetical lookup costs 1 cycle, misses occur on 2% of accesses, and the average <em>additional</em> miss penalty is 30 cycles. The expected translation lookup-related time is <code>1 + 0.02 × 30 = 1.6 cycles</code> in this simplified, nonoverlapped model. This is an illustrative cost model, not a general CPU timing formula; many translations overlap with other work.</p>
+<pre><code class="language-python">def expected_lookup_cost(hit_cost, miss_fraction, extra_miss_penalty):
+    assert 0 &lt;= miss_fraction &lt;= 1
+    return hit_cost + miss_fraction * extra_miss_penalty
+
+assert expected_lookup_cost(1, 0.02, 30) == 1.6
+assert expected_lookup_cost(1, 0.10, 30) == 4.0
+print('Illustrative costs: 1.6 and 4.0 cycles')
+</code></pre>
+<p>For a practical CPU performance model, distinguish cycles, instructions, loads, instruction fetches, misses, page walks, and memory-stall cycles. A page-walk count is not automatically equivalent to a full execution stall because many modern cores overlap independent operations. Hardware counter event definitions and simultaneous multithreading can further alter the interpretation.</p>
+
+</section>
+<section id="miss-rate-walk-rate-and-walk-duration" aria-labelledby="heading-miss-rate-walk-rate-and-walk-duration"><h2 id="heading-miss-rate-walk-rate-and-walk-duration">Miss Rate, Walk Rate, and Walk Duration</h2>
+<p>A translation study needs a meaningful denominator. A 1% dTLB miss rate per retired load may be very different from 1% per executed memory micro-operation, particularly in speculative pipelines. A data-TLB miss may hit a shared second-level TLB and never cause a memory page walk. It is therefore useful to track three stages: local TLB miss; shared translation cache miss or walker activation; and long-latency translation work that stalls a dependent memory operation.</p>
+<p>Performance counter sets vary widely. Some report “walk completed” events, some report duration-related cycles, and some count page-size-specific translation requests. Counter multiplexing, speculation, machine virtualization, and privileged access restrictions can affect collection. Always document the event name, machine model, scope, and interpretation before drawing conclusions about cause.</p>
+
+</section>
+<section id="address-space-identifiers-and-process-isolation" aria-labelledby="heading-address-space-identifiers-and-process-isolation"><h2 id="heading-address-space-identifiers-and-process-isolation">Address-Space Identifiers and Process Isolation</h2>
+<p>If all TLB entries were keyed only by virtual page number, switching between processes could misinterpret a cached mapping from another address space. Modern processors therefore frequently associate translations with <strong>address-space identifiers</strong> (ASIDs), <strong>process-context identifiers</strong> (PCIDs), equivalent tags, or globally valid mapping classes. The applicable context identifies which page-table interpretation is active. This permits translations from several contexts to coexist without confusing one process's virtual page with another's.</p>
+<p>Tags improve performance by avoiding an unconditional full TLB flush on every context switch, but they do not excuse stale entries after page-table changes. ASID availability is finite and identifiers may be reused; software must follow the architecture's generation or invalidation protocol when reusing a tag for a different address space. Some privileged/global mappings intentionally survive ordinary process changes under carefully defined rules.</p>
+
+</section>
+<section id="worked-example-why-an-untagged-cache-fails" aria-labelledby="heading-worked-example-why-an-untagged-cache-fails"><h2 id="heading-worked-example-why-an-untagged-cache-fails">Worked Example: Why an Untagged Cache Fails</h2>
+<pre><code class="language-python"># Two processes use the same virtual page number but different frames.
+page_tables = {(10, 0xA): 0x100, (11, 0xA): 0x200}
+untagged_cache = {0xA: 0x100}
+assert untagged_cache[0xA] != page_tables[(11, 0xA)]
+
+# The context must participate in the translation-cache key.
+tagged_cache = {(10, 0xA): 0x100, (11, 0xA): 0x200}
+assert tagged_cache[(10, 0xA)] == 0x100
+assert tagged_cache[(11, 0xA)] == 0x200
+print('Address-space tags prevent this example of aliasing')
+</code></pre>
+<p>This model intentionally simplifies real global mappings, PCID/ASID lifetime rules, and translation-stage tags. The architectural lesson is that <strong>address and context must be considered together</strong> whenever caching a process-specific translation.</p>
+
+</section>
+<section id="context-switching-and-translation-retention" aria-labelledby="heading-context-switching-and-translation-retention"><h2 id="heading-context-switching-and-translation-retention">Context Switching and Translation Retention</h2>
+<p>When the OS switches execution to a different process, it updates the active address-space selection using architecture-specific privileged state. If the machine supports correctly managed tags, TLB entries from the previous context may remain cached and are ignored when their tags do not match. With no suitable tags, or when the software invalidates mappings or reuses a tag, flushing may be necessary. The right protocol depends on architecture and configuration.</p>
+<p>The performance benefit is largest when processes alternate frequently while preserving working translation sets. However, context-switch cost is not only the TLB: register state, instruction and data cache behavior, branch prediction, scheduler placement, and kernel overhead can matter. A process switch does not imply that all old physical cache lines are invalid; cache contents and translation validity are separate concerns.</p>
+
+</section>
+<section id="global-mappings-and-shared-kernel-regions" aria-labelledby="heading-global-mappings-and-shared-kernel-regions"><h2 id="heading-global-mappings-and-shared-kernel-regions">Global Mappings and Shared Kernel Regions</h2>
+<p>Many systems arrange for some privileged mappings to be common across address spaces. Such mappings may be marked as global or otherwise handled with dedicated context logic, allowing their translations to remain useful across ordinary user-process switches. This has obvious performance benefits for frequent system calls and interrupts, but it also introduces correctness obligations when a global mapping changes.</p>
+<p>“Global” means the mapping has special translation-context treatment under the architecture, not that it grants access to every privilege level. User/supervisor permissions still apply. A kernel memory isolation policy can choose different mapping layouts, including mechanisms intended to reduce cross-privilege information exposure. The exact names and rules differ for x86 PCID/global paging, Arm ASIDs, and RISC-V global (<code>G</code>) translations.</p>
+
+</section>
+<section id="tlb-invalidation-after-mapping-changes" aria-labelledby="heading-tlb-invalidation-after-mapping-changes"><h2 id="heading-tlb-invalidation-after-mapping-changes">TLB Invalidation After Mapping Changes</h2>
+<p>If software modifies a page-table entry, an existing TLB entry may continue representing the old mapping until the required architectural synchronization and invalidation actions complete. Updating a PTE in memory does not by itself guarantee that subsequent CPU accesses use the new value. This is why instructions and kernel interfaces exist to invalidate a page, range, address space, or translation stage. The required procedure can depend on the changed bits, whether a previously invalid entry becomes valid, and whether global or remote CPUs hold translations.</p>
+<p>On x86, mechanisms include <code>INVLPG</code> and other invalidation operations governed by PCID and virtualization rules. RISC-V uses <code>SFENCE.VMA</code> for relevant supervisor translation synchronization; it is not simply interchangeable with a generic data-cache flush or the ordinary <code>FENCE</code> instruction. Arm has architecture-specific TLBI instructions with defined shareability and synchronization requirements. These families share an objective—preventing stale translations—but their scope and sequencing are not identical.</p>
+
+</section>
+<section id="a-stale-translation-example" aria-labelledby="heading-a-stale-translation-example"><h2 id="heading-a-stale-translation-example">A Stale Translation Example</h2>
+<pre><code class="language-python"># Illustrative only: a PTE update does not magically update a cached TLB entry.
+page_table = {(3, 0x20): 0xA0}
+tlb = SimpleTLB(2)
+old_pa, result = tlb.translate(3, 0x20000, page_table)
+assert result == 'walk' and old_pa == 0xA0000
+page_table[(3, 0x20)] = 0xB0
+stale_pa, result = tlb.translate(3, 0x20000, page_table)
+assert result == 'hit' and stale_pa == 0xA0000
+# Model a correctly scoped invalidation after changing the table.
+tlb.entries.pop((3, 0x20), None)
+new_pa, result = tlb.translate(3, 0x20000, page_table)
+assert result == 'walk' and new_pa == 0xB0000
+print('Stale mapping detected and invalidated')
+</code></pre>
+<p>The example shows only a local software cache. Real processors require architecture-specific ordering and sometimes cross-core invalidation acknowledgments before memory may be reused safely. It would be unsafe to implement a kernel TLB protocol by copying this Python dictionary operation.</p>
+
+</section>
+<section id="multicore-shootdowns-and-translation-consistency" aria-labelledby="heading-multicore-shootdowns-and-translation-consistency"><h2 id="heading-multicore-shootdowns-and-translation-consistency">Multicore Shootdowns and Translation Consistency</h2>
+<p>Several cores may have cached translations for the same address space. If the OS revokes or remaps a page, it must ensure every relevant core stops using a stale mapping according to the architecture's synchronization rules. A <strong>TLB shootdown</strong> is a common OS technique for coordinating such remote invalidations, frequently using interprocessor signaling and acknowledgments. Efficient kernels may batch invalidations or avoid sending them to cores that could not hold the affected address space.</p>
+<p>The difficult case is not just performance. After unmapping a physical frame, another subsystem might reuse it for sensitive data. If a different core still has a valid-looking stale translation to the old frame, the process could access memory it no longer owns. Correct operation requires ordering the page-table update, invalidation, and frame-reuse lifecycle, not merely setting a page table bit.</p>
+
+</section>
+<section id="a-safe-unmap-protocol-conceptual-sequence" aria-labelledby="heading-a-safe-unmap-protocol-conceptual-sequence"><h2 id="heading-a-safe-unmap-protocol-conceptual-sequence">A Safe Unmap Protocol: Conceptual Sequence</h2>
+<p>A simplified revoke-and-reuse workflow has these stages: (1) establish ownership of the mapping operation under the kernel's synchronization discipline; (2) update or remove relevant PTEs and make those changes visible as prescribed; (3) issue correctly scoped local and remote invalidations; (4) wait for completion where required by the architecture and OS memory-reclamation protocol; and (5) release or repurpose the physical frame once no disallowed processor or device access can remain. Devices using IOMMU mappings may require separate invalidation and completion.</p>
+<p>This is a <strong>conceptual ordering</strong>, not an executable operating-system algorithm. Some architectures permit deferred invalidation for safe transitions, some permit batching and lazy switching, and kernel freeing paths include other reference-counting and synchronization rules. The safety condition is that physical memory must not be exposed through a stale authorized mapping after ownership changes.</p>
+
+</section>
+<section id="why-cross-core-invalidation-becomes-expensive" aria-labelledby="heading-why-cross-core-invalidation-becomes-expensive"><h2 id="heading-why-cross-core-invalidation-becomes-expensive">Why Cross-Core Invalidation Becomes Expensive</h2>
+<p>A mapping change can cost more on a high-core-count server than on a single-core system because remote signaling, synchronization, and queueing span multiple processors. Frequent map/unmap activity, permission changes, or huge-page splits can increase shootdown pressure. The effect is measurable in workloads with allocator churn, memory mapping changes, or rapidly changing process address spaces.</p>
+<p>One optimization is to batch compatible updates and use the narrowest safe invalidation scope. Another is to limit unnecessary mapping changes or avoid repeatedly breaking large pages. The correct strategy depends on the kernel, architecture, address-space tags, and actual performance counters. Reducing shootdown cost must never compromise memory isolation or the ability to revoke mappings.</p>
+
+</section>
+<section id="risc-v-satp-asids-and-sfence-vma" aria-labelledby="heading-risc-v-satp-asids-and-sfence-vma"><h2 id="heading-risc-v-satp-asids-and-sfence-vma">RISC-V satp, ASIDs, and SFENCE.VMA</h2>
+<p>In RISC-V supervisor paging, <code>satp</code> includes the current mode, address-space identifier field, and translation-root PPN. <code>SFENCE.VMA</code> orders earlier relevant page-table modifications and certain translation operations with subsequent implicit page-table references, according to the privileged architecture. Its operands can constrain the virtual-address and ASID scope; global translations have special handling. An ordinary write of <code>satp</code> is <strong>not</strong> automatically equivalent to the necessary <code>SFENCE.VMA</code> synchronization for every translation change.</p>
+<p>The precise rules differ with hypervisor extensions, page attributes, ASID reuse, and mapping changes. In particular, an ASID is not a globally unique label across an arbitrary machine or across time. The authoritative RISC-V privileged specification must be consulted for required fencing sequences, invalid or malformed PTE handling, and the treatment of global mappings and superpages.</p>
+
+</section>
+<section id="x86-paging-pcids-and-invalidation" aria-labelledby="heading-x86-paging-pcids-and-invalidation"><h2 id="heading-x86-paging-pcids-and-invalidation">x86 Paging, PCIDs, and Invalidation</h2>
+<p>On modern x86-64 systems, the hardware walks paging structures rooted through privileged control registers. The processor can use PCIDs where supported and enabled to distinguish cached translations across address spaces. The x86-64 memory-protection model includes a range of PTE attributes and privilege checks, and may support four-level or five-level paging. Instructions such as <code>INVLPG</code>, and virtualization-related invalidations, have precise scope and behavior defined by the Intel or AMD manuals.</p>
+<p>Architectural invalidation details should not be inferred from convenient x86 folklore. Changing page tables can require specific invalidations even when the mapping appears “not used,” and global pages or multiple PCIDs affect scope. The full Intel Software Developer's Manual and processor documentation describe valid combinations and the required ordering; software should use proven OS interfaces rather than hand-written page-table manipulation without those rules.</p>
+
+</section>
+<section id="arm-translation-granules-asids-and-tlbi" aria-labelledby="heading-arm-translation-granules-asids-and-tlbi"><h2 id="heading-arm-translation-granules-asids-and-tlbi">Arm Translation Granules, ASIDs, and TLBI</h2>
+<p>Arm A-profile systems may support different translation granules and independently controlled translation regimes for different exception levels. Arm's stage-one translation tables select page descriptors, block descriptors, and access permissions under active configuration registers. ASIDs distinguish certain translation contexts. AArch64 software uses architecturally defined TLB invalidation and ordering sequences, including barriers and TLBI operations, to publish mapping changes safely.</p>
+<p>Arm stage-two translation can be active under a hypervisor, adding another address-translation regime. As with x86 and RISC-V, the software must consider how translation caches are tagged and invalidated. Because Arm's descriptor fields, page sizes, and barrier domains differ from RISC-V and x86, the generic algorithms in this article are conceptual rather than drop-in assembly guidance.</p>
+
+</section>
+<section id="architecture-comparison-translation-controls" aria-labelledby="heading-architecture-comparison-translation-controls"><h2 id="heading-architecture-comparison-translation-controls">Architecture Comparison: Translation Controls</h2>
+<table>
+<thead>
+<tr>
+  <th>Concern</th>
+  <th>RISC-V Sv39 family</th>
+  <th>x86-64</th>
+  <th>Arm AArch64</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Typical translation root</td>
+  <td><code>satp</code> (supervisor stage)</td>
+  <td>privileged paging controls, including CR3</td>
+  <td>translation-table base registers</td>
+</tr>
+<tr>
+  <td>Example base page</td>
+  <td>4 KiB</td>
+  <td>4 KiB</td>
+  <td>granule-dependent, commonly 4 KiB</td>
+</tr>
+<tr>
+  <td>Large mapping</td>
+  <td>higher-level superpage leaf</td>
+  <td>larger paging entries</td>
+  <td>block or page descriptors</td>
+</tr>
+<tr>
+  <td>Context tags</td>
+  <td>ASID, global entries</td>
+  <td>PCID and global entries when enabled</td>
+  <td>ASIDs and regime-specific tags</td>
+</tr>
+<tr>
+  <td>Invalidation family</td>
+  <td><code>SFENCE.VMA</code></td>
+  <td><code>INVLPG</code> and related operations</td>
+  <td>TLBI instructions with required ordering</td>
+</tr>
+<tr>
+  <td>Virtualization</td>
+  <td>optional two-stage translation mechanisms</td>
+  <td>EPT/NPT variants</td>
+  <td>stage-two translation</td>
+</tr>
+</tbody>
+</table>
+<p>This is a conceptual comparison, not a promise that a particular product supports every mode or page size. A processor's supported features, selected operating-system configuration, and privilege level determine the actual active mechanism.</p>
+
+</section>
+<section id="tlb-miss-versus-demand-page-fault" aria-labelledby="heading-tlb-miss-versus-demand-page-fault"><h2 id="heading-tlb-miss-versus-demand-page-fault">TLB Miss Versus Demand Page Fault</h2>
+<p>An access to a valid, resident physical page may miss the TLB and refill without operating-system involvement. Conversely, an access to a virtual address that currently lacks a present/resident mapping may trigger a page fault, even though the virtual memory region is legitimate. The OS can allocate a new frame, read a file-backed page, or resolve a copy-on-write mapping and return control so that the original instruction is retried where the architecture permits.</p>
+<p>An invalid user pointer, access to a supervisor-only page, or an impermissible write may instead lead to process termination, a signal, or other rejection. A page fault is a control transfer due to a translation/access problem; it does not necessarily mean that a disk read occurred. The common phrase <strong>minor fault</strong> versus <strong>major fault</strong> in an OS is a software accounting distinction, not a synonym for TLB misses versus hits.</p>
+
+</section>
+<section id="page-fault-handling-timeline" aria-labelledby="heading-page-fault-handling-timeline"><h2 id="heading-page-fault-handling-timeline">Page Fault Handling Timeline</h2>
+<p>A useful teaching timeline is: program attempts a load; a TLB miss triggers walking; the walker finds a missing PTE or permission problem; the processor generates a precise architectural fault; privileged software identifies the virtual address and fault cause; the OS validates the region and either repairs the mapping or rejects access; required translation synchronization occurs; and execution resumes or the process receives an error. Actual sequencing depends on ISA, OS, and fault cause.</p>
+<p>The faulting instruction should not leave forbidden architectural side effects. Software may need to retry an instruction after the mapping is repaired. A sophisticated processor may have speculatively executed younger instructions before detecting the fault, yet those younger instructions cannot commit incorrect architectural state. Transient microarchitectural side effects require a separate security analysis.</p>
+
+</section>
+<section id="copy-on-write-and-shared-mapping-examples" aria-labelledby="heading-copy-on-write-and-shared-mapping-examples"><h2 id="heading-copy-on-write-and-shared-mapping-examples">Copy-on-Write and Shared Mapping Examples</h2>
+<p>After a <code>fork</code>-like operation, parent and child processes may reference the same read-only physical frame even though either process may later need a private writable copy. A write that encounters the protected mapping can trigger a copy-on-write fault. The OS allocates a new frame, copies the contents, updates the writing process's mapping, and performs any required translation invalidation before retrying the write. The other process may continue mapping the original frame.</p>
+<p>This demonstrates the partnership between page tables and TLBs. The CPU enforces the write restriction that produces a fault; the OS interprets the mapping as copy-on-write and changes the mapping. The hardware does not inherently “know” that the high-level process operation was a fork or that a copy must be made.</p>
+
+</section>
+<section id="multi-stage-translation-in-virtual-machines" aria-labelledby="heading-multi-stage-translation-in-virtual-machines"><h2 id="heading-multi-stage-translation-in-virtual-machines">Multi-Stage Translation in Virtual Machines</h2>
+<p>A virtualized CPU may translate a guest virtual address (GVA) to a guest physical address (GPA) using guest page tables, then translate GPA to host physical address (HPA) through a second stage managed by the hypervisor. Intel EPT, AMD NPT, Arm stage two, and RISC-V hypervisor-stage translation provide related but nonidentical mechanisms. Translation caches may hold combined mappings and intermediate results so that every guest access does not require a full nested walk.</p>
+<p>The permission chain matters: a guest user mapping may permit an access at stage one but still fail at stage two because the hypervisor denies that GPA. Hypervisor translation faults may have a different handling path from ordinary guest page faults. Nested translation adds performance sensitivity to page walks, page size, and invalidation across both stages.</p>
+
+</section>
+<section id="worked-example-a-two-stage-mapping" aria-labelledby="heading-worked-example-a-two-stage-mapping"><h2 id="heading-worked-example-a-two-stage-mapping">Worked Example: A Two-Stage Mapping</h2>
+<pre><code class="language-python">PAGE = 4096
+# Stage one: guest virtual page -&gt; guest physical page.
+guest_table = {0x40: 0x90}
+# Stage two: guest physical page -&gt; host physical page.
+host_table = {0x90: 0xB0}
+
+def nested_translate(guest_va):
+    g_vpn, offset = divmod(guest_va, PAGE)
+    g_ppn = guest_table[g_vpn]
+    h_ppn = host_table[g_ppn]
+    return h_ppn * PAGE + offset
+
+assert nested_translate(0x40123) == 0xB0123
+print(hex(nested_translate(0x40123)))
+</code></pre>
+<p>Real two-stage translation may walk guest page-table memory through host-stage translation as well; this small example models only the end-to-end composition. It omits permission checks, combined TLBs, exception classification, and stage-specific invalidation.</p>
+
+</section>
+<section id="device-translation-and-the-iommu-boundary" aria-labelledby="heading-device-translation-and-the-iommu-boundary"><h2 id="heading-device-translation-and-the-iommu-boundary">Device Translation and the IOMMU Boundary</h2>
+<p>A DMA-capable device may present an I/O virtual address that an IOMMU translates for device memory requests. This protects and maps device-visible memory, but the IOMMU is not the CPU's ordinary instruction/data TLB. The operating system and driver must coordinate mappings, device access permissions, cache coherency, and I/O translation invalidations. CPU page-table and IOMMU changes may require separate protocols.</p>
+<p>A device can observe memory independently of a CPU core's translation cache, so flushing only the CPU TLB cannot generally complete DMA ownership transfer. Similarly, access to a memory-mapped device region can carry special memory-type and ordering rules separate from translation. For full treatment of device memory transactions, consult the related motherboard buses, LSU, and platform IOMMU material.</p>
+
+</section>
+<section id="virtual-indexing-physical-tagging-and-cache-aliases" aria-labelledby="heading-virtual-indexing-physical-tagging-and-cache-aliases"><h2 id="heading-virtual-indexing-physical-tagging-and-cache-aliases">Virtual Indexing, Physical Tagging, and Cache Aliases</h2>
+<p>Some L1 data-cache designs start accessing a cache set using low address bits before the physical translation is fully known. A <strong>virtually indexed, physically tagged</strong> (VIPT) cache can overlap lookup with translation while validating the final result against a physical tag. Designers must ensure that indexing choices do not create unhandled synonyms: two different virtual addresses that map to the same physical cache line. Restricting index bits to the page offset is one common way to simplify this issue for a chosen base page size and cache geometry.</p>
+<p>A physically indexed, physically tagged cache does not have the same synonym-index problem but may wait longer for translation. Fully virtually tagged caches have different aliasing, context, and invalidation challenges. These are implementation trade-offs; the ISA usually specifies correct memory behavior, not one mandatory cache-indexing arrangement. Related reading on cache mapping belongs to <strong>CPU Cache Hierarchies and Locality</strong>.</p>
+
+</section>
+<section id="shared-memory-aliasing-and-physical-identity" aria-labelledby="heading-shared-memory-aliasing-and-physical-identity"><h2 id="heading-shared-memory-aliasing-and-physical-identity">Shared Memory, Aliasing, and Physical Identity</h2>
+<p>Shared memory explicitly permits several address spaces or several VAs to reach the same physical memory. Translation hardware must handle those aliases without breaking the coherence and ordering rules that govern memory. Two processes can have distinct VPN/ASID keys but a shared PPN, meaning that their TLB entries are different while their data-cache accesses may converge on the same physical line.</p>
+<p>This separation explains why a TLB invalidation is not the same as a data-cache eviction. Revoking one virtual alias should stop future authorized translations through that alias; it does not imply that the physical data disappeared or that all other valid aliases must be discarded. Conversely, coherent writes to a shared physical line are not a substitute for validating the current process's page permissions.</p>
+
+</section>
+<section id="security-boundaries-user-supervisor-and-execute-permission" aria-labelledby="heading-security-boundaries-user-supervisor-and-execute-permission"><h2 id="heading-security-boundaries-user-supervisor-and-execute-permission">Security Boundaries: User, Supervisor, and Execute Permission</h2>
+<p>Page-level permissions help the CPU enforce isolation between unprivileged code, kernel memory, and executable or writable regions. Typical systems use non-executable data mappings, supervisor-only mappings, and restrictions against executing writable memory when feasible. Some processors add policies such as supervisor execute prevention or privileged access prevention. Effective protection depends on OS policy, user/kernel mapping design, correct page-table changes, and broader microarchitectural safeguards.</p>
+<p>No page table can prove that a program is free of memory bugs, that trusted kernel code handles pointers correctly, or that transient execution leaks nothing. A legal mapped address might contain sensitive data the application should not disclose. The MMU enforces an architectural permission layer; system security also includes language/runtime safety, credentials, I/O access control, sandbox design, and patch management.</p>
+
+</section>
+<section id="speculative-translation-and-side-channel-risks" aria-labelledby="heading-speculative-translation-and-side-channel-risks"><h2 id="heading-speculative-translation-and-side-channel-risks">Speculative Translation and Side-Channel Risks</h2>
+<p>Out-of-order cores may perform work speculatively and may cache translation metadata or access cache structures along a predicted path. Even where unauthorized loads cannot retire architecturally, speculative behavior can alter microarchitectural state. Modern transient-execution and cache-based attacks demonstrate why “faulting instructions do not commit data” is necessary but not a complete confidentiality guarantee. Security assessments must consider microcode, firmware, OS mitigations, and the specific processor vulnerability model.</p>
+<p>Translation structures themselves can also reveal timing variation. A TLB side channel may infer whether particular translations are cached, depending on attacker control and isolation properties. Defenses may involve system-level isolation and scheduling choices in addition to page permissions. No general-purpose article should claim that one flushing rule, huge-page setting, or address-space tag universally eliminates side channels.</p>
+
+</section>
+<section id="nonuniform-memory-access-and-page-placement" aria-labelledby="heading-nonuniform-memory-access-and-page-placement"><h2 id="heading-nonuniform-memory-access-and-page-placement">Nonuniform Memory Access and Page Placement</h2>
+<p>On a NUMA server, translating an address to a physical frame is only part of the performance story: the frame may belong to a local or remote memory node. TLBs provide address mappings, not automatic local placement. A thread can have excellent TLB hit rates while suffering high memory latency because its pages are remote. Conversely, a large local dataset can stress translation structures independently of NUMA locality.</p>
+<p>Diagnosis should pair page-placement evidence with translation-miss counters, memory bandwidth, LLC misses, CPU affinity, and application access patterns. Large pages, allocation policies, memory migration, and thread pinning can interact; improvements to one factor can worsen another. This boundary connects CPU translation machinery to OS memory management and multicore topology without making them the same subject.</p>
+
+</section>
+<section id="translation-pressure-in-pointer-chasing-workloads" aria-labelledby="heading-translation-pressure-in-pointer-chasing-workloads"><h2 id="heading-translation-pressure-in-pointer-chasing-workloads">Translation Pressure in Pointer-Chasing Workloads</h2>
+<p>A pointer-chasing workload accesses a location determined by a previous load, reducing memory-level parallelism. If each pointer lands on a different 4 KiB page, dTLB entries can be consumed quickly and each miss can delay the dependent load. Hardware prefetchers often struggle when addresses are unpredictable. If the dataset also misses in ordinary caches, the delays may compound, but not necessarily add linearly because internal pipeline overlap still exists.</p>
+<p>A more compact data layout, huge-page policy where appropriate, or batched processing can improve locality. The right intervention depends on whether the measured bottleneck is page walks, LLC misses, random DRAM latency, or allocator fragmentation. A useful benchmark compares stable CPU frequency and similar memory placement while varying working-set size and page-size strategy.</p>
+
+</section>
+<section id="a-synthetic-workload-page-count-versus-byte-count" aria-labelledby="heading-a-synthetic-workload-page-count-versus-byte-count"><h2 id="heading-a-synthetic-workload-page-count-versus-byte-count">A Synthetic Workload: Page Count Versus Byte Count</h2>
+<pre><code class="language-python">def distinct_pages(addresses, page_size=4096):
+    return len({address // page_size for address in addresses})
+
+# Same number of accesses; different spatial distribution.
+nearby = [0x100000 + 8 * i for i in range(1000)]
+scattered = [0x100000 + 4096 * i for i in range(1000)]
+assert distinct_pages(nearby) == 2
+assert distinct_pages(scattered) == 1000
+print('Pages touched:', distinct_pages(nearby), distinct_pages(scattered))
+</code></pre>
+<p>The example counts <strong>pages touched</strong>, not observed hardware TLB misses. Reuse order, associativity, processor context, large pages, and replacement behavior determine actual misses. It does, however, explain why the same number of eight-byte reads can impose radically different translation demands.</p>
+
+</section>
+<section id="translation-lookups-and-concurrent-pipeline-work" aria-labelledby="heading-translation-lookups-and-concurrent-pipeline-work"><h2 id="heading-translation-lookups-and-concurrent-pipeline-work">Translation Lookups and Concurrent Pipeline Work</h2>
+<p>Superscalar processors may have many outstanding loads, speculative instruction fetches, and page-walk requests. TLB lookup ports, walk-engine slots, miss-status resources, and translation-cache refill bandwidth can become bottlenecks. A new instruction cannot always issue merely because its arithmetic operands are ready; it may be waiting for translation or permission confirmation. Page walks can also contend with ordinary load/store traffic in the cache hierarchy.</p>
+<p>Design trade-offs include additional lookup bandwidth, multi-level TLB organization, better replacement policies, page-walk caches, and increased concurrent walkers. Each option incurs area, energy, verification, and complexity costs. Real hardware often uses selective structures rather than the simplistic assumption that “more entries always means faster execution.”</p>
+
+</section>
+<section id="worked-example-walker-throughput-as-a-bound" aria-labelledby="heading-worked-example-walker-throughput-as-a-bound"><h2 id="heading-worked-example-walker-throughput-as-a-bound">Worked Example: Walker Throughput as a Bound</h2>
+<pre><code class="language-python">def minimum_walk_cycles(misses, walker_slots, avg_service_cycles):
+    assert misses &gt;= 0 and walker_slots &gt; 0 and avg_service_cycles &gt; 0
+    # Idealized fully occupied, nonoverlapping batches; not a CPU prediction.
+    import math
+    return math.ceil(misses / walker_slots) * avg_service_cycles
+
+assert minimum_walk_cycles(20, 2, 8) == 80
+assert minimum_walk_cycles(20, 4, 8) == 40
+print('Idealized batch bounds: 80 and 40 cycles')
+</code></pre>
+<p>The model assumes fixed-length service batches and ignores pipeline overlap, cache hits, dependencies, and replacement. It illustrates resource capacity, not an experimentally derived latency. In practice, performance counters and instruction-dependency traces are needed to determine whether walker concurrency is limiting useful throughput.</p>
+
+</section>
+<section id="correctness-invariants-of-a-translation-unit" aria-labelledby="heading-correctness-invariants-of-a-translation-unit"><h2 id="heading-correctness-invariants-of-a-translation-unit">Correctness Invariants of a Translation Unit</h2>
+<p>An MMU implementation should preserve a set of nonnegotiable invariants. Each successful access must correspond to a permitted translation for the active context and translation stage; the offset must be correct for the selected page size; a stale mapping must not remain usable after required synchronization; a fault must not commit an unauthorized result; and the observable semantics must agree with the architecture under concurrent page-table updates and privilege transitions.</p>
+<p>Useful refinements include: no invalid PTE may be accepted as a leaf; global and ASID-tagged entries must match their prescribed contexts; a superpage leaf must satisfy alignment constraints; stage-two permission denial must not be silently converted to successful stage-one access; and translated fetches, reads, and writes must use the proper effective access permissions. These properties are appropriate targets for formal assertions and constrained tests.</p>
+
+</section>
+<section id="a-translation-test-matrix" aria-labelledby="heading-a-translation-test-matrix"><h2 id="heading-a-translation-test-matrix">A Translation Test Matrix</h2>
+<table>
+<thead>
+<tr>
+  <th>Test family</th>
+  <th>Constructed input</th>
+  <th>Required observation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Offset preservation</td>
+  <td>Several addresses in same base page</td>
+  <td>Correct unchanged low offset</td>
+</tr>
+<tr>
+  <td>Multi-level walk</td>
+  <td>Sparse region with valid terminal leaf</td>
+  <td>Correct frame and page size</td>
+</tr>
+<tr>
+  <td>Invalid/noncanonical address</td>
+  <td>Bad sign extension or PTE encoding</td>
+  <td>Architecture-defined fault</td>
+</tr>
+<tr>
+  <td>Privilege protection</td>
+  <td>User tries supervisor-only mapping</td>
+  <td>Access denied</td>
+</tr>
+<tr>
+  <td>Read/write/execute checks</td>
+  <td>Different access types</td>
+  <td>Permissions enforced independently</td>
+</tr>
+<tr>
+  <td>Context switch</td>
+  <td>Same VPN, distinct ASIDs</td>
+  <td>No cross-process translation confusion</td>
+</tr>
+<tr>
+  <td>Page-table modification</td>
+  <td>Revoke/remap while cached</td>
+  <td>Correct invalidation protocol</td>
+</tr>
+<tr>
+  <td>Multicore mapping change</td>
+  <td>Remote core retains old mapping</td>
+  <td>No use after required shootdown completion</td>
+</tr>
+<tr>
+  <td>Huge-page split</td>
+  <td>Split large leaf into base pages</td>
+  <td>No stale large mapping conflicts</td>
+</tr>
+<tr>
+  <td>Virtualization</td>
+  <td>Conflicting stage-two permission</td>
+  <td>Translation denied at correct stage</td>
+</tr>
+</tbody>
+</table>
+<p>Tests should also include asynchronous interrupts, speculative accesses, concurrent page-table updates, read-only pages that become writable, ASID reuse, and processor errata workarounds. The table is a verification agenda, not a finished formal proof or a conformance-suite certification.</p>
+
+</section>
+<section id="diagnosing-a-translation-bottleneck" aria-labelledby="heading-diagnosing-a-translation-bottleneck"><h2 id="heading-diagnosing-a-translation-bottleneck">Diagnosing a Translation Bottleneck</h2>
+<p>Begin with a reproducible workload and an explicit hypothesis. Record throughput, instructions per cycle, workload memory footprint, CPU frequency, TLB-miss counters, page-walk events, faults, cache misses, and NUMA placement where supported. Compare instruction-side and data-side translation effects. Check whether large-page mappings are actually in effect rather than assuming the OS honored a request. Validate performance counter meanings for the exact processor and software configuration.</p>
+<p>Run controlled changes: compact the layout, alter page-touch order, compare base pages and huge pages, pin threads or alter NUMA placement, or adjust batching and page-allocation behavior. Keep input data and concurrency comparable. A reduction in measured dTLB misses with no speedup is not contradictory: translation may not have been on the critical path, or the change may have worsened cache locality or memory allocation.</p>
+
+</section>
+<section id="a-ten-gate-engineering-evaluation-framework" aria-labelledby="heading-a-ten-gate-engineering-evaluation-framework"><h2 id="heading-a-ten-gate-engineering-evaluation-framework">A Ten-Gate Engineering Evaluation Framework</h2>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Engineering question</th>
+  <th>Evidence required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. Contract</td>
+  <td>Which ISA, translation mode, and privilege levels apply?</td>
+  <td>Privileged architecture manual</td>
+</tr>
+<tr>
+  <td>2. Address form</td>
+  <td>Are address sizes and canonicality checked?</td>
+  <td>Boundary-value tests</td>
+</tr>
+<tr>
+  <td>3. Page tables</td>
+  <td>Are roots, indices, leaves, and invalid encodings handled?</td>
+  <td>Walk traces and reference model</td>
+</tr>
+<tr>
+  <td>4. Permissions</td>
+  <td>Are read/write/execute and privilege checks correct?</td>
+  <td>Fault and access tests</td>
+</tr>
+<tr>
+  <td>5. TLB hierarchy</td>
+  <td>Do tags, lookup, refill, and replacement preserve mappings?</td>
+  <td>Targeted hit/miss tests</td>
+</tr>
+<tr>
+  <td>6. Mapping change</td>
+  <td>Can every relevant stale translation be invalidated?</td>
+  <td>Local and multicore tests</td>
+</tr>
+<tr>
+  <td>7. Page size</td>
+  <td>Are base pages and superpages aligned and supported?</td>
+  <td>Mixed-size and split tests</td>
+</tr>
+<tr>
+  <td>8. Virtualization</td>
+  <td>Are both translation stages and permissions enforced?</td>
+  <td>Guest/hypervisor tests</td>
+</tr>
+<tr>
+  <td>9. Performance</td>
+  <td>Is translation a measured bottleneck rather than an assumption?</td>
+  <td>Counters, profiles, controlled benchmarks</td>
+</tr>
+<tr>
+  <td>10. Lifecycle</td>
+  <td>Can kernel and firmware changes preserve isolation?</td>
+  <td>Regression suites, errata review, rollback</td>
+</tr>
+</tbody>
+</table>
+<p>These gates apply to a CPU designer, OS developer, virtualization engineer, and hardware evaluator at different levels. An individual developer typically controls data layout and allocation policy, not the MMU implementation. A hardware designer must build conformance tests that cover behavior the OS relies on; an OS engineer must use the architecture's actual invalidation contracts.</p>
+
+</section>
+<section id="applied-scenario-1-a-database-scan-with-high-dtlb-misses" aria-labelledby="heading-applied-scenario-1-a-database-scan-with-high-dtlb-misses"><h2 id="heading-applied-scenario-1-a-database-scan-with-high-dtlb-misses">Applied Scenario 1 — A Database Scan With High dTLB Misses</h2>
+<p>A database analytical query reads columns distributed across a multi-gigabyte region. Despite good sequential access within each column, its working set covers many more pages than the base-page TLB can cache. A performance trace shows many second-level TLB misses and nontrivial page-walk duration. The team compares physical memory placement, page-size policy, row-group batch size, and access pattern. Large pages reduce the translation footprint for eligible regions, but the team also checks memory use and latency percentiles after the change.</p>
+<p>The central lesson is that fewer translation entries can be beneficial without changing the number of bytes read. Yet the optimization is justified only by a measured workload response. A database index or cache reorganization may offer a larger benefit than changing page size alone.</p>
+
+</section>
+<section id="applied-scenario-2-a-context-switch-reuses-a-virtual-address" aria-labelledby="heading-applied-scenario-2-a-context-switch-reuses-a-virtual-address"><h2 id="heading-applied-scenario-2-a-context-switch-reuses-a-virtual-address">Applied Scenario 2 — A Context Switch Reuses a Virtual Address</h2>
+<p>Two processes each use virtual address <code>0x400000</code> but map it to different physical frames. A teaching processor that caches translation entries by VPN alone could accidentally reuse the first process's PPN when executing the second. Correct ASID/PCID management, global-mapping rules, and invalidation on tag reuse avoid this class of architectural error. A test suite deliberately alternates contexts and checks that each process reads its own data.</p>
+<p>The scenario illustrates that a TLB entry is a context-dependent assertion, not a universal mapping. Reusing an identifier without the prescribed synchronization is distinct from a normal tagged context switch.</p>
+
+</section>
+<section id="applied-scenario-3-unmapping-a-page-on-a-64-core-server" aria-labelledby="heading-applied-scenario-3-unmapping-a-page-on-a-64-core-server"><h2 id="heading-applied-scenario-3-unmapping-a-page-on-a-64-core-server">Applied Scenario 3 — Unmapping a Page on a 64-Core Server</h2>
+<p>A memory-management operation revokes a user mapping that many cores may have used. Updating the PTE is necessary but insufficient if remote cores can still use cached translations. The kernel coordinates invalidation under its architecture-specific shootdown protocol, then safely manages physical-frame lifetime. A profiler shows elevated CPU time in remote TLB invalidation routines during high-frequency map/unmap churn.</p>
+<p>The engineering response may involve batching safe operations or reducing mapping turnover, not weakening revocation. Correctness comes first: no processor may retain unauthorized access once the protocol declares the mapping retired.</p>
+
+</section>
+<section id="applied-scenario-4-a-large-page-must-be-split" aria-labelledby="heading-applied-scenario-4-a-large-page-must-be-split"><h2 id="heading-applied-scenario-4-a-large-page-must-be-split">Applied Scenario 4 — A Large Page Must Be Split</h2>
+<p>An application maps a large region using 2 MiB pages, then requests a fine-grained permission change for a 4 KiB subrange. The OS may need to split a large leaf mapping into smaller entries, update one subrange, and invalidate conflicting old translations. The previously high TLB reach can decline, and changing page size may itself have nontrivial cost.</p>
+<p>This case shows why page size is both a performance decision and a management granularity decision. A design that maximizes huge-page coverage may conflict with fine-grained isolation, memory deduplication, migration, or debug instrumentation.</p>
+
+</section>
+<section id="applied-scenario-5-a-guest-vm-suffers-translation-walk-pressure" aria-labelledby="heading-applied-scenario-5-a-guest-vm-suffers-translation-walk-pressure"><h2 id="heading-applied-scenario-5-a-guest-vm-suffers-translation-walk-pressure">Applied Scenario 5 — A Guest VM Suffers Translation Walk Pressure</h2>
+<p>A guest operating system runs a page-intensive workload. Guest virtual addresses translate through guest mappings and host-stage mappings. A measurement shows high nested-walk activity and long memory stalls. The administrator checks guest memory backing, hypervisor page sizes, working-set patterns, and whether the workload is actually reaching physical memory rather than being delayed by guest page faults.</p>
+<p>Optimizing one translation stage without considering the other can have limited effect. A combined translation cache may hide many costs, and not every guest workload benefits equally from host large pages or altered memory placement.</p>
+
+</section>
+<section id="applied-scenario-6-a-security-patch-changes-mapping-rules" aria-labelledby="heading-applied-scenario-6-a-security-patch-changes-mapping-rules"><h2 id="heading-applied-scenario-6-a-security-patch-changes-mapping-rules">Applied Scenario 6 — A Security Patch Changes Mapping Rules</h2>
+<p>An operating-system security update changes which kernel mappings remain visible in user contexts. The design reduces a category of cross-privilege exposure but may increase TLB activity or context-switch work on some hardware. Engineers compare before/after results on identical workloads while preserving the stronger isolation policy. They verify that privileged and unprivileged mapping tests still pass and that any optimization does not reintroduce the vulnerable mapping behavior.</p>
+<p>The lesson is that translation performance and security must be evaluated together. A fast translation path that violates privilege isolation is not an acceptable optimization, while a mitigation's cost should be measured rather than guessed.</p>
+
+</section>
+<section id="guided-exercise-1-decode-a-three-level-virtual-address" aria-labelledby="heading-guided-exercise-1-decode-a-three-level-virtual-address"><h2 id="heading-guided-exercise-1-decode-a-three-level-virtual-address">Guided Exercise 1 — Decode a Three-Level Virtual Address</h2>
+<p>Take a canonical Sv39 virtual address of your choice with bit 38 equal to zero. Extract VPN[2], VPN[1], VPN[0], and offset using the nine-bit and twelve-bit fields. Verify the calculation with the provided <code>sv39_fields</code> function. Then describe how an intermediate page-table pointer differs from a terminal leaf entry. Explain why the same three indices are insufficient to establish permissions or canonicality.</p>
+<p><strong>Check:</strong> The indices determine a walk route; the root, entries, privilege level, and page size determine the actual mapping. High address bits must satisfy canonicality rules, and invalid encodings or forbidden accesses must fault.</p>
+
+</section>
+<section id="guided-exercise-2-distinguish-tlb-misses-from-page-faults" aria-labelledby="heading-guided-exercise-2-distinguish-tlb-misses-from-page-faults"><h2 id="heading-guided-exercise-2-distinguish-tlb-misses-from-page-faults">Guided Exercise 2 — Distinguish TLB Misses From Page Faults</h2>
+<p>An application reads a previously touched, resident, read-only page after its TLB entry was evicted. State whether a page fault is necessarily required. Next, attempt to write the same page. Identify why the second access might fault even if the translation is already cached. Finally, describe how a copy-on-write mapping could turn the write fault into successful software-assisted remapping.</p>
+<p><strong>Check:</strong> A resident valid page can be translated by a normal miss-and-refill; a write forbidden by the PTE triggers an access fault. Software may repair a copy-on-write fault by allocating a private page, updating the mapping, and applying the required synchronization.</p>
+
+</section>
+<section id="guided-exercise-3-estimate-translation-coverage" aria-labelledby="heading-guided-exercise-3-estimate-translation-coverage"><h2 id="heading-guided-exercise-3-estimate-translation-coverage">Guided Exercise 3 — Estimate Translation Coverage</h2>
+<p>Compute the nominal reach of 128 entries mapping 4 KiB pages and 128 entries mapping 2 MiB pages. Then list three reasons that actual effective reach can be lower than the arithmetic maximum. Finally, explain why a large-page conversion might not speed up an application whose cache misses dominate its runtime.</p>
+<p><strong>Check:</strong> Nominal coverage is 512 KiB and 256 MiB, respectively. Conflict misses, replacement, page-size-specific capacity, shared resources, and context competition can reduce usable reach. Optimizing a noncritical resource may not improve throughput.</p>
+
+</section>
+<section id="guided-exercise-4-design-an-invalidation-test" aria-labelledby="heading-guided-exercise-4-design-an-invalidation-test"><h2 id="heading-guided-exercise-4-design-an-invalidation-test">Guided Exercise 4 — Design an Invalidation Test</h2>
+<p>Construct two address spaces mapping the same VPN to different PPNs. Populate a TLB with both. Change one mapping and design tests that exercise a local hit, a local invalidation, a remote core's stale entry, and identifier reuse. Which observations distinguish an ordinary missed entry from a correctness violation? Where must memory reclamation wait for translation revocation to finish?</p>
+<p><strong>Check:</strong> A miss should refill from a valid current mapping. A stale hit returning an unauthorized old frame after required invalidation completion is a correctness problem. Reuse of freed physical memory must be coordinated with all relevant translation and device-access lifetimes.</p>
+
+</section>
+<section id="guided-exercise-5-compare-two-stage-translation" aria-labelledby="heading-guided-exercise-5-compare-two-stage-translation"><h2 id="heading-guided-exercise-5-compare-two-stage-translation">Guided Exercise 5 — Compare Two-Stage Translation</h2>
+<p>A guest virtual address maps to GPA frame 0x90, and that GPA frame maps to HPA frame 0xB0. For offset 0x123, calculate the final host address. Then explain which agent manages stage-one versus stage-two mappings and why a guest-allowed mapping can still fail in the hypervisor's stage-two permissions.</p>
+<p><strong>Check:</strong> The final host physical address is <code>0xB0123</code>. Each stage imposes its own mapping and access constraints; the guest's permission cannot override a restrictive host-stage mapping.</p>
+
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions"><h2 id="heading-review-questions">Review Questions</h2>
+<ol>
+<li>Why does an ordinary TLB miss not imply an operating-system page fault?</li>
+<li>Which address bits are unchanged when a 4 KiB page is translated?</li>
+<li>What prevents one process's cached VPN mapping from being mistaken for another's?</li>
+<li>What extra information does a TLB entry need besides a PPN?</li>
+<li>Why may a page walk take many more cycles on one access than another?</li>
+<li>How does a second-level TLB differ from a page-walk cache?</li>
+<li>Why can large pages improve TLB reach yet harm memory management flexibility?</li>
+<li>Why must a higher-level superpage leaf obey physical alignment rules?</li>
+<li>What can go wrong if a kernel edits a PTE but fails to invalidate translations?</li>
+<li>Why does a multicore shootdown require consideration of remote CPU activity?</li>
+<li>How are accessed and dirty bits used by an OS, and why are they architecture-specific?</li>
+<li>What is the distinction between page permission checks and an application's broader security policy?</li>
+<li>Why does speculative translation require additional microarchitectural security analysis?</li>
+<li>How do guest-virtual, guest-physical, and host-physical addresses differ?</li>
+<li>Why can a DMA device require invalidation separate from an ordinary CPU TLB flush?</li>
+<li>In what circumstances does a high dTLB miss count fail to predict a significant slowdown?</li>
+<li>What evidence would establish that translation, rather than DRAM latency or NUMA placement, is the performance bottleneck?</li>
+<li>How does a virtually indexed, physically tagged cache interact with page offsets and aliases?</li>
+<li>What distinguishes RISC-V <code>SFENCE.VMA</code> from a generic data-cache operation?</li>
+<li>What invariants should be tested when a huge page is split into smaller mappings?</li>
+</ol>
+
+</section>
+<section id="glossary" aria-labelledby="heading-glossary"><h2 id="heading-glossary">Glossary</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Address space</td>
+  <td>Mapping context in which virtual addresses have defined meaning.</td>
+</tr>
+<tr>
+  <td>ASID</td>
+  <td>Address-space identifier used to distinguish translation contexts in supported architectures.</td>
+</tr>
+<tr>
+  <td>Canonical address</td>
+  <td>Virtual/linear address satisfying architecture-specific high-bit validity rules.</td>
+</tr>
+<tr>
+  <td>Demand paging</td>
+  <td>OS technique that establishes or restores mappings when needed, often through faults.</td>
+</tr>
+<tr>
+  <td>Dirty bit</td>
+  <td>Mapping state indicating a write occurred under the applicable architectural rule.</td>
+</tr>
+<tr>
+  <td>dTLB</td>
+  <td>Data-side translation lookaside buffer.</td>
+</tr>
+<tr>
+  <td>Effective address</td>
+  <td>Address computed for an instruction's memory reference before some translation steps.</td>
+</tr>
+<tr>
+  <td>Global mapping</td>
+  <td>Translation with architecture-defined context-independent handling; not universal user permission.</td>
+</tr>
+<tr>
+  <td>Huge page</td>
+  <td>Larger-than-base-page virtual-memory mapping used to cover a broad region.</td>
+</tr>
+<tr>
+  <td>iTLB</td>
+  <td>Instruction-fetch-side translation lookaside buffer.</td>
+</tr>
+<tr>
+  <td>IOMMU</td>
+  <td>Hardware translating and restricting device-originated memory requests.</td>
+</tr>
+<tr>
+  <td>Leaf PTE</td>
+  <td>Final page-table descriptor that defines a mapping rather than pointing to another table.</td>
+</tr>
+<tr>
+  <td>MMU</td>
+  <td>Memory-management unit supporting translation and protection.</td>
+</tr>
+<tr>
+  <td>Nested translation</td>
+  <td>Multiple translation stages, such as guest VA to guest PA to host PA.</td>
+</tr>
+<tr>
+  <td>Page fault</td>
+  <td>Architectural exception for missing, illegal, or otherwise disallowed mapping/access.</td>
+</tr>
+<tr>
+  <td>Page offset</td>
+  <td>Byte displacement preserved within a mapped page.</td>
+</tr>
+<tr>
+  <td>Page-table walk</td>
+  <td>Retrieval and checking of mapping descriptors across a hierarchy.</td>
+</tr>
+<tr>
+  <td>PCID</td>
+  <td>x86 process-context identifier, used when available and enabled.</td>
+</tr>
+<tr>
+  <td>Physical frame</td>
+  <td>Physical memory page aligned for a selected mapping size.</td>
+</tr>
+<tr>
+  <td>PPN</td>
+  <td>Physical page number.</td>
+</tr>
+<tr>
+  <td>PTE</td>
+  <td>Page-table entry.</td>
+</tr>
+<tr>
+  <td>Shootdown</td>
+  <td>Coordination to invalidate translation caches on relevant other processors.</td>
+</tr>
+<tr>
+  <td>Superpage</td>
+  <td>Large mapping represented by a higher-level page-table leaf.</td>
+</tr>
+<tr>
+  <td>TLB</td>
+  <td>Cache of translation and associated metadata, not the cache of user data.</td>
+</tr>
+<tr>
+  <td>TLB reach</td>
+  <td>Approximate virtual-memory span represented by available translation entries.</td>
+</tr>
+<tr>
+  <td>Translation stage</td>
+  <td>A mapping step; virtualized systems may apply more than one.</td>
+</tr>
+<tr>
+  <td>VPN</td>
+  <td>Virtual page number.</td>
+</tr>
+<tr>
+  <td>VIPT</td>
+  <td>Virtually indexed, physically tagged cache design.</td>
+</tr>
+<tr>
+  <td>W^X</td>
+  <td>Security policy of avoiding memory that is simultaneously writable and executable.</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="complete-cpu-specialist-directory" aria-labelledby="heading-complete-cpu-specialist-directory"><h2 id="heading-complete-cpu-specialist-directory">Complete CPU Specialist Directory</h2>
+<p>These 24 active links preserve the parent CPU unit index’s full prescribed specialist directory. Link destinations represent the intended canonical pages; listing an article here does not independently establish that its target is already deployed.</p><ol class="course-links"><li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a></strong> — Functional units, data paths, control signals, and the organization of a processor core.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a></strong> — Program-visible registers, flags, the program counter, and architectural execution state.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a></strong> — Instruction addresses, fetch bandwidth, decoding, and the processor front end.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a></strong> — Integer arithmetic, logical operations, floating-point execution, and execution-unit specialization.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a></strong> — Control sequencing, interrupts, faults, traps, and movement into privileged execution.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a></strong> — Architecturally correct state updates, retirement, and precise execution semantics.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a></strong> — Overlapped execution stages and structural, data, and control dependencies.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a></strong> — Multiple-issue processing, scheduling windows, and execution beyond original program order.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a></strong> — Physical register mapping, false dependency removal, recovery, and in-order commitment.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a></strong> — Control-flow prediction, speculative work, recovery, and misprediction costs.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a></strong> — Data-parallel instruction execution and domain-specific operations within general-purpose CPUs.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a></strong> — Control-store methods, instruction decomposition, and micro-operation sequencing.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a></strong> — L1/L2/L3 organization, hits, misses, associativity, and program access patterns.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a></strong> — Memory execution, store buffers, dependency checks, and ordering visibility.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a></strong> — Virtual-to-physical translation, TLB caching, page walks, and execution costs.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a></strong> — Core clusters, shared last-level caches, fabric paths, and chiplet or package organization.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a></strong> — Multiple architectural thread states sharing execution resources in one core.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a></strong> — Coherent shared-memory behavior, ownership, and instructions for synchronization.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a></strong> — Clock domains, frequency scaling, dynamic power, leakage, and active or idle states.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a></strong> — Heat transfer, sustained power limits, cooling interfaces, and package construction.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a></strong> — Instruction throughput, latency, benchmark validity, and application-specific comparison.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a></strong> — Privilege enforcement, speculative side effects, and microarchitectural information leakage.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a></strong> — Error signaling, fault containment, architectural state checks, and resilience requirements.</li>
+<li><strong><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a></strong> — ISA compatibility, core configuration, software ecosystem, and fit-for-purpose evaluation.</li></ol>
+</section>
+<section id="related-encyclopedia-topics-and-taxonomy-boundaries" aria-labelledby="heading-related-encyclopedia-topics-and-taxonomy-boundaries"><h2 id="heading-related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</h2>
+<p><strong>This CPU specialist article owns</strong> the processor's translation lookup, TLB and walker hardware, architectural permission enforcement, and resulting performance constraints. For general memory-hierarchy theory consult <a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a>. For broader processor implementation see <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a>. For physical DRAM and DIMMs see <a href="/library/encyclopedia/computer-science/hardware-systems/memory-hardware">Memory Hardware</a>. For memory ordering and load/store queues see <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a>.</p>
+<p>Operating systems decide how virtual regions are allocated, paged, mapped, shared, and revoked; this article explains the CPU mechanism that executes those decisions. Compiler pointer arithmetic, general application security, data caches, and IOMMU device programming belong to adjacent areas. Navigation links below are active targets for the CPU index's complete prescribed subarticle sequence, whether or not every destination has yet been published.</p>
+
+</section>
+<section id="primary-documentation-and-further-reading" aria-labelledby="heading-primary-documentation-and-further-reading"><h2 id="heading-primary-documentation-and-further-reading">Primary Documentation and Further Reading</h2>
+<ol>
+<li><strong>RISC-V International</strong>, <a href="https://docs.riscv.org/reference/isa/priv/supervisor.html">RISC-V Privileged Architecture, Supervisor-Level ISA</a>. Primary specification for <code>satp</code>, page-table formats, permissions, <code>SFENCE.VMA</code>, and Sv39/Sv48-style translation. Check the currently ratified edition and applicable extensions when implementing software.</li>
+<li><strong>Intel</strong>, <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Intel 64 and IA-32 Architectures Software Developer's Manuals</a>, especially Volume 3A/3B, paging and protection, paging-structure caches, PCIDs, and translation invalidation.</li>
+<li><strong>Arm</strong>, <a href="https://developer.arm.com/documentation/">Arm Architecture Reference Manuals and Programmer's Guides</a>, for translation granules, stage-one and stage-two descriptors, TLBI, and synchronization semantics.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://www.kernel.org/doc/html/next/mm/page_tables.html">Page Tables</a>. Description of multi-level page-table structure, higher-level mappings, and fault handling.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://www.kernel.org/doc/html/latest/core-api/cachetlb.html">Cache and TLB Flushing Under Linux</a>. Kernel interfaces and expectations for invalidation after page-table changes.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://www.kernel.org/doc/html/latest/admin-guide/mm/concepts.html">Memory Management Concepts</a>. Background on virtual mappings, faults, and large-page trade-offs.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/next/arm64/memory.html">AArch64 Memory Layout</a>. Examples of address layout and page-table-level choices in a real operating system.</li>
+<li><strong>John L. Hennessy and David A. Patterson</strong>, <em>Computer Architecture: A Quantitative Approach</em>, memory-system and virtual-memory chapters. Use a current edition for quantitative comparisons and model-specific context.</li>
+<li><strong>David A. Patterson and John L. Hennessy</strong>, <em>Computer Organization and Design</em>, chapters on memory hierarchy, virtual memory, and processor/datapath organization.</li>
+<li><strong>Operating-system research literature</strong>, memory-management and TLB shootdown papers on page-table scalability, translation caching, and memory isolation. Prefer processor- and kernel-specific experimental evidence for performance claims.</li>
+</ol>
+
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope"><h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Prepared November 23, 2026.</strong> This article is CPU specialist <strong>15 of 24</strong>, to be installed at <code>library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers.html</code> relative to <code>C:\MGU\</code>. Its public canonical URL omits <code>.html</code>. The existing CPU index and its prescribed set of 24 article destinations are retained.</p>
+<p>The figures, calculations, and executable programs are instructional approximations. The article does not claim to implement an instruction-set-conforming MMU, reproduce internal vendor TLB details, or supply a production-safe operating-system invalidation algorithm. Formal architecture specifications and tested kernel APIs take precedence for real device and OS engineering. No claim of live website publication is made by generating this local file.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<script src="/component/bottom-nav-loader.js" defer></script>
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

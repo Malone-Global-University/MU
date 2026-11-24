@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interconnect Latency, Throughput, and Contention | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Technical encyclopedia treatment of interconnect latency, sustained throughput and contention: queueing, Little's law, arbitration, credit flow, multihop networks, bottleneck diagnosis and 15 worked examples.">
+<meta name="keywords" content="interconnect latency,throughput,contention,queueing,Little's law,bandwidth,utilization,PCI Express,AXI,NoC,memory controller,link credits,head-of-line blocking,performance counters,tail latency,arbitration">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-latency-throughput-and-contention">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Interconnect Latency, Throughput, and Contention | MGU Encyclopedia">
+<meta property="og:description" content="An in-depth guide to interconnect latency, queueing, useful payload bandwidth and bottleneck analysis, with 15 practical worked examples.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-latency-throughput-and-contention">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Interconnect Latency, Throughput, and Contention</h1>
+<p class="subtitle">Quantifying real-world communication performance across shared buses, memory pathways, switch fabrics, and packet networks.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#scope-and-position-within-computer-architecture">Scope and position within computer architecture</a></li>
+<li><a href="#performance-questions-and-observation-boundaries">Performance questions and observation boundaries</a></li>
+<li><a href="#a-vocabulary-for-latency-throughput-bandwidth-and-utilization">A vocabulary for latency, throughput, bandwidth, and utilization</a></li>
+<li><a href="#the-complete-latency-path">The complete latency path</a></li>
+<li><a href="#unloaded-latency-versus-loaded-latency">Unloaded latency versus loaded latency</a></li>
+<li><a href="#serialization-propagation-processing-and-queueing-delays">Serialization, propagation, processing, and queueing delays</a></li>
+<li><a href="#payload-size-and-protocol-overhead">Payload size and protocol overhead</a></li>
+<li><a href="#clock-frequency-is-not-a-throughput-guarantee">Clock frequency is not a throughput guarantee</a></li>
+<li><a href="#link-width-lane-count-and-directional-capacity">Link width, lane count, and directional capacity</a></li>
+<li><a href="#bursts-pipelines-and-transfer-acceptance">Bursts, pipelines, and transfer acceptance</a></li>
+<li><a href="#outstanding-transactions-and-latency-hiding">Outstanding transactions and latency hiding</a></li>
+<li><a href="#little-s-law-and-in-flight-work">Little&#x27;s law and in-flight work</a></li>
+<li><a href="#multiple-resource-ceilings-and-the-bottleneck-principle">Multiple resource ceilings and the bottleneck principle</a></li>
+<li><a href="#shared-segments-and-oversubscription">Shared segments and oversubscription</a></li>
+<li><a href="#arbitration-and-service-fairness">Arbitration and service fairness</a></li>
+<li><a href="#queue-locations-and-backpressure-propagation">Queue locations and backpressure propagation</a></li>
+<li><a href="#head-of-line-blocking">Head-of-line blocking</a></li>
+<li><a href="#credit-based-flow-control-and-buffer-limits">Credit-based flow control and buffer limits</a></li>
+<li><a href="#bursty-arrivals-traffic-shaping-and-tail-effects">Bursty arrivals, traffic shaping, and tail effects</a></li>
+<li><a href="#percentiles-averages-and-measurement-windows">Percentiles, averages, and measurement windows</a></li>
+<li><a href="#queueing-theory-as-a-model-not-a-product-specification">Queueing theory as a model, not a product specification</a></li>
+<li><a href="#contention-at-memory-controllers-and-coherent-fabrics">Contention at memory controllers and coherent fabrics</a></li>
+<li><a href="#contention-in-pcie-and-device-fabrics">Contention in PCIe and device fabrics</a></li>
+<li><a href="#on-chip-meshes-and-multihop-service">On-chip meshes and multihop service</a></li>
+<li><a href="#latency-sensitive-and-bandwidth-oriented-workloads">Latency-sensitive and bandwidth-oriented workloads</a></li>
+<li><a href="#adaptive-frequency-power-states-and-thermal-effects">Adaptive frequency, power states, and thermal effects</a></li>
+<li><a href="#reliability-retries-and-effective-service">Reliability, retries, and effective service</a></li>
+<li><a href="#security-isolation-and-performance-interference">Security isolation and performance interference</a></li>
+<li><a href="#monitoring-points-and-hardware-performance-counters">Monitoring points and hardware performance counters</a></li>
+<li><a href="#controlled-benchmark-design">Controlled benchmark design</a></li>
+<li><a href="#interpreting-counter-correlations-without-inventing-causation">Interpreting counter correlations without inventing causation</a></li>
+<li><a href="#a-repeatable-investigation-sequence">A repeatable investigation sequence</a></li>
+<li><a href="#worked-example-1-ideal-channel-width-versus-accepted-transfers">Worked example 1 — Ideal channel width versus accepted transfers</a></li>
+<li><a href="#worked-example-2-serialization-time-compared-with-fixed-latency">Worked example 2 — Serialization time compared with fixed latency</a></li>
+<li><a href="#worked-example-3-concurrency-bound-imposed-by-request-latency">Worked example 3 — Concurrency bound imposed by request latency</a></li>
+<li><a href="#worked-example-4-little-s-law-applied-to-a-storage-or-dma-queue">Worked example 4 — Little&#x27;s law applied to a storage or DMA queue</a></li>
+<li><a href="#worked-example-5-oversubscribed-two-device-switch">Worked example 5 — Oversubscribed two-device switch</a></li>
+<li><a href="#worked-example-6-bidirectional-capacity-and-a-misleading-aggregate-figure">Worked example 6 — Bidirectional capacity and a misleading aggregate figure</a></li>
+<li><a href="#worked-example-7-packet-overhead-and-useful-byte-efficiency">Worked example 7 — Packet overhead and useful-byte efficiency</a></li>
+<li><a href="#worked-example-8-a-burst-with-fixed-setup-and-per-beat-time">Worked example 8 — A burst with fixed setup and per-beat time</a></li>
+<li><a href="#worked-example-9-queue-delay-near-saturation">Worked example 9 — Queue delay near saturation</a></li>
+<li><a href="#worked-example-10-a-packet-blocked-behind-the-wrong-destination">Worked example 10 — A packet blocked behind the wrong destination</a></li>
+<li><a href="#worked-example-11-bandwidth-delay-product-and-credit-starvation">Worked example 11 — Bandwidth-delay product and credit starvation</a></li>
+<li><a href="#worked-example-12-a-multihop-path-with-and-without-contention">Worked example 12 — A multihop path with and without contention</a></li>
+<li><a href="#worked-example-13-average-latency-conceals-slow-completions">Worked example 13 — Average latency conceals slow completions</a></li>
+<li><a href="#worked-example-14-sharing-bandwidth-with-a-high-priority-control-flow">Worked example 14 — Sharing bandwidth with a high-priority control flow</a></li>
+<li><a href="#worked-example-15-an-end-to-end-bottleneck-investigation">Worked example 15 — An end-to-end bottleneck investigation</a></li>
+<li><a href="#comparison-of-bottleneck-signatures">Comparison of bottleneck signatures</a></li>
+<li><a href="#design-choices-and-practical-trade-offs">Design choices and practical trade-offs</a></li>
+<li><a href="#specialist-glossary">Specialist glossary</a></li>
+<li><a href="#references-and-further-technical-reading">References and further technical reading</a></li>
+<li><a href="#sub-articles-in-the-bus-systems-unit">Sub-Articles in the Bus Systems unit</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#editorial-scope-and-publication-status">Editorial scope and publication status</a></li>
+</ol>
+</section>
+<section id="scope-and-position-within-computer-architecture" aria-labelledby="heading-scope-and-position-within-computer-architecture">
+<h2 id="heading-scope-and-position-within-computer-architecture">Scope and position within computer architecture</h2>
+<p>An interconnect transfers requests, responses, data, and control information between system components. Its visible performance depends on far more than the headline bit rate of a cable, the clock frequency of an on-chip bus, or the width of a memory channel. A transaction may spend time waiting for an arbitration grant, crossing a bridge, occupying a switch buffer, receiving target service, or contending with unrelated requests. A transfer that uses only a few bytes may be dominated by fixed command costs even when the physical link can move many gigabytes each second. Conversely, a long stream may achieve substantial throughput while individual requests suffer significant queueing delay.</p>
+<p>This specialist article belongs to the <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/">Bus Systems unit directory</a> in the MGU Computer Science Encyclopedia. It is the unit's <strong>17th planned specialist article</strong>, concentrating on <strong>performance models and observable bottlenecks</strong> rather than re-explaining the electrical design of every link. The articles on <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-width-transfer-rate-and-efficiency">Bus Width, Transfer Rate, and Efficiency</a>, <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-arbitration-and-access-priority">Bus Arbitration and Access Priority</a>, and <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/switched-fabrics-and-packet-based-interconnects">Switched Fabrics and Packet-Based Interconnects</a> provide the detailed protocol and topology foundations. Here, the main question is <strong>how much useful work gets through, how long it takes, and why performance changes under load</strong>.</p>
+<p>All numerical examples use hypothetical, explicitly stated configurations, except where a named standard is identified as an illustrative reference. They demonstrate methods rather than promise performance for any particular chipset, board, endpoint, memory system, or deployed MGU server.</p>
+
+</section>
+<section id="performance-questions-and-observation-boundaries" aria-labelledby="heading-performance-questions-and-observation-boundaries">
+<h2 id="heading-performance-questions-and-observation-boundaries">Performance questions and observation boundaries</h2>
+<p>Before collecting counters, define what is being observed. Is the target the <strong>time from a processor's load request to returned data</strong>, the <strong>time from a driver's DMA submission to completion</strong>, the <strong>amount of payload crossing a link in one second</strong>, or the <strong>application's completed operations per second</strong>? These quantities can all describe one system but are not equivalent. The application may perform encryption, buffering, copies, and scheduling outside the interconnect; an instrumented link often sees protocol bytes that an application never requested.</p>
+<p>A defensible experiment specifies the initiator, destination, route, direction, transaction size, number of concurrent requests, observation clock, operating state, and completion boundary. For example, “device-to-host useful payload bytes per second over the upstream PCIe link during a sustained transfer” is much more precise than “PCIe speed.” A read may traverse both downstream request and upstream response paths, and a CPU-to-device write may terminate at a device buffer before the ultimate media operation occurs. The phrase <strong>completed transaction</strong> therefore requires a protocol-specific definition.</p>
+<p>The core engineering questions are: what service rate can the resource sustain, how much of it reaches the intended workload, how much delay is intrinsic to the route, how much comes from queueing, and whether the bottleneck changes when competing initiators become active. A measurement that does not distinguish those components can lead to expensive but ineffective upgrades.</p>
+
+</section>
+<section id="a-vocabulary-for-latency-throughput-bandwidth-and-utilization" aria-labelledby="heading-a-vocabulary-for-latency-throughput-bandwidth-and-utilization">
+<h2 id="heading-a-vocabulary-for-latency-throughput-bandwidth-and-utilization">A vocabulary for latency, throughput, bandwidth, and utilization</h2>
+<p><strong>Latency</strong> is elapsed time between two defined events. <strong>Throughput</strong> is completed useful work per unit time. <strong>Bandwidth</strong> is a capacity term, often a theoretical or sustainable upper rate of a particular channel. <strong>Utilization</strong> is the share of a resource's defined available service capacity that is used over a measurement interval. <strong>Transaction rate</strong> counts operations per second; <strong>payload rate</strong> counts useful bytes. <strong>Queue occupancy</strong> counts pending or in-flight work; it does not itself establish that the link is saturated.</p>
+<p>These quantities have different dimensions. Latency can be measured in nanoseconds, microseconds, or milliseconds; payload bandwidth in decimal bytes per second; a packet-processing limit in messages per second; utilization as a fraction or percent. A device reporting 8 GB/s may be delivering data while transactions experience widely varying response times. A peripheral that handles 100,000 tiny requests each second may move only a few megabytes per second because fixed processing overhead dominates.</p>
+<table>
+<thead>
+<tr>
+  <th>Quantity</th>
+  <th>Typical unit</th>
+  <th>What it establishes</th>
+  <th>What it does not establish</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Request-response latency</td>
+  <td>ns, µs, ms</td>
+  <td>Time between named events</td>
+  <td>Overall useful data rate</td>
+</tr>
+<tr>
+  <td>Link signaling rate</td>
+  <td>GT/s or Gbaud</td>
+  <td>Physical symbol or transfer opportunities</td>
+  <td>Usable payload throughput</td>
+</tr>
+<tr>
+  <td>Sustained payload throughput</td>
+  <td>GB/s or MB/s</td>
+  <td>Useful bytes delivered per time</td>
+  <td>Single-request responsiveness</td>
+</tr>
+<tr>
+  <td>Transaction throughput</td>
+  <td>requests/s or IOPS</td>
+  <td>Completed operations per time</td>
+  <td>Bytes per operation</td>
+</tr>
+<tr>
+  <td>Busy-time utilization</td>
+  <td>percent</td>
+  <td>Active service fraction at a defined point</td>
+  <td>Equitable allocation or absence of queues</td>
+</tr>
+<tr>
+  <td>Outstanding work</td>
+  <td>requests, beats, credits</td>
+  <td>In-flight concurrency</td>
+  <td>Guarantees of completion latency</td>
+</tr>
+<tr>
+  <td>Tail latency</td>
+  <td>p95, p99, p99.9</td>
+  <td>Slow-end behavior of a specified distribution</td>
+  <td>Root cause without corroborating traces</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="the-complete-latency-path" aria-labelledby="heading-the-complete-latency-path">
+<h2 id="heading-the-complete-latency-path">The complete latency path</h2>
+<p>A simple additive latency model is <strong>T = T_prepare + T_queue + T_arbitrate + T_transport + T_target + T_return + T_complete</strong>. The categories must be defined so they do not double-count overlapping pipeline stages. Request construction and driver scheduling may happen before a bus request exists; switch forwarding occurs during transport; controller service includes actions such as DRAM timing, flash-device command handling, or endpoint decoding. Backpressure can appear at several boundaries and often moves waiting time upstream.</p>
+<p>The total is not always the sum of isolated device specifications. Independent work may overlap, caches or posted writes can hide a portion of apparent delay, and coherent requests may trigger additional messages whose routes are workload-dependent. The sum is most useful as a <strong>critical-path accounting model</strong> for one transaction rather than a universal equation for all traffic. Multiple requests can coexist, and a pipelined interconnect can deliver a completion every cycle despite each individual request taking several cycles to travel through it.</p>
+<p>Good latency measurements name their start and stop events: asserted request, accepted address, last data beat, target response, interrupt observation, driver notification, or application return. Moving a timestamp boundary can change the apparent latency without changing the hardware. An architect should draw the path and explicitly label where events are timestamped.</p>
+
+</section>
+<section id="unloaded-latency-versus-loaded-latency" aria-labelledby="heading-unloaded-latency-versus-loaded-latency">
+<h2 id="heading-unloaded-latency-versus-loaded-latency">Unloaded latency versus loaded latency</h2>
+<p><strong>Unloaded latency</strong> measures a request when other traffic is absent or sufficiently light that queueing is negligible. It exposes propagation, pipeline depth, fixed arbitration cycles, controller service, and protocol overhead. <strong>Loaded latency</strong> measures the same operation while one or more initiators compete for resources; it adds waiting caused by other operations, scheduler priorities, row conflicts, buffers, and flow control. Loaded latency is frequently the more relevant service-level property.</p>
+<p>The unloaded value is not necessarily constant: clock transitions, energy-saving modes, NUMA placement, cache state, translation lookups, and target readiness can vary between samples. Similarly, loaded latency depends on the shape of competing traffic, not merely its average byte rate. A competing stream of short operations may exercise control queues differently from a stream of large bursts. Traffic arriving in synchronized bursts can produce long queues even when the long-term mean demand remains below capacity.</p>
+<p>A meaningful investigation therefore measures at multiple imposed loads and records the entire latency distribution. A plot of latency versus offered workload usually identifies the region where extra throughput begins costing disproportionate delay. If the curve changes suddenly at a lower rate than expected, examine shared controllers, address mapping, flow control, and other upstream resources before blaming the advertised link speed.</p>
+
+</section>
+<section id="serialization-propagation-processing-and-queueing-delays" aria-labelledby="heading-serialization-propagation-processing-and-queueing-delays">
+<h2 id="heading-serialization-propagation-processing-and-queueing-delays">Serialization, propagation, processing, and queueing delays</h2>
+<p><strong>Serialization delay</strong> is the time needed to place a specified number of bits or bytes onto a link at its usable coding rate, assuming continuous transmission and no additional overhead. <strong>Propagation delay</strong> is the time for the electrical or optical signal to traverse the physical medium. <strong>Processing delay</strong> arises in packet classification, address decoding, error checking, switching, or target service. <strong>Queueing delay</strong> occurs while work waits behind other work or for a credit, port, buffer, or grant.</p>
+<p>A short, high-speed interconnect usually has negligible propagation time compared with memory-controller service or software processing, but propagation can become material in long-distance systems. Even locally, an additional retimer, bridge, pipeline register, or switch stage can introduce fixed latency. Serialization scales with transfer size, while fixed handling costs do not. Hence the transfer size is central to interpreting the apparent speed of a link.</p>
+<p>One useful approximation for a single uncontented transfer is <strong>T ≈ L_fixed + S / B_usable</strong>, where S is the payload in bytes and B_usable is its effective byte rate. This is not a substitute for protocol timing, parallel transfer channels, retransmission, or a multi-hop request/response operation; it is an explicit first-pass separation of fixed cost and size-dependent transfer time.</p>
+
+</section>
+<section id="payload-size-and-protocol-overhead" aria-labelledby="heading-payload-size-and-protocol-overhead">
+<h2 id="heading-payload-size-and-protocol-overhead">Payload size and protocol overhead</h2>
+<p>A physical link transports more than application payload. Headers, delimiters, credits, alignment, flow-control traffic, data-integrity fields, and retransmissions consume some link capacity. A useful accounting identity is <strong>payload efficiency = useful payload bytes / total transmitted bytes</strong> over a carefully defined period. On a packet fabric, “total transmitted” may be counted per hop rather than across the entire network. A 4 KiB application block can require multiple packets, and a small control message may occupy a minimum framing unit.</p>
+<p>The more significant the fixed per-transaction overhead, the more strongly performance depends on payload size. Aggregating operations into larger bursts can improve payload efficiency and reduce command-processing overhead; it may also increase interference, occupy shared buffers longer, and worsen latency for small urgent requests. Neither “maximize packet size” nor “minimize packet size” is a universal engineering rule.</p>
+<table>
+<thead>
+<tr>
+  <th>Workload form</th>
+  <th>Primary efficiency concern</th>
+  <th>Latency concern</th>
+  <th>Frequent bottleneck</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Tiny MMIO register reads</td>
+  <td>Setup and completion overhead</td>
+  <td>Request/response round trip</td>
+  <td>Target service and fixed protocol cycles</td>
+</tr>
+<tr>
+  <td>Repeated short packets</td>
+  <td>Headers and packet rate</td>
+  <td>Queueing under bursty arrivals</td>
+  <td>Per-packet processing or switch arbitration</td>
+</tr>
+<tr>
+  <td>Large contiguous DMA</td>
+  <td>Sustained payload capacity</td>
+  <td>Startup and completion boundary</td>
+  <td>Link or memory-controller bandwidth</td>
+</tr>
+<tr>
+  <td>Cache-coherence traffic</td>
+  <td>Useful-line versus control traffic</td>
+  <td>Dependency and ownership delays</td>
+  <td>Shared fabric, directory or home agent</td>
+</tr>
+<tr>
+  <td>Storage read stream</td>
+  <td>Queue depth and command size</td>
+  <td>Device and controller response distribution</td>
+  <td>Storage media, queue service or PCIe uplink</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="clock-frequency-is-not-a-throughput-guarantee" aria-labelledby="heading-clock-frequency-is-not-a-throughput-guarantee">
+<h2 id="heading-clock-frequency-is-not-a-throughput-guarantee">Clock frequency is not a throughput guarantee</h2>
+<p>An interface clock establishes potential transfer opportunities, not guaranteed useful traffic. A 64-bit synchronous data channel offering 200 million transfers each second has a nominal peak of 64 × 200 million / 8 = <strong>1.6 billion bytes per second</strong> before idle cycles and overhead. If the receiver accepts only half the transfer opportunities, the accepted payload rate is at most 0.8 GB/s under the stated assumptions. A bridge may run at a higher clock but still provide less throughput if its data width is narrower.</p>
+<p>Physical serial links require an additional distinction between symbol rate and payload bit rate. Coding efficiency, error-correction framing, control blocks, link-management traffic, and packet formatting all matter. PCI Express is a helpful example because rates described in GT/s are not automatically equal to application GB/s. A manufacturer’s “bidirectional aggregate bandwidth” is also not interchangeable with the per-direction capacity of one producer-to-consumer workload.</p>
+<p>Protocol and implementation variations matter: AMBA AXI offers multiple independent address and data channels, but its observed rate depends on the endpoint and fabric implementation. A high clock is one input to a service-rate calculation, not a measured outcome.</p>
+
+</section>
+<section id="link-width-lane-count-and-directional-capacity" aria-labelledby="heading-link-width-lane-count-and-directional-capacity">
+<h2 id="heading-link-width-lane-count-and-directional-capacity">Link width, lane count, and directional capacity</h2>
+<p>For an ideal parallel payload channel, <strong>B_peak = width_bits × transfers_per_second / 8</strong>. For a multi-lane serial link, derive the decoded per-lane rate and then multiply by the number of trained lanes; apply any stated formatting and protocol deductions separately. A PCIe endpoint trained at a narrower link width or lower generation than expected will have less physical capacity, but may still be bottlenecked elsewhere.</p>
+<p>Full-duplex links can often send and receive simultaneously. If an example link sustains 6 GB/s in each direction, it can have a bidirectional aggregate of 12 GB/s under balanced traffic while <strong>no one-way stream can use 12 GB/s</strong>. Read transactions often use small request messages in one direction and much larger data completions in the other. Summing the two directions without a clear purpose can misstate throughput.</p>
+<p>A shared upstream segment can also limit aggregate device traffic even when each downstream link has ample capacity. For accurate reporting, record link direction, active width, generation or transfer rate, negotiated payload size if relevant, and the measurement boundary. These variables should appear in the performance report alongside the traffic generator and data-size distribution.</p>
+
+</section>
+<section id="bursts-pipelines-and-transfer-acceptance" aria-labelledby="heading-bursts-pipelines-and-transfer-acceptance">
+<h2 id="heading-bursts-pipelines-and-transfer-acceptance">Bursts, pipelines, and transfer acceptance</h2>
+<p>A bus transaction may consist of multiple <strong>beats</strong>, one or more addresses, and one or more responses. The presence of a transaction on an address channel does not mean useful data has completed. On an AXI-style ready/valid channel, an accepted beat occurs on a clock edge where both valid and ready are asserted; deasserted ready means backpressure and no transfer on that edge. Independent channels and outstanding IDs allow other requests to progress while one response waits, subject to the implementation’s rules.</p>
+<p>Pipelining allows a channel to accept work at a greater rate than its single-request round-trip latency would suggest. For instance, a fabricated four-stage path might accept one request each cycle after fill, while each request remains in the pipeline for four cycles. Conversely, a nonpipelined device may be forced to wait for every response before issuing the next request, leaving a high-capacity link idle much of the time.</p>
+<p>The critical distinction is <strong>acceptance rate</strong> versus <strong>response latency</strong>. Performance measurements should identify stalls at the address channel, data channel, completion channel, and any bridge or endpoint queues. A longer burst can amortize setup overhead but may expose arbitration fairness problems when multiple initiators are active.</p>
+
+</section>
+<section id="outstanding-transactions-and-latency-hiding" aria-labelledby="heading-outstanding-transactions-and-latency-hiding">
+<h2 id="heading-outstanding-transactions-and-latency-hiding">Outstanding transactions and latency hiding</h2>
+<p>An initiator that waits synchronously for every completion is limited by round-trip latency. If a transaction carries S bytes and takes L seconds, the ideal rate from a single strictly serialized outstanding request is approximately <strong>S / L</strong>. With N independent in-flight transactions, the latency-limited bound becomes <strong>N × S / L</strong>, provided the destination and fabric can actually overlap them. Actual throughput is bounded by the minimum of this concurrency rate and all available downstream service capacities.</p>
+<p>The word <strong>independent</strong> matters. A pointer-chasing load cannot be issued until the previous load reveals the next address; simply enlarging an issue queue will not create parallelism in that dependency chain. Likewise, some protocols require ordering that limits progress for related operations, and target resources may accept several addresses while servicing them almost serially. A device advertising a high queue depth is not promising that all requests complete simultaneously.</p>
+<p>Queue capacity is a system property involving the initiator, fabric, switches, completion credits, target, memory controller, and software. Raising only one limit can have no effect if another component exhausts its available entries. The proper question is how many useful outstanding bytes can be maintained without crossing a different capacity or latency boundary.</p>
+
+</section>
+<section id="little-s-law-and-in-flight-work" aria-labelledby="heading-little-s-law-and-in-flight-work">
+<h2 id="heading-little-s-law-and-in-flight-work">Little&#x27;s law and in-flight work</h2>
+<p>For a stable system over a suitable interval, <strong>Little’s law</strong> states that average number of items in the system equals throughput rate multiplied by average time spent in that system: <strong>N̄ = λ × W̄</strong>. In the context of an interconnect, if a flow completes 500,000 transactions per second and each spends an average 20 µs between two consistently defined observation points, the average in-flight count is 10 transactions. The relationship is useful for checking whether measured concurrency plausibly supports the desired transaction rate.</p>
+<p>The law does not assume a specific queue-service distribution, but its application depends on clear population boundaries, a stable observation regime, and compatible arrivals/departures and time averages. An instantaneous hardware-occupancy counter is not interchangeable with the average used in the equation. A long-running burst that steadily accumulates unserviced work violates the equilibrium assumption behind this interpretation.</p>
+<p>Applied to bytes, the practical <strong>bandwidth-delay product</strong> estimates how much data must be outstanding to keep a path occupied: B_usable × L. It provides a target for batching, credits, and prefetch concurrency, not a guarantee that a device can issue or complete that much useful independent traffic.</p>
+
+</section>
+<section id="multiple-resource-ceilings-and-the-bottleneck-principle" aria-labelledby="heading-multiple-resource-ceilings-and-the-bottleneck-principle">
+<h2 id="heading-multiple-resource-ceilings-and-the-bottleneck-principle">Multiple resource ceilings and the bottleneck principle</h2>
+<p>An end-to-end transfer passes through a series of resources: source engine, read path, bridge, upstream link, root complex, memory controller, and destination buffers, for example. Under sustained streaming, <strong>long-run useful throughput cannot exceed the sustainable capacity of the narrowest required shared stage</strong>, adjusted for traffic expansion or reduction between stages. A simple minimum of raw link rates is only appropriate if each stage carries equivalent bytes and work with no parallel or branching paths.</p>
+<p>The smallest isolated specification value is not always the active bottleneck. Address locality can make DRAM service highly efficient or slow; a protocol header adds a different traffic expansion on different links; a cache hit may avoid the DRAM channel entirely; packet copies may double memory traffic. The route should therefore be drawn with separate resource demands per unit of useful work. Roofline-like thinking is helpful: a workload can be limited by transaction processing, memory bandwidth, queue availability, or CPU issue capacity rather than transport bit rate.</p>
+<p>The bottleneck can migrate with changes in message size, concurrency, address locality, or policy. Adding a faster PCIe card to a platform already limited by a shared upstream switch may produce little benefit. Engineers should verify each stage before purchasing replacement hardware or reconfiguring workload placement.</p>
+
+</section>
+<section id="shared-segments-and-oversubscription" aria-labelledby="heading-shared-segments-and-oversubscription">
+<h2 id="heading-shared-segments-and-oversubscription">Shared segments and oversubscription</h2>
+<p>Oversubscription occurs when combined offered demand exceeds a shared segment's sustainable service rate. Consider two endpoints each capable of delivering 9 GB/s into a shared 12 GB/s upstream path. Their nominal combined demand is 18 GB/s, which cannot pass through that shared path continuously. A fair scheduler might give each 6 GB/s if both remain backlogged and have equal effective priority, but protocol effects, packet sizes, priorities, endpoint behavior, and destination congestion may produce unequal rates.</p>
+<p>The exact location of the shared segment matters. A PCIe switch may have full-speed links to endpoints but fewer or narrower lanes toward the host; a memory controller may combine requests from numerous CPU cores and devices; a NoC router may have a congested output despite unused links elsewhere. Measuring all downstream links without the upstream link misses the aggregate contention boundary.</p>
+<p><strong>Offered load</strong> is the amount participants attempt to inject. <strong>Accepted load</strong> is the amount admitted by the fabric. <strong>Delivered load</strong> is useful work completed at the destination. Above capacity, upstream queues may expand, the fabric may apply backpressure, or sources may throttle. Those behaviors are not interchangeable and must not be interpreted as the same utilization statistic.</p>
+
+</section>
+<section id="arbitration-and-service-fairness" aria-labelledby="heading-arbitration-and-service-fairness">
+<h2 id="heading-arbitration-and-service-fairness">Arbitration and service fairness</h2>
+<p>When multiple initiators request one resource, an arbiter selects which request proceeds. Fixed priority can reduce delay for an urgent class but may starve lower-priority agents under sustained load. Round-robin can improve fairness among backlogged participants, although its behavior depends on grant duration, packet size, and whether service is counted per request, beat, or byte. Weighted policies can reserve approximate shares but do not automatically enforce strict per-operation deadlines.</p>
+<p>Arbitration occurs at several scales: CPU-cache request queues, DRAM command schedulers, shared parallel buses, NoC router outputs, switch ports, and storage submission queues. Some systems grant an entire burst; others grant individual flits or beats. A workload with many tiny messages may win many grants while moving little payload, whereas large bursts may occupy a channel longer but have lower overhead per byte.</p>
+<p>A good design states whether the objective is maximum aggregate throughput, low urgent-request latency, bounded worst-case service, predictable proportional shares, or starvation avoidance. No single scheduling algorithm optimizes all five simultaneously. Measure each traffic class rather than relying on the aggregate average alone.</p>
+
+</section>
+<section id="queue-locations-and-backpressure-propagation" aria-labelledby="heading-queue-locations-and-backpressure-propagation">
+<h2 id="heading-queue-locations-and-backpressure-propagation">Queue locations and backpressure propagation</h2>
+<p>Interconnects contain queues at initiators, bridges, router inputs, crossbar destinations, controllers, and endpoints. A transaction can wait before being admitted, wait for an output port, or wait for a response buffer to become available. A system-level “latency” figure can conceal which of these queues dominates. When one queue fills, flow control can stop new traffic and propagate blocking toward a source that is not directly attached to the bottleneck.</p>
+<p><strong>Backpressure</strong> is a safety mechanism, not automatically a defect: it prevents unbounded overflow and can preserve reliability. Nevertheless, poor buffer allocation, inadequate credit return, or a permanently blocked destination can yield severe throughput loss. A high occupancy counter indicates pressure at that queue, but not necessarily that the queue itself is the limiting service resource. The root cause might be a downstream port that rarely becomes ready.</p>
+<p>If instrumentation is available, sample both occupancy and the reason for stalled progress. Count valid-but-not-ready cycles on handshake channels, track credit starvation on packet links, and relate them to target service and competing traffic. The direction in which blocking propagates is often a valuable clue to where the bottleneck originates.</p>
+
+</section>
+<section id="head-of-line-blocking" aria-labelledby="heading-head-of-line-blocking">
+<h2 id="heading-head-of-line-blocking">Head-of-line blocking</h2>
+<p><strong>Head-of-line (HOL) blocking</strong> arises when the first queued item cannot advance and prevents later items from advancing, even when their desired downstream resources could otherwise serve them. A single FIFO containing packets for multiple outputs is a classic example: a packet targeting a congested output blocks a later packet for an idle output. Head-of-line blocking may also appear in ordered transaction queues, completion handling, or resource-allocation policies that bind unrelated work together.</p>
+<p>Virtual output queues, separate traffic classes, and multiple virtual channels can mitigate particular HOL patterns. These structures require more state, arbitration, buffers, and sometimes additional hardware verification. Simply doubling queue depth may increase the time work waits without improving service if the front entry remains blocked. Similarly, unrestricted reordering may violate required memory or device ordering semantics.</p>
+<p>When diagnosing HOL behavior, identify the queue's service eligibility rules. A later transaction might be physically able to travel but logically forbidden to pass an earlier request. The remedy must respect the protocol's ordering and completion guarantees, not just move packets faster.</p>
+
+</section>
+<section id="credit-based-flow-control-and-buffer-limits" aria-labelledby="heading-credit-based-flow-control-and-buffer-limits">
+<h2 id="heading-credit-based-flow-control-and-buffer-limits">Credit-based flow control and buffer limits</h2>
+<p>In credit-managed fabrics, a sender can transmit only when it holds permission representing receiver buffer capacity. Credits may be tracked by traffic class, virtual channel, or message type. The sender needs enough credits to cover in-flight traffic and credit-return latency; otherwise, the link may become idle even though the receiver could process more work. Credits prevent buffer overflow but can themselves become a throughput limitation.</p>
+<p>Suppose a path can transfer 8 GB/s and the effective credit round trip is 2 µs. The bandwidth-delay product is 16,000 bytes. Maintaining the full rate in this simplified model requires enough usable outstanding capacity to cover at least that data volume, with extra margin for packet granularity and fluctuations. This is not a claim about the credit-allocation rules of any named fabric: some credits account for packet headers and payload separately, and some traffic has multiple buffers or independent credit domains.</p>
+<p>Analyze the complete refill mechanism. A larger advertised data-link rate does not help if credits recycle too slowly; conversely, more credits cannot overcome a target that has a low sustainable service rate. Credit counters must be interpreted alongside receiver occupancy, protocol priority, and actual payload completion.</p>
+
+</section>
+<section id="bursty-arrivals-traffic-shaping-and-tail-effects" aria-labelledby="heading-bursty-arrivals-traffic-shaping-and-tail-effects">
+<h2 id="heading-bursty-arrivals-traffic-shaping-and-tail-effects">Bursty arrivals, traffic shaping, and tail effects</h2>
+<p>Average offered demand hides temporal structure. Two devices each averaging 3 GB/s might fit beneath an 8 GB/s shared link when their traffic is smooth, yet produce high instantaneous queues if both emit short 8 GB/s bursts at the same time. A benchmark that reports only average throughput may miss large spikes in the response time of latency-sensitive requests.</p>
+<p>Traffic shaping, admission control, and per-class service policies can smooth injection rates and protect critical work. Shaping can lower burst-induced delay while adding its own waiting time at the source. A hard priority class might improve a control path but create starvation risk for bulk transfers. A token-bucket policy limits long-term injected rate and permits bursts within a configured token reserve; it does not itself establish a fixed end-to-end latency guarantee.</p>
+<p>Tail latency is often determined by rare congestion episodes, retries, page walks, memory row conflicts, or shared-resource scheduling. Collect percentile distributions at a clearly specified workload and sample population rather than using average latency as a service-level guarantee. Large p99 changes can occur without much change in mean throughput.</p>
+
+</section>
+<section id="percentiles-averages-and-measurement-windows" aria-labelledby="heading-percentiles-averages-and-measurement-windows">
+<h2 id="heading-percentiles-averages-and-measurement-windows">Percentiles, averages, and measurement windows</h2>
+<p>The <strong>mean</strong> is valuable for work-conservation and Little's-law calculations but is not a summary of worst-case user experience. The median describes the central completion time; p95 or p99 expresses a high-latency percentile of the observed sample distribution. A p99 value of 300 µs means that approximately 99 percent of measurements are at or below that threshold under the reported empirical convention, not that any future request will finish within 300 µs.</p>
+<p>Percentiles must be computed from the underlying observations or a valid distribution summary. Averaging per-second p99 values does not in general recover the p99 of all requests. Measurements also depend on sample size, warmup, clock changes, thread pinning, address locality, run length, and background load. An isolated burst may dominate a short collection, while a long averaging interval can mask brief, severe stalls.</p>
+<p>Report elapsed wall-clock duration; total successful and failed operations; throughput; latency mean, median, and selected percentiles; request-size histogram; retry counts; workload placement; and traffic direction. When instruments have different timestamp sources, account for synchronization uncertainty rather than asserting sub-nanosecond conclusions from loosely synchronized clocks.</p>
+
+</section>
+<section id="queueing-theory-as-a-model-not-a-product-specification" aria-labelledby="heading-queueing-theory-as-a-model-not-a-product-specification">
+<h2 id="heading-queueing-theory-as-a-model-not-a-product-specification">Queueing theory as a model, not a product specification</h2>
+<p>Queueing models are useful for understanding why delay can increase sharply near saturation. In a simplified <strong>M/M/1</strong> queue, with Poisson arrivals at rate λ and exponentially distributed service times at rate μ, stability requires λ &lt; μ and the mean time in the system is <strong>W = 1 / (μ − λ)</strong>. As utilization ρ = λ / μ approaches one, the expected delay becomes much larger than the mean service time. These assumptions are rarely exact for a modern burst-based interconnect.</p>
+<p>Real traffic may be non-Poisson and correlated; service times may depend on packet size, DRAM bank conflicts, priority, and routing; multiple servers and independent paths may exist. Deterministic or batch arrivals have different delay properties, and processor pipelines can overlap service. A numerical M/M/1 example should therefore be labeled a teaching model, not a throughput prediction for PCIe, AXI, or any specific memory controller.</p>
+<p>Use analytical approximations to ask which parameters matter and to check whether an observed curve is plausible. Use protocol traces, hardware counters, simulation, or controlled experiments to establish what actually happens in a concrete design.</p>
+
+</section>
+<section id="contention-at-memory-controllers-and-coherent-fabrics" aria-labelledby="heading-contention-at-memory-controllers-and-coherent-fabrics">
+<h2 id="heading-contention-at-memory-controllers-and-coherent-fabrics">Contention at memory controllers and coherent fabrics</h2>
+<p>A coherent CPU interconnect transports data and control messages among cores, caches, and home agents. Its load includes demand misses, writebacks, snoops, ownership requests, and sometimes accelerator traffic. Two software threads may saturate a memory controller even while their core-local links look underused. Cache-line bouncing and false sharing can create high coherence-traffic volume despite little useful application-level data movement.</p>
+<p>DRAM service adds scheduling constraints: rows must be opened or closed; read/write direction changes introduce turnaround costs; banks can be parallel to a degree, but controller queues and the channel are shared. Thus identical total byte counts may produce different latency and throughput for sequential versus random addresses, one versus several banks, and local versus remote NUMA placement. Latency may rise before bandwidth reaches its theoretical ceiling.</p>
+<p>Observability should include read/write bytes per memory channel, local and remote accesses, memory-controller queue pressure when available, and coherent-fabric traffic. These observations belong next to the workload's cache hit rate and address-placement data. Do not attribute a slowdown to the PCIe bus merely because a PCIe device initiated the memory traffic.</p>
+
+</section>
+<section id="contention-in-pcie-and-device-fabrics" aria-labelledby="heading-contention-in-pcie-and-device-fabrics">
+<h2 id="heading-contention-in-pcie-and-device-fabrics">Contention in PCIe and device fabrics</h2>
+<p>A PCIe topology includes endpoints, switches, links, a root complex, and memory-system paths behind it. A link width such as x8 or x16 describes the local trained connection; it does not guarantee that all devices beneath a switch can transfer at their individual peak rates simultaneously. Traffic in opposite directions has different resource consumption, and memory reads require completion packets that share finite buffers and credits.</p>
+<p>Small completion payloads, limited read-request concurrency, payload and read-request sizing, and target response time can reduce effective throughput. The source of a memory read might wait for acknowledgments or completions while another engine streams writes efficiently. A downstream PCIe counter may show high traffic while the application remains stalled in software or in the device's command engine.</p>
+<p>Capture PCIe link generation and lane width, topology, error/retry counters, and device DMA completion rates when permitted. Interpret these with platform-specific tools. Changing Max Payload Size or Max Read Request Size indiscriminately can affect compatibility, ordering and available credits; any modification should follow device and platform guidance rather than a universal “bigger is better” recipe.</p>
+
+</section>
+<section id="on-chip-meshes-and-multihop-service" aria-labelledby="heading-on-chip-meshes-and-multihop-service">
+<h2 id="heading-on-chip-meshes-and-multihop-service">On-chip meshes and multihop service</h2>
+<p>A network-on-chip can route requests through several switches, each contributing link latency, router pipeline delay, and contention. The shortest path in hops is not necessarily the lowest-latency path under load; a locally congested output may dominate. Packet-based routing permits multiple unrelated transfers to proceed concurrently if they do not require the same links or destination resources.</p>
+<p>Topology influences capacity. A mesh may have high aggregate edge bandwidth yet a comparatively narrow bisection between two communicating halves. A central memory-controller node can become a hotspot even when the average router occupancy is low. Routing and virtual-channel allocation can reduce congestion or avoid certain deadlocks but add area, power, and complexity. Multicast or coherence-broadcast traffic may consume link bandwidth in many places for each logical request.</p>
+<p>Performance must be assessed using a matrix of source and destination locations, not one scalar bandwidth. Synthetic tests should include uniform random, hotspot, nearest-neighbor and relevant real-application traffic, because each pattern stresses different routers and bisections. Check worst-case latency and fairness in addition to aggregate delivered flits per cycle.</p>
+
+</section>
+<section id="latency-sensitive-and-bandwidth-oriented-workloads" aria-labelledby="heading-latency-sensitive-and-bandwidth-oriented-workloads">
+<h2 id="heading-latency-sensitive-and-bandwidth-oriented-workloads">Latency-sensitive and bandwidth-oriented workloads</h2>
+<p>A small control read might transmit only four bytes but wait on an MMIO round trip; a high-bandwidth DMA can transfer megabytes efficiently once set up. The first workload is sensitive to fixed service and queueing delays; the second is often sensitive to sustained throughput and contention with other large streams. Attempting to optimize both with a single traffic schedule can produce counterintuitive results.</p>
+<p>Real-time control often requires bounded response rather than best average bandwidth. Interactive accelerator submissions care about startup and completion latency; batch media processing tends to care about streaming throughput and amortized overhead. The interconnect fabric may use QoS classes, separate queues, or bandwidth reservations, but their benefit depends on the target response time and application demand.</p>
+<p>Classify requests by deadlines, size, dependency, and direction. Then evaluate each policy under combined workloads. A memory controller that improves large-burst efficiency might delay small urgent reads. The correct objective function must be chosen at system level: completed work, deadline misses, energy per transfer, or tail latency, not solely peak link utilization.</p>
+
+</section>
+<section id="adaptive-frequency-power-states-and-thermal-effects" aria-labelledby="heading-adaptive-frequency-power-states-and-thermal-effects">
+<h2 id="heading-adaptive-frequency-power-states-and-thermal-effects">Adaptive frequency, power states, and thermal effects</h2>
+<p>Link and processor frequency may vary with negotiated speed, power-management policy, and thermal or electrical conditions. A path that appears to deliver inconsistent bandwidth can be changing its clock or link state, while the workload has not changed. Entering a low-power link state can save energy but impose a wakeup latency; keeping a link continuously active can improve response consistency at an energy cost.</p>
+<p>Throttling can be caused by endpoint heat, package power limits, memory-controller temperature, or platform firmware. In such a case, the long-run service rate can be lower than the initial burst rate. A benchmark measured for two seconds may not characterize a fifteen-minute sustained transfer. Clock-frequency normalization and temperature logging are therefore valuable when investigating recurring throughput loss.</p>
+<p>Be careful not to infer a physical-layer fault from a workload-dependent slowdown. First compare link-state telemetry, retry/error counters, accepted traffic, CPU frequency, and device temperature over the same timeline. Power and reliability limits belong in the service-capacity model, but their exact implementation is platform-specific.</p>
+
+</section>
+<section id="reliability-retries-and-effective-service" aria-labelledby="heading-reliability-retries-and-effective-service">
+<h2 id="heading-reliability-retries-and-effective-service">Reliability, retries, and effective service</h2>
+<p>Error detection, link replay, end-to-end retries, timeouts, and recovery can consume capacity without delivering additional application payload. A link may report high transmitted byte counts while effective payload completion falls due to repeated retransmissions. Intermittent errors may also create severe tail latency without much effect on a long-run average. Raw line rate and payload throughput must be measured separately when this is possible.</p>
+<p>Do not assume that every interconnect performs retransmission at the same layer. PCIe link-layer reliability is not the same as storage-command retry or a software network retry. A completed lower-layer packet does not guarantee success at the application boundary. A controller might report errors and require software to resubmit operations; in other settings, a timeout can trigger a device reset, temporarily preventing any new work.</p>
+<p>Investigate errors with the relevant protocol-defined status and counters, comparing the timing of retry bursts against throughput dips. The companion article on <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-error-detection-diagnostics-and-recovery">Bus Error Detection, Diagnostics, and Recovery</a> provides the dedicated reliability treatment. Here, errors are examined as a source of wasted capacity and variable service time.</p>
+
+</section>
+<section id="security-isolation-and-performance-interference" aria-labelledby="heading-security-isolation-and-performance-interference">
+<h2 id="heading-security-isolation-and-performance-interference">Security isolation and performance interference</h2>
+<p>Resource contention is also an isolation issue. Multiple tenants can share cache, memory controllers, PCIe switches, or interconnect queues even if their address permissions are isolated. A malicious or simply aggressive participant may consume disproportionate service and degrade another participant's latency. The IOMMU can constrain device memory access, but it does not by itself reserve fair bandwidth or remove timing interference.</p>
+<p>Performance-based side channels can sometimes infer a neighbor's activity from changes in shared-resource latency. Defensive system design considers both confidentiality and availability: partition or regulate traffic where supported, restrict unauthorized DMA, maintain device reset and fault containment procedures, and verify tenant scheduling under contention. Capacity planning should measure worst-case coexistence rather than extrapolate from isolated tenant benchmarks.</p>
+<p>Be precise about guarantees. QoS hints do not inherently enforce bandwidth limits, and prioritization at one hop does not guarantee a bound through every downstream controller. An end-to-end service claim needs evidence that each shared resource follows the necessary policy and that failure scenarios are handled.</p>
+
+</section>
+<section id="monitoring-points-and-hardware-performance-counters" aria-labelledby="heading-monitoring-points-and-hardware-performance-counters">
+<h2 id="heading-monitoring-points-and-hardware-performance-counters">Monitoring points and hardware performance counters</h2>
+<p>The most informative telemetry often comes from <strong>multiple layers simultaneously</strong>. On-chip fabric counters may report requests, flits, stalls, or buffer occupancy. Memory-controller counters may report read/write bytes and queue pressure. PCIe instrumentation may report link state, lane width, errors, and packet traffic. Drivers can measure queue depth, DMA throughput, and command latency. Applications measure completed useful operations and response-time distributions.</p>
+<p>Event names are not standardized across all vendors. One counter may count transaction requests, another accepted beats, and another completed responses. Counter multiplexing, overflow, sampling bias, clock domains, and timebase conversions can distort comparisons. An occupancy counter is not a latency histogram; a “stall cycle” may overlap several causes; and counters collected at different windows cannot always be summed.</p>
+<p>Start with a topology diagram and a counter dictionary: <strong>location, event definition, units, reset behavior, saturation, sampling interval, and scope</strong>. Only then derive rates and correlate them with workload transitions. For processor and memory performance, Intel VTune and Memory Latency Checker provide examples of tools that distinguish bandwidth and latency as load changes; Linux perf can help associate work with performance events where supported.</p>
+
+</section>
+<section id="controlled-benchmark-design" aria-labelledby="heading-controlled-benchmark-design">
+<h2 id="heading-controlled-benchmark-design">Controlled benchmark design</h2>
+<p>A credible benchmark should isolate the source and destination as far as practical, pin threads or devices to known locations when relevant, warm caches and devices appropriately, and exercise several request sizes and queue depths. Record the complete topology and background workload. Run each scenario more than once, preserving raw observations and reporting variation rather than selecting the most favorable result.</p>
+<p>Use both <strong>unloaded</strong> and <strong>loaded</strong> cases. Vary offered load gradually; then introduce a competing stream to determine how fairness, head-of-line blocking, and priority affect each class. For heterogeneous systems, run CPU-driven reads, device-driven DMA, and storage commands separately before testing them together. Record both directions and verify that traffic generators are not CPU-limited.</p>
+<p>A benchmark result must specify whether it measures synthetic peak, sustained application behavior, or service-level latency under realistic contention. A number produced by a cache-resident copy loop is not proof of DRAM bandwidth; a device benchmark may spend substantial time in driver setup; and a storage throughput graph may be limited by the filesystem or media rather than the interconnect.</p>
+
+</section>
+<section id="interpreting-counter-correlations-without-inventing-causation" aria-labelledby="heading-interpreting-counter-correlations-without-inventing-causation">
+<h2 id="heading-interpreting-counter-correlations-without-inventing-causation">Interpreting counter correlations without inventing causation</h2>
+<p>High link utilization and high latency can occur together, but correlation alone does not prove that the link is the root cause. A slow memory controller can fill an upstream queue, making bridge occupancy high while the physical link is underutilized. Alternatively, a fabric with insufficient credits can throttle an otherwise idle target. Performance analysis is a problem of locating a causal constraint along a path.</p>
+<p>One practical method is <strong>controlled perturbation</strong>: change one factor at a time while recording the same metrics. Reduce message size, increase outstanding requests, move the memory allocation, disable one competing workload, or select another path—only when these changes are safe and permitted. A hypothesis is stronger if the predicted bottleneck counter and application response change together as expected. If increasing concurrency improves throughput with stable per-request service, the initial limitation was likely insufficient in-flight work; if concurrency raises latency without throughput growth, another service ceiling may already have been reached.</p>
+<p>Keep measurement limits visible. Some hardware lacks per-hop counters; clocks may not be synchronized; and a driver may not expose packet-level telemetry. State what is directly measured, what is inferred, and what remains unknown.</p>
+
+</section>
+<section id="a-repeatable-investigation-sequence" aria-labelledby="heading-a-repeatable-investigation-sequence">
+<h2 id="heading-a-repeatable-investigation-sequence">A repeatable investigation sequence</h2>
+<p>The following sequence is intended as an editorial and engineering framework, not as a command script that can diagnose every platform automatically:</p>
+<ol>
+<li><strong>Define the symptom:</strong> specify the transaction, payload, direction, observation points, and the performance goal.</li>
+<li><strong>Draw the route:</strong> show initiators, queues, bridges, links, switches, controllers, and target resources.</li>
+<li><strong>Calculate first-order bounds:</strong> translate widths, symbol rates, and overhead into capacities; calculate concurrency needs.</li>
+<li><strong>Establish a baseline:</strong> measure unloaded response times, sustained useful throughput, and error rates.</li>
+<li><strong>Increase offered load:</strong> measure admitted throughput, queue occupancy, latency percentiles, and backpressure.</li>
+<li><strong>Introduce controlled competitors:</strong> test contention and fairness while holding the target workload fixed.</li>
+<li><strong>Attribute stalls:</strong> compare telemetry on both sides of each suspected bottleneck rather than relying on one busy counter.</li>
+<li><strong>Test a precise change:</strong> adjust placement, batching, outstanding requests, scheduling, or path capacity within platform guidance.</li>
+<li><strong>Validate service guarantees:</strong> confirm stability, tail behavior, errors, and performance of unrelated tenants.</li>
+<li><strong>Document limitations:</strong> preserve configuration and counters so the experiment is reproducible.</li>
+</ol>
+<table>
+<thead>
+<tr>
+  <th>Observation</th>
+  <th>Plausible explanation</th>
+  <th>Corroborating evidence to seek</th>
+  <th>Caution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>High bandwidth, growing p99 latency</td>
+  <td>Congestion near a service ceiling</td>
+  <td>Occupancy, queue wait, stalled requests</td>
+  <td>High utilization alone is not proof</td>
+</tr>
+<tr>
+  <td>Low bandwidth, many outstanding requests</td>
+  <td>Slow target or blocked credits</td>
+  <td>Target completion rate, downstream ready, credits</td>
+  <td>Requests may not be independent</td>
+</tr>
+<tr>
+  <td>Low bandwidth, few outstanding requests</td>
+  <td>Dependency or submission bottleneck</td>
+  <td>Queue depth, source issue rate, software traces</td>
+  <td>Adding lanes may have no effect</td>
+</tr>
+<tr>
+  <td>Throughput drops with second device</td>
+  <td>Shared upstream resource</td>
+  <td>Switch topology and per-port traffic</td>
+  <td>Fair sharing is not guaranteed</td>
+</tr>
+<tr>
+  <td>Strongly variable latency without high byte rate</td>
+  <td>Bursts, small transactions, priority or errors</td>
+  <td>Histograms, retries, arbitration traces</td>
+  <td>Average throughput hides bursts</td>
+</tr>
+<tr>
+  <td>Stable packet rate but lower GB/s</td>
+  <td>Smaller average payload</td>
+  <td>Payload-size distribution, headers</td>
+  <td>Compare equal work units</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="worked-example-1-ideal-channel-width-versus-accepted-transfers" aria-labelledby="heading-worked-example-1-ideal-channel-width-versus-accepted-transfers">
+<h2 id="heading-worked-example-1-ideal-channel-width-versus-accepted-transfers">Worked example 1 — Ideal channel width versus accepted transfers</h2>
+<p>A hypothetical 64-bit-wide bus offers 200 million beat opportunities per second. Treat each accepted beat as eight useful bytes and ignore framing. The theoretical data rate is <strong>64 × 200,000,000 / 8 = 1,600,000,000 bytes/s = 1.6 GB/s</strong>. A trace of 10,000 sample clock opportunities shows 7,500 valid-and-ready accepted beats, 2,000 opportunities blocked because the receiver is not ready, and 500 without valid data. The actual accepted payload rate is <strong>1.6 × 7,500/10,000 = 1.2 GB/s</strong>.</p>
+<p>The observed acceptance fraction is 75%, but attributing the remaining 25% entirely to congestion would be wrong: 5% of opportunities had no request to send. The blocked fraction is 20%; the idle-source fraction is 5%. If additional traffic raises the valid percentage while ready deassertions increase, the bottleneck may be the receiver or a downstream path. If ready is almost always high but valid rarely appears, investigate source submission or dependencies. This numerical example treats every accepted beat as useful data; an actual protocol may move control and padding as well.</p>
+
+</section>
+<section id="worked-example-2-serialization-time-compared-with-fixed-latency" aria-labelledby="heading-worked-example-2-serialization-time-compared-with-fixed-latency">
+<h2 id="heading-worked-example-2-serialization-time-compared-with-fixed-latency">Worked example 2 — Serialization time compared with fixed latency</h2>
+<p>Suppose a synthetic link can sustain <strong>16 GB/s</strong> of payload after all coding overhead, and a request/response operation has a fixed path and endpoint cost of <strong>250 ns</strong>, excluding payload transfer time. A 64-byte payload takes <strong>64 / (16 × 10⁹) = 4 ns</strong> to serialize. The model predicts approximately <strong>254 ns</strong> in the absence of contention. A 64 KiB payload takes <strong>65,536 / (16 × 10⁹) = 4.096 µs</strong> to serialize, so the same fixed cost yields roughly <strong>4.346 µs</strong>.</p>
+<p>The fixed cost dominates the tiny request but is only a small fraction of the larger transfer's total. The lesson is not that real protocols transfer exactly 64 KiB as one unbroken frame; the simplification deliberately holds other factors fixed to expose the size-dependent term. Hardware segmentation, completion latency, credits, maximum payload sizes, and concurrency would alter a real measurement. For a workload of tiny dependent control transactions, reducing fixed latency may be more valuable than doubling link width.</p>
+
+</section>
+<section id="worked-example-3-concurrency-bound-imposed-by-request-latency" aria-labelledby="heading-worked-example-3-concurrency-bound-imposed-by-request-latency">
+<h2 id="heading-worked-example-3-concurrency-bound-imposed-by-request-latency">Worked example 3 — Concurrency bound imposed by request latency</h2>
+<p>A hypothetical request fetches <strong>64 bytes</strong> and cannot receive a result sooner than <strong>250 ns</strong> after issuance. With only one outstanding request and no overlap, the upper bound is <strong>64 / 250 ns = 256 MB/s</strong> of requested bytes. With 32 independent outstanding operations, an idealized concurrency-limited rate is <strong>32 × 64 / 250 ns = 8.192 GB/s</strong>. With 64 independent operations, that expression becomes <strong>16.384 GB/s</strong>, but a 12 GB/s shared link would cap sustained useful throughput below or at 12 GB/s even before its other overhead.</p>
+<p>Increasing request depth from 1 to 32 could therefore yield a large gain in this teaching model; increasing from 64 to 128 might only inflate buffers and queueing. The model assumes independent requests, a target capable of overlap, and a stable latency. A pointer-chasing program fails the independence assumption because it learns each next address from the previous completion. A read-specific fabric may also have separate request and data-return capacity constraints.</p>
+
+</section>
+<section id="worked-example-4-little-s-law-applied-to-a-storage-or-dma-queue" aria-labelledby="heading-worked-example-4-little-s-law-applied-to-a-storage-or-dma-queue">
+<h2 id="heading-worked-example-4-little-s-law-applied-to-a-storage-or-dma-queue">Worked example 4 — Little&#x27;s law applied to a storage or DMA queue</h2>
+<p>A controlled transfer workload records <strong>400,000 completed requests/s</strong> and a mean end-to-end time of <strong>30 µs</strong> from accepted submission to observed completion. Little’s law gives an average in-flight population of <strong>N̄ = 400,000 × 30 × 10⁻⁶ = 12 requests</strong>. If each successful request carries 4,096 useful bytes, the corresponding delivered payload rate is <strong>400,000 × 4,096 = 1.6384 GB/s</strong>. This does not imply that an exact queue depth of 12 is always sufficient: arrivals and response times fluctuate, and a bounded buffer must tolerate bursts.</p>
+<p>If the measurement reports only nine requests outstanding on average, re-check the timestamp and population definitions before declaring a law of physics violated. Perhaps the count excludes a driver queue or the completion timestamp includes work outside the hardware window. A different average may also reflect changing traffic over the test interval. Consistent boundaries make the throughput–latency–concurrency relationship a useful diagnostic cross-check.</p>
+
+</section>
+<section id="worked-example-5-oversubscribed-two-device-switch" aria-labelledby="heading-worked-example-5-oversubscribed-two-device-switch">
+<h2 id="heading-worked-example-5-oversubscribed-two-device-switch">Worked example 5 — Oversubscribed two-device switch</h2>
+<p>A fabricated platform connects devices A and B through dedicated downstream links, each able to deliver <strong>8 GB/s</strong> of useful upstream data. They share one upstream route capable of <strong>12 GB/s</strong> after overhead. Alone, either device can reach 8 GB/s if the host memory system keeps up. Together, the offered total is 16 GB/s and the shared route cannot deliver more than 12 GB/s. With equal-rate fair byte scheduling and both permanently backlogged, each might obtain approximately <strong>6 GB/s</strong>.</p>
+<p>The 6 GB/s estimate is conditional, not an architectural guarantee. Device A may obtain 7 GB/s and B 5 GB/s if priorities or packet lengths differ; a target memory controller might cap the total at 10 GB/s and reduce both further. Measuring each endpoint's local link at full utilization without measuring the shared uplink may create confusion. The topology diagram establishes where the 12 GB/s ceiling applies; the arbitration policy explains how that ceiling is divided.</p>
+
+</section>
+<section id="worked-example-6-bidirectional-capacity-and-a-misleading-aggregate-figure" aria-labelledby="heading-worked-example-6-bidirectional-capacity-and-a-misleading-aggregate-figure">
+<h2 id="heading-worked-example-6-bidirectional-capacity-and-a-misleading-aggregate-figure">Worked example 6 — Bidirectional capacity and a misleading aggregate figure</h2>
+<p>Consider a full-duplex serial interface with sustainable payload capacity of <strong>6 GB/s in each direction</strong>. A bidirectional workload sending 5 GB/s from A to B and 4 GB/s from B to A carries an aggregate of <strong>9 GB/s</strong>, while using 83.3% of forward-direction capacity and 66.7% of reverse-direction capacity. It would be inaccurate to say that a single forward stream can reach 12 GB/s because “the interface supports 12 GB/s aggregate.”</p>
+<p>Now suppose A issues reads whose requests occupy 0.2 GB/s forward and data completions occupy 5.8 GB/s reverse. The reverse data path is almost saturated while the forward request path is lightly used. A single total-utilization counter could hide that imbalance. A good report separates producer, consumer, request direction, response direction, and payload accounting. Protocol overhead and control traffic would reduce the available useful rate in a real deployment.</p>
+
+</section>
+<section id="worked-example-7-packet-overhead-and-useful-byte-efficiency" aria-labelledby="heading-worked-example-7-packet-overhead-and-useful-byte-efficiency">
+<h2 id="heading-worked-example-7-packet-overhead-and-useful-byte-efficiency">Worked example 7 — Packet overhead and useful-byte efficiency</h2>
+<p>A fictitious transport sends packets containing <strong>4,096 payload bytes</strong> and <strong>64 bytes of combined headers and other per-packet overhead</strong>, with no retransmissions or further alignment. Efficiency is <strong>4,096 / (4,096 + 64) = 98.46%</strong>. For a 64-byte payload using the same 64 overhead bytes, efficiency is only <strong>50%</strong>. At an equal physical byte rate, the larger-payload flow can transfer nearly twice the useful data per transmitted byte in this simplified comparison.</p>
+<p>This calculation does not assert PCIe, AXI, Ethernet, or any named protocol has a universal 64-byte overhead. Actual framing can depend on transaction type, generation, control symbols, padding and the measurement boundary. The scenario illustrates why a packet-per-second ceiling and a bytes-per-second ceiling are separate limits. Larger transfers may also incur more queueing for competing small packets, so evaluate the latency impact of coalescing before deploying it broadly.</p>
+
+</section>
+<section id="worked-example-8-a-burst-with-fixed-setup-and-per-beat-time" aria-labelledby="heading-worked-example-8-a-burst-with-fixed-setup-and-per-beat-time">
+<h2 id="heading-worked-example-8-a-burst-with-fixed-setup-and-per-beat-time">Worked example 8 — A burst with fixed setup and per-beat time</h2>
+<p>A hypothetical peripheral performs an eight-beat burst with <strong>64 bytes per beat</strong>. Transaction setup consumes <strong>100 ns</strong>, while each beat requires <strong>40 ns</strong> of nonoverlapped service. Total modeled service time is <strong>100 + 8 × 40 = 420 ns</strong> for <strong>512 bytes</strong>, equivalent to <strong>512 / 420 ns ≈ 1.219 GB/s</strong>. If the setup is paid for each of eight separate single-beat requests, total time becomes <strong>8 × (100 + 40) = 1,120 ns</strong>, yielding only <strong>about 0.457 GB/s</strong>.</p>
+<p>Batched bursts improve this artificial target’s useful service rate by amortizing setup. However, another initiator might have to wait longer while the eight-beat burst occupies a shared resource. In a real pipelined controller, setup and data may overlap between requests, changing the arithmetic. Specify whether the operation blocks other requests and whether transfer acceptance is measured at the initiator, fabric, or final target.</p>
+
+</section>
+<section id="worked-example-9-queue-delay-near-saturation" aria-labelledby="heading-worked-example-9-queue-delay-near-saturation">
+<h2 id="heading-worked-example-9-queue-delay-near-saturation">Worked example 9 — Queue delay near saturation</h2>
+<p>Use a classroom <strong>M/M/1</strong> model with an average service capacity <strong>μ = 100,000 transactions/s</strong> and an arrival rate <strong>λ = 80,000 transactions/s</strong>. Utilization is <strong>ρ = 0.8</strong>; mean time in the system is <strong>1 / (100,000 − 80,000) = 50 µs</strong>. The service-time mean alone is <strong>1/μ = 10 µs</strong>. Under these assumptions the difference—<strong>40 µs</strong>—is mean waiting, and Little's law predicts <strong>80,000 × 50 µs = 4</strong> transactions in the whole system on average.</p>
+<p>If arrivals rise to 95,000/s without increasing service capacity, mean modeled system time becomes <strong>200 µs</strong>, despite only an 18.75% increase in arrival rate. This steep rise illustrates why operating near capacity can damage response time. The M/M/1 assumptions are not valid specifications for a bus, where bursts, flow control, correlated arrivals and parallel engines can change the distribution. Use actual measurements before deriving service targets.</p>
+
+</section>
+<section id="worked-example-10-a-packet-blocked-behind-the-wrong-destination" aria-labelledby="heading-worked-example-10-a-packet-blocked-behind-the-wrong-destination">
+<h2 id="heading-worked-example-10-a-packet-blocked-behind-the-wrong-destination">Worked example 10 — A packet blocked behind the wrong destination</h2>
+<p>Imagine an input FIFO containing three packets in order: P1 destined for output X, P2 for output Y, and P3 for Y. Output X is busy for the next five arbitration slots, while output Y is ready now. If the fabric allows only the head of this shared FIFO to compete for service, P2 and P3 cannot advance even though Y could accept them. The observed output-Y utilization is low, while the input queue remains occupied. This is <strong>head-of-line blocking</strong>, not evidence that output Y lacks bandwidth.</p>
+<p>A design with separate virtual output queues could place X-bound and Y-bound packets into different queues, allowing Y packets to proceed under the appropriate ordering and fairness rules. The cost is extra state and scheduling complexity. Simply making the original FIFO deeper might hold more traffic but would not remove the blocked head condition. A diagnostic trace should record destination, queue position, output readiness, and arbitration eligibility for each packet.</p>
+
+</section>
+<section id="worked-example-11-bandwidth-delay-product-and-credit-starvation" aria-labelledby="heading-worked-example-11-bandwidth-delay-product-and-credit-starvation">
+<h2 id="heading-worked-example-11-bandwidth-delay-product-and-credit-starvation">Worked example 11 — Bandwidth-delay product and credit starvation</h2>
+<p>Suppose a credit-controlled route delivers <strong>8 GB/s</strong> of useful payload when continuously fed, with a <strong>2 µs</strong> time from data injection to effective reuse of the relevant buffer capacity. Its payload bandwidth-delay product is <strong>8 × 10⁹ × 2 × 10⁻⁶ = 16,000 bytes</strong>, about 15.6 KiB. If the sender has only <strong>8 KiB</strong> of usable outstanding payload capacity and all other assumptions hold, the latency-limited rate is at most <strong>8,192 / 2 µs = 4.096 GB/s</strong>.</p>
+<p>Increasing the capacity toward 16,000 bytes could remove that particular concurrency bottleneck. Beyond that threshold, additional credits may not improve throughput because the link rate is already reached. Actual fabrics often distinguish packet headers, payload credits, virtual channels, reserve slots, and return-credit timing; one aggregate byte pool is only a teaching abstraction. Count the resources that genuinely constrain issuance instead of blindly increasing buffer allocations.</p>
+
+</section>
+<section id="worked-example-12-a-multihop-path-with-and-without-contention" aria-labelledby="heading-worked-example-12-a-multihop-path-with-and-without-contention">
+<h2 id="heading-worked-example-12-a-multihop-path-with-and-without-contention">Worked example 12 — A multihop path with and without contention</h2>
+<p>An illustrative packet traverses <strong>five router stages</strong>, each contributing <strong>20 ns</strong> of fixed forwarding latency, then reaches a target with <strong>80 ns</strong> of nonoverlapped service. Without queueing or response-path cost, the forward portion is <strong>5 × 20 + 80 = 180 ns</strong>. During a competing burst, packets wait an additional 60 ns at router 2 and 140 ns at router 4. Their modeled time becomes <strong>380 ns</strong> even though none of the physical link rates has changed.</p>
+<p>If an alternate route has six 20 ns stages but avoids 200 ns of congestion, its modeled time is <strong>6 × 20 + 80 = 200 ns</strong>, lower than the congested five-hop path. This illustrates why shortest path by hops need not be fastest under load. Real adaptive routing must account for ordering, deadlock freedom, link availability and implementation-specific cost; a system cannot simply route every request arbitrarily in pursuit of lower delay.</p>
+
+</section>
+<section id="worked-example-13-average-latency-conceals-slow-completions" aria-labelledby="heading-worked-example-13-average-latency-conceals-slow-completions">
+<h2 id="heading-worked-example-13-average-latency-conceals-slow-completions">Worked example 13 — Average latency conceals slow completions</h2>
+<p>In a constructed experiment, <strong>98%</strong> of requests complete in <strong>5 µs</strong>, while <strong>2%</strong> complete in <strong>200 µs</strong> due to occasional congestion. Mean latency is <strong>0.98 × 5 + 0.02 × 200 = 8.9 µs</strong>. The median is 5 µs, but p99 falls in the 200 µs group for a sufficiently large sample following that distribution. A report containing only “average latency: 8.9 µs” fails to describe the experience of the slowest 1% of transactions.</p>
+<p>Now imagine an optimization that lowers the 5 µs group to 4 µs but leaves the 200 µs tail unchanged. Mean latency improves to <strong>7.92 µs</strong>, yet p99 remains near 200 µs. Conversely, reducing the rare congestion episode may greatly improve p99 with only a modest change in average. The relevant metric depends on whether the application values bulk throughput, common-case responsiveness, deadlines, or long-tail service reliability.</p>
+
+</section>
+<section id="worked-example-14-sharing-bandwidth-with-a-high-priority-control-flow" aria-labelledby="heading-worked-example-14-sharing-bandwidth-with-a-high-priority-control-flow">
+<h2 id="heading-worked-example-14-sharing-bandwidth-with-a-high-priority-control-flow">Worked example 14 — Sharing bandwidth with a high-priority control flow</h2>
+<p>A hypothetical 10 GB/s fabric carries a backlogged bulk stream and a control stream that injects <strong>1 GB/s on average</strong> but arrives in bursts. Assume the scheduler provides the control stream strict priority and every burst is admitted promptly while it remains below the physical capacity. During a control burst injecting 6 GB/s, the bulk stream can obtain at most roughly 4 GB/s of service if both share the same output and have equivalent per-byte costs. Between bursts, the bulk stream can use much more of the link.</p>
+<p>Even though the control stream averages only 1 GB/s, its peak behavior can cause substantial variation in the bulk stream's latency and throughput. A weighted service reservation or shaping policy might make sharing more predictable, but it can also increase control-flow wait time. Evaluation should report per-class byte rates, completion latencies, fairness and deadline misses—not only the link's 100% aggregate utilization during each burst.</p>
+
+</section>
+<section id="worked-example-15-an-end-to-end-bottleneck-investigation" aria-labelledby="heading-worked-example-15-an-end-to-end-bottleneck-investigation">
+<h2 id="heading-worked-example-15-an-end-to-end-bottleneck-investigation">Worked example 15 — An end-to-end bottleneck investigation</h2>
+<p>A DMA engine transfers data from an endpoint through a switch and host memory controller. Benchmarks show <strong>6 GB/s</strong> with one device and <strong>6 GB/s total</strong> after enabling a second identical device. The endpoint links each advertise more than 6 GB/s, so an engineer initially suspects the switch uplink. However, switch counters show only 6.5 GB/s of aggregate upstream traffic against 12 GB/s of sustainable capacity, while memory-controller telemetry shows a separate sustained 6 GB/s write-acceptance limit for the chosen memory region. That downstream memory service, not the switch, is the likely constraint.</p>
+<p>A controlled change moves one device’s target buffer to a different memory controller, and the combined completed rate rises to 10 GB/s while the switch remains below its capacity. This supports the memory-placement hypothesis. The inference still requires checking the altered workload, address mappings, cache effects, and device submission rate. The general method is to <strong>measure both sides of each candidate bottleneck</strong>, test one causal change, and validate that improved throughput has not introduced unacceptable tail latency or unfairness.</p>
+
+</section>
+<section id="comparison-of-bottleneck-signatures" aria-labelledby="heading-comparison-of-bottleneck-signatures">
+<h2 id="heading-comparison-of-bottleneck-signatures">Comparison of bottleneck signatures</h2>
+<p>The same complaint—“the bus is slow”—can emerge from different mechanisms. The following table is a conceptual guide; all signatures require corroboration with the actual protocol and hardware counters.</p>
+<table>
+<thead>
+<tr>
+  <th>Bottleneck type</th>
+  <th>Expected pattern</th>
+  <th>High-value discriminating test</th>
+  <th>Primary design lever</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Link bandwidth</td>
+  <td>Throughput plateaus near usable link capacity</td>
+  <td>Raise concurrency and observe rate plateau</td>
+  <td>Width, generation, alternative route, reduce bytes</td>
+</tr>
+<tr>
+  <td>Latency-limited issuance</td>
+  <td>Few in-flight requests and low link utilization</td>
+  <td>Increase independent outstanding work</td>
+  <td>Pipeline, queue depth, batching</td>
+</tr>
+<tr>
+  <td>Target service</td>
+  <td>Many outstanding requests, low completion rate</td>
+  <td>Observe target/controller queue and service</td>
+  <td>Placement, controller capacity, service optimization</td>
+</tr>
+<tr>
+  <td>Arbiter contention</td>
+  <td>Per-initiator latency shifts with competitors</td>
+  <td>Run isolated versus combined traffic</td>
+  <td>Scheduling/QoS, isolation, admission control</td>
+</tr>
+<tr>
+  <td>HOL blocking</td>
+  <td>Idle eligible output behind blocked FIFO head</td>
+  <td>Trace input destination and eligibility</td>
+  <td>Virtual output queues, alternative queue organization</td>
+</tr>
+<tr>
+  <td>Credit starvation</td>
+  <td>Idle transmitter awaiting receiver capacity</td>
+  <td>Correlate credits with buffer occupancy</td>
+  <td>Buffer-credit design, return-credit latency</td>
+</tr>
+<tr>
+  <td>Retries and errors</td>
+  <td>Transmitted traffic exceeds useful completions</td>
+  <td>Compare error/replay counters with dips</td>
+  <td>Signal integrity and recovery investigation</td>
+</tr>
+<tr>
+  <td>NUMA/coherence contention</td>
+  <td>Slowdowns tied to address and thread placement</td>
+  <td>Change placement under controlled conditions</td>
+  <td>Locality, partitioning, reduce false sharing</td>
+</tr>
+<tr>
+  <td>Bursty tail latency</td>
+  <td>Similar averages but large high percentiles</td>
+  <td>Inspect arrival and queue timeline</td>
+  <td>Shaping, class separation, capacity headroom</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="design-choices-and-practical-trade-offs" aria-labelledby="heading-design-choices-and-practical-trade-offs">
+<h2 id="heading-design-choices-and-practical-trade-offs">Design choices and practical trade-offs</h2>
+<p>Optimizing one metric may worsen another. Extra buffering absorbs bursts but increases stored in-flight work and can lengthen tail response. Larger bursts improve payload efficiency but can delay competing small transactions. A faster link may reduce serialization time but leave fixed controller latency unchanged. A wider crossbar improves concurrency at an area, timing, and power cost. Increasing transaction concurrency hides latency but may create queue pressure, replay, and unfairness.</p>
+<p>In real-time and safety-critical designs, deterministic access windows and conservative admission rules may be preferable to average-throughput optimization. In general-purpose computing, work-conserving arbitration and deep queues often improve aggregate utilization, but workload isolation still matters. In virtualized and multi-tenant environments, QoS and performance governance should be verified under adversarial or unexpectedly heavy workloads; their marketing labels alone do not establish guarantees.</p>
+<p>An architecture decision should therefore compare <strong>sustained useful throughput, latency distribution, deadline behavior, resource cost, energy, and recoverability</strong> for a documented workload mix. Treat unused theoretical bandwidth as potential headroom, not evidence that end-to-end service can actually consume it.</p>
+
+</section>
+<section id="specialist-glossary" aria-labelledby="heading-specialist-glossary">
+<h2 id="heading-specialist-glossary">Specialist glossary</h2>
+<ul>
+<li><strong>Acceptance:</strong> Protocol event in which a request or data beat is formally received.</li>
+<li><strong>Admission control:</strong> Policy limiting new work to preserve a resource or service objective.</li>
+<li><strong>Aggregate bandwidth:</strong> Sum of rates across specified directions or paths, requiring precise scope.</li>
+<li><strong>Arbitration:</strong> Selection among initiators or queued operations competing for shared service.</li>
+<li><strong>Backpressure:</strong> Mechanism that slows upstream injection when downstream readiness or capacity is limited.</li>
+<li><strong>Bandwidth:</strong> Maximum or sustainable data-transfer capacity at a defined boundary.</li>
+<li><strong>Bandwidth-delay product:</strong> Transfer rate multiplied by relevant path delay, estimating required in-flight data.</li>
+<li><strong>Beat:</strong> One data-transfer unit under a particular interface timing contract.</li>
+<li><strong>Bisection bandwidth:</strong> Capacity connecting two halves of a network under a specified partition.</li>
+<li><strong>Bridge:</strong> Component joining interconnect domains while possibly translating protocol or timing.</li>
+<li><strong>Bufferbloat:</strong> Excess latency associated with large persistent queues, where applicable.</li>
+<li><strong>Burst:</strong> Transaction or traffic cluster that transfers multiple items over a short interval.</li>
+<li><strong>Busy fraction:</strong> Share of observed opportunities during which a particular resource is serving work.</li>
+<li><strong>Cache coherence:</strong> Coordination of cached copies of shared memory data across agents.</li>
+<li><strong>Completion:</strong> Protocol-defined event indicating a named operation has finished at a specified boundary.</li>
+<li><strong>Congestion:</strong> State where offered demand exceeds or strains available service at one or more resources.</li>
+<li><strong>Control traffic:</strong> Nonpayload messages used for routing, management, acknowledgment, or coherence.</li>
+<li><strong>Credit:</strong> Flow-control permission corresponding to receiver-side buffering or other capacity.</li>
+<li><strong>Critical path:</strong> Sequence of dependent work determining latency of the observed operation.</li>
+<li><strong>Cycle:</strong> Timing interval tied to an interface or processor clock, not universally one transfer.</li>
+<li><strong>Data beat:</strong> Accepted unit of data on a transfer channel.</li>
+<li><strong>Deadlock:</strong> Situation in which agents wait cyclically on resources with no permitted progress.</li>
+<li><strong>Delivered load:</strong> Work actually completed at the defined destination or observation boundary.</li>
+<li><strong>DMA:</strong> Direct memory access, memory transfers initiated by devices or DMA controllers.</li>
+<li><strong>Duplex:</strong> Directionality of a link; full duplex permits simultaneous bidirectional traffic.</li>
+<li><strong>Endpoint:</strong> Terminal device or component of an interconnect route.</li>
+<li><strong>Fairness:</strong> Property describing how shared service is distributed among eligible participants.</li>
+<li><strong>Flow control:</strong> Regulation of injection according to buffer availability or other capacity.</li>
+<li><strong>Flit:</strong> Flow-control unit used in some packet-based fabrics and networks-on-chip.</li>
+<li><strong>Full duplex:</strong> Simultaneous transfer in both directions under separately defined capacities.</li>
+<li><strong>GB/s:</strong> Decimal gigabytes per second, where a gigabyte is 10^9 bytes.</li>
+<li><strong>GiB:</strong> Gibibyte, equal to 2^30 bytes.</li>
+<li><strong>Head-of-line blocking:</strong> Queue restriction in which a blocked front item prevents later serviceable items from proceeding.</li>
+<li><strong>Histogram:</strong> Distribution of observed values grouped into defined ranges.</li>
+<li><strong>HOL:</strong> Abbreviation for head-of-line blocking.</li>
+<li><strong>In-flight work:</strong> Operations accepted but not yet completed at the chosen boundary.</li>
+<li><strong>Initiator:</strong> Agent requesting a transaction or originating a data transfer.</li>
+<li><strong>IOPS:</strong> Input/output operations per second, meaningful with operation type and size.</li>
+<li><strong>IPC:</strong> Instructions per cycle, a processor metric not directly equivalent to link throughput.</li>
+<li><strong>Latency:</strong> Elapsed time between named initiation and completion observations.</li>
+<li><strong>Latency hiding:</strong> Overlapping independent operations so useful throughput exceeds single-operation rate.</li>
+<li><strong>Little's law:</strong> Stable-system relation N̄ = λ × W̄ between average population, throughput, and time.</li>
+<li><strong>Loaded latency:</strong> Transaction response time measured under competing or significant load.</li>
+<li><strong>Mean:</strong> Arithmetic average of a set of observations.</li>
+<li><strong>Memory controller:</strong> Agent organizing and scheduling transactions into memory-technology operations.</li>
+<li><strong>MMIO:</strong> Memory-mapped I/O, device access through mapped address-space locations.</li>
+<li><strong>MSI-X:</strong> Message-signaled interrupt capability with multiple vectors in appropriate PCIe systems.</li>
+<li><strong>NoC:</strong> Network-on-chip, communication network implemented within an integrated circuit.</li>
+<li><strong>NUMA:</strong> Non-uniform memory access, where access cost depends on placement and topology.</li>
+<li><strong>Offered load:</strong> Work that initiators attempt to inject, whether or not it can be admitted.</li>
+<li><strong>Occupancy:</strong> Count or fraction of allocated queue or buffer capacity at a defined instant or average.</li>
+<li><strong>Outstanding transaction:</strong> Accepted transaction awaiting its defined completion.</li>
+<li><strong>Oversubscription:</strong> Aggregate demand greater than usable capacity of a shared resource.</li>
+<li><strong>P99:</strong> 99th-percentile response-time statistic of a specified measured population.</li>
+<li><strong>Packet:</strong> Framed message containing control information and potentially data payload.</li>
+<li><strong>Payload:</strong> User-relevant information within a larger transport or protocol unit.</li>
+<li><strong>PCIe:</strong> PCI Express, serial point-to-point interconnect and switch-fabric family.</li>
+<li><strong>Percentile:</strong> Statistical value describing a cumulative proportion of observations.</li>
+<li><strong>Propagation delay:</strong> Time for a signal to traverse the physical medium.</li>
+<li><strong>QoS:</strong> Quality of service, policies or metrics differentiating traffic treatment.</li>
+<li><strong>Queue depth:</strong> Number of pending or in-flight operations at a defined observation point.</li>
+<li><strong>Queueing delay:</strong> Time spent waiting for service availability rather than being served.</li>
+<li><strong>Read completion:</strong> Response carrying requested data or status under a protocol's rules.</li>
+<li><strong>Retry:</strong> Repetition of an operation or message after a defined failure or recovery event.</li>
+<li><strong>Serialization delay:</strong> Time required to transmit a packet or data unit at a stated effective rate.</li>
+<li><strong>Service rate:</strong> Rate at which a resource can complete defined work under given conditions.</li>
+<li><strong>Skew:</strong> Relative timing difference between signals or clock edges, relevant to physical timing.</li>
+<li><strong>Stall:</strong> Period during which an operation cannot make expected forward progress.</li>
+<li><strong>Sustained throughput:</strong> Completed useful payload or work rate maintained over an interval.</li>
+<li><strong>Tail latency:</strong> Behavior of the slow end of the response-time distribution.</li>
+<li><strong>Throughput:</strong> Completed useful work per unit time at a defined boundary.</li>
+<li><strong>Traffic class:</strong> Set of operations given a common scheduling or QoS policy.</li>
+<li><strong>Transaction:</strong> Protocol-defined request and associated response or completion behavior.</li>
+<li><strong>Unloaded latency:</strong> Response time with negligible competing queue pressure.</li>
+<li><strong>Utilization:</strong> Used share of a precisely defined resource's service capacity or opportunities.</li>
+<li><strong>Virtual channel:</strong> Separate logical buffering/flow-control class over shared physical links.</li>
+<li><strong>Virtual output queue:</strong> Input-side queue separated by desired output to reduce particular HOL effects.</li>
+<li><strong>Working set:</strong> Data or operations actively involved in workload over a relevant interval.</li>
+</ul>
+
+</section>
+<section id="references-and-further-technical-reading" aria-labelledby="heading-references-and-further-technical-reading">
+<h2 id="heading-references-and-further-technical-reading">References and further technical reading</h2>
+<p>The following primary standards, vendor documentation, and measurement references support the article's concepts. Their detailed performance event definitions and protocol requirements should be checked for the actual generation, implementation, and platform in use.</p>
+<ol>
+<li>Arm, <a href="https://documentation-service.arm.com/static/6800e9e95b1a8c5a27aa1a59">Learn the Architecture: An Introduction to AMBA AXI</a>. Explains independent channels, VALID/READY acceptance, multiple outstanding transactions, and related concepts.</li>
+<li>Arm, <a href="https://documentation-service.arm.com/static/602a9df190ee6824a1e02b98">AMBA AXI and ACE Protocol Specification</a>. Protocol-specific ordering, responses and transfer conditions; consult the current issue applicable to a design.</li>
+<li>Arm, <a href="https://www.arm.com/architecture/system-architectures/amba">AMBA System Architectures</a>. Context for AXI, coherence and SoC communication.</li>
+<li>Arm, <a href="https://www.arm.com/architecture/system-architectures/amba/amba-4">AMBA 4 and AXI-Stream</a>. Interface roles and transaction patterns in on-chip systems.</li>
+<li>PCI-SIG, <a href="https://pcisig.com/specifications">PCI Express Specifications</a>. Normative link, packet, credit and ordering specifications, subject to membership or license conditions.</li>
+<li>PCI-SIG, <a href="https://pcisig.com/faq?field_category_value%5B%5D=pci_express_3.0">PCI Express FAQ</a>. Encoding and signal-rate distinctions for representative PCIe generations.</li>
+<li>Intel, <a href="https://www.intel.com/content/www/us/en/download/736633/intel-memory-latency-checker-intel-mlc.html">Memory Latency Checker</a>. Tool for examining memory latency and bandwidth under changing load and NUMA placement.</li>
+<li>Intel, <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/vtune-platform-profiler.html">VTune Platform Profiler</a>. System-level performance metrics including memory and I/O utilization and throughput.</li>
+<li>Intel, <a href="https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-2/analyze-platform-performance.html">VTune: Analyze Platform Performance</a>. Topology and utilization of system links and memory domains.</li>
+<li>Intel, <a href="https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2024-1/memory-usage-view.html">VTune: Memory Usage View</a>. Bandwidth and local-versus-remote memory bottleneck investigation.</li>
+<li>Linux Kernel project, <a href="https://github.com/torvalds/linux/blob/master/tools/perf/Documentation/perf-stat.txt">perf stat documentation</a>. Hardware-event collection and limitations, including multiplexing.</li>
+<li>Linux Kernel project, <a href="https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux-stable/%2B/master/tools/perf/Documentation/perf-c2c.txt">perf c2c documentation</a>. Cache-line sharing and contention analysis where supported.</li>
+<li>Linux manual-pages project, <a href="https://man7.org/linux/man-pages/man1/perf-stat.1.html">perf stat manual</a>. Practical statistic collection and measurement modes.</li>
+<li>Linux manual-pages project, <a href="https://man7.org/linux/man-pages/man1/perf-c2c.1.html">perf c2c manual</a>. Shared-data event investigation and attribution limitations.</li>
+<li>Arm, <a href="https://developer.arm.com/-/media/Arm%20Developer%20Community/PDF/Quality%20of%20Service%20QoS%20in%20Arm%20Systems.pdf">Quality of Service in Arm Systems</a>. Outstanding-request regulation and QoS mechanisms; system-specific guarantees still require verification.</li>
+<li>Intel, <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/finding-your-memory-access-performance-bottlenecks.html">Finding Your Memory Access Performance Bottlenecks</a>. Methodology for separating memory-latency, memory-bandwidth and cross-socket effects.</li>
+</ol>
+
+</section>
+<section id="sub-articles-in-the-bus-systems-unit" aria-labelledby="heading-sub-articles-in-the-bus-systems-unit">
+<h2 id="heading-sub-articles-in-the-bus-systems-unit">Sub-Articles in the Bus Systems unit</h2>
+<p>This is <strong>Level 5 specialist article 17 of 20</strong>. The linked articles below are <strong>sibling specialist pages</strong>, not deeper children. Planned links are intentionally active even when their destination is not yet deployed; their presence does not assert publication.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-width-transfer-rate-and-efficiency">Bus Width, Transfer Rate, and Efficiency</a> — widths, coding efficiency and theoretical service ceilings.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-arbitration-and-access-priority">Bus Arbitration and Access Priority</a> — policies allocating shared communication resources.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-transactions-and-protocol-phases">Bus Transactions and Protocol Phases</a> — acceptance, response, backpressure and transaction lifecycle.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-topologies-and-interconnect-hierarchies">Bus Topologies and Interconnect Hierarchies</a> — routes, shared segments and hierarchy.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/direct-memory-access-and-bus-mastering">Direct Memory Access and Bus Mastering</a> — device-initiated transfers and outstanding work.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence">Transaction Ordering and Memory Coherence</a> — ordering and visibility constraints on reordering.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow">PCI Express Architecture and Transaction Flow</a> — concrete switch and transaction semantics.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/on-chip-buses-and-networks-on-chip">On-Chip Buses and Networks-on-Chip</a> — internal fabric architecture and router-level resources.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/switched-fabrics-and-packet-based-interconnects">Switched Fabrics and Packet-Based Interconnects</a> — multihop flows, virtual channels and routing.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/processor-memory-and-storage-interconnects">Processor, Memory, and Storage Interconnects</a> — endpoint and controller distinctions.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-signal-integrity-and-electrical-constraints">Bus Signal Integrity and Electrical Constraints</a> — physical factors affecting link service rates.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-isolation-and-device-security">Interconnect Isolation and Device Security</a> — boundaries and resource isolation under concurrent traffic.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-error-detection-diagnostics-and-recovery">Bus Error Detection, Diagnostics, and Recovery</a> — error reporting, retry and recovery behavior.</li>
+</ul>
+
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>These articles lie outside the Bus Systems unit and supply complementary architectural or system-level explanations.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems overview</a> — introductory overview of hardware communication pathways.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/computer-architecture-overview">Computer Architecture Overview</a> — entire processor, memory and I/O system organization.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — core-level execution and memory access mechanisms.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture-articles/performance-counters-and-cpi-analysis">Performance Counters and CPI Analysis</a> — processor-local measurement and metric interpretation.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> — locality, cache structure and memory-service effects.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/parallel-architecture">Parallel Architecture</a> — scaling concurrent execution and data movement.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/motherboards-and-buses">Motherboards and Buses</a> — physical platform and expansion integration.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> — processor components as initiators and targets.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/storage-hardware">Storage Hardware</a> — persistent media and controller-level behavior.</li>
+<li><a href="/library/encyclopedia/computer-science/software-systems/device-and-io-management">Device and I/O Management</a> — operating-system interfaces and queue coordination.</li>
+</ul>
+
+</section>
+<section id="editorial-scope-and-publication-status" aria-labelledby="heading-editorial-scope-and-publication-status">
+<h2 id="heading-editorial-scope-and-publication-status">Editorial scope and publication status</h2>
+<p><strong>Completed deliverable:</strong> a standalone MGU Level 5 reference article on interconnect performance, with explicitly modeled formulas, invented illustrative workloads, measured-versus-inferred distinctions, decision frameworks, references and sibling navigation. The unit's parent overview and directory index are not modified by this file. <strong>Publication is not asserted:</strong> deployment, runtime component loading, and link availability depend on the MGU website.</p>
+<p>This article addresses latency, throughput and contention as an integrated <strong>service and workload</strong> problem, not as a substitute for detailed physical-layer design, bus protocol specifications, cache coherence proofs or operating-system driver implementation. Its examples deliberately avoid claiming a particular platform has been benchmarked. The next planned Bus Systems specialist article is <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-signal-integrity-and-electrical-constraints">Bus Signal Integrity and Electrical Constraints</a>.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPU Cache Hierarchies and Locality | MGU Computer Science Encyclopedia | Malone Global University</title>
+<meta name="description" content="CPU cache hierarchy and locality: L1/L2/LLC organization, cache lines, associativity, replacement, writes, prefetch, miss metrics, data layout, NUMA, and practical performance methods.">
+<meta name="keywords" content="CPU cache, L1 cache, L2 cache, L3 cache, last-level cache, locality, cache line, associativity, cache miss, write-back, prefetch, false sharing, blocking, AMAT, cache performance">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CPU Cache Hierarchies and Locality | MGU Encyclopedia">
+<meta property="og:description" content="A technical guide to CPU cache operation, locality, miss analysis, cache-aware data layout, and empirical performance engineering.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>CPU Cache Hierarchies and Locality</h1>
+<p class="subtitle">How processor caches hold, move, replace, and share data—and how locality, access patterns, and measurement determine real CPU performance.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#scope-and-central-question">Scope and Central Question</a></li>
+<li><a href="#learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</a></li>
+<li><a href="#why-a-hierarchy-exists">Why a Hierarchy Exists</a></li>
+<li><a href="#l1-instruction-cache-and-l1-data-cache">L1 Instruction Cache and L1 Data Cache</a></li>
+<li><a href="#l2-l3-and-the-last-level-cache">L2, L3, and the Last-Level Cache</a></li>
+<li><a href="#private-cluster-shared-and-system-level-capacity">Private, Cluster-Shared, and System-Level Capacity</a></li>
+<li><a href="#cache-lines-as-the-unit-of-movement">Cache Lines as the Unit of Movement</a></li>
+<li><a href="#line-boundaries-and-spatial-utilization">Line Boundaries and Spatial Utilization</a></li>
+<li><a href="#address-fields-sets-ways-and-tags">Address Fields, Sets, Ways, and Tags</a></li>
+<li><a href="#worked-example-cache-geometry">Worked Example: Cache Geometry</a></li>
+<li><a href="#direct-mapped-set-associative-and-fully-associative">Direct-Mapped, Set-Associative, and Fully Associative</a></li>
+<li><a href="#compulsory-capacity-and-conflict-misses">Compulsory, Capacity, and Conflict Misses</a></li>
+<li><a href="#executable-set-associative-lru-model">Executable Set-Associative LRU Model</a></li>
+<li><a href="#conflict-trace-why-alignment-alone-is-not-enough">Conflict Trace: Why Alignment Alone Is Not Enough</a></li>
+<li><a href="#temporal-locality">Temporal Locality</a></li>
+<li><a href="#spatial-locality">Spatial Locality</a></li>
+<li><a href="#working-sets-and-cache-residency">Working Sets and Cache Residency</a></li>
+<li><a href="#how-cpu-cache-policy-differs-from-software-cache-policy">How CPU Cache Policy Differs from Software Cache Policy</a></li>
+<li><a href="#inclusive-exclusive-and-noninclusive-designs">Inclusive, Exclusive, and Noninclusive Designs</a></li>
+<li><a href="#tags-valid-bits-dirty-bits-and-replacement-metadata">Tags, Valid Bits, Dirty Bits, and Replacement Metadata</a></li>
+<li><a href="#write-through-and-write-back-policies">Write-Through and Write-Back Policies</a></li>
+<li><a href="#write-allocate-read-for-ownership-and-streaming-stores">Write-Allocate, Read-for-Ownership, and Streaming Stores</a></li>
+<li><a href="#write-buffers-evictions-and-backpressure">Write Buffers, Evictions, and Backpressure</a></li>
+<li><a href="#replacement-policies-lru-and-beyond">Replacement Policies: LRU and Beyond</a></li>
+<li><a href="#an-lru-trace-and-reuse-distance">An LRU Trace and Reuse Distance</a></li>
+<li><a href="#hardware-prefetchers">Hardware Prefetchers</a></li>
+<li><a href="#software-prefetch-hints-and-their-limits">Software Prefetch Hints and Their Limits</a></li>
+<li><a href="#sequential-strided-and-random-access-patterns">Sequential, Strided, and Random Access Patterns</a></li>
+<li><a href="#memory-level-parallelism-and-nonblocking-caches">Memory-Level Parallelism and Nonblocking Caches</a></li>
+<li><a href="#load-buffers-store-to-load-forwarding-and-hit-under-miss">Load Buffers, Store-to-Load Forwarding, and Hit-Under-Miss</a></li>
+<li><a href="#address-translation-and-cache-lookup">Address Translation and Cache Lookup</a></li>
+<li><a href="#virtual-aliases-synonyms-and-address-space-isolation">Virtual Aliases, Synonyms, and Address-Space Isolation</a></li>
+<li><a href="#instruction-cache-consistency-and-generated-code">Instruction-Cache Consistency and Generated Code</a></li>
+<li><a href="#cache-management-operations-and-dma-boundaries">Cache Management Operations and DMA Boundaries</a></li>
+<li><a href="#cache-coherence-ownership-and-sharing">Cache Coherence, Ownership, and Sharing</a></li>
+<li><a href="#false-sharing-and-cache-line-granularity">False Sharing and Cache-Line Granularity</a></li>
+<li><a href="#access-latency-throughput-and-bandwidth">Access Latency, Throughput, and Bandwidth</a></li>
+<li><a href="#average-memory-access-time-a-simplified-model">Average Memory Access Time: A Simplified Model</a></li>
+<li><a href="#local-versus-global-miss-rates">Local Versus Global Miss Rates</a></li>
+<li><a href="#why-cache-misses-do-not-directly-equal-stall-cycles">Why Cache Misses Do Not Directly Equal Stall Cycles</a></li>
+<li><a href="#memory-bound-versus-compute-bound-phases">Memory-Bound Versus Compute-Bound Phases</a></li>
+<li><a href="#a-simple-bandwidth-lower-bound">A Simple Bandwidth Lower Bound</a></li>
+<li><a href="#working-set-transitions-and-capacity-knees">Working-Set Transitions and Capacity Knees</a></li>
+<li><a href="#array-of-structures-versus-structure-of-arrays">Array-of-Structures Versus Structure-of-Arrays</a></li>
+<li><a href="#worked-layout-utilization-estimate">Worked Layout Utilization Estimate</a></li>
+<li><a href="#loop-order-and-row-major-matrices">Loop Order and Row-Major Matrices</a></li>
+<li><a href="#cache-blocking-and-tiling">Cache Blocking and Tiling</a></li>
+<li><a href="#a-conservative-tile-capacity-calculation">A Conservative Tile-Capacity Calculation</a></li>
+<li><a href="#pointer-chasing-and-dependent-memory-loads">Pointer Chasing and Dependent Memory Loads</a></li>
+<li><a href="#data-packing-alignment-and-padding">Data Packing, Alignment, and Padding</a></li>
+<li><a href="#multithreading-affinity-and-cache-sharing">Multithreading, Affinity, and Cache Sharing</a></li>
+<li><a href="#numa-and-multi-socket-effects">NUMA and Multi-Socket Effects</a></li>
+<li><a href="#measuring-hardware-events-responsibly">Measuring Hardware Events Responsibly</a></li>
+<li><a href="#a-controlled-locality-benchmark-plan">A Controlled Locality Benchmark Plan</a></li>
+<li><a href="#checklist-for-interpreting-a-cache-benchmark">Checklist for Interpreting a Cache Benchmark</a></li>
+<li><a href="#applied-scenario-1-a-table-scan-slows-after-a-schema-change">Applied Scenario 1 — A Table Scan Slows After a Schema Change</a></li>
+<li><a href="#applied-scenario-2-matrix-multiplication-benefits-from-tiling">Applied Scenario 2 — Matrix Multiplication Benefits from Tiling</a></li>
+<li><a href="#applied-scenario-3-a-lock-free-counter-suffers-false-sharing">Applied Scenario 3 — A Lock-Free Counter Suffers False Sharing</a></li>
+<li><a href="#applied-scenario-4-a-random-access-index-becomes-latency-bound">Applied Scenario 4 — A Random-Access Index Becomes Latency Bound</a></li>
+<li><a href="#applied-scenario-5-a-cpu-and-noncoherent-device-exchange-buffers">Applied Scenario 5 — A CPU and Noncoherent Device Exchange Buffers</a></li>
+<li><a href="#applied-scenario-6-a-shared-llc-becomes-a-multitenant-bottleneck">Applied Scenario 6 — A Shared LLC Becomes a Multitenant Bottleneck</a></li>
+<li><a href="#common-design-errors-and-misinterpretations">Common Design Errors and Misinterpretations</a></li>
+<li><a href="#comparison-of-locality-improvement-techniques">Comparison of Locality Improvement Techniques</a></li>
+<li><a href="#ten-gate-cache-and-locality-engineering-framework">Ten-Gate Cache and Locality Engineering Framework</a></li>
+<li><a href="#worked-decision-example-table-size-versus-associativity">Worked Decision Example — Table Size Versus Associativity</a></li>
+<li><a href="#guided-exercise-1-compute-a-set-and-tag">Guided Exercise 1 — Compute a Set and Tag</a></li>
+<li><a href="#guided-exercise-2-separate-miss-categories">Guided Exercise 2 — Separate Miss Categories</a></li>
+<li><a href="#guided-exercise-3-estimate-serial-amat">Guided Exercise 3 — Estimate Serial AMAT</a></li>
+<li><a href="#guided-exercise-4-diagnose-a-multithreaded-regression">Guided Exercise 4 — Diagnose a Multithreaded Regression</a></li>
+<li><a href="#guided-exercise-5-design-a-working-set-sweep">Guided Exercise 5 — Design a Working-Set Sweep</a></li>
+<li><a href="#review-questions">Review Questions</a></li>
+<li><a href="#glossary">Glossary</a></li>
+<li><a href="#complete-cpu-specialist-directory">Complete CPU Specialist Directory</a></li>
+<li><a href="#related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</a></li>
+<li><a href="#primary-documentation-and-further-reading">Primary Documentation and Further Reading</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="scope-and-central-question" aria-labelledby="heading-scope-and-central-question"><h2 id="heading-scope-and-central-question">Scope and Central Question</h2>
+<p>A CPU core can issue an arithmetic operation in only a few cycles, but the operands may reside beyond the core in memory whose access time is substantially longer. <strong>CPU caches</strong> are small, comparatively fast storage structures that keep recently used instructions and data near execution units. <strong>Locality</strong> describes the tendency of software to use the same addresses again or access addresses near those already touched. The central engineering question is not simply whether a processor has a large cache: it is <strong>which requests reach which level, why lines remain or are displaced, and whether a program can reuse fetched information before it leaves the hierarchy</strong>.</p>
+<p>This article is <strong>CPU specialist article 13 of 24</strong> in the Hardware Systems division. Its subject is the physical and operational organization of CPU instruction/data caches, common mapping and replacement choices, private/shared capacity, allocation and write policies, miss handling, and program-access behavior. It distinguishes <strong>architectural semantics</strong>—what a load or store must mean—from <strong>microarchitectural performance</strong>—how long a data access takes and where its bytes are found. A cache hit must not change the values that a correctly synchronized program observes; a cache miss may delay a result without altering the instruction's logical meaning.</p>
+<p>The subject overlaps but does not duplicate neighboring articles. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a> owns virtual-to-physical translation; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a> owns multi-agent consistency protocols and atomic operations; and <a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> owns the broader architectural abstraction across storage technologies. Here the focus is the actual <strong>CPU cache organization and its measurable effect on locality</strong>.</p>
+
+</section>
+<section id="learning-objectives-and-prerequisites" aria-labelledby="heading-learning-objectives-and-prerequisites"><h2 id="heading-learning-objectives-and-prerequisites">Learning Objectives and Prerequisites</h2>
+<p>After reading, a student should be able to distinguish L1 instruction, L1 data, midlevel, and last-level caches; compute block number, set, and tag for a toy set-associative cache; separate compulsory, capacity, and conflict misses; explain write-back/write-through and write-allocate/no-write-allocate policies; and trace how locality, prefetch, contention, and cache sharing affect an application. The student should also be able to derive a simple average-memory-access-time estimate, explain why measured latency does not equal a single cache's specification, and design fair before/after locality experiments.</p>
+<p>Prerequisites are binary addressing, loads and stores, arrays, basic CPU pipelines, and a distinction between virtual and physical addresses. The Python examples are <strong>teaching models</strong>: they illustrate mapping or logical miss behavior, not an exact prediction of a real Intel, AMD, Arm, or RISC-V product. Cache sizes, line sizes, indexing mechanisms, bypass rules, coherency, and prefetch algorithms must be verified against the specific processor or platform under study.</p>
+
+</section>
+<section id="why-a-hierarchy-exists" aria-labelledby="heading-why-a-hierarchy-exists"><h2 id="heading-why-a-hierarchy-exists">Why a Hierarchy Exists</h2>
+<p>Fast small storage is expensive in area and power per stored bit, while large off-core memory has much higher effective latency to the requesting core. A hierarchy attempts to offer fast access to the program's frequently needed working subset while using larger slower levels for capacity. The design must balance capacity, access latency, sustainable bandwidth, hit rates, energy, die area, access ports, wire lengths, and contention among clients.</p>
+<p>A typical path is <strong>load/store unit → L1 data cache → L2 cache → shared last-level cache or system-level structures → memory controller → DRAM</strong>. But this is a teaching topology: a hit may be supplied by a sibling core through a coherence protocol, an L2 may be shared in some designs, and not every CPU has exactly three levels. Instruction fetch uses an instruction-side path, often beginning at a separate L1 instruction cache. Prefetch requests and writebacks run alongside demand requests rather than waiting for every demand access to finish.</p>
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1190 690" role="img" aria-labelledby="cache-title cache-description" style="display:block;max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px" fill="none" stroke="currentColor" stroke-width="2">
+<title id="cache-title">Conceptual multicore CPU cache and memory hierarchy</title>
+<desc id="cache-description">Two CPU cores have private L1 instruction and data caches and private L2 caches, linked to a shared last-level cache, a memory controller, and DRAM. Demand requests flow toward memory and returned lines move toward cores. A separate line shows prefetch and coherence traffic. This is a teaching organization and does not imply every processor uses L1, private L2, shared L3, or an inclusive cache design.</desc>
+<defs><marker id="cache-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="currentColor" stroke="none"/></marker></defs>
+<rect x="35" y="75" width="540" height="355" rx="14"/>
+<rect x="615" y="75" width="540" height="355" rx="14"/>
+<rect x="95" y="138" width="420" height="72" rx="8"/>
+<rect x="675" y="138" width="420" height="72" rx="8"/>
+<rect x="95" y="248" width="192" height="74" rx="8"/>
+<rect x="323" y="248" width="192" height="74" rx="8"/>
+<rect x="675" y="248" width="192" height="74" rx="8"/>
+<rect x="903" y="248" width="192" height="74" rx="8"/>
+<rect x="175" y="353" width="255" height="52" rx="8"/>
+<rect x="755" y="353" width="255" height="52" rx="8"/>
+<rect x="350" y="472" width="490" height="62" rx="10"/>
+<rect x="390" y="570" width="410" height="47" rx="10"/>
+<rect x="440" y="646" width="310" height="35" rx="8"/>
+<path d="M210 210V245" marker-end="url(#cache-arrow)"/>
+<path d="M408 210V245" marker-end="url(#cache-arrow)"/>
+<path d="M790 210V245" marker-end="url(#cache-arrow)"/>
+<path d="M988 210V245" marker-end="url(#cache-arrow)"/>
+<path d="M210 322V351" marker-end="url(#cache-arrow)"/>
+<path d="M408 322V351" marker-end="url(#cache-arrow)"/>
+<path d="M790 322V351" marker-end="url(#cache-arrow)"/>
+<path d="M988 322V351" marker-end="url(#cache-arrow)"/>
+<path d="M303 405V450H510V472" marker-end="url(#cache-arrow)"/>
+<path d="M883 405V450H680V472" marker-end="url(#cache-arrow)"/>
+<path d="M595 534V570" marker-end="url(#cache-arrow)"/>
+<path d="M595 617V646" marker-end="url(#cache-arrow)"/>
+<g fill="currentColor" stroke="none" text-anchor="middle" font-family="system-ui,Arial,sans-serif">
+<text x="595" y="37" font-size="27" font-weight="700">A Conceptual Two-Core CPU Cache Hierarchy</text>
+<text x="305" y="112" font-size="23" font-weight="700">Core 0 — private resources</text>
+<text x="885" y="112" font-size="23" font-weight="700">Core 1 — private resources</text>
+<text x="305" y="181" font-size="19" font-weight="700">Fetch, Decode, Execute and Load/Store</text>
+<text x="885" y="181" font-size="19" font-weight="700">Fetch, Decode, Execute and Load/Store</text>
+<text x="191" y="281" font-size="20" font-weight="700">L1 Instruction</text>
+<text x="419" y="281" font-size="20" font-weight="700">L1 Data</text>
+<text x="771" y="281" font-size="20" font-weight="700">L1 Instruction</text>
+<text x="999" y="281" font-size="20" font-weight="700">L1 Data</text>
+<text x="302" y="386" font-size="21" font-weight="700">Private L2</text>
+<text x="882" y="386" font-size="21" font-weight="700">Private L2</text>
+<text x="595" y="510" font-size="23" font-weight="700">Shared Last-Level Cache / Interconnect</text>
+<text x="595" y="600" font-size="21" font-weight="700">Memory Controller</text>
+<text x="595" y="673" font-size="21" font-weight="700">DRAM</text>
+<text x="595" y="65" font-size="15">Not a universal design; real caches vary by product, topology, allocation and inclusion policies</text>
+</g></svg>
+<figcaption>A teaching hierarchy with distinct L1 instruction/data caches, private L2 caches and a shared last-level structure. Arrows trace possible access paths, not one required timing sequence. Prefetch, remote-core cache-to-cache transfers, directories, DMA agents and outstanding misses are intentionally omitted for readability.</figcaption>
+</figure>
+
+<p>The diagram emphasizes <strong>possible service paths</strong>, not a mandatory inclusive nesting. Each level stores <strong>copies of blocks</strong>, while requests can be outstanding at several levels simultaneously. The fastest level is normally accessed first from the requesting core's perspective, but parallel lookups, speculative activity, bypasses, and data returned from other agents complicate a literal one-box-after-another interpretation.</p>
+
+</section>
+<section id="l1-instruction-cache-and-l1-data-cache" aria-labelledby="heading-l1-instruction-cache-and-l1-data-cache"><h2 id="heading-l1-instruction-cache-and-l1-data-cache">L1 Instruction Cache and L1 Data Cache</h2>
+<p>Most high-performance general-purpose cores use distinct first-level instruction and data caches. The L1 instruction cache supplies instruction bytes to the fetch/decode front end; the L1 data cache serves load and store pipelines. This separation allows simultaneous front-end and data-side activity and lets each structure be optimized for its access pattern. Some processors, especially simpler embedded implementations, instead use unified caches, scratchpads, or no cache at all.</p>
+<p>An L1 cache favors low latency and high access bandwidth. Its hit latency is not an ISA guarantee, and a different addressing mode, alignment, load width, frequency, or core generation can change the observed interval from request to usable data. A hit in an L1 data cache also need not be the same thing as a <strong>completed architectural load</strong>: dependencies, load queues, address generation, forwarding, replay, faults, and retirement can affect when software sees the result.</p>
+
+</section>
+<section id="l2-l3-and-the-last-level-cache" aria-labelledby="heading-l2-l3-and-the-last-level-cache"><h2 id="heading-l2-l3-and-the-last-level-cache">L2, L3, and the Last-Level Cache</h2>
+<p>A second-level cache commonly supplies a larger working set and absorbs misses from one or more L1 caches. An L3 or system-level cache often pools capacity across cores or clusters, although platforms differ widely in sharing scope, interconnect topology, and whether every core can reach every cache slice at identical latency. <strong>Last-level cache (LLC)</strong> names the final cache level before some other memory source, not a universal synonym for L3: an implementation can have two, three, or more cache levels.</p>
+<p>A shared cache can improve effective reuse when related threads share a dataset, yet can also create interference when unrelated threads compete for capacity, fill bandwidth, or interconnect paths. A larger last-level cache cannot rescue an algorithm whose critical working set repeatedly thrashes in L1, whose access pattern defeats prefetch, or whose dependency chain admits very little overlapping work. Capacity is one resource among several.</p>
+
+</section>
+<section id="private-cluster-shared-and-system-level-capacity" aria-labelledby="heading-private-cluster-shared-and-system-level-capacity"><h2 id="heading-private-cluster-shared-and-system-level-capacity">Private, Cluster-Shared, and System-Level Capacity</h2>
+<p>A <strong>private cache</strong> is normally associated with a single core or a bounded set of hardware-thread contexts. A <strong>shared cache</strong> can accept requests from multiple cores, which may benefit from data reuse or suffer from mutual eviction. A chip with several last-level cache slices may present a logically shared cache while routing each request to a physically distributed home. Cross-slice traffic and nonuniform access distances are possible.</p>
+<p>When interpreting a product's advertised cache, determine whether a stated capacity is <em>per core</em>, <em>per cluster</em>, or <em>for an entire processor package</em>. Multiplying a shared capacity by core count is an accounting error, and summing private capacities does not establish that one thread can use the whole sum. Also consider disabled slices, asymmetric core designs, simultaneous multithreading, and data shared by producer/consumer threads.</p>
+
+</section>
+<section id="cache-lines-as-the-unit-of-movement" aria-labelledby="heading-cache-lines-as-the-unit-of-movement"><h2 id="heading-cache-lines-as-the-unit-of-movement">Cache Lines as the Unit of Movement</h2>
+<p>A <strong>cache line</strong>, or <strong>cache block</strong>, is a contiguous region managed as a unit for many cache fill and eviction purposes. On a processor with a 64-byte data-cache line, reading one eight-byte scalar can pull a 64-byte aligned region into a cache even when only eight bytes are immediately used. That supplies seven other eight-byte values at no further <em>line-fill</em> cost if they are actually accessed before eviction. A line can be marked valid, dirty, shared, or otherwise tracked through metadata depending on the design.</p>
+<p>Line size is not necessarily the same as a load width, DRAM burst size, prefetch request size, coherence-sector size, or the amount a vector load transfers. Some implementations use sectors or sub-blocks internally. If the program uses only one byte from many distant lines, the physical transfer and occupancy can dwarf the useful payload. Larger line sizes exploit spatial locality but can increase unused traffic, conflict pressure, and false-sharing granularity.</p>
+
+</section>
+<section id="line-boundaries-and-spatial-utilization" aria-labelledby="heading-line-boundaries-and-spatial-utilization"><h2 id="heading-line-boundaries-and-spatial-utilization">Line Boundaries and Spatial Utilization</h2>
+<p>For a line of <code>B</code> bytes, address <code>a</code> belongs to line <code>a // B</code>, and its byte offset within that line is <code>a % B</code>. A byte range <code>[a, a+n)</code> touches line indices from <code>a // B</code> to <code>(a+n-1) // B</code> when <code>n &gt; 0</code>. An unaligned multi-byte access may straddle lines, producing two relevant cache-block accesses and potentially crossing a page boundary as well.</p>
+<pre><code class="language-python"># Teaching geometry; not a processor cache API.
+def lines_touched(address: int, length: int, line_size: int = 64):
+    assert address &gt;= 0 and length &gt;= 0 and line_size &gt; 0
+    if length == 0:
+        return []
+    return list(range(address // line_size,
+                      (address + length - 1) // line_size + 1))
+
+assert lines_touched(0, 8) == [0]
+assert lines_touched(60, 8) == [0, 1]
+assert lines_touched(128, 0) == []
+assert lines_touched(128, 128) == [2, 3]
+print('Unaligned eight-byte access touches:', lines_touched(60, 8))
+</code></pre>
+<p>When measuring locality, track <strong>useful bytes per fetched line</strong>, not merely the number of logical array elements processed. Packing records into a smaller footprint can improve useful occupancy, but overpacking may introduce expensive decoding, misalignment, or synchronization. The right metric is whole-workload cost.</p>
+
+</section>
+<section id="address-fields-sets-ways-and-tags" aria-labelledby="heading-address-fields-sets-ways-and-tags"><h2 id="heading-address-fields-sets-ways-and-tags">Address Fields, Sets, Ways, and Tags</h2>
+<p>A conventional set-associative cache divides storage into <strong>sets</strong>; each set has several <strong>ways</strong> or candidate line slots. The address is divided conceptually into a block offset, an index selecting a set, and a tag identifying which memory block is present. For a power-of-two line size <code>B</code> and <code>S</code> sets, a simple physically indexed teaching model uses <code>block = address // B</code>, <code>set = block % S</code>, and <code>tag = block // S</code>.</p>
+<p>Real processors may hash physical address bits, use slices, bank indexing, virtual index bits, page coloring, or other implementation-specific choices. The arithmetic above is reliable only for the stated toy model. Associativity defines how many distinct blocks <em>mapped to the same set</em> can reside together, not how many entire arrays may be cached. A cache with <code>S</code> sets, <code>W</code> ways, and <code>B</code> bytes per block has nominal data capacity <code>S × W × B</code> bytes, excluding tags and other metadata.</p>
+
+</section>
+<section id="worked-example-cache-geometry" aria-labelledby="heading-worked-example-cache-geometry"><h2 id="heading-worked-example-cache-geometry">Worked Example: Cache Geometry</h2>
+<p>Consider a hypothetical <code>32 KiB</code>, eight-way cache with 64-byte lines. It contains 512 line slots, divided into 64 sets. A byte address of 4,736 has block number 74, set number 10, tag 1, and offset 0. A second block separated by <code>64 × 64 = 4,096</code> bytes maps to the same set but a different tag. This does <strong>not</strong> guarantee conflict: eight ways can hold up to eight eligible blocks in that set under suitable conditions.</p>
+<pre><code class="language-python"># Simple modulo-indexed, set-associative example.
+def geometry(capacity, line_size, ways, address):
+    assert capacity &gt; 0 and line_size &gt; 0 and ways &gt; 0
+    assert capacity % (line_size * ways) == 0
+    sets = capacity // (line_size * ways)
+    block = address // line_size
+    return dict(sets=sets, offset=address % line_size,
+                set_index=block % sets, tag=block // sets)
+
+sample = geometry(32768, 64, 8, 4736)
+assert sample == {'sets': 64, 'offset': 0, 'set_index': 10, 'tag': 1}
+assert geometry(32768, 64, 8, 4736 + 4096)['set_index'] == 10
+print(sample)
+</code></pre>
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th style="text-align:right">Hypothetical value</th>
+  <th>Practical significance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Capacity</td>
+  <td style="text-align:right">32 KiB</td>
+  <td>Nominal data held in line slots</td>
+</tr>
+<tr>
+  <td>Block / line size</td>
+  <td style="text-align:right">64 B</td>
+  <td>Fill, tag, and typical coherence granularity</td>
+</tr>
+<tr>
+  <td>Associativity</td>
+  <td style="text-align:right">8 ways</td>
+  <td>Maximum eligible lines in a set</td>
+</tr>
+<tr>
+  <td>Set count</td>
+  <td style="text-align:right">64</td>
+  <td>Number of index destinations</td>
+</tr>
+<tr>
+  <td>Offset bits</td>
+  <td style="text-align:right">6</td>
+  <td>Which byte within a 64-byte line</td>
+</tr>
+<tr>
+  <td>Index bits</td>
+  <td style="text-align:right">6</td>
+  <td>Which of 64 sets under simple indexing</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="direct-mapped-set-associative-and-fully-associative" aria-labelledby="heading-direct-mapped-set-associative-and-fully-associative"><h2 id="heading-direct-mapped-set-associative-and-fully-associative">Direct-Mapped, Set-Associative, and Fully Associative</h2>
+<p>A <strong>direct-mapped</strong> cache has one way per set: two addresses with the same set index cannot coexist. A <strong>set-associative</strong> cache provides several positions in each set and requires a replacement policy when a full set receives a new block. A <strong>fully associative</strong> cache allows any block to occupy any slot, at a potentially substantial lookup and metadata cost. Most large practical CPU caches use set associativity; small special-purpose buffers may be fully associative.</p>
+<p>Increasing associativity usually reduces some conflicts, but does not guarantee a faster or lower-energy implementation. More way comparisons, replacement metadata, banking complexity, wire routing, and critical-path timing can matter. If an access pattern already uses few conflicting blocks, additional ways may buy little. Capacity, indexing, replacement, prefetching, and inclusion policy interact with associativity.</p>
+
+</section>
+<section id="compulsory-capacity-and-conflict-misses" aria-labelledby="heading-compulsory-capacity-and-conflict-misses"><h2 id="heading-compulsory-capacity-and-conflict-misses">Compulsory, Capacity, and Conflict Misses</h2>
+<p>A <strong>compulsory</strong> (cold) miss is the first reference to a cache block in a trace when nothing has preloaded it. A <strong>capacity</strong> miss occurs because a finite cache cannot hold the working set that would have been retained by a larger ideal cache under the same access trace. A <strong>conflict</strong> miss arises when placement restrictions force eviction even though enough total storage would exist under a more associative organization. These conventional categories assume specified models, and practical measured misses can also be driven by coherence actions, prefetch interference, and other agents.</p>
+<p>Do not classify every second reference as a conflict miss. For example, looping over 100 distinct lines with a 64-line fully associative LRU cache can miss repeatedly because of insufficient capacity, even though there is no set conflict. In contrast, repeatedly touching nine lines that all map to one eight-way set can thrash that set while most other sets remain empty. Cache geometry must be combined with the actual address trace.</p>
+
+</section>
+<section id="executable-set-associative-lru-model" aria-labelledby="heading-executable-set-associative-lru-model"><h2 id="heading-executable-set-associative-lru-model">Executable Set-Associative LRU Model</h2>
+<p>The following small simulation tracks block residency in an <code>S</code>-set, <code>W</code>-way cache using exact least-recently-used (LRU) replacement. A hit moves a block to the most-recent position of its set; a miss allocates the block and may evict the oldest entry. It ignores timing, writes, coherence, prefetch, partial line states, and the replacement approximations used in many commercial cores.</p>
+<pre><code class="language-python">from collections import deque
+
+class ToyCache:
+    def __init__(self, sets, ways, line_bytes=64):
+        self.sets = [deque() for _ in range(sets)]
+        self.ways = ways
+        self.line_bytes = line_bytes
+        self.hits = self.misses = 0
+
+    def touch(self, byte_address):
+        block = byte_address // self.line_bytes
+        bucket = self.sets[block % len(self.sets)]
+        if block in bucket:
+            bucket.remove(block)
+            bucket.append(block)
+            self.hits += 1
+            return True
+        self.misses += 1
+        if len(bucket) == self.ways:
+            bucket.popleft()
+        bucket.append(block)
+        return False
+
+c = ToyCache(sets=2, ways=2)
+for address in (0, 64, 0, 128, 64, 0):
+    c.touch(address)
+assert (c.hits, c.misses) == (3, 3)
+print('hits / misses:', c.hits, c.misses)
+</code></pre>
+<p>The model is useful for reasoning about address placement; it must not be interpreted as a substitute for hardware counters or an implementation-accurate simulator. A real cache can serve multiple accesses simultaneously and can hold outstanding misses in separate structures.</p>
+
+</section>
+<section id="conflict-trace-why-alignment-alone-is-not-enough" aria-labelledby="heading-conflict-trace-why-alignment-alone-is-not-enough"><h2 id="heading-conflict-trace-why-alignment-alone-is-not-enough">Conflict Trace: Why Alignment Alone Is Not Enough</h2>
+<p>Suppose a toy cache has eight sets and two ways. Addresses <code>0</code>, <code>512</code>, and <code>1,024</code> are 64-byte-aligned and map to the same set because each differs by eight lines. Repeating them in sequence yields misses every time with LRU once all three compete for two positions. By contrast, three lines spread across distinct sets can remain resident indefinitely after their initial misses.</p>
+<pre><code class="language-python"># Standalone definition kept small for reproducibility.
+from collections import deque
+
+def miss_count(addresses, sets=8, ways=2, line_size=64):
+    buckets = [deque() for _ in range(sets)]
+    misses = 0
+    for address in addresses:
+        block = address // line_size
+        slot = buckets[block % sets]
+        if block in slot:
+            slot.remove(block)
+        else:
+            misses += 1
+            if len(slot) == ways:
+                slot.popleft()
+        slot.append(block)
+    return misses
+
+bad = [0, 512, 1024] * 4
+good = [0, 64, 128] * 4
+assert miss_count(bad) == 12
+assert miss_count(good) == 3
+print('conflicting / distributed misses:', miss_count(bad), miss_count(good))
+</code></pre>
+<p>In production, allocator placement, physical-address mapping, cache slice hashing, page size, and prefetching can alter the result. Use this trace to understand the <em>mechanism</em>, not to predict a universal address stride that thrashes every CPU.</p>
+
+</section>
+<section id="temporal-locality" aria-labelledby="heading-temporal-locality"><h2 id="heading-temporal-locality">Temporal Locality</h2>
+<p><strong>Temporal locality</strong> means that a referenced block is likely to be referenced again before it is evicted. Repeated accesses to the same small table, a loop counter's associated data, or a reused transformation buffer can benefit. Temporal locality is about reuse distance: ten million accesses are not cache-friendly if they sweep a vast dataset in a pattern that ejects each line before its next use.</p>
+<p>The distinction between <strong>reuse count</strong> and <strong>reuse distance</strong> is crucial. An item accessed twice may have no second hit if many other lines intervene. Conversely, an item used hundreds of times in a tight loop can remain hot. Algorithms can improve locality by operating on a compact tile or processing all related operations on one record before moving to the next, provided dependencies and data semantics permit reordering.</p>
+
+</section>
+<section id="spatial-locality" aria-labelledby="heading-spatial-locality"><h2 id="heading-spatial-locality">Spatial Locality</h2>
+<p><strong>Spatial locality</strong> means that after one address is accessed, nearby addresses are likely to be useful. Sequential array scans exploit line fills because successive elements share lines. Traversing linked nodes randomly scattered through memory does not, even if the same number of logical nodes is visited. An array of eight-byte values with 64-byte cache lines can potentially use eight values per line; a structure with large padding or pointer-heavy indirection may consume an entire line for one small useful field.</p>
+<p>Spatial locality does not justify indiscriminate prefetching. A program may read only one byte from each 64-byte line, so each demand fill is mostly wasted. High spatial reuse is a <strong>property of the application address trace relative to line boundaries and scheduling</strong>, not simply a property of having an array or a high-level data structure.</p>
+
+</section>
+<section id="working-sets-and-cache-residency" aria-labelledby="heading-working-sets-and-cache-residency"><h2 id="heading-working-sets-and-cache-residency">Working Sets and Cache Residency</h2>
+<p>The <strong>working set</strong> of a phase is the collection of blocks actively needed over a relevant time window. A phase's working set may fit entirely in L1, exceed L1 but fit in L2, or stream through LLC and memory. The phrase “fits in cache” is therefore incomplete without specifying the cache, sharing scope, competing activity, set distribution, line overhead, and whether the data must coexist with other arrays and instructions.</p>
+<p>A 64-KiB lookup table does not necessarily fit in a 64-KiB cache: its instruction stream, stack, other working data, same-set conflicts, prefetches, operating-system activity, and replacement behavior consume resources. Conversely, a table larger than the cache can run well when it uses only a tiny hot portion or streams at high bandwidth with sufficient parallelism. Measure the <em>active blocks</em> rather than treating allocated bytes as the sole determinant of misses.</p>
+
+</section>
+<section id="how-cpu-cache-policy-differs-from-software-cache-policy" aria-labelledby="heading-how-cpu-cache-policy-differs-from-software-cache-policy"><h2 id="heading-how-cpu-cache-policy-differs-from-software-cache-policy">How CPU Cache Policy Differs from Software Cache Policy</h2>
+<p>Software-managed caches often use explicit keys, expiration rules, and object eviction that an application can observe directly. CPU caches ordinarily operate below the ISA and preserve the intended load/store values while optimizing their delivery. Hardware may choose to evict an otherwise valid line at any time consistent with applicable rules. The programmer cannot assume “the item is still cached” solely because it was read recently.</p>
+<p>This distinction also prevents misleading analogies with browser caches, database buffer pools, disk page caches, and distributed caches. Those systems have their own data consistency, persistence, writeback, and invalidation contracts. CPU cache analysis belongs at the instruction/data-transfer level, not at the HTTP object or database query level, even when the same word <em>cache</em> appears in all three.</p>
+
+</section>
+<section id="inclusive-exclusive-and-noninclusive-designs" aria-labelledby="heading-inclusive-exclusive-and-noninclusive-designs"><h2 id="heading-inclusive-exclusive-and-noninclusive-designs">Inclusive, Exclusive, and Noninclusive Designs</h2>
+<p><strong>Inclusive</strong> cache hierarchies retain a copy or directory representation of every applicable upper-level line in a lower level according to the implementation's inclusion rules. <strong>Exclusive</strong> organizations try to avoid unnecessary duplication of line contents across levels so aggregate effective capacity can increase, at a cost of different transfer and replacement behavior. <strong>Noninclusive</strong> designs do not guarantee full inclusion; the same line may or may not exist at multiple levels. Some designs also use noninclusive data arrays with separate directories, making a simple yes/no label inadequate.</p>
+<p>Never assume L3 inclusion solely from the presence of L1, L2, and L3 labels. An inclusive shared cache can help track which private caches may hold lines, but a shared cache may instead use a separate directory or snoop filtering. Inclusion and coherence are different concepts: a noninclusive hierarchy can still maintain correct coherence. The design is often product- and generation-specific. Consult implementation manuals or use documented detection methods when the distinction materially affects a workload.</p>
+
+</section>
+<section id="tags-valid-bits-dirty-bits-and-replacement-metadata" aria-labelledby="heading-tags-valid-bits-dirty-bits-and-replacement-metadata"><h2 id="heading-tags-valid-bits-dirty-bits-and-replacement-metadata">Tags, Valid Bits, Dirty Bits, and Replacement Metadata</h2>
+<p>A cache data array is accompanied by <strong>tags</strong> identifying resident blocks and metadata that allows the controller to track usable state. A valid bit can indicate whether a slot contains a usable line. A dirty indication can mean that a write-back cache has data not yet written to the next applicable level. Coherence metadata, error-correction information, prefetch provenance, and replacement state may also be maintained, but their format is implementation-specific.</p>
+<p>These bits are not application-level object metadata. A programmer cannot enumerate a CPU's resident cache tags from ordinary portable code, nor can most software count exact dirty lines through an ISA-independent interface. A CPU may move or replace lines without any explicit software instruction. When a cache line is evicted, the controller must preserve architectural correctness, including by writing back dirty data at an appropriate time.</p>
+
+</section>
+<section id="write-through-and-write-back-policies" aria-labelledby="heading-write-through-and-write-back-policies"><h2 id="heading-write-through-and-write-back-policies">Write-Through and Write-Back Policies</h2>
+<p>In a <strong>write-through</strong> design, writes propagate to a lower-level storage structure under the defined policy; in a <strong>write-back</strong> design, a store can update a cached line and mark it dirty, with lower-level updating deferred until eviction, cleaning, or another required action. Actual CPUs may include store buffers and multiple cache levels, so a write-through cache does not imply that every store waits for DRAM before the instruction can continue. Write-back reduces repeated downstream traffic for frequently modified lines but requires dirty tracking and reliable eventual propagation.</p>
+<p>The policy must be considered alongside memory ordering, persistence, fault handling, and coherence. A store being “completed” to software, “visible” to another core, present in an L1 cache, and durably recorded on a storage device are distinct milestones. This article treats cache traffic; the precise ordering and atomic guarantees belong in the sibling CPU coherence and memory-ordering articles.</p>
+<table>
+<thead>
+<tr>
+  <th>Cache policy</th>
+  <th>Main idea</th>
+  <th>Possible benefit</th>
+  <th>Important trade-off</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Write-through</td>
+  <td>Forward changes to a downstream level</td>
+  <td>Simpler local dirty-data tracking in some designs</td>
+  <td>Additional downstream write traffic</td>
+</tr>
+<tr>
+  <td>Write-back</td>
+  <td>Keep modified line until later propagation</td>
+  <td>Coalesce multiple writes to same line</td>
+  <td>Dirty eviction, ordering, recovery complexity</td>
+</tr>
+<tr>
+  <td>Write-allocate</td>
+  <td>Fetch/allocate a line on a write miss</td>
+  <td>Encourages reuse of subsequently updated lines</td>
+  <td>Read-for-ownership/fill traffic may be costly</td>
+</tr>
+<tr>
+  <td>No-write-allocate</td>
+  <td>Avoid allocating the missed line for that store</td>
+  <td>Can favor some streaming patterns</td>
+  <td>Later reads/writes may miss; not always available</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="write-allocate-read-for-ownership-and-streaming-stores" aria-labelledby="heading-write-allocate-read-for-ownership-and-streaming-stores"><h2 id="heading-write-allocate-read-for-ownership-and-streaming-stores">Write-Allocate, Read-for-Ownership, and Streaming Stores</h2>
+<p>A write miss may cause a line to be allocated and ownership acquired before the new data is installed. This is often associated with a <strong>read-for-ownership</strong> (RFO) transaction, especially in coherent write-back hierarchies. The mechanism can be surprising for large streaming output arrays: a program appears to <em>write</em> data but still triggers reads or ownership traffic for lines it will overwrite completely. Some architectures provide non-temporal or streaming store options that can reduce cache pollution and RFO overhead in suitable cases.</p>
+<p>Those instructions are hints or operations with processor-specific behavior, not universal promises to bypass every cache or produce immediately persistent data. A non-temporal write can involve write-combining buffers and alignment constraints; it must be benchmarked for the exact target. Reusing the result soon after a non-temporal store may make bypass counterproductive. The goal is to reduce total memory traffic and latency, not maximize the number of special instructions.</p>
+
+</section>
+<section id="write-buffers-evictions-and-backpressure" aria-labelledby="heading-write-buffers-evictions-and-backpressure"><h2 id="heading-write-buffers-evictions-and-backpressure">Write Buffers, Evictions, and Backpressure</h2>
+<p>Caches do not operate in isolation. <strong>Store buffers</strong> can hold pending stores; <strong>writeback buffers</strong> can hold evicted dirty lines; <strong>fill buffers</strong> can track incoming data; and downstream links have finite throughput. When buffers saturate, a core may stall even if many of its loads hit in L1. In a write-heavy workload, the performance limit might be eviction bandwidth or ownership traffic rather than raw load-miss latency.</p>
+<p>A dirty eviction is not necessarily a synchronous DRAM write at the point it leaves L1; it can enter a lower cache or a writeback queue. Likewise, a clean eviction may simply discard a duplicate without downstream data transfer, subject to required metadata/coherence messages. Hardware performance counters can help identify buffer pressure, but their precise definitions vary by microarchitecture and event model.</p>
+
+</section>
+<section id="replacement-policies-lru-and-beyond" aria-labelledby="heading-replacement-policies-lru-and-beyond"><h2 id="heading-replacement-policies-lru-and-beyond">Replacement Policies: LRU and Beyond</h2>
+<p>An ideal <strong>least-recently-used</strong> (LRU) policy evicts the block whose last reference occurred furthest in the past. It is intuitively useful and appears in teaching simulations, but exact LRU metadata becomes costly at high associativity. Real processors may use pseudo-LRU, tree-based approximations, dynamic insertion policies, re-reference prediction, random or pseudo-random choices, or proprietary strategies. Replacement may react to prefetch origin or access type.</p>
+<p>The absence of a documented replacement rule means a cache miss sequence is not necessarily reproducible from capacity and associativity alone. A profiler can measure the result for a real workload; a simulator must state its assumed policy. Also note that a policy optimal for one trace can perform poorly on a streaming trace that fills a cache with one-time-use lines. Adaptive policies attempt to reconcile those patterns.</p>
+
+</section>
+<section id="an-lru-trace-and-reuse-distance" aria-labelledby="heading-an-lru-trace-and-reuse-distance"><h2 id="heading-an-lru-trace-and-reuse-distance">An LRU Trace and Reuse Distance</h2>
+<p>In a fully associative four-line LRU teaching cache, the reference sequence <code>A, B, C, D, A, E</code> evicts <code>B</code> when <code>E</code> arrives, because <code>A</code> was most recently reused. The <strong>stack/reuse distance</strong> of an access reflects the number of distinct lines referenced since the prior access to that line; in fully associative LRU, a reference can hit when its reuse distance is less than the cache's line capacity. Set-associative mapping complicates this because each line competes within one set, not against the whole cache.</p>
+<pre><code class="language-python">from collections import OrderedDict
+
+def fully_associative_lru(trace, capacity):
+    resident = OrderedDict()
+    outcome = []
+    for block in trace:
+        hit = block in resident
+        if hit:
+            resident.move_to_end(block)
+        else:
+            if len(resident) == capacity:
+                resident.popitem(last=False)
+            resident[block] = None
+        outcome.append('H' if hit else 'M')
+    return ''.join(outcome), tuple(resident)
+
+status, current = fully_associative_lru('ABCD AE'.replace(' ', ''), 4)
+assert status == 'MMMMHM'
+assert 'B' not in current and 'A' in current
+print(status, current)
+</code></pre>
+<p>This simple trace is not a performance benchmark; it isolates replacement behavior. For a real workload, effective cache retention depends on address mapping, private/shared resources, speculative requests, other threads, replacement heuristics, and the persistence of outstanding misses.</p>
+
+</section>
+<section id="hardware-prefetchers" aria-labelledby="heading-hardware-prefetchers"><h2 id="heading-hardware-prefetchers">Hardware Prefetchers</h2>
+<p>Hardware prefetchers attempt to recognize access patterns and request lines before a demand instruction needs them. A stride detector may notice that an array is accessed at regular intervals; a stream prefetcher may pull upcoming adjacent lines. Successful prefetching can convert a would-be demand miss into a hit or reduce its stall penalty. A line prefetched into a cache can also evict useful data, consume bandwidth, or be requested too early or too late.</p>
+<p>A demand-miss count is not a complete measure of memory traffic: hardware can fetch many lines that were never actually demanded. When an experiment improves miss rate but harms runtime, inspect bandwidth, prefetch requests, working-set interference, and effective latency. Do not assume the prefetch algorithm or the available enable/disable controls are common across CPU families, even under the same instruction-set architecture.</p>
+
+</section>
+<section id="software-prefetch-hints-and-their-limits" aria-labelledby="heading-software-prefetch-hints-and-their-limits"><h2 id="heading-software-prefetch-hints-and-their-limits">Software Prefetch Hints and Their Limits</h2>
+<p>Some architectures expose prefetch hints that ask hardware to bring data closer to a core. These hints can help certain irregular patterns when a future address can be computed far enough in advance. They can also hurt when the compiler's normal access schedule or the CPU's hardware prefetcher already handles the pattern. The hint may be ignored, and in some architectures its precise fault and permission behavior differs from a normal load. Always consult the ISA before assuming a hint can safely probe arbitrary addresses.</p>
+<p>A useful experimental sequence is to measure baseline performance, identify where dependent misses stall progress, add a bounded lookahead only where address calculation is safe, and compare total time and traffic. In pointer chasing, the next address may be unknown until the current miss returns; a naive prefetch cannot eliminate that dependency. Prefetch helps when work can be scheduled ahead of consumption, not when the address itself is serially dependent.</p>
+
+</section>
+<section id="sequential-strided-and-random-access-patterns" aria-labelledby="heading-sequential-strided-and-random-access-patterns"><h2 id="heading-sequential-strided-and-random-access-patterns">Sequential, Strided, and Random Access Patterns</h2>
+<p>For an eight-byte array element and a 64-byte line, a sequential scan can consume eight elements per loaded line. A stride of eight elements touches a new line for every access; a stride of 512 elements may additionally interact with set mapping. Random pointer chasing often loses both spatial reuse and predictable prefetch. The same total element count can therefore generate very different cache traffic and access stalls.</p>
+<pre><code class="language-python"># Approximate demand line footprint; ignores prefetch, writes, coherence.
+def unique_lines(indexes, element_bytes=8, line_bytes=64):
+    return len({i * element_bytes // line_bytes for i in indexes})
+
+sequence = list(range(64))
+stride_eight = list(range(0, 512, 8))  # also 64 references
+assert len(sequence) == len(stride_eight) == 64
+assert unique_lines(sequence) == 8
+assert unique_lines(stride_eight) == 64
+print('unique lines:', unique_lines(sequence), unique_lines(stride_eight))
+</code></pre>
+<p>The function counts distinct lines, not misses: a repeated scan over the same resident lines may be all hits, and hardware prefetch may hide the latency of many unique lines. This distinction should appear in every measurement report.</p>
+
+</section>
+<section id="memory-level-parallelism-and-nonblocking-caches" aria-labelledby="heading-memory-level-parallelism-and-nonblocking-caches"><h2 id="heading-memory-level-parallelism-and-nonblocking-caches">Memory-Level Parallelism and Nonblocking Caches</h2>
+<p>A core that can keep multiple independent misses in flight may overlap their latency. Nonblocking caches use structures often called <strong>miss-status holding registers (MSHRs)</strong> or similar fill tracking mechanisms to remember outstanding line requests. Loads waiting on independent lines may proceed while earlier misses are unresolved; dependent loads cannot progress until the required address or value becomes available. A finite number of miss-tracking entries, load queue slots, and bandwidth channels limits concurrency.</p>
+<p>This explains why two programs with the same miss count can perform differently. A long dependent linked-list chain may pay the latency of each miss serially. Several independent streams can overlap requests until they saturate a shared bottleneck. Cache capacity and cache-miss ratio are therefore insufficient to predict slowdown without <strong>dependency structure and outstanding-request capacity</strong>.</p>
+
+</section>
+<section id="load-buffers-store-to-load-forwarding-and-hit-under-miss" aria-labelledby="heading-load-buffers-store-to-load-forwarding-and-hit-under-miss"><h2 id="heading-load-buffers-store-to-load-forwarding-and-hit-under-miss">Load Buffers, Store-to-Load Forwarding, and Hit-Under-Miss</h2>
+<p>A demand load may obtain its value by forwarding from an older in-flight store, rather than reading the line from L1. Conversely, a load that misses can wait while unrelated load hits complete through other resources. This <strong>hit-under-miss</strong> behavior is one source of out-of-order completion. A fill buffer holding data in transit may sometimes satisfy a later access before that data resides in the ordinary L1 tag/data array.</p>
+<p>Performance-event definitions matter. A “load hit” reported by one counter may exclude store-forwarded loads; a “miss” may include requests that merged with an existing fill; a retired-load event may count fewer speculative accesses than a broader cache-lookup event. Comparing two counters without reading their event descriptions can produce invalid hit-rate arithmetic.</p>
+
+</section>
+<section id="address-translation-and-cache-lookup" aria-labelledby="heading-address-translation-and-cache-lookup"><h2 id="heading-address-translation-and-cache-lookup">Address Translation and Cache Lookup</h2>
+<p>CPU caches store data associated with addresses, but different levels may use virtual or physical indexing and tagging. In a <strong>virtually indexed, physically tagged (VIPT)</strong> design, some indexing can proceed in parallel with translation while the physical tag provides identity. Constraints among page-offset bits, cache size, line size, and associativity determine when this can be implemented without virtual synonym problems. Some architectures use physically indexed and physically tagged (PIPT) caches or other designs.</p>
+<p>A <strong>TLB miss</strong> does not mean a <strong>cache miss</strong>, and a <strong>page fault</strong> is not synonymous with either. Page-table entries themselves may be cached, page walks may use the data-cache hierarchy, and translation latency may be overlapped with portions of cache lookup. Diagnose TLB-related stalls separately from ordinary L1/L2/LLC misses; the proper performance events differ.</p>
+
+</section>
+<section id="virtual-aliases-synonyms-and-address-space-isolation" aria-labelledby="heading-virtual-aliases-synonyms-and-address-space-isolation"><h2 id="heading-virtual-aliases-synonyms-and-address-space-isolation">Virtual Aliases, Synonyms, and Address-Space Isolation</h2>
+<p>Two virtual addresses can map to the same physical memory. If a cache were indexed and tagged entirely by virtual address without adequate controls, it could accidentally hold inconsistent copies under different virtual identities. Designs avoid or manage this through physical tags, indexing constraints, ASIDs, invalidation, operating-system rules, or other mechanisms. These are hardware/software contract questions, not ordinary application cache-tuning knobs.</p>
+<p>The same term <em>alias</em> is sometimes used for different phenomena: two virtual names for one physical block; distinct physical blocks colliding in a cache set; and two high-level variables pointing to one object. Keep these separate in proofs and performance discussions. Large pages, page coloring, and allocation strategies can affect access behavior on particular systems, but cannot be generalized without a documented cache mapping.</p>
+
+</section>
+<section id="instruction-cache-consistency-and-generated-code" aria-labelledby="heading-instruction-cache-consistency-and-generated-code"><h2 id="heading-instruction-cache-consistency-and-generated-code">Instruction-Cache Consistency and Generated Code</h2>
+<p>Instruction and data caches can have different visibility and maintenance rules. Ordinary compiled code normally receives platform-appropriate instruction-cache and synchronization handling from the operating system and toolchain. Self-modifying code, JIT compilers, runtime patchers, and firmware can need explicit mechanisms to make newly written instruction bytes visible to instruction fetch. The required sequence differs across ISAs and operating systems; a data-cache write alone is not always sufficient.</p>
+<p>The hardware model must account for instruction fetch already in flight, pipeline refills, translation, and the possibility that code is being executed concurrently on another core. Use the platform's approved code-generation and cache-maintenance APIs rather than inserting ad hoc cache-flush instructions copied from another CPU family. This is a correctness and security issue, not merely a performance consideration.</p>
+
+</section>
+<section id="cache-management-operations-and-dma-boundaries" aria-labelledby="heading-cache-management-operations-and-dma-boundaries"><h2 id="heading-cache-management-operations-and-dma-boundaries">Cache Management Operations and DMA Boundaries</h2>
+<p>Device DMA, coherent accelerators, noncoherent peripherals, and shared memory introduce additional ownership and visibility rules. A CPU cache may contain a dirty line whose updated bytes are not yet at the memory location read by a noncoherent device; a CPU may likewise retain an old copy after device writes. On systems without automatic coherent integration, the operating system or device driver must perform the specified cache-maintenance and synchronization operations around DMA ownership transitions.</p>
+<p>For example, RISC-V's optional <strong>Zicbom</strong> cache-block management extension defines block operations for invalidate, clean, and flush, while platform rules govern whether and how software may use them. Do not treat a cache flush as a general-purpose replacement for a memory fence: <strong>cache maintenance, visibility ordering, persistence, and device synchronization are related but distinct contracts</strong>. Incorrect maintenance can lose dirty data or expose stale device buffers.</p>
+
+</section>
+<section id="cache-coherence-ownership-and-sharing" aria-labelledby="heading-cache-coherence-ownership-and-sharing"><h2 id="heading-cache-coherence-ownership-and-sharing">Cache Coherence, Ownership, and Sharing</h2>
+<p>When multiple cores cache the same physical line, the platform must maintain the required data coherence. Protocols commonly coordinate whether a cache may read a line, modify it, or must relinquish a version. Ownership upgrades can generate traffic and delay stores even when the local tag array already contains the address. Cache coherence does not by itself solve data races or impose an application's required memory order.</p>
+<p>This article introduces the performance consequences of sharing—extra ownership transfers, shared-cache contention, and false sharing—while leaving protocol-state diagrams, atomics, and memory-model guarantees to the dedicated <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a> article. A statement such as “the line is in cache” is insufficient to establish that a store already holds the needed writable ownership.</p>
+
+</section>
+<section id="false-sharing-and-cache-line-granularity" aria-labelledby="heading-false-sharing-and-cache-line-granularity"><h2 id="heading-false-sharing-and-cache-line-granularity">False Sharing and Cache-Line Granularity</h2>
+<p><strong>False sharing</strong> occurs when two threads independently modify different variables that happen to reside on the same coherence granule, commonly a cache line. Because the system transfers or invalidates the line as a unit, ownership can ping-pong despite no application-level sharing of the variables. Actual coherence granularity and layout must be verified; two values being adjacent in source code is not proof they share a line in the compiled program.</p>
+<pre><code class="language-python"># Layout-only demonstration, not a coherence protocol simulation.
+def line_id(address, line_size=64):
+    return address // line_size
+
+counter_a = 0x1000
+counter_b = counter_a + 8
+counter_padded = counter_a + 64
+assert line_id(counter_a) == line_id(counter_b)
+assert line_id(counter_a) != line_id(counter_padded)
+print('un-padded same line:', line_id(counter_a) == line_id(counter_b))
+</code></pre>
+<p>Padding may reduce cross-core ownership traffic but enlarge the working set and increase cache capacity pressure. Align and pad only hot, independently written variables when measurements justify the trade. In a single-threaded workload, padding two counters is unlikely to confer the same benefit.</p>
+
+</section>
+<section id="access-latency-throughput-and-bandwidth" aria-labelledby="heading-access-latency-throughput-and-bandwidth"><h2 id="heading-access-latency-throughput-and-bandwidth">Access Latency, Throughput, and Bandwidth</h2>
+<p><strong>Latency</strong> is the delay between issuing a request and receiving a needed result; <strong>throughput</strong> is the rate at which a level can sustain completed accesses; <strong>bandwidth</strong> is the volume of data transferred per unit time. A cache level can have a short hit latency but insufficient ports or bandwidth for a particular vector workload. Conversely, a streaming workload can achieve high DRAM bandwidth while individual memory accesses still have long latency, because many requests overlap.</p>
+<p>A performance chart labeled “L1 latency” may report dependent integer-load latency, while another reports cache pipeline throughput; these are not interchangeable measurements. Compare like with like: dependent pointer-chase timings for serial access latency, controlled throughput loops for access rate, and sustained data-transfer tests for bandwidth. Frequency, thermal conditions, data type, alignment, compiler flags, and speculative work must be documented.</p>
+
+</section>
+<section id="average-memory-access-time-a-simplified-model" aria-labelledby="heading-average-memory-access-time-a-simplified-model"><h2 id="heading-average-memory-access-time-a-simplified-model">Average Memory Access Time: A Simplified Model</h2>
+<p>A familiar approximation for serial lookup is <strong>AMAT = hit time + miss rate × miss penalty</strong>, where the miss penalty is additional time paid on a miss rather than the entire downstream access time counted twice. For a nested system, one can apply the relationship at multiple levels if miss rates use the correct denominators. The model is instructional: it suppresses parallel misses, speculative loads, prefetch, queueing, core overlap, and nonuniform shared-cache paths.</p>
+<pre><code class="language-python"># Serial, non-overlapped demand-access teaching model.
+def amat(l1_cycles, l1_miss_fraction, l2_cycles,
+         l2_local_miss_fraction, lower_cycles):
+    assert 0 &lt;= l1_miss_fraction &lt;= 1
+    assert 0 &lt;= l2_local_miss_fraction &lt;= 1
+    return l1_cycles + l1_miss_fraction * (
+        l2_cycles + l2_local_miss_fraction * lower_cycles)
+
+value = amat(4, 0.10, 12, 0.20, 100)
+assert abs(value - 7.2) &lt; 1e-9
+print('Illustrative AMAT cycles:', value)
+</code></pre>
+<p>Here the L2 local miss rate is computed <strong>among accesses that reach L2</strong>, not among all original references. With a 10% L1 miss rate and 20% L2 local miss rate, only 2% of original references proceed beyond L2 in this simplified trace. The effective stall time perceived by a running program can be very different when misses overlap or are hidden behind independent execution.</p>
+
+</section>
+<section id="local-versus-global-miss-rates" aria-labelledby="heading-local-versus-global-miss-rates"><h2 id="heading-local-versus-global-miss-rates">Local Versus Global Miss Rates</h2>
+<p>The <strong>local L2 miss rate</strong> is L2 misses divided by L2 accesses. The <strong>global L2 miss rate</strong> is L2 misses divided by requests entering at L1 (for a clearly specified set of demand accesses). The two rates answer different questions. If 1,000 relevant requests reach L1, 100 miss L1, and 20 of those miss L2, L1 local miss rate is 10%; L2 local miss rate is 20%; and global L2 miss rate is 2%.</p>
+<pre><code class="language-python">entry, l1_misses, l2_misses = 1000, 100, 20
+l1_local = l1_misses / entry
+l2_local = l2_misses / l1_misses
+l2_global = l2_misses / entry
+assert (l1_local, l2_local, l2_global) == (0.1, 0.2, 0.02)
+assert abs(l1_local * l2_local - l2_global) &lt; 1e-12
+print('L1 local, L2 local, L2 global:', l1_local, l2_local, l2_global)
+</code></pre>
+<p>Use an event definition that matches the desired denominator. A hardware counter that counts all line fills, including prefetches and coherence requests, should not be divided by retired demand loads and labeled a clean demand-load miss rate without additional justification.</p>
+
+</section>
+<section id="why-cache-misses-do-not-directly-equal-stall-cycles" aria-labelledby="heading-why-cache-misses-do-not-directly-equal-stall-cycles"><h2 id="heading-why-cache-misses-do-not-directly-equal-stall-cycles">Why Cache Misses Do Not Directly Equal Stall Cycles</h2>
+<p>A cache miss can be overlapped with unrelated arithmetic, another independent miss, or a branch that was already predicted. Some misses are speculative and later discarded; other misses sit directly on the critical dependency path. A processor may also stall on a full load queue, store buffer, MSHR, or shared-cache interface even when additional misses could eventually be serviced. Thus <strong>miss counts are symptoms requiring context, not a universal estimate of runtime</strong>.</p>
+<p>When diagnosing a regression, distinguish at least three possibilities: (1) more unique lines are fetched, (2) the same misses overlap less effectively, or (3) throughput/capacity contention delays servicing the same logical set of requests. Each suggests a different intervention: layout and blocking, more independent work or better scheduling, or reducing bandwidth/ownership contention.</p>
+
+</section>
+<section id="memory-bound-versus-compute-bound-phases" aria-labelledby="heading-memory-bound-versus-compute-bound-phases"><h2 id="heading-memory-bound-versus-compute-bound-phases">Memory-Bound Versus Compute-Bound Phases</h2>
+<p>An application can be memory-latency bound when its critical load chain serializes progress, memory-bandwidth bound when bytes transferred approach platform limits, cache-capacity bound when hot working data does not remain resident, or compute-bound when arithmetic dominates despite suitable data locality. These labels can describe different phases of one program. A single reported LLC miss ratio cannot distinguish them.</p>
+<p>The <strong>roofline model</strong> uses arithmetic intensity—useful operations per byte moved at a stated memory-hierarchy boundary—to reason about maximum attainable throughput. However, low arithmetic intensity is not proof of sustained bandwidth saturation: an irregular dependence chain may be latency-limited and never generate enough concurrent memory requests. State the modeled cache/memory boundary and the counted bytes when using such estimates.</p>
+
+</section>
+<section id="a-simple-bandwidth-lower-bound" aria-labelledby="heading-a-simple-bandwidth-lower-bound"><h2 id="heading-a-simple-bandwidth-lower-bound">A Simple Bandwidth Lower Bound</h2>
+<p>For a purely streaming operation with an unavoidable transfer of <code>V</code> bytes through a link whose sustainable bandwidth is <code>R</code> bytes/s, the transfer alone requires at least <code>V / R</code> seconds. This is a lower bound, not a predicted total runtime: control, compute, write-allocate traffic, repeated lines, multiple sockets, sharing, and imperfect overlap can increase time. Copying a dataset can require both source reads and destination writes; a write-allocate policy may add traffic beyond the application-visible bytes.</p>
+<pre><code class="language-python"># Idealized transfer bound; bandwidth is assumed sustainable.
+def minimum_transfer_seconds(bytes_moved, bytes_per_second):
+    assert bytes_moved &gt;= 0 and bytes_per_second &gt; 0
+    return bytes_moved / bytes_per_second
+
+two_gib = 2 * (1024 ** 3)
+ideal = minimum_transfer_seconds(two_gib, 32e9)
+assert 0.06 &lt; ideal &lt; 0.08
+print('Ideal lower bound (seconds):', round(ideal, 4))
+</code></pre>
+<p>A reported cache speed such as “L3 bandwidth” should never be substituted for DRAM throughput when modeling a dataset that repeatedly misses the last-level cache. Report which path carries the bytes and whether the rate is per core, per memory channel, per socket, or for the full machine.</p>
+
+</section>
+<section id="working-set-transitions-and-capacity-knees" aria-labelledby="heading-working-set-transitions-and-capacity-knees"><h2 id="heading-working-set-transitions-and-capacity-knees">Working-Set Transitions and Capacity Knees</h2>
+<p>Cache benchmark curves often show a change in latency or throughput as the tested footprint grows through characteristic sizes. These <strong>knees</strong> can suggest an L1, L2, or LLC working-set threshold but do not prove a cache's exact nominal capacity. Associativity, page translation, coherence, cache placement, prefetch, code footprint, and benchmark structure can shift the transition. Some CPUs implement nonuniform cache slices or victim structures that blur sharp boundaries.</p>
+<p>A rigorous experiment varies one factor at a time, sweeps multiple footprints on both sides of expected boundaries, measures repeated runs, controls other activity, and includes both random-dependent and streaming patterns. The final report should identify the processor and its shared-cache topology instead of making a universal statement from one plot.</p>
+
+</section>
+<section id="array-of-structures-versus-structure-of-arrays" aria-labelledby="heading-array-of-structures-versus-structure-of-arrays"><h2 id="heading-array-of-structures-versus-structure-of-arrays">Array-of-Structures Versus Structure-of-Arrays</h2>
+<p>In an <strong>array of structures (AoS)</strong>, each record stores several fields together. This favors operations that consume most fields of one record at a time. In a <strong>structure of arrays (SoA)</strong>, each field occupies a separate contiguous array. This can favor processing one field across many records, especially vectorization and sequential streams. Neither layout always wins; copying, pointer management, alignment, false sharing, and API contracts can reverse the result.</p>
+<p>Suppose each record has four eight-byte fields, but a query reads only one field per record. AoS nominally presents only eight useful bytes from each 32-byte record; a cold sweep can transfer substantially more data per useful field than SoA. If the query instead reads all fields, AoS can avoid touching four separate streams. Cache efficiency is determined by actual field access and reuse, not a blanket preference for either layout.</p>
+
+</section>
+<section id="worked-layout-utilization-estimate" aria-labelledby="heading-worked-layout-utilization-estimate"><h2 id="heading-worked-layout-utilization-estimate">Worked Layout Utilization Estimate</h2>
+<p>The following example computes an idealized fraction of useful bytes among fields touched. It does <strong>not</strong> account for block boundaries, partial cache lines, vector register widths, prefetches, record packing between lines, or real physical-address layout. It explains why hot/cold field separation can be valuable but is insufficient by itself to predict speedups.</p>
+<pre><code class="language-python">record_bytes = 32  # four 8-byte fields
+field_bytes = 8
+records = 10_000
+useful = records * field_bytes
+approx_aos_payload = records * record_bytes
+approx_soa_payload = useful
+assert useful / approx_aos_payload == 0.25
+assert approx_aos_payload / approx_soa_payload == 4
+print('Idealized AoS/SoA payload ratio:', approx_aos_payload / approx_soa_payload)
+</code></pre>
+<p>An especially effective pattern is to segregate <strong>hot fields</strong>—those needed on nearly every operation—from <strong>cold fields</strong> used only on exceptions or detailed inspection. That can increase useful density in cache lines. But it may complicate code and turn some operations into multiple random accesses. Validate the complete workload before changing a stable data format.</p>
+
+</section>
+<section id="loop-order-and-row-major-matrices" aria-labelledby="heading-loop-order-and-row-major-matrices"><h2 id="heading-loop-order-and-row-major-matrices">Loop Order and Row-Major Matrices</h2>
+<p>For a row-major two-dimensional array, consecutive elements of a row are contiguous. Traversing rows with the column index changing fastest typically exploits spatial locality. Traversing columns with the row index changing fastest jumps by a full row stride; with sufficiently wide rows, consecutive accesses may touch different lines and pages. The arithmetic count is identical, but memory behavior can be very different.</p>
+<pre><code class="language-python"># Cache-line footprint of the first four scalar visits.
+def row_major_address(row, col, ncols, element_bytes=8):
+    return (row * ncols + col) * element_bytes
+
+ncols = 128
+row_first = [row_major_address(0, c, ncols) for c in range(4)]
+col_first = [row_major_address(r, 0, ncols) for r in range(4)]
+assert len({a // 64 for a in row_first}) == 1
+assert len({a // 64 for a in col_first}) == 4
+print('line counts for four references:',
+      len({a // 64 for a in row_first}),
+      len({a // 64 for a in col_first}))
+</code></pre>
+<p>Compilers may interchange loops when dependencies and language semantics allow. The best order can change with column-major storage, blocking, SIMD vectorization, or cache tiling. A naive loop-order change that breaks dependency ordering, numerical stability, or observable side effects is not a valid optimization.</p>
+
+</section>
+<section id="cache-blocking-and-tiling" aria-labelledby="heading-cache-blocking-and-tiling"><h2 id="heading-cache-blocking-and-tiling">Cache Blocking and Tiling</h2>
+<p><strong>Blocking</strong> divides a large computation into smaller regions so reused data can remain in an appropriate cache before the next region is processed. Matrix multiplication is a classic example: a naive traversal can repeatedly fetch values from a large array, while a tiled implementation works on compact chunks that increase repeated use. A tile must leave room for all simultaneously live operands, intermediate results, code, and competition from other activity.</p>
+<p>A simplistic capacity calculation might choose a square tile <code>b</code> so three <code>b × b</code> arrays of eight-byte values nominally occupy <code>3 × b² × 8</code> bytes. The estimate is only a starting point: line alignment, cache associativity, vector blocking, loop overhead, memory bandwidth, and multithreading change actual performance. Many optimized libraries use multilevel packing and register-level microkernels rather than one cache tile size.</p>
+
+</section>
+<section id="a-conservative-tile-capacity-calculation" aria-labelledby="heading-a-conservative-tile-capacity-calculation"><h2 id="heading-a-conservative-tile-capacity-calculation">A Conservative Tile-Capacity Calculation</h2>
+<pre><code class="language-python">from math import isqrt
+
+def nominal_square_tile(cache_bytes, element_bytes=8,
+                        concurrent_tiles=3, fraction=0.5):
+    assert cache_bytes &gt; 0 and element_bytes &gt; 0
+    assert concurrent_tiles &gt; 0 and 0 &lt; fraction &lt;= 1
+    budget = int(cache_bytes * fraction)
+    return isqrt(budget // (concurrent_tiles * element_bytes))
+
+b = nominal_square_tile(32768)
+assert b == 26
+assert 3 * b * b * 8 &lt;= 32768 * 0.5
+print('Nominal half-L1 square tile bound:', b)
+</code></pre>
+<p>This is a capacity constraint, not a performance-optimal tile recommendation. It does not model cache-set conflicts, real register blocking, or communication between tiles. A production tuner should benchmark several tile dimensions on the target CPU and verify numerical correctness under the altered accumulation order.</p>
+
+</section>
+<section id="pointer-chasing-and-dependent-memory-loads" aria-labelledby="heading-pointer-chasing-and-dependent-memory-loads"><h2 id="heading-pointer-chasing-and-dependent-memory-loads">Pointer Chasing and Dependent Memory Loads</h2>
+<p>Linked lists and trees can be expressive and enable efficient updates, but their nodes are often allocated far apart. A linked traversal loads one node, discovers the next pointer, and then issues the next dependent load. Even with a large LLC, a long chain can produce serial waiting if the nodes are cold and independent parallelism is scarce. A flat index array, packed node representation, or breadthwise layout may improve locality, although these changes can affect update complexity.</p>
+<p>A performance comparison should consider more than cache lines. Linked structures carry pointer bytes, allocator metadata, branch behavior, and sometimes unpredictable control flow. Flattening may improve scan speed but make insertions more expensive. The correct design is determined by the operation mix and the cost of maintaining the representation over time.</p>
+
+</section>
+<section id="data-packing-alignment-and-padding" aria-labelledby="heading-data-packing-alignment-and-padding"><h2 id="heading-data-packing-alignment-and-padding">Data Packing, Alignment, and Padding</h2>
+<p>Reducing data structure size can allow more useful objects to reside in each cache line. Yet aggressive packing can introduce extra decode instructions, unaligned access penalties on some systems, and costly updates. Explicit alignment can help vector operations and avoid certain split-line accesses; excessive alignment can inflate footprint and worsen cache residency. Padding can reduce false sharing but consume more space.</p>
+<p>Test at the level of actual compiled layout, not source-code intent. C/C++ structure padding and ABI rules, Rust representation attributes, managed-language object headers, and runtime pointer compression can all change real sizes. A model reporting “32 bytes per record” should justify the compiled layout with a <code>sizeof</code>-style check or runtime memory investigation on the applicable platform.</p>
+
+</section>
+<section id="multithreading-affinity-and-cache-sharing" aria-labelledby="heading-multithreading-affinity-and-cache-sharing"><h2 id="heading-multithreading-affinity-and-cache-sharing">Multithreading, Affinity, and Cache Sharing</h2>
+<p>Placing two cooperating threads on cores that share an LLC may improve shared read-only data reuse, but may also increase contention for cache capacity and memory bandwidth. Moving them to separate clusters can reduce interference at the cost of more communication traffic. Simultaneous multithreading means two logical processors can share one core's pipeline and cache resources; distinct logical CPU IDs do not prove private L1/L2 capacity.</p>
+<p>For benchmarking, record core topology, CPU affinity, frequency policy, thread count, allocator placement, and memory policy. Migrations can change which caches are warm and may increase effective misses. Affinity is not automatically beneficial: pinning can block the scheduler from balancing load or aligning work with memory proximity. Test both controlled pinning and normal scheduling under representative production conditions.</p>
+
+</section>
+<section id="numa-and-multi-socket-effects" aria-labelledby="heading-numa-and-multi-socket-effects"><h2 id="heading-numa-and-multi-socket-effects">NUMA and Multi-Socket Effects</h2>
+<p>A cache miss beyond the LLC can access memory attached to the local processor or another NUMA node. Remote access may involve extra interconnect latency and traffic, and cache-to-cache transfers can complicate the path further. Therefore a memory-bound workload may benefit from NUMA-aware allocation and thread placement even if its per-core L1/L2 miss rates remain unchanged.</p>
+<p>A NUMA policy is part of the full memory-system design, not a property of one cache. Page migration, huge pages, memory controllers, cross-socket coherency, and device placement can matter. Consult topology tools and memory-node counters for the actual host instead of assuming every cache miss has a uniform DRAM cost.</p>
+
+</section>
+<section id="measuring-hardware-events-responsibly" aria-labelledby="heading-measuring-hardware-events-responsibly"><h2 id="heading-measuring-hardware-events-responsibly">Measuring Hardware Events Responsibly</h2>
+<p>Modern processors expose performance-monitoring units (PMUs), but <strong>event names and encodings are microarchitecture-specific</strong>. A generalized <code>cache-misses</code> metric may refer to last-level misses or a tool-defined event mapping rather than “all misses at all levels.” More specific events may count demand loads, prefetches, line replacements, or outstanding cycles. Some events are speculative, approximate, multiplexed, or affected by counter privilege policy.</p>
+<p>Intel's public performance-event tables and vendor optimization documentation are useful for understanding precisely which requests an event counts. On Linux, <code>perf list</code> can reveal supported event names, while <code>perf stat</code> can report configured metrics. The command below is an <strong>illustrative example for supported Linux environments</strong>, not a guarantee that the listed events or permissions exist on every CPU:</p>
+<pre><code class="language-text">perf list
+perf stat -e cycles,instructions,cache-references,cache-misses -- ./your-program
+</code></pre>
+<p>Always read the event definition, record the command and tool version, repeat the experiment, and report uncertainty before inferring a causal cache mechanism.</p>
+
+</section>
+<section id="a-controlled-locality-benchmark-plan" aria-labelledby="heading-a-controlled-locality-benchmark-plan"><h2 id="heading-a-controlled-locality-benchmark-plan">A Controlled Locality Benchmark Plan</h2>
+<p>Start with a workload whose output can be validated and whose data sizes span several anticipated working-set regimes. Fix compiler/build options, thread count, input generation, run order, and environmental conditions as far as practical. Compare sequential, strided, and randomized dependent access patterns, but avoid claiming that the results isolate only caches: TLBs, prefetchers, branch prediction, and memory-controller behavior also respond to access patterns.</p>
+<p>Warmup and cold-start tests answer different questions. A warmed loop can primarily measure cache-resident behavior, while a cold traversal includes initial fills and potentially page faults. To avoid having the compiler optimize the benchmark away, consume a result in an observable fashion and inspect generated code when the conclusion hinges on a specific load sequence. Report median and variance across repeated runs rather than selecting the most favorable sample.</p>
+
+</section>
+<section id="checklist-for-interpreting-a-cache-benchmark" aria-labelledby="heading-checklist-for-interpreting-a-cache-benchmark"><h2 id="heading-checklist-for-interpreting-a-cache-benchmark">Checklist for Interpreting a Cache Benchmark</h2>
+<p>A trustworthy report should answer: What processor, stepping, clocks, and core topology were used? Which cache levels are private or shared? What were data type, working-set size, alignment, page size, and allocation scheme? Was the program single- or multithreaded? Were the same input and correct output used for both variants? Which performance events were counted and what do they count? Was the result from demand load latency, throughput, or total application elapsed time?</p>
+<p>If any of these are unknown, a performance claim should be qualified. The claim “cache blocking made this kernel 2× faster” should be backed by a measured baseline and controlled transformation. The claim “therefore every CPU benefits 2×” is not justified by the same measurement.</p>
+
+</section>
+<section id="applied-scenario-1-a-table-scan-slows-after-a-schema-change" aria-labelledby="heading-applied-scenario-1-a-table-scan-slows-after-a-schema-change"><h2 id="heading-applied-scenario-1-a-table-scan-slows-after-a-schema-change">Applied Scenario 1 — A Table Scan Slows After a Schema Change</h2>
+<p>A service scans a table whose records gained several rarely used descriptive fields. The logical number of rows is unchanged, yet each record now occupies substantially more space. The engineer first verifies that the same query is executed, then compares the actual bytes per record, cache-line utilization, row layout, and DRAM traffic. The suspected mechanism is not “cache is broken” but <strong>lower useful density and an expanded working set</strong>.</p>
+<p>Possible interventions include placing hot keys and counters in a compact array, separating infrequently used metadata, and batching operations that use the same record. The decision must also account for additional pointer dereferences and writes needed to maintain the split representation. Acceptance requires correct query output and lower total elapsed time on representative row distributions, not only fewer L1 misses in a synthetic scan.</p>
+
+</section>
+<section id="applied-scenario-2-matrix-multiplication-benefits-from-tiling" aria-labelledby="heading-applied-scenario-2-matrix-multiplication-benefits-from-tiling"><h2 id="heading-applied-scenario-2-matrix-multiplication-benefits-from-tiling">Applied Scenario 2 — Matrix Multiplication Benefits from Tiling</h2>
+<p>A numerical kernel multiplies large matrices and repeatedly revisits values. A naive loop nest may traverse one operand with a wide stride and cycle through a working set too large for nearby caches. The team checks storage order, vectorized generated code, available cache resources, and memory traffic. It then introduces cache blocking or calls an established tuned library. The improvement mechanism is repeated use of operands while tiles are still resident.</p>
+<p>A trial should sweep tile dimensions rather than treating a nominal L1 capacity bound as the optimum. It must confirm that result accuracy remains within the application's numerical tolerance, because accumulation order and floating-point vectorization can change rounding. Profiling should show consistent end-to-end gains across real matrix sizes and thread counts.</p>
+
+</section>
+<section id="applied-scenario-3-a-lock-free-counter-suffers-false-sharing" aria-labelledby="heading-applied-scenario-3-a-lock-free-counter-suffers-false-sharing"><h2 id="heading-applied-scenario-3-a-lock-free-counter-suffers-false-sharing">Applied Scenario 3 — A Lock-Free Counter Suffers False Sharing</h2>
+<p>Two worker threads update independent counters that occupy one physical cache line. Even though they never read each other's variable, the line can move between writable owners, generating stalls and coherency traffic. The engineer confirms the compiled addresses and ownership behavior through profiling, then tests a layout in which each hot counter occupies a separate appropriately aligned line or uses a per-thread aggregate.</p>
+<p>The trade-off is larger memory footprint and possibly more reduction work. Padding every field in the application would waste capacity without solving the right problem. The result is accepted only when throughput increases at realistic thread counts and the larger footprint does not create a new cache or NUMA bottleneck.</p>
+
+</section>
+<section id="applied-scenario-4-a-random-access-index-becomes-latency-bound" aria-labelledby="heading-applied-scenario-4-a-random-access-index-becomes-latency-bound"><h2 id="heading-applied-scenario-4-a-random-access-index-becomes-latency-bound">Applied Scenario 4 — A Random-Access Index Becomes Latency Bound</h2>
+<p>A search engine follows a chain of pointer-linked nodes spread across DRAM. PMU evidence and dependency timing suggest that the core frequently waits for an address that cannot be known until the prior node returns. The team compares node packing, contiguous arrays of indexes, and higher-fanout search layouts that reduce dependent memory references. An increase in cache capacity alone may not help if the active index is much larger or if the lookup path remains serial.</p>
+<p>The new representation can increase update or deletion costs, so the engineering decision evaluates search rate, update rate, allocation cost, memory footprint, and correctness. A successful fix reduces critical dependent misses and improves tail latency, not merely the average cache hit percentage.</p>
+
+</section>
+<section id="applied-scenario-5-a-cpu-and-noncoherent-device-exchange-buffers" aria-labelledby="heading-applied-scenario-5-a-cpu-and-noncoherent-device-exchange-buffers"><h2 id="heading-applied-scenario-5-a-cpu-and-noncoherent-device-exchange-buffers">Applied Scenario 5 — A CPU and Noncoherent Device Exchange Buffers</h2>
+<p>A peripheral fills a buffer using DMA while a CPU consumes the result. In a noncoherent system, the CPU might retain stale cached data from a previous ownership cycle. Conversely, when the CPU prepares data for a device, dirty CPU lines may require cleaning before the device observes the current contents. The correct process is determined by the platform's DMA mapping API, memory attributes, device coherency contract, and required ordering operations.</p>
+<p>A generic instruction to “clear the cache” is neither sufficiently precise nor universally safe. The driver must establish the direction of transfer, the ownership boundary, the relevant memory range, and completion signaling, then use the supported synchronization mechanism. Verification checks correctness under repeated transfers, multiple cores, and worst-case cache states; performance tuning follows only after the visibility contract is correct.</p>
+
+</section>
+<section id="applied-scenario-6-a-shared-llc-becomes-a-multitenant-bottleneck" aria-labelledby="heading-applied-scenario-6-a-shared-llc-becomes-a-multitenant-bottleneck"><h2 id="heading-applied-scenario-6-a-shared-llc-becomes-a-multitenant-bottleneck">Applied Scenario 6 — A Shared LLC Becomes a Multitenant Bottleneck</h2>
+<p>A server hosts two memory-intensive services that run well separately but slow down together. One workload streams large arrays and displaces the other's hot lookup tables from a shared last-level cache. The investigation compares interference in LLC occupancy, memory bandwidth, CPU utilization, and migration behavior. Mitigations might include scheduling isolation, CPU affinity, workload batching, data-layout changes, or platform-supported resource controls.</p>
+<p>The team must distinguish cache-capacity competition from bandwidth saturation and NUMA placement, because the remedies differ. For example, separating services into different core clusters may reduce contention in one shared structure but increase remote-memory traffic. Acceptance includes both services' throughput, worst-case latency, and the fairness of resource use.</p>
+
+</section>
+<section id="common-design-errors-and-misinterpretations" aria-labelledby="heading-common-design-errors-and-misinterpretations"><h2 id="heading-common-design-errors-and-misinterpretations">Common Design Errors and Misinterpretations</h2>
+<p>A recurring mistake is to treat all misses as equal in cost. An L1 miss satisfied quickly by L2, an LLC miss served by another core, and an LLC miss that must reach remote DRAM are different events. Another is to equate measured miss rate with total processor stalls, ignoring prefetch and independent outstanding operations. A third is to optimize raw hit percentage by loading unnecessary lines, thereby increasing memory traffic and hurting useful work.</p>
+<p>Other errors include assuming every processor uses 64-byte lines; equating L3 with universal last-level capacity; assuming inclusion policy from vendor identity; conflating TLB misses with data-cache misses; using write-back cache rules to infer durable storage; treating <code>cache-misses</code> counters as architecture-neutral; and trying to solve data races by cache flushing. Each mistake can be avoided by naming the hardware level, relevant contract, metric definition, and tested product.</p>
+
+</section>
+<section id="comparison-of-locality-improvement-techniques" aria-labelledby="heading-comparison-of-locality-improvement-techniques"><h2 id="heading-comparison-of-locality-improvement-techniques">Comparison of Locality Improvement Techniques</h2>
+<table>
+<thead>
+<tr>
+  <th>Intervention</th>
+  <th>Targeted mechanism</th>
+  <th>Conditions for benefit</th>
+  <th>Main risk or cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Reduce record footprint</td>
+  <td>Useful bytes per line and resident-set size</td>
+  <td>Many cold fields or excessive padding</td>
+  <td>Extra decoding, maintenance overhead</td>
+</tr>
+<tr>
+  <td>Switch AoS/SoA layout</td>
+  <td>Spatial locality and vector access</td>
+  <td>A stable, repeated field-access pattern</td>
+  <td>Penalizes other operation mixes</td>
+</tr>
+<tr>
+  <td>Reorder loops</td>
+  <td>Sequential access and reuse</td>
+  <td>Dependencies permit reordering</td>
+  <td>Changed semantics or code complexity</td>
+</tr>
+<tr>
+  <td>Cache blocking</td>
+  <td>Temporal locality of data tiles</td>
+  <td>Repeated use of large arrays</td>
+  <td>Tuning, packing, and loop overhead</td>
+</tr>
+<tr>
+  <td>Prefetch</td>
+  <td>Hide predictable miss latency</td>
+  <td>Address known sufficiently early</td>
+  <td>Pollution, bandwidth waste</td>
+</tr>
+<tr>
+  <td>Improve pointer locality</td>
+  <td>Fewer dependent cold lines</td>
+  <td>Data can be compacted or indexed</td>
+  <td>Update cost, redesign effort</td>
+</tr>
+<tr>
+  <td>Pad hot independent writers</td>
+  <td>Reduce false sharing</td>
+  <td>Confirmed shared-line ownership traffic</td>
+  <td>Greater footprint</td>
+</tr>
+<tr>
+  <td>Manage thread/NUMA placement</td>
+  <td>Less sharing or remote data access</td>
+  <td>Topology-sensitive workloads</td>
+  <td>Lost scheduling flexibility</td>
+</tr>
+<tr>
+  <td>Use streaming stores</td>
+  <td>Reduce unnecessary allocation/traffic</td>
+  <td>Large write-once buffers, documented support</td>
+  <td>Weak reuse, platform differences</td>
+</tr>
+</tbody>
+</table>
+<p>A performance change is credible when a hypothesized mechanism connects the code transformation to measured hardware behavior and to the application's final objective. If the final runtime does not improve, the change is not justified simply because a microbenchmark counter looks better.</p>
+
+</section>
+<section id="ten-gate-cache-and-locality-engineering-framework" aria-labelledby="heading-ten-gate-cache-and-locality-engineering-framework"><h2 id="heading-ten-gate-cache-and-locality-engineering-framework">Ten-Gate Cache and Locality Engineering Framework</h2>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Question</th>
+  <th>Required evidence or outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. Establish correctness</td>
+  <td>Does the new layout preserve program results?</td>
+  <td>Regression tests and explicit memory-order assumptions</td>
+</tr>
+<tr>
+  <td>2. Identify the bottleneck</td>
+  <td>Latency, bandwidth, capacity, coherence, or compute?</td>
+  <td>Profile of the representative workload</td>
+</tr>
+<tr>
+  <td>3. Map topology</td>
+  <td>Which levels are private/shared, and at what scope?</td>
+  <td>Processor-specific documentation and topology inventory</td>
+</tr>
+<tr>
+  <td>4. Define the working set</td>
+  <td>Which lines are active and how frequently reused?</td>
+  <td>Footprint and access-pattern analysis</td>
+</tr>
+<tr>
+  <td>5. Check mapping</td>
+  <td>Are conflicts, padding, or aliasing material?</td>
+  <td>Set/address model plus measured symptoms</td>
+</tr>
+<tr>
+  <td>6. Inspect miss sources</td>
+  <td>Demand reads, writes, prefetch, coherence, or translation?</td>
+  <td>Counter definitions and controlled tests</td>
+</tr>
+<tr>
+  <td>7. Choose one intervention</td>
+  <td>Which mechanism is expected to change?</td>
+  <td>Explicit causal hypothesis and limited code change</td>
+</tr>
+<tr>
+  <td>8. Compare fairly</td>
+  <td>Same inputs, output, environment, and objectives?</td>
+  <td>Controlled repeated benchmark</td>
+</tr>
+<tr>
+  <td>9. Assess system trade-offs</td>
+  <td>Does improvement survive threading and realistic sizes?</td>
+  <td>Throughput, tail latency, memory footprint, energy where relevant</td>
+</tr>
+<tr>
+  <td>10. Document and maintain</td>
+  <td>Is the optimization portable and understandable?</td>
+  <td>Hardware scope, measurement record, fallback, and review date</td>
+</tr>
+</tbody>
+</table>
+<p>This framework prevents premature changes to source layout or specialized instructions based solely on a cache-size number. It also recognizes that caches, software scheduling, and OS memory management are interacting systems, not independent tuning knobs.</p>
+
+</section>
+<section id="worked-decision-example-table-size-versus-associativity" aria-labelledby="heading-worked-decision-example-table-size-versus-associativity"><h2 id="heading-worked-decision-example-table-size-versus-associativity">Worked Decision Example — Table Size Versus Associativity</h2>
+<p>A team measures poor performance on a read-mostly index of approximately 40 KiB. The processor advertises a 48-KiB L1 data cache, so the team assumes the index must fit. A careful review shows that the index shares sets with other live data, its allocated footprint includes metadata and padding, and several threads repeatedly update counters located next to frequently read entries. The symptoms may therefore involve both limited effective residency and coherence ownership traffic, even though 40 is less than 48.</p>
+<p>Instead of purchasing more cores or forcing an undocumented cache-control option, the team first separates the hot read-only index from the writable counters, narrows hot keys, and measures a controlled access trace. It also checks whether the L2 or LLC readily supplies L1 misses and whether those misses appear on the critical path. The decision is based on measured service objectives, not the capacity comparison alone.</p>
+
+</section>
+<section id="guided-exercise-1-compute-a-set-and-tag" aria-labelledby="heading-guided-exercise-1-compute-a-set-and-tag"><h2 id="heading-guided-exercise-1-compute-a-set-and-tag">Guided Exercise 1 — Compute a Set and Tag</h2>
+<p>Design a toy <code>16 KiB</code>, four-way cache with 64-byte lines. Compute the line slots and set count; then determine block number, set, tag, and offset for byte addresses <code>0</code>, <code>256</code>, and <code>16,384</code>. Explain which addresses necessarily map to the same set under the simple modulo-indexed model, and whether four-way associativity guarantees all three remain simultaneously resident.</p>
+<p><strong>Check:</strong> 256 line slots, 64 sets. Addresses 0, 256, and 16,384 have block numbers 0, 4, and 256, with set indices 0, 4, and 0. The two blocks mapping to set zero can coexist in a four-way cache if no other evictions or restrictions intervene.</p>
+
+</section>
+<section id="guided-exercise-2-separate-miss-categories" aria-labelledby="heading-guided-exercise-2-separate-miss-categories"><h2 id="heading-guided-exercise-2-separate-miss-categories">Guided Exercise 2 — Separate Miss Categories</h2>
+<p>Trace twelve references repeating four blocks in a two-line fully associative LRU cache; then repeat the trace for a direct-mapped cache with two sets. Identify cold misses and explain which additional misses are due to limited total capacity versus restrictive placement. Define the exact address-to-set mapping you use instead of assuming that letters imply physical address spacing.</p>
+<p><strong>Check:</strong> All four distinct blocks generate a cold miss on their first visit. Subsequent misses depend on trace order and mapping. A direct-mapped conflict classification requires knowing which physical blocks index the same set, whereas a fully associative LRU cache has no set-placement conflicts by construction.</p>
+
+</section>
+<section id="guided-exercise-3-estimate-serial-amat" aria-labelledby="heading-guided-exercise-3-estimate-serial-amat"><h2 id="heading-guided-exercise-3-estimate-serial-amat">Guided Exercise 3 — Estimate Serial AMAT</h2>
+<p>Assume an L1 hit time of 3 cycles, a 12% L1 local miss rate, an incremental L2 service time of 11 cycles on L1 misses, an L2 local miss rate of 25%, and a further 90-cycle lower-level penalty. Compute the serial AMAT with the nested formula, then explain why the value is not a prediction of actual IPC loss.</p>
+<p><strong>Check:</strong> <code>3 + 0.12 × (11 + 0.25 × 90) = 7.02 cycles</code>. Overlap, prefetch, miss tracking, load dependencies, and other execution work can change the effective performance impact.</p>
+
+</section>
+<section id="guided-exercise-4-diagnose-a-multithreaded-regression" aria-labelledby="heading-guided-exercise-4-diagnose-a-multithreaded-regression"><h2 id="heading-guided-exercise-4-diagnose-a-multithreaded-regression">Guided Exercise 4 — Diagnose a Multithreaded Regression</h2>
+<p>Two threads update eight-byte counters. Their base addresses are eight bytes apart, and hardware uses a 64-byte coherence granule. Determine whether they <strong>could</strong> share a cache line, then state what additional information is required to prove they <strong>do</strong> share a line. Design a measurement and a padding experiment, and explain why alignment and memory-order correctness are separate questions.</p>
+<p><strong>Check:</strong> Eight-byte separation can place both counters on one line, but a counter near the end of one line may put the second in the next line. Confirm actual aligned addresses, compiled layout, and repeated ownership traffic. Padding should be tested against increased footprint and correctness checks.</p>
+
+</section>
+<section id="guided-exercise-5-design-a-working-set-sweep" aria-labelledby="heading-guided-exercise-5-design-a-working-set-sweep"><h2 id="heading-guided-exercise-5-design-a-working-set-sweep">Guided Exercise 5 — Design a Working-Set Sweep</h2>
+<p>Develop a benchmarking plan that tests datasets from smaller than L1 to larger than LLC. Use sequential and randomized dependent traversals, with at least five repetitions per size. Record processor model, clock policy, affinity, page size, and counter semantics. Explain why warmup, randomization seed, and compiler optimizations must be controlled before attributing a performance knee to a particular cache level.</p>
+<p><strong>Check:</strong> A valid result compares correctly computed outputs under fixed conditions and discloses the possibility of TLB, prefetch, and memory-controller effects. One transition in a plot should be labeled as <em>suggestive evidence</em>, not definitive discovery of a cache's exact capacity.</p>
+
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions"><h2 id="heading-review-questions">Review Questions</h2>
+<ol>
+<li>Why is a cache hierarchy preferable to relying only on fast arithmetic units and DRAM?</li>
+<li>How do L1 instruction, L1 data, L2, and last-level caches differ in role?</li>
+<li>What are a cache line, set, way, and tag, and how do they relate to nominal data capacity?</li>
+<li>Under what assumptions can <code>block % sets</code> describe set indexing?</li>
+<li>Distinguish compulsory, capacity, conflict, and coherence-related misses.</li>
+<li>Why does a 40-KiB active dataset not necessarily fit in an advertised 48-KiB L1 data cache?</li>
+<li>What is the difference between write-back, write-through, write-allocate, and non-temporal stores?</li>
+<li>How can a hardware prefetcher improve latency while simultaneously increasing traffic?</li>
+<li>Why are a TLB miss, data-cache miss, and page fault different events?</li>
+<li>Explain why cache coherence does not eliminate data races.</li>
+<li>What is false sharing, and when might padding reduce or worsen performance?</li>
+<li>Derive local and global miss rates from a two-level access trace.</li>
+<li>What limitations make serial AMAT an incomplete runtime model?</li>
+<li>Why can pointer chasing be latency bound even without saturating DRAM bandwidth?</li>
+<li>Compare the cache behavior of row-major row scans and column scans.</li>
+<li>What does cache blocking improve, and why does a capacity calculation not give an optimal tile size?</li>
+<li>What evidence is needed before concluding that an L3 miss counter explains a slowdown?</li>
+<li>Why might placing two threads on separate cache-sharing groups help or hurt?</li>
+<li>How does DMA cache maintenance differ from a memory-ordering fence?</li>
+<li>What measurements would justify changing a production data layout?</li>
+</ol>
+
+</section>
+<section id="glossary" aria-labelledby="heading-glossary"><h2 id="heading-glossary">Glossary</h2>
+<p><strong>Address tag:</strong> Identifier stored with a cache slot to distinguish blocks mapping to the same set. <strong>AMAT:</strong> Average memory access time in a specified simplified model. <strong>Associativity:</strong> Number of eligible line positions per set. <strong>Bandwidth:</strong> Sustained data volume transferred per unit time. <strong>Block / cache line:</strong> Region managed as a unit by the cache controller. <strong>Cache hit:</strong> Lookup satisfied from the relevant cache level under its current state. <strong>Cache miss:</strong> Lookup not satisfied from that level, requiring another action. <strong>Capacity miss:</strong> Miss that would be avoided with adequate ideal capacity under a stated model. <strong>Cold miss:</strong> First access to a block not previously populated. <strong>Conflict miss:</strong> Miss caused by placement restrictions among sets. <strong>Data cache:</strong> Cache serving data loads and stores. <strong>Dirty line:</strong> Cached line holding data not yet propagated according to its write-back policy. <strong>False sharing:</strong> Ownership traffic caused by independent writes to separate items in one coherence granule.</p>
+<p><strong>Fill buffer:</strong> Structure tracking data arriving for a cache miss. <strong>Hardware prefetch:</strong> Hardware-initiated request anticipating future access. <strong>Hit-under-miss:</strong> Ability to service a hit while another miss remains unresolved. <strong>Inclusive cache:</strong> Cache level maintaining an inclusion property for a specified other level. <strong>Instruction cache:</strong> Cache holding instruction bytes for fetch. <strong>Last-level cache:</strong> Final cache level in a specified hierarchy, not invariably L3. <strong>Latency:</strong> Time between request and required result. <strong>Local miss rate:</strong> Misses divided by accesses at that cache level. <strong>Global miss rate:</strong> Misses at a level divided by an upstream reference population. <strong>LRU:</strong> Replacement policy preferring removal of least recently used resident line. <strong>MSHR:</strong> Miss-status holding structure tracking outstanding misses.</p>
+<p><strong>NUMA:</strong> Nonuniform memory access, in which access cost depends on memory placement and topology. <strong>Prefetch pollution:</strong> Eviction or traffic caused by prefetched lines that provide insufficient benefit. <strong>Replacement policy:</strong> Rule or heuristic selecting an eviction victim. <strong>Reuse distance:</strong> Distinct-block references separating two uses of one block in a stated trace. <strong>Set:</strong> Group of line positions selected by an indexing function. <strong>Spatial locality:</strong> Tendency to access nearby addresses. <strong>Store buffer:</strong> Structure holding pending stores before they complete later visibility actions. <strong>Temporal locality:</strong> Tendency to reuse a previously accessed block. <strong>Throughput:</strong> Number of operations or accesses completed per unit time. <strong>TLB:</strong> Translation lookaside buffer for address-translation entries. <strong>VIPT:</strong> Virtually indexed, physically tagged cache. <strong>Way:</strong> One candidate line slot within a set. <strong>Working set:</strong> Active set of blocks used within a relevant phase or interval. <strong>Write-allocate:</strong> Policy that allocates a missed block on certain writes. <strong>Write-back:</strong> Policy permitting modified cached data to be propagated later. <strong>Write-through:</strong> Policy forwarding writes to a downstream structure under defined rules.</p>
+
+</section>
+<section id="complete-cpu-specialist-directory" aria-labelledby="heading-complete-cpu-specialist-directory"><h2 id="heading-complete-cpu-specialist-directory">Complete CPU Specialist Directory</h2>
+<p>The approved CPU specialist index prescribes the following <strong>24 Level 5 destinations</strong>. Links remain active for planned pages; a link does not prove a file is installed or deployed.</p><ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality" aria-current="page">CPU Cache Hierarchies and Locality</a> — Current article.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a> — Prescribed specialist destination.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a> — Prescribed specialist destination.</li></ol><p>For orientation see the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">CPU specialist index</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">CPU overview</a>, and <a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems division index</a>.</p>
+</section>
+<section id="related-encyclopedia-topics-and-taxonomy-boundaries" aria-labelledby="heading-related-encyclopedia-topics-and-taxonomy-boundaries"><h2 id="heading-related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</h2>
+<p>This article owns <strong>CPU cache hardware and program locality</strong>. For the architectural abstraction across storage levels, consult <a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a>. For physical DRAM technologies and module characteristics, see <a href="/library/encyclopedia/computer-science/hardware-systems/memory-hardware">Memory Hardware</a>. For address translation and page-table walks, see <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a>.</p>
+<p>Within the CPU specialist unit, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a> owns instruction issue and ordering; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a> owns cache-line ownership and atomics; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a> owns processor-wide cluster structure; and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a> owns wider performance attribution. Cache timing channels and defensive implications belong to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a>.</p>
+
+</section>
+<section id="primary-documentation-and-further-reading" aria-labelledby="heading-primary-documentation-and-further-reading"><h2 id="heading-primary-documentation-and-further-reading">Primary Documentation and Further Reading</h2>
+<ol>
+<li><a href="https://learn.arm.com/learning-paths/servers-and-cloud-computing/memory-subsystem/cache-hierarchy/">Arm Learning Paths, <em>Analyze Arm Cache Hierarchy and Performance Characteristics</em></a>. Practical definitions of locality, cache-line behavior, and hierarchy analysis; specific numerical examples are architecture/platform dependent.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel64-and-ia32-architectures-optimization.html">Intel, <em>Intel 64 and IA-32 Architectures Optimization Reference Manual</em></a>. Processor-specific cache, prefetch, bandwidth, and performance guidance; use the revision corresponding to the target CPU.</li>
+<li><a href="https://www.intel.com/content/www/us/en/docs/ipp/developer-guide-reference/2021-11/cache-optimizations.html">Intel Integrated Performance Primitives, <em>Cache Optimizations</em></a>. Loop locality, blocking, and threading implications.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/loop-optimizations-where-blocks-are-required.html">Intel, <em>Loop Optimizations Where Blocks Are Required</em></a>. A worked software-engineering discussion of blocking to improve data reuse.</li>
+<li><a href="https://gpuopen.com/learn/ryzen-performance/">AMD GPUOpen, <em>AMD Ryzen CPU Performance Guide</em></a>. Processor-aware locality, working sets, and performance considerations.</li>
+<li><a href="https://support.arm.com/documentation/101430/0102/Functional-description/L2-memory-system/About-the-L2-memory-system">Arm, <em>Cortex-A78 Core Technical Reference Manual: L2 Memory System</em></a>. Concrete implementation documentation; not a universal Arm design.</li>
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/cmo.html">RISC-V International, <em>CMO Extensions for Base Cache Management Operations</em></a>. Ratified definitions for optional cache-block clean, flush, and invalidate operations.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/ddio-analysis-performance-monitoring.html">Intel, <em>Data Direct I/O Technology Performance Monitoring</em></a>. Distinctions among event sources, uncore monitoring, and data-path attribution.</li>
+<li><a href="https://perfmon-events.intel.com/">Intel, <em>PerfMon Events Documentation</em></a>. Processor-model-specific performance event definitions.</li>
+<li><a href="https://www.man7.org/linux/man-pages/man1/perf-stat.1.html">Linux <em>perf-stat(1)</em> manual</a>. Counter-collection syntax and important measurement limitations.</li>
+<li>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em>. Morgan Kaufmann. Quantitative cache modeling, locality, and memory-level parallelism.</li>
+<li>David A. Patterson and John L. Hennessy, <em>Computer Organization and Design</em>. Morgan Kaufmann. Introductory cache mapping, miss classification, and multilevel memory systems.</li>
+<li>Ulrich Drepper, <em>What Every Programmer Should Know About Memory</em> (2007). Cache, memory access, and NUMA background; historical measurements should not be treated as contemporary hardware specifications.</li>
+</ol>
+
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope"><h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Prepared November 23, 2026:</strong> This is CPU specialist article <strong>13 of 24</strong>, following the prescribed CPU unit directory. It provides a comprehensive introduction to real processor cache organization, set mapping, replacement and writes, locality, prefetch, memory-level parallelism, multicore contention, performance measurement, and practical data-layout design. The numerical examples and Python traces are explicitly <strong>illustrative models</strong>; they are not measurements of a named processor or claims about its undocumented cache internals.</p>
+<p>This publication's physical file is <code>library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality.html</code> relative to the <code>C:\MGU&lt;/code&gt; extraction root. The corresponding canonical URL omits <code>.html</code>. The parent CPU unit index and sibling articles are not modified. Active specialist links lead to intended article destinations and are not evidence that every linked article has already been installed.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

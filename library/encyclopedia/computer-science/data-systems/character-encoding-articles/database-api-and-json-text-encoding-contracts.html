@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database, API, and JSON Text Encoding Contracts | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Technical treatment of character encoding across JSON, HTTP APIs, client libraries, SQL drivers and databases, including UTF-8 validation, round-trip testing and multilingual preservation.">
+<meta name="keywords" content="database text encoding, JSON UTF-8, HTTP APIs, Unicode round trip, client encoding, SQLite, PostgreSQL, SQL collation, text storage, PowerShell 5.1">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/character-encoding-articles/database-api-and-json-text-encoding-contracts">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Database, API, and JSON Text Encoding Contracts | MGU Encyclopedia">
+<meta property="og:description" content="Technical treatment of character encoding across JSON, HTTP APIs, client libraries, SQL drivers and databases, including UTF-8 validation, round-trip testing and multilingual preservation.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/data-systems/character-encoding-articles/database-api-and-json-text-encoding-contracts">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== SHARED HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Database, API, and JSON Text Encoding Contracts</h1>
+<p class="subtitle">Preserving Unicode text across JSON requests, application strings, database drivers, SQL storage, and API responses.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#1-scope-and-central-principle">1. Scope and Central Principle</a></li>
+<li><a href="#2-learning-objectives-and-questions">2. Learning Objectives and Questions</a></li>
+<li><a href="#3-the-end-to-end-text-path">3. The End-to-End Text Path</a></li>
+<li><a href="#4-four-distinct-notions-of-text-equality">4. Four Distinct Notions of Text Equality</a></li>
+<li><a href="#5-the-json-text-model">5. The JSON Text Model</a></li>
+<li><a href="#6-json-serialization-is-not-character-encoding">6. JSON Serialization Is Not Character Encoding</a></li>
+<li><a href="#7-http-media-types-request-handling-and-responses">7. HTTP Media Types, Request Handling, and Responses</a></li>
+<li><a href="#8-unicode-strings-inside-programming-languages">8. Unicode Strings Inside Programming Languages</a></li>
+<li><a href="#9-database-storage-encoding-versus-client-encoding">9. Database Storage Encoding Versus Client Encoding</a></li>
+<li><a href="#10-driver-and-connection-configuration">10. Driver and Connection Configuration</a></li>
+<li><a href="#11-sql-text-types-binary-types-and-repertoire-limits">11. SQL Text Types, Binary Types, and Repertoire Limits</a></li>
+<li><a href="#12-collation-does-not-set-the-storage-encoding">12. Collation Does Not Set the Storage Encoding</a></li>
+<li><a href="#13-normalization-as-an-explicit-data-contract">13. Normalization as an Explicit Data Contract</a></li>
+<li><a href="#14-surrogates-noncharacters-and-unsafe-text-assumptions">14. Surrogates, Noncharacters, and Unsafe Text Assumptions</a></li>
+<li><a href="#15-application-identifiers-display-names-and-search-keys">15. Application Identifiers, Display Names, and Search Keys</a></li>
+<li><a href="#16-length-limits-at-transport-driver-and-column-boundaries">16. Length Limits at Transport, Driver, and Column Boundaries</a></li>
+<li><a href="#17-logging-and-observability-at-encoding-boundaries">17. Logging and Observability at Encoding Boundaries</a></li>
+<li><a href="#18-byte-level-teaching-fixture-a-multilingual-profile">18. Byte-Level Teaching Fixture: A Multilingual Profile</a></li>
+<li><a href="#19-worked-python-round-trip-json-sqlite-json">19. Worked Python Round Trip: JSON → SQLite → JSON</a></li>
+<li><a href="#20-comparing-raw-json-bytes-with-unicode-meaning">20. Comparing Raw JSON Bytes with Unicode Meaning</a></li>
+<li><a href="#21-negative-tests-invalid-utf-8-and-escaped-surrogates">21. Negative Tests: Invalid UTF-8 and Escaped Surrogates</a></li>
+<li><a href="#22-javascript-utf-16-code-units-versus-utf-8-payload-bytes">22. JavaScript: UTF-16 Code Units Versus UTF-8 Payload Bytes</a></li>
+<li><a href="#23-windows-powershell-5-1-strict-text-round-trip">23. Windows PowerShell 5.1: Strict Text Round Trip</a></li>
+<li><a href="#24-postgresql-demonstrating-client-and-server-encodings">24. PostgreSQL: Demonstrating Client and Server Encodings</a></li>
+<li><a href="#25-sqlite-text-encoding-driver-decoding-and-binary-inspection">25. SQLite: Text Encoding, Driver Decoding, and Binary Inspection</a></li>
+<li><a href="#26-database-round-trip-test-matrix">26. Database Round-Trip Test Matrix</a></li>
+<li><a href="#27-errors-and-failure-modes-in-production-systems">27. Errors and Failure Modes in Production Systems</a></li>
+<li><a href="#28-secure-handling-of-untrusted-text">28. Secure Handling of Untrusted Text</a></li>
+<li><a href="#29-binary-data-and-json-must-not-be-interchanged-implicitly">29. Binary Data and JSON Must Not Be Interchanged Implicitly</a></li>
+<li><a href="#30-api-contracts-and-versioned-schema-evolution">30. API Contracts and Versioned Schema Evolution</a></li>
+<li><a href="#31-importing-legacy-csv-and-other-text-files-into-apis">31. Importing Legacy CSV and Other Text Files into APIs</a></li>
+<li><a href="#32-normalization-collation-and-search-index-migration">32. Normalization, Collation, and Search-Index Migration</a></li>
+<li><a href="#33-cross-language-differences-python-javascript-and-sql">33. Cross-Language Differences: Python, JavaScript, and SQL</a></li>
+<li><a href="#34-diagnosing-a-production-encoding-incident">34. Diagnosing a Production Encoding Incident</a></li>
+<li><a href="#35-a-practical-data-contract-checklist">35. A Practical Data-Contract Checklist</a></li>
+<li><a href="#36-architecture-selection-and-operational-tradeoffs">36. Architecture Selection and Operational Tradeoffs</a></li>
+<li><a href="#37-worked-review-questions">37. Worked Review Questions</a></li>
+<li><a href="#38-applied-exercises">38. Applied Exercises</a></li>
+<li><a href="#39-glossary-and-conceptual-summary">39. Glossary and Conceptual Summary</a></li>
+<li><a href="#40-sub-articles-and-related-topics">40. Sub-Articles and Related Topics</a></li>
+<li><a href="#41-technical-references-and-further-reading">41. Technical References and Further Reading</a></li>
+<li><a href="#42-publication-scope-and-reader-guidance">42. Publication Scope and Reader Guidance</a></li>
+</ol>
+</section>
+<section aria-labelledby="heading-1-scope-and-central-principle" id="1-scope-and-central-principle"><h2 id="heading-1-scope-and-central-principle">1. Scope and Central Principle</h2>
+<p>A text field may begin as Unicode in an application, cross an HTTP interface as UTF-8 bytes, enter a database through a driver, persist in a database-specific representation, and return to a client through another JSON document. Each step can preserve the user's intended text—or subtly alter it. The fact that text displays correctly in one interface is not proof that the same character sequence survived each boundary.</p>
+<p>This Level 5 MGU Encyclopedia article examines <strong>character-encoding contracts</strong> between application code, database drivers, SQL data types, JSON serialization, HTTP transport, and consumers. It extends the <a href="/library/encyclopedia/computer-science/data-systems/character-encoding">Character Encoding overview</a> and <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/">Character Encoding specialist directory</a>. The emphasis here is not designing an entire database schema, query plan, or HTTP API; those belong to <a href="/library/encyclopedia/computer-science/data-systems/databases">Databases</a>, <a href="/library/encyclopedia/computer-science/data-systems/databases-articles/structured-query-language">Structured Query Language</a>, and <a href="/library/encyclopedia/computer-science/programming-and-development/api-design">API Design</a>. Here the question is whether text crosses those interfaces without unacknowledged corruption.</p>
+<p><strong>Governing rule:</strong> specify the character sequence and encoding at each byte boundary; decode and encode according to the appropriate contract; test both the resulting Unicode code points and the serialized bytes. When normalization, case conversion, replacement, trimming, or transcoding changes content, treat that change as an explicit transformation, not as an invisible consequence of storage or transport.</p>
+</section>
+<section aria-labelledby="heading-2-learning-objectives-and-questions" id="2-learning-objectives-and-questions"><h2 id="heading-2-learning-objectives-and-questions">2. Learning Objectives and Questions</h2>
+<p>By the end of the article, a reader should be able to explain why a database's internal text encoding need not match the HTTP payload encoding; distinguish a database column's collation from its storage encoding; enforce UTF-8 JSON exchange; identify surrogate and invalid-UTF-8 hazards; use parameterized database operations; compare byte counts with character and grapheme counts; design a round-trip text fixture; and diagnose a disagreement between what an application sent and what a subsequent client received.</p>
+<p>The investigation should ask: Where do actual <strong>bytes</strong> exist? Which component constructs a Unicode string? Which driver negotiates or converts a character set? What values can the destination represent? Which normalization and equality rules apply? What is the observable evidence of successful persistence? Which transport standard governs JSON serialization? What diagnostic artifact preserves the original bytes if a failure occurs?</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Boundary</th>
+<th scope="col">Input and output</th>
+<th scope="col">Required contract</th>
+<th scope="col">Frequent mistake</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTTP request</td>
+<td>Bytes → Unicode JSON text</td>
+<td>UTF-8 for interoperable JSON; strict decoding</td>
+<td>Decoding JSON as a legacy code page</td>
+</tr>
+<tr>
+<td>JSON parser</td>
+<td>JSON syntax → strings and values</td>
+<td>Well-formed JSON; validate application string policy</td>
+<td>Confusing escape sequences with raw bytes</td>
+</tr>
+<tr>
+<td>Database driver</td>
+<td>Language string ↔ database client representation</td>
+<td>Driver encoding and conversion settings</td>
+<td>Assuming a client uses database-file bytes directly</td>
+</tr>
+<tr>
+<td>Database column</td>
+<td>SQL text value ↔ persisted representation</td>
+<td>Character repertoire and storage rules</td>
+<td>Treating collation as encoding</td>
+</tr>
+<tr>
+<td>Query and comparison</td>
+<td>Values → ordered or matched results</td>
+<td>Named collation, normalization, and equality policy</td>
+<td>Assuming visual equivalence implies binary equality</td>
+</tr>
+<tr>
+<td>HTTP response</td>
+<td>Unicode JSON values → bytes</td>
+<td>UTF-8 and correct media type</td>
+<td>Comparing serialized bytes when order/escaping differs</td>
+</tr>
+<tr>
+<td>Display</td>
+<td>String → glyph sequence</td>
+<td>Font, shaping, grapheme and direction rules</td>
+<td>Treating legible rendering as a round-trip proof</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-3-the-end-to-end-text-path" id="3-the-end-to-end-text-path"><h2 id="heading-3-the-end-to-end-text-path">3. The End-to-End Text Path</h2>
+<p>Consider a user's display name <code>Café — 東京 😀</code>. The name includes ASCII letters, a Latin accented character, an em dash, Japanese characters, a space, and a supplementary-plane emoji. It is a useful compact fixture because an ASCII-only, Latin-1-only, or three-byte UTF-8 implementation cannot represent the full value faithfully. It also demonstrates variable-width encoding even when every character looks like a single visible symbol.</p>
+<p>An ordinary pipeline is <strong>application string → JSON serializer → UTF-8 bytes → HTTP body → UTF-8 decoder → JSON parser → database driver → stored SQL text → database driver → application string → JSON serializer → UTF-8 response bytes</strong>. In a client that uses UTF-16 code units, the internal string representation introduces yet another counting convention, but that does not change the requirement that open-system JSON exchange use UTF-8.</p>
+<p>Crucially, not all arrows are byte copies. A database driver can convert an incoming client encoding to the server's internal encoding. A JSON serializer can represent <code>é</code> directly as UTF-8 bytes or as ASCII characters spelling the escape <code>\u00e9</code>. Both may decode to the same Unicode string. A collation can say two different strings compare alike without making their stored code points identical. A web UI may render canonically equivalent strings identically even if database equality says otherwise.</p>
+</section>
+<section aria-labelledby="heading-4-four-distinct-notions-of-text-equality" id="4-four-distinct-notions-of-text-equality"><h2 id="heading-4-four-distinct-notions-of-text-equality">4. Four Distinct Notions of Text Equality</h2>
+<p>Text can be compared at several layers. <strong>Byte equality</strong> means exactly identical octets in a specified encoding. <strong>Code-point equality</strong> means the same ordered sequence of Unicode scalar values. <strong>Normalized equality</strong> applies a specified Unicode normalization form, often NFC, before code-point comparison. <strong>Collation equivalence</strong> applies locale- and implementation-dependent comparison rules and may ignore differences such as case, accents, or punctuation at a chosen strength.</p>
+<p>For example, precomposed <code>é</code> (U+00E9) and decomposed <code>e</code> followed by U+0301 are not byte-equal under UTF-8 and not code-point-equal. Both normalize to the same NFC sequence. Depending on collation settings, they may also compare alike; that is a separate decision. Neither case folding nor collation should be used as a substitute for byte-exact identity when auditing a record.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Equality question</th>
+<th scope="col">Example test</th>
+<th scope="col">Appropriate for</th>
+<th scope="col">Not appropriate for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Same UTF-8 bytes?</td>
+<td>Compare hex or hash of serialized value</td>
+<td>Transport integrity, archive verification</td>
+<td>User-perceived semantic equality</td>
+</tr>
+<tr>
+<td>Same Unicode sequence?</td>
+<td>Compare code points of decoded text</td>
+<td>Lossless application round trips</td>
+<td>Locale sorting</td>
+</tr>
+<tr>
+<td>Same after NFC?</td>
+<td>Normalize both strings before comparison</td>
+<td>Explicit normalization policies</td>
+<td>Detecting whether storage transformed source text</td>
+</tr>
+<tr>
+<td>Same under collation?</td>
+<td>Compare with named, versioned collation</td>
+<td>Sorting and language-aware matching</td>
+<td>Cryptographic identities or source-byte preservation</td>
+</tr>
+<tr>
+<td>Same displayed glyphs?</td>
+<td>Inspect rendering and fonts</td>
+<td>Interface usability</td>
+<td>Establishing data preservation</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-5-the-json-text-model" id="5-the-json-text-model"><h2 id="heading-5-the-json-text-model">5. The JSON Text Model</h2>
+<p>JSON strings represent Unicode text and JSON syntax operates on textual characters, not arbitrary bytes. RFC 8259 requires <strong>JSON text exchanged between systems that are not part of a closed ecosystem to be encoded in UTF-8</strong>. A JSON generator should not add a byte-order mark to a network JSON text; a parser may ignore a BOM rather than reject it for interoperability. <code>Content-Type: application/json</code> identifies the media type. Under the <code>application/json</code> registration, no <code>charset</code> parameter is defined and adding one does not change the required UTF-8 encoding of interoperable JSON.</p>
+<p>JSON escapes are syntax within a JSON document. The two ASCII characters <code>\</code> and <code>n</code> can represent a line feed after parsing; the six ASCII characters <code>\u00e9</code> can represent U+00E9. Such sequences do not mean the transport is using UTF-16 or ASCII as its character encoding. They are themselves carried in the network byte stream, normally UTF-8. For a supplementary character, a JSON serializer can use a paired <code>\uD83D\uDE00</code> representation instead of putting <code>😀</code> directly in the UTF-8 document. Both encode the same parsed Unicode scalar value when the pair is valid.</p>
+<p>RFC 8259's grammar can admit escaped <strong>unpaired UTF-16 surrogates</strong>, which do not correspond to Unicode scalar values. Some parsers may accept them and disagree on subsequent string length or encoding. For robust cross-system exchange, reject unpaired surrogates at the application boundary; the I-JSON profile (RFC 7493) sets a stricter interoperable character policy. Do not assume syntactic JSON parse success alone proves every string is safe to store or re-encode.</p>
+</section>
+<section aria-labelledby="heading-6-json-serialization-is-not-character-encoding" id="6-json-serialization-is-not-character-encoding"><h2 id="heading-6-json-serialization-is-not-character-encoding">6. JSON Serialization Is Not Character Encoding</h2>
+<p>A serializer decides field ordering, whitespace, escape spelling, and representation of numbers and textual characters. An <strong>encoder</strong> converts the resulting Unicode document to bytes. This separation matters for byte-level comparisons. Consider <code>{"city":"東京"}</code> and <code>{"city":"\u6771\u4eac"}</code>: these JSON documents have different UTF-8 byte sequences but can yield the same parsed object. Escaping policy may be chosen for application compatibility, but it should not be confused with a distinct text-encoding contract.</p>
+<p>Using <code>ensure_ascii=False</code> in Python makes non-ASCII characters appear directly in the produced JSON string; applying <code>.encode('utf-8')</code> then creates UTF-8 bytes. Using <code>ensure_ascii=True</code> chooses JSON escapes and the UTF-8 byte stream is ASCII-compatible because the escaped form uses ASCII characters. Neither option magically converts source data that was decoded incorrectly upstream. Both require a scalar-valid input to be safe in an interoperable exchange.</p>
+<p>The most reliable test is therefore <strong>parse → compare specified Unicode values → serialize under the selected protocol → inspect bytes</strong>. Only compare whole-document bytes when the contract also fixes the exact serialization (for example, a formal canonical JSON scheme). A cryptographic signature over arbitrary JSON needs an agreed canonicalization or byte-preserving representation; equal parsed values alone do not establish the same signature input.</p>
+</section>
+<section aria-labelledby="heading-7-http-media-types-request-handling-and-responses" id="7-http-media-types-request-handling-and-responses"><h2 id="heading-7-http-media-types-request-handling-and-responses">7. HTTP Media Types, Request Handling, and Responses</h2>
+<p>An API endpoint receiving JSON should check the expected media type and treat its body as UTF-8 according to the JSON media type's rules. The <code>Accept</code> request header describes media types acceptable to the client; it does not supply the request body's character encoding. Likewise, an endpoint should not infer a database character set from an HTTP header or let an arbitrary client <code>charset</code> label override the JSON standard.</p>
+<p>A representative request is:</p>
+<pre><code class="language-http">POST /api/profiles HTTP/1.1
+Host: example.invalid
+Content-Type: application/json
+Accept: application/json
+
+{"id":"profile-017","display_name":"Café — 東京 😀"}
+</code></pre>
+<p>This is an <em>illustrative textual rendering</em> of an HTTP request: the actual wire body must be the UTF-8 byte representation, and a transport implementation handles message framing. For the response, <code>Content-Type: application/json</code> identifies a UTF-8 JSON representation; an implementation may explicitly advertise <code>charset=utf-8</code>, but the JSON registration itself does not define a charset parameter. An API's independent contract should also specify required fields, length limits, normalization behavior, error handling, and permitted characters for identifiers versus display names.</p>
+</section>
+<section aria-labelledby="heading-8-unicode-strings-inside-programming-languages" id="8-unicode-strings-inside-programming-languages"><h2 id="heading-8-unicode-strings-inside-programming-languages">8. Unicode Strings Inside Programming Languages</h2>
+<p>A Python <code>str</code> represents a sequence of Unicode code points conceptually; encoding to UTF-8 returns a <code>bytes</code> object. JavaScript strings are sequences of UTF-16 code units, so <code>.length</code> can count two units for a single supplementary character. Java and many other runtimes also expose UTF-16-oriented string operations. A database driver may accept a language string and perform character conversion internally; the application should not guess at its intermediate byte representation.</p>
+<p>For the string <code>Café — 東京 😀</code>, a byte count (<code>len(s.encode('utf-8'))</code> in Python), a Python string length, a JavaScript <code>.length</code>, and a grapheme-cluster count answer different questions. None can be substituted into an API limit without explicitly stating the unit. An application can be “Unicode-capable” yet truncate a field incorrectly by cutting a UTF-8 byte stream in the middle of a multibyte sequence or splitting a UTF-16 surrogate pair.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Counting unit</th>
+<th scope="col">What it counts</th>
+<th scope="col">Typical use</th>
+<th scope="col">Pitfall</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UTF-8 bytes</td>
+<td>Serialized octets</td>
+<td>Network framing and byte-limited storage</td>
+<td>Multibyte characters vary in size</td>
+</tr>
+<tr>
+<td>Unicode scalar values</td>
+<td>Non-surrogate code points</td>
+<td>Character-level validity and quotas</td>
+<td>Multiple scalars can form one grapheme</td>
+</tr>
+<tr>
+<td>UTF-16 code units</td>
+<td>16-bit units</td>
+<td>Some runtime string indexing</td>
+<td>Supplementary characters occupy two</td>
+</tr>
+<tr>
+<td>Extended grapheme clusters</td>
+<td>Approximate user-perceived text elements</td>
+<td>Cursor movement and UI limits</td>
+<td>Segmentation depends on Unicode rules/version</td>
+</tr>
+<tr>
+<td>Database length expression</td>
+<td>Product-specific SQL semantics</td>
+<td>Schema constraints</td>
+<td>Units and trailing-space behavior vary</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-9-database-storage-encoding-versus-client-encoding" id="9-database-storage-encoding-versus-client-encoding"><h2 id="heading-9-database-storage-encoding-versus-client-encoding">9. Database Storage Encoding Versus Client Encoding</h2>
+<p>A database may accept text in a client-selected encoding, convert it internally, and return text in another client-selected encoding. This is not automatically a data-integrity problem when the original Unicode sequence survives. PostgreSQL, for example, exposes client and server encoding concepts and can perform automatic conversion for supported pairs. A client cannot safely presume that reading the raw database file reveals UTF-8 bytes merely because the API emits JSON in UTF-8.</p>
+<p>SQLite is another instructive case: database text values are stored using the database's UTF-8, UTF-16LE, or UTF-16BE encoding, and <code>PRAGMA encoding</code> reports the selected encoding. SQLite's encoding is set when a new database is initialized; an established populated database cannot be converted simply by assigning a new PRAGMA value. Python's <code>sqlite3</code> adapter converts <code>str</code> values to database text and ordinarily returns <code>str</code> for <code>TEXT</code>. Real-world legacy databases may nevertheless contain improperly encoded data in columns or <code>BLOB</code> fields, so the declared storage configuration does not guarantee that all imported source bytes were originally interpreted correctly.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">System or layer</th>
+<th scope="col">Encoding-related concept</th>
+<th scope="col">Practical lesson</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PostgreSQL server</td>
+<td><code>server_encoding</code></td>
+<td>Internal text repertoire and storage processing are server properties</td>
+</tr>
+<tr>
+<td>PostgreSQL connection</td>
+<td><code>client_encoding</code></td>
+<td>Some client/server pairs are transcoded automatically</td>
+</tr>
+<tr>
+<td>SQLite database</td>
+<td><code>PRAGMA encoding</code></td>
+<td>File text representation can be UTF-8 or a UTF-16 endian scheme</td>
+</tr>
+<tr>
+<td>SQLite Python adapter</td>
+<td><code>str</code> versus <code>bytes</code></td>
+<td>Text and binary values should not be confused</td>
+</tr>
+<tr>
+<td>HTTP JSON</td>
+<td>UTF-8 exchange requirement</td>
+<td>The wire contract does not inherit the database file encoding</td>
+</tr>
+<tr>
+<td>Application display</td>
+<td>Font and layout system</td>
+<td>Correct rendering cannot demonstrate storage identity</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-10-driver-and-connection-configuration" id="10-driver-and-connection-configuration"><h2 id="heading-10-driver-and-connection-configuration">10. Driver and Connection Configuration</h2>
+<p>A connection is not merely a TCP socket or a handle. It is also a boundary where application strings become values recognized by a database's protocol and server. A PostgreSQL administrator or application can inspect <code>SHOW server_encoding</code> and <code>SHOW client_encoding</code>; a program may use a documented configuration mechanism to select a supported client encoding. Such settings must be aligned with the actual bytes transmitted by any low-level client and with what its driver promises to convert. Passing malformed UTF-8 bytes while claiming UTF-8 is not a legitimate form of legacy migration.</p>
+<p>Never perform two conversions by accident. For example, decoding incoming UTF-8 JSON as Windows-1252 and then faithfully storing the resulting mojibake in a UTF-8 database produces internally well-formed UTF-8 <strong>of the wrong characters</strong>. Reconfiguring the database later does not reverse that application error. Conversely, trying to “fix” already-correct Unicode by passing through an 8-bit encoding may introduce replacement characters or exceptions. Trace the actual boundary and preserve evidence before modifying data.</p>
+</section>
+<section aria-labelledby="heading-11-sql-text-types-binary-types-and-repertoire-limits" id="11-sql-text-types-binary-types-and-repertoire-limits"><h2 id="heading-11-sql-text-types-binary-types-and-repertoire-limits">11. SQL Text Types, Binary Types, and Repertoire Limits</h2>
+<p>Database products distinguish text columns and binary columns in different ways. A Unicode-capable <code>TEXT</code> or national-character type stores character information under the engine's contract; a <code>BLOB</code> or <code>VARBINARY</code> holds opaque bytes without an implied text decoder. In some products, type families differ in repertoire, storage encoding, or collations. For example, a MySQL deployment using <code>utf8mb3</code> has a smaller Unicode repertoire than <code>utf8mb4</code>, and a supplementary-plane character can fail even when ordinary Western text works. Product-specific details must be checked against the installed engine, driver, column definitions, and configuration.</p>
+<p>Do not use a binary column to avoid resolving an encoding agreement unless opaque bytes are actually the intended data model. If legacy bytes are retained for audit, store them explicitly as binary alongside an identified encoding and any decoded value; do not label the binary field “UTF-8 text” without verifying the bytes. Where a schema stores normalized search forms, preserve the source display value separately if exact reconstruction is required.</p>
+</section>
+<section aria-labelledby="heading-12-collation-does-not-set-the-storage-encoding" id="12-collation-does-not-set-the-storage-encoding"><h2 id="heading-12-collation-does-not-set-the-storage-encoding">12. Collation Does Not Set the Storage Encoding</h2>
+<p>A database collation chooses comparison and ordering behavior. It may make <code>A</code> and <code>a</code> compare alike, or distinguish accent levels differently for different languages. It does <strong>not</strong> determine whether an HTTP JSON document is UTF-8, nor does it necessarily rewrite the code points stored in a column. A Unicode text column with a case-insensitive collation can store <code>Café</code> and <code>CAFÉ</code> as distinct byte sequences even if some queries treat them as equivalent.</p>
+<p>SQLite's built-in <code>NOCASE</code> collation, absent extensions, performs ASCII-only case-insensitivity; do not assume it implements full Unicode case folding. PostgreSQL offers configurable collations, but the chosen provider, locale, and versions affect semantics. A database can index normalized or collation-derived values for search while retaining a separate exact text field. For keys, specify a stable uniqueness policy; a text column that appears to have unique display names is not automatically a safe identifier or authentication credential.</p>
+</section>
+<section aria-labelledby="heading-13-normalization-as-an-explicit-data-contract" id="13-normalization-as-an-explicit-data-contract"><h2 id="heading-13-normalization-as-an-explicit-data-contract">13. Normalization as an Explicit Data Contract</h2>
+<p>A round trip can be lossless without being byte-identical if the program deliberately chooses a new representation. For exact archival preservation, however, NFC normalization changes the underlying scalar sequence of some input strings. Applications should document whether data is normalized on input, compared after normalization without changing stored text, or preserved verbatim with a derived normalized lookup key. Avoid normalizing all values opportunistically in a driver hook without recording the policy.</p>
+<p>Suppose the client submits <code>Cafe\u0301</code>, containing <code>e</code> followed by a combining acute accent, and later receives <code>Café</code>, containing precomposed U+00E9. The two render similarly, but the original code-point sequence did <strong>not</strong> survive. Under an explicit NFC-normalization contract, that transformation can be considered valid; under a source-preservation contract, it is a detected alteration. A reliable test suite must assert the policy it is intended to enforce.</p>
+</section>
+<section aria-labelledby="heading-14-surrogates-noncharacters-and-unsafe-text-assumptions" id="14-surrogates-noncharacters-and-unsafe-text-assumptions"><h2 id="heading-14-surrogates-noncharacters-and-unsafe-text-assumptions">14. Surrogates, Noncharacters, and Unsafe Text Assumptions</h2>
+<p>A JSON parser can accept a syntactically escaped lone surrogate such as <code>"\uD800"</code>; its returned runtime string may contain a surrogate code unit that cannot be encoded as strict UTF-8. RFC 8259 discusses this interoperability problem, and I-JSON restricts such values. A robust API should reject unpaired surrogate values before persistence or serialization, rather than silently replacing them. Some libraries' <code>errors='replace'</code> behavior is useful in controlled repair workflows, but replacement is data loss and should not be part of ordinary “lossless” database contracts.</p>
+<p>Noncharacters and private-use code points require separate policy decisions; they are not identical to malformed UTF-8 sequences. Unicode-valid source text may still violate an application's identifier policy, contain controls requiring safe display, or exceed product-specific restrictions. An encoded name should be validated for the target field's documented purpose. Free-form display names should generally not inherit the same restricted repertoire as machine-generated IDs.</p>
+</section>
+<section aria-labelledby="heading-15-application-identifiers-display-names-and-search-keys" id="15-application-identifiers-display-names-and-search-keys"><h2 id="heading-15-application-identifiers-display-names-and-search-keys">15. Application Identifiers, Display Names, and Search Keys</h2>
+<p>Three fields can legitimately need three different policies. A machine-assigned <code>id</code> can be restricted to an ASCII-safe grammar. A <code>display_name</code> should permit multilingual text while enforcing scalar validity and a measured size limit. A <code>search_key</code> can be derived through explicit normalization and case folding, or through database collation, without being treated as the original content. These are separate schema and application-contract concerns, not alternate “encodings” of a single string.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Field</th>
+<th scope="col">Example</th>
+<th scope="col">Validation and comparison contract</th>
+<th scope="col">Preservation rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>profile-017</code></td>
+<td>Named ASCII identifier grammar; exact comparisons</td>
+<td>Keep exact identifier</td>
+</tr>
+<tr>
+<td><code>display_name</code></td>
+<td><code>Café — 東京 😀</code></td>
+<td>Unicode scalars, documented length limits</td>
+<td>Preserve original scalar sequence unless normalization is explicit</td>
+</tr>
+<tr>
+<td><code>display_name_nfc</code></td>
+<td>Derived normalized value</td>
+<td>NFC equality for chosen search workflow</td>
+<td>Do not present as original input</td>
+</tr>
+<tr>
+<td><code>search_key</code></td>
+<td>Case-folded form</td>
+<td>Documented locale/Unicode policy</td>
+<td>Rebuildable derived field, not a source artifact</td>
+</tr>
+<tr>
+<td><code>raw_import_bytes</code></td>
+<td>Original legacy octets</td>
+<td>Validated size and provenance</td>
+<td>Store as binary with source encoding metadata</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-16-length-limits-at-transport-driver-and-column-boundaries" id="16-length-limits-at-transport-driver-and-column-boundaries"><h2 id="heading-16-length-limits-at-transport-driver-and-column-boundaries">16. Length Limits at Transport, Driver, and Column Boundaries</h2>
+<p>For a JSON API, define maximum request <strong>byte</strong> size independently from an application field's maximum <strong>scalar-value</strong> or <strong>grapheme</strong> length. A byte limit protects network and parser resources; a character-level limit serves field policy; a database column limit has product-specific units and behavior. The same name may consume far more UTF-8 bytes than its visible-character count, particularly for supplementary-plane symbols or combining sequences. A preflight length check done in JavaScript using <code>.length</code> may disagree with a Python code-point length check.</p>
+<p>Do not truncate raw UTF-8 byte streams to a fixed width and attempt to decode the result. This can split a multibyte sequence and create an invalid document. Nor should a length-restricted API silently slice a UTF-16 string in the middle of a surrogate pair. Return a documented validation error or truncate only using the agreed character-boundary algorithm with explicit user-facing rules. Testing should include maximum-size ASCII, accented Latin text, East Asian text, supplementary symbols, combining marks, and unusually long grapheme clusters.</p>
+</section>
+<section aria-labelledby="heading-17-logging-and-observability-at-encoding-boundaries" id="17-logging-and-observability-at-encoding-boundaries"><h2 id="heading-17-logging-and-observability-at-encoding-boundaries">17. Logging and Observability at Encoding Boundaries</h2>
+<p>Diagnostic logging should identify the stage where bytes became characters and the stage where characters became bytes. In an authorized test environment, log a short safe hex excerpt or hash of the original body, the named decoder, whether strict validation passed, the number of code points, whether normalization occurred, the driver/client encoding, and the resulting database-read sequence. Do not indiscriminately log raw personal data or secrets; use fixture values, redaction, access controls, and bounded excerpts.</p>
+<p>Metrics can include invalid-UTF-8 rejections, explicit transcoding failures, normalization change counts, round-trip mismatches, downstream database character-set errors, and API serialization failures. A “successful insert” counter alone is weak evidence. The insert may faithfully store mojibake that was created before the database call. Conversely, a database's byte representation can change during legitimate client/server transcoding without a semantic preservation failure.</p>
+</section>
+<section aria-labelledby="heading-18-byte-level-teaching-fixture-a-multilingual-profile" id="18-byte-level-teaching-fixture-a-multilingual-profile"><h2 id="heading-18-byte-level-teaching-fixture-a-multilingual-profile">18. Byte-Level Teaching Fixture: A Multilingual Profile</h2>
+<p>The worked fixture uses an identifier and display name:</p>
+<pre><code class="language-json">{"id":"profile-017","display_name":"Café — 東京 😀"}
+</code></pre>
+<p>Within the string <code>Café — 東京 😀</code>, the visible character <code>é</code> is U+00E9 encoded as UTF-8 <code>C3 A9</code>; the em dash is U+2014 encoded as <code>E2 80 94</code>; <code>東</code> is U+6771 encoded as <code>E6 9D B1</code>; <code>京</code> is U+4EAC encoded as <code>E4 BA AC</code>; and <code>😀</code> is U+1F600 encoded as <code>F0 9F 98 80</code>. ASCII characters and spaces occupy one byte apiece. A strict decoder converts the entire request body into JSON text; the parsed <code>display_name</code> is passed to a parameterized database insert; the database read yields the expected Unicode sequence; and the response serializer produces UTF-8 again.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Text element</th>
+<th scope="col">Unicode notation</th>
+<th scope="col">UTF-8 hex</th>
+<th scope="col">Boundary lesson</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>C</code></td>
+<td>U+0043</td>
+<td><code>43</code></td>
+<td>ASCII subset of UTF-8</td>
+</tr>
+<tr>
+<td><code>é</code></td>
+<td>U+00E9</td>
+<td><code>C3 A9</code></td>
+<td>Two bytes, one scalar value</td>
+</tr>
+<tr>
+<td><code>—</code></td>
+<td>U+2014</td>
+<td><code>E2 80 94</code></td>
+<td>Three bytes; not representable in ISO-8859-1</td>
+</tr>
+<tr>
+<td><code>東</code></td>
+<td>U+6771</td>
+<td><code>E6 9D B1</code></td>
+<td>Three bytes</td>
+</tr>
+<tr>
+<td><code>京</code></td>
+<td>U+4EAC</td>
+<td><code>E4 BA AC</code></td>
+<td>Three bytes</td>
+</tr>
+<tr>
+<td><code>😀</code></td>
+<td>U+1F600</td>
+<td><code>F0 9F 98 80</code></td>
+<td>Four bytes; two UTF-16 code units</td>
+</tr>
+</tbody>
+</table>
+<p>The next examples reproduce this pipeline without a network server or external database service. They deliberately use an in-memory SQLite database, a strict UTF-8 decode step, and a JSON serializer so that the important transformations remain visible and repeatable.</p>
+</section>
+<section aria-labelledby="heading-19-worked-python-round-trip-json-sqlite-json" id="19-worked-python-round-trip-json-sqlite-json"><h2 id="heading-19-worked-python-round-trip-json-sqlite-json">19. Worked Python Round Trip: JSON → SQLite → JSON</h2>
+<p>This runnable example models a UTF-8 HTTP body as <code>request_bytes</code>, decodes it with strict error handling, parses JSON, verifies scalar validity, inserts the display name with a parameterized statement, reads it back, and serializes the response as UTF-8. The output inspection records both the Unicode scalar values and the relevant encoded bytes. It does not assume that raw bytes inside other database products will equal the HTTP bytes; the equality test is performed at the application interface.</p>
+<pre><code class="language-python">import json
+import sqlite3
+
+original = {"id": "profile-017", "display_name": "Café — 東京 😀"}
+request_bytes = json.dumps(original, ensure_ascii=False,
+                           separators=(",", ":")).encode("utf-8")
+request_text = request_bytes.decode("utf-8", errors="strict")
+parsed = json.loads(request_text)
+
+
+def require_scalar_text(value):
+    if not isinstance(value, str) or any(0xD800 &lt;= ord(c) &lt;= 0xDFFF
+                                         for c in value):
+        raise ValueError("String must contain Unicode scalar values")
+    return value
+
+name = require_scalar_text(parsed["display_name"])
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE profiles (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+con.execute("INSERT INTO profiles(id, name) VALUES (?, ?)",
+            (parsed["id"], name))
+stored = con.execute("SELECT name FROM profiles WHERE id = ?",
+                     (parsed["id"],)).fetchone()[0]
+assert stored == name
+assert [ord(c) for c in stored] == [ord(c) for c in original["display_name"]]
+
+reply = {"id": parsed["id"], "display_name": stored}
+response_bytes = json.dumps(reply, ensure_ascii=False,
+                            separators=(",", ":")).encode("utf-8")
+assert json.loads(response_bytes.decode("utf-8")) == original
+assert response_bytes == request_bytes  # Here, serialization was deliberately identical.
+assert con.execute("PRAGMA encoding").fetchone()[0] == "UTF-8"
+print("display_name UTF-8 hex:", name.encode("utf-8").hex(" "))
+print("code points:", " ".join(f"U+{ord(c):04X}" for c in name))
+print("request bytes:", len(request_bytes))
+print("response equals request:", response_bytes == request_bytes)
+con.close()
+</code></pre>
+<p>The last byte-equality assertion is meaningful only because the example fixes both object construction and JSON serialization options. In a production API, reordered keys or a different escape policy could change the document bytes while retaining the same parsed values. A stronger contract would specify a canonical representation if byte-for-byte equality across distinct implementations were required. It should not rely on an incidental ordering convention of a particular client.</p>
+</section>
+<section aria-labelledby="heading-20-comparing-raw-json-bytes-with-unicode-meaning" id="20-comparing-raw-json-bytes-with-unicode-meaning"><h2 id="heading-20-comparing-raw-json-bytes-with-unicode-meaning">20. Comparing Raw JSON Bytes with Unicode Meaning</h2>
+<p>The string <code>é</code> can be serialized directly or escaped. The following complete demonstration proves that the two bodies differ at the byte layer yet parse to identical Unicode strings. It also proves that <code>U+00E9</code> and <code>U+0065 U+0301</code> do not become identical merely by serializing them to JSON and reading them back.</p>
+<pre><code class="language-python">import json
+import unicodedata
+
+value = {"name": "Café"}
+direct = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+escaped = json.dumps(value, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+assert direct != escaped
+assert json.loads(direct.decode("utf-8")) == json.loads(escaped.decode("utf-8"))
+
+precomposed = "Café"
+decomposed = "Cafe\u0301"
+assert precomposed != decomposed
+assert unicodedata.normalize("NFC", precomposed) == \
+       unicodedata.normalize("NFC", decomposed)
+print("direct:", direct.hex(" "))
+print("escaped:", escaped.decode("ascii"))
+print("precomposed:", [f"U+{ord(c):04X}" for c in precomposed])
+print("decomposed:", [f"U+{ord(c):04X}" for c in decomposed])
+</code></pre>
+<p>An API requiring “lossless text exchange” should normally promise to preserve the Unicode scalar sequence, not an arbitrary JSON escape spelling. A source-preservation archive may additionally retain the original request bytes. If the application promises NFC-normalized storage, its test should explicitly state that original scalar-sequence equality is not required for this normalization step and should preserve original input when that matters for provenance.</p>
+</section>
+<section aria-labelledby="heading-21-negative-tests-invalid-utf-8-and-escaped-surrogates" id="21-negative-tests-invalid-utf-8-and-escaped-surrogates"><h2 id="heading-21-negative-tests-invalid-utf-8-and-escaped-surrogates">21. Negative Tests: Invalid UTF-8 and Escaped Surrogates</h2>
+<p>An interoperable text contract is defined as much by its rejection conditions as by its successful examples. A byte stream containing a lone <code>0xFF</code> is not valid UTF-8. A JSON source containing an escaped unpaired surrogate may pass a permissive JSON parser but fail a later strict encoder. These are two different failure classes: one at the byte decoder, and one at the Unicode-scalar/application policy boundary.</p>
+<pre><code class="language-python">import json
+
+# Invalid raw UTF-8 must fail before JSON parsing.
+invalid_body = b'{"name":"\xff"}'
+try:
+    invalid_body.decode("utf-8", errors="strict")
+    raise AssertionError("Expected UnicodeDecodeError")
+except UnicodeDecodeError:
+    print("Invalid UTF-8 correctly rejected")
+
+# RFC 8259 discusses the interoperability problem of unpaired escapes.
+problematic = json.loads('"\\uD800"')
+assert len(problematic) == 1
+assert ord(problematic[0]) == 0xD800
+try:
+    problematic.encode("utf-8", errors="strict")
+    raise AssertionError("Expected UnicodeEncodeError")
+except UnicodeEncodeError:
+    print("Unpaired surrogate correctly rejected at strict encoding")
+
+# A deliberate policy check catches it before persistence.
+assert any(0xD800 &lt;= ord(c) &lt;= 0xDFFF for c in problematic)
+</code></pre>
+<p>Avoid describing the second case as invalid UTF-8 <em>on the wire</em>: the JSON document shown in that test is ASCII-only and can be encoded in valid UTF-8. The problem is that an escape reconstructs a surrogate value rather than a Unicode scalar value in a permissive implementation. That distinction directs remediation to the correct layer.</p>
+</section>
+<section aria-labelledby="heading-22-javascript-utf-16-code-units-versus-utf-8-payload-bytes" id="22-javascript-utf-16-code-units-versus-utf-8-payload-bytes"><h2 id="heading-22-javascript-utf-16-code-units-versus-utf-8-payload-bytes">22. JavaScript: UTF-16 Code Units Versus UTF-8 Payload Bytes</h2>
+<p>JavaScript is a useful illustration of string-length ambiguity because <code>String.prototype.length</code> counts UTF-16 code units. <code>TextEncoder</code> serializes JavaScript string content to UTF-8; the number of resulting bytes does not equal <code>.length</code> in general. When given a lone surrogate, <code>TextEncoder</code> replaces it with U+FFFD rather than failing, so applications needing source-exact scalar preservation must reject invalid surrogate sequences <strong>before</strong> encoding.</p>
+<pre><code class="language-javascript">const payload = { id: "profile-017", display_name: "Café — 東京 😀" };
+const jsonText = JSON.stringify(payload);
+const bytes = new TextEncoder().encode(jsonText);
+const decoder = new TextDecoder("utf-8", { fatal: true });
+const recovered = JSON.parse(decoder.decode(bytes));
+if (recovered.display_name !== payload.display_name) throw new Error("text changed");
+const name = payload.display_name;
+const scalars = Array.from(name); // iterates Unicode code points, not graphemes
+console.log({ codeUnits: name.length, codePoints: scalars.length,
+              utf8Bytes: new TextEncoder().encode(name).length });
+
+// Reject unmatched UTF-16 surrogates before accepting text as lossless Unicode.
+function hasUnpairedSurrogate(text) {
+  for (let i = 0; i &lt; text.length; i++) {
+    const n = text.charCodeAt(i);
+    if (n &gt;= 0xD800 &amp;&amp; n &lt;= 0xDBFF) {
+      if (i + 1 &gt;= text.length) return true;
+      const next = text.charCodeAt(i + 1);
+      if (next &lt; 0xDC00 || next &gt; 0xDFFF) return true;
+      i++;
+    } else if (n &gt;= 0xDC00 &amp;&amp; n &lt;= 0xDFFF) return true;
+  }
+  return false;
+}
+if (hasUnpairedSurrogate(name)) throw new Error("invalid scalar sequence");
+if (!hasUnpairedSurrogate("\uD800")) throw new Error("surrogate test failed");
+console.log("UTF-8 JSON round trip and validation passed");
+</code></pre>
+<p>For browser APIs, <code>fetch()</code> and JSON body handling should be used according to their documented contracts rather than hand-constructing a bytes-to-string conversion around arbitrary code-page names. On the receiving side, a strict decoding path is appropriate when rejecting malformed source data is part of the API agreement. These examples demonstrate the string and byte concepts; they do not implement an HTTP service.</p>
+</section>
+<section aria-labelledby="heading-23-windows-powershell-5-1-strict-text-round-trip" id="23-windows-powershell-5-1-strict-text-round-trip"><h2 id="heading-23-windows-powershell-5-1-strict-text-round-trip">23. Windows PowerShell 5.1: Strict Text Round Trip</h2>
+<p>Windows PowerShell 5.1 operates over .NET strings, which use UTF-16 code units. Explicit <code>System.Text.UTF8Encoding</code> construction gives a known UTF-8 encoder/decoder with strict error handling. The example below accepts Unicode string values, obtains UTF-8 bytes, checks their round trip, serializes a JSON representation, and verifies the decoded field. It does not require changing the PowerShell console's display encoding or any persistent profile setting.</p>
+<pre><code class="language-powershell">$utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+$label = 'Café — 東京 😀'
+$bytes = $utf8.GetBytes($label)
+$decoded = $utf8.GetString($bytes)
+if ($decoded -cne $label) { throw 'UTF-8 round trip failed' }
+
+$record = [ordered]@{ id = 'profile-017'; display_name = $label }
+$json = $record | ConvertTo-Json -Compress -Depth 4
+$payload = $utf8.GetBytes($json)
+$jsonAgain = $utf8.GetString($payload)
+$parsed = $jsonAgain | ConvertFrom-Json
+if ($parsed.display_name -cne $label) { throw 'JSON field changed' }
+
+$hex = [BitConverter]::ToString($bytes)
+Write-Host ('Name UTF-8 bytes: ' + $hex)
+Write-Host ('Message length in bytes: ' + $payload.Length)
+Write-Host 'Strict Unicode field round trip passed'
+</code></pre>
+<p>The PowerShell example is written for Windows PowerShell 5.1 and uses explicit encoding objects; it should be tested in the target environment before operational deployment. <code>ConvertTo-Json</code> can change JSON escape presentation, field order, or formatting relative to another serializer, so the assertion deliberately checks the recovered field value rather than the exact original JSON body. For arbitrary files, use explicit .NET APIs when exact bytes matter; default file redirection encoding is not a stable cross-version data contract.</p>
+</section>
+<section aria-labelledby="heading-24-postgresql-demonstrating-client-and-server-encodings" id="24-postgresql-demonstrating-client-and-server-encodings"><h2 id="heading-24-postgresql-demonstrating-client-and-server-encodings">24. PostgreSQL: Demonstrating Client and Server Encodings</h2>
+<p>The following illustrative SQL can be used in a correctly configured PostgreSQL session to inspect the connection and a sample text value. Actual commands should be reviewed before execution in a production database. Database character-set conversion behavior depends on the server and client settings; do not change a production connection's client encoding without ensuring the driver and application agree.</p>
+<pre><code class="language-sql">SHOW server_encoding;
+SHOW client_encoding;
+
+CREATE TEMP TABLE encoding_demo (name text NOT NULL);
+INSERT INTO encoding_demo(name) VALUES ('Café — 東京 😀');
+SELECT name,
+       char_length(name) AS characters,
+       octet_length(name) AS bytes_in_server_encoding
+FROM encoding_demo;
+</code></pre>
+<p><code>char_length</code> and <code>octet_length</code> answer different questions. The latter reports byte length in the server's encoding; it is not automatically identical to HTTP payload length, which also includes JSON field syntax and transport bytes. A UTF-8 server can report a different byte count for two canonically equivalent strings even if a language-aware comparison treats them alike. Use a supported client encoding (normally UTF-8 for modern interoperable pipelines), validate input, and ensure any server/client conversion is intentional and tested.</p>
+</section>
+<section aria-labelledby="heading-25-sqlite-text-encoding-driver-decoding-and-binary-inspection" id="25-sqlite-text-encoding-driver-decoding-and-binary-inspection"><h2 id="heading-25-sqlite-text-encoding-driver-decoding-and-binary-inspection">25. SQLite: Text Encoding, Driver Decoding, and Binary Inspection</h2>
+<p>SQLite's <code>PRAGMA encoding</code> allows developers to inspect the text encoding of the database. The Python <code>sqlite3</code> interface ordinarily adapts <code>str</code> values as text and retrieves text as Python <code>str</code>. SQLite also allows BLOB values in many schemas; those are not automatically Unicode text. A BLOB containing legacy bytes must be associated with a source encoding before decoding.</p>
+<pre><code class="language-sql">PRAGMA encoding;
+CREATE TABLE IF NOT EXISTS name_examples (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+-- Prepared placeholders are used through the client API, not by string concatenation.
+-- To inspect bytes in a UTF-8 SQLite database:
+SELECT hex(CAST(name AS BLOB)) FROM name_examples;
+</code></pre>
+<p>The last inspection is meaningful within a known database representation, but do not copy its result into a blanket rule for every database file. A UTF-16-configured SQLite database can use different physical text bytes, and an application driver can hide that conversion. Database tools may also display or export strings using a different output encoding. For a rigorous test, compare the text retrieved through the documented driver API and separately record its UTF-8 encoding in the application.</p>
+</section>
+<section aria-labelledby="heading-26-database-round-trip-test-matrix" id="26-database-round-trip-test-matrix"><h2 id="heading-26-database-round-trip-test-matrix">26. Database Round-Trip Test Matrix</h2>
+<p>A reliable conformance matrix should exercise both ordinary and adversarial-but-permitted values. Use deterministic fixture identifiers, always record the exact source scalar sequence, and test reads and writes through each deployed driver, language, or service rather than only through a database administration console. Include both source-string equality and policy-defined normalization or collation results.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Fixture</th>
+<th scope="col">Input challenge</th>
+<th scope="col">Expected result under lossless policy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Alpha 42</code></td>
+<td>ASCII baseline</td>
+<td>Exact code-point sequence preserved</td>
+</tr>
+<tr>
+<td><code>Café</code></td>
+<td>Two-byte UTF-8 scalar</td>
+<td>Preserved, not downgraded to <code>Caf?</code></td>
+</tr>
+<tr>
+<td><code>Cafe\u0301</code></td>
+<td>Decomposed combining sequence</td>
+<td>Exact sequence preserved unless normalization is declared</td>
+</tr>
+<tr>
+<td><code>東京</code></td>
+<td>East Asian characters</td>
+<td>Preserved without legacy-code-page substitution</td>
+</tr>
+<tr>
+<td><code>😀</code></td>
+<td>Supplementary-plane scalar</td>
+<td>Preserved across UTF-16-oriented runtimes</td>
+</tr>
+<tr>
+<td><code>İstanbul</code></td>
+<td>Locale-sensitive casing</td>
+<td>Preserved; no implicit lowercasing</td>
+</tr>
+<tr>
+<td><code>עִבְרִית</code></td>
+<td>Combining marks and RTL text</td>
+<td>Logical sequence preserved independent of visual order</td>
+</tr>
+<tr>
+<td><code>a\u0000b</code></td>
+<td>Embedded NUL</td>
+<td>Rejected or accepted per field/database contract; never silently truncated</td>
+</tr>
+<tr>
+<td>Lone surrogate escape</td>
+<td>Non-scalar JSON escape</td>
+<td>Rejected before lossless persistence</td>
+</tr>
+<tr>
+<td>Invalid UTF-8 octet</td>
+<td>Decoder failure</td>
+<td>Explicit error; never silent replacement</td>
+</tr>
+</tbody>
+</table>
+<p>For fields with a prescribed normalization policy, publish a separate set of post-normalization expected results. If the database driver is configured to replace invalid bytes, a round-trip test can appear successful only because both sides agree on already-replaced data; retain a pre-decoding hash or fixture bytes to detect that condition.</p>
+</section>
+<section aria-labelledby="heading-27-errors-and-failure-modes-in-production-systems" id="27-errors-and-failure-modes-in-production-systems"><h2 id="heading-27-errors-and-failure-modes-in-production-systems">27. Errors and Failure Modes in Production Systems</h2>
+<p>Encoding bugs commonly manifest as <strong>mojibake</strong>, question marks, replacement characters, failed inserts, truncated names, inconsistent sort order, or JSON responses that downstream tools cannot encode. A single successful Unicode smoke test does not prove correctness for all scripts or fields. The error often occurs before the database: an import script may decode source bytes with the wrong legacy encoding and then store the resulting wrong characters perfectly.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Symptom</th>
+<th scope="col">Likely boundary</th>
+<th scope="col">First check</th>
+<th scope="col">Appropriate action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CafÃ©</code></td>
+<td>Wrong decode before storage or display</td>
+<td>Original bytes and decoder label</td>
+<td>Locate reversible transformation before repairing</td>
+</tr>
+<tr>
+<td><code>Caf?</code></td>
+<td>Unrepresentable-character replacement</td>
+<td>Client/column repertoire and error policy</td>
+<td>Stop lossy transcoding; restore from originals</td>
+</tr>
+<tr>
+<td><code>\ufffd</code> displayed</td>
+<td>Replacement decoding</td>
+<td>Strict-decoding logs, byte copies</td>
+<td>Verify whether source bytes survive</td>
+</tr>
+<tr>
+<td>Emoji insert fails</td>
+<td>Restricted column encoding or validation</td>
+<td>Database/driver and type configuration</td>
+<td>Correct schema/driver support and retry from source</td>
+</tr>
+<tr>
+<td>Suffix missing</td>
+<td>Byte/length confusion</td>
+<td>Field length units and truncation</td>
+<td>Use boundary-aware validation; never byte-slice text</td>
+</tr>
+<tr>
+<td>Equality differs across services</td>
+<td>Collation/normalization mismatch</td>
+<td>Code points and collation versions</td>
+<td>Standardize comparison contract</td>
+</tr>
+<tr>
+<td>JSON serialization fails</td>
+<td>Invalid scalar sequence or object type</td>
+<td>Surrogate checks and serialization policy</td>
+<td>Reject or explicitly transform under documented rules</td>
+</tr>
+<tr>
+<td>Logs show escaped text</td>
+<td>Presentation of JSON escaping</td>
+<td>Parse logged representation</td>
+<td>Do not confuse escaping with encoded content</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-28-secure-handling-of-untrusted-text" id="28-secure-handling-of-untrusted-text"><h2 id="heading-28-secure-handling-of-untrusted-text">28. Secure Handling of Untrusted Text</h2>
+<p>Byte validity is necessary but not sufficient for secure application text handling. A correctly decoded name can include bidirectional controls, invisible format characters, confusable glyphs, or characters that are dangerous only when interpolated into SQL, HTML, logs, or a command. The secure response is <strong>contextual handling</strong>: use SQL parameters instead of string concatenation, HTML escaping for rendered output, JSON serialization for JSON output, and constrained identifier grammars for machine keys. Encoding validation does not replace those controls.</p>
+<p>Avoid blanket ASCII-only input policies for ordinary display names: international text is legitimate application data. Instead, separate free-form personal names from machine keys, apply scalar-validity checks, enforce size limits, and use field-specific display safeguards. For high-assurance identifiers, consider the Unicode security profile and confusable review appropriate to that identifier class; the dedicated next Character Encoding article covers those topics in depth.</p>
+</section>
+<section aria-labelledby="heading-29-binary-data-and-json-must-not-be-interchanged-implicitly" id="29-binary-data-and-json-must-not-be-interchanged-implicitly"><h2 id="heading-29-binary-data-and-json-must-not-be-interchanged-implicitly">29. Binary Data and JSON Must Not Be Interchanged Implicitly</h2>
+<p>Not every database field or API payload is text. A PDF file, compressed archive, cryptographic key, or arbitrary byte sequence should not be decoded as UTF-8 merely to fit a JSON string. Where a JSON representation must transport binary content, specify a textual encoding such as Base64 and include exact decode rules, byte-length limits, and integrity checks. A JSON string containing Base64 characters is still a text field, but its <strong>decoded payload</strong> is binary—not Unicode prose.</p>
+<p>Preserve this distinction across database columns: a <code>BLOB</code> of source bytes is not interchangeable with <code>TEXT</code>, even if both can display a hexadecimal rendering in an administrative tool. If a migration policy requires retaining original source files, store the original binary bytes or archival artifact separately from the decoded text and from derived search keys.</p>
+</section>
+<section aria-labelledby="heading-30-api-contracts-and-versioned-schema-evolution" id="30-api-contracts-and-versioned-schema-evolution"><h2 id="heading-30-api-contracts-and-versioned-schema-evolution">30. API Contracts and Versioned Schema Evolution</h2>
+<p>A well-specified API should distinguish transport encoding, parsed JSON field type, character repertoire, normalization policy, comparison policy, byte and character limits, and failure responses. Those clauses are versioned contracts in their own right. Changing from “preserve all scalars” to “normalize every submitted name to NFC” can alter equality, uniqueness, or signature behavior without changing the JSON schema's primitive type from <code>string</code>.</p>
+<p>When migrating services, replay representative Unicode fixtures through old and new encoders, storage drivers, databases, and serializers. Compare scalar sequences, record counts, search-index keys, and byte artifacts separately. Preserve old source representations where reprocessing is necessary. In a mixed-version deployment, ensure both readers interpret stored values under the same declared policy; do not treat a new default codec or driver release as proof of safe compatibility.</p>
+</section>
+<section aria-labelledby="heading-31-importing-legacy-csv-and-other-text-files-into-apis" id="31-importing-legacy-csv-and-other-text-files-into-apis"><h2 id="heading-31-importing-legacy-csv-and-other-text-files-into-apis">31. Importing Legacy CSV and Other Text Files into APIs</h2>
+<p>Many encoding errors arise in offline import systems that ultimately populate APIs. A CSV source may be Windows-1252, ISO-8859-1, UTF-8, or a vendor-specific code page. The importing job should retain its original bytes, use a documented source encoding, decode strictly where feasible, and log any deliberate replacement or transliteration. The decoded fields should then be validated and sent through the database driver's Unicode interface. On export, the output file encoding must be explicitly named and tested.</p>
+<p>An import into a UTF-8 database does <strong>not</strong> automatically validate that the source was UTF-8. The importer can accidentally convert <code>CafÃ©</code> into valid UTF-8 bytes representing those incorrect characters. Repair procedures should start with stored bytes, source provenance, and knowledge of the actual conversion chain. Never run speculative mass conversions against a live corpus without an immutable backup and reversible reconciliation plan.</p>
+</section>
+<section aria-labelledby="heading-32-normalization-collation-and-search-index-migration" id="32-normalization-collation-and-search-index-migration"><h2 id="heading-32-normalization-collation-and-search-index-migration">32. Normalization, Collation, and Search-Index Migration</h2>
+<p>Changing a database collation or a Unicode version can change which text values compare equal or how they sort. Changing normalization policy can likewise affect uniqueness and grouping. Before applying these changes, measure the number of pairs that would collide under the new comparison policy and decide how to resolve them without overwriting records. Rebuild dependent indexes according to the database vendor's upgrade guidance and preserve deterministic identifiers independent of user-facing names.</p>
+<p>When constructing a derived search key, store or record the normalization and case-folding profile, and consider the Unicode data version used. Comparing a new key to an old key produced with different rules can cause surprising matches or misses. Exact text storage and search-specific derived representations should remain independently observable.</p>
+</section>
+<section aria-labelledby="heading-33-cross-language-differences-python-javascript-and-sql" id="33-cross-language-differences-python-javascript-and-sql"><h2 id="heading-33-cross-language-differences-python-javascript-and-sql">33. Cross-Language Differences: Python, JavaScript, and SQL</h2>
+<p>Different language runtimes expose different string lengths, surrogate handling, and error defaults. Python's strict UTF-8 encoder generally rejects a string containing an isolated surrogate; JavaScript <code>TextEncoder</code> replaces a lone surrogate rather than throwing. A JSON parser may accept escaped surrogates while the next network writer cannot send them as strict UTF-8. SQL systems differ in comparison behavior and whether length functions count code points, code units, bytes, or trailing spaces under various data types and collations.</p>
+<p>This means <strong>a green unit test in one language does not establish interoperability</strong>. Use a cross-language fixture set, including supplementary symbols, decomposed text, Turkish casing, zero-width controls, and malformed byte streams. Assertions must identify which layer is being tested. Treat the expected code-point sequence as a portable baseline when the contract calls for source preservation; treat its UTF-8 bytes as the portable wire baseline when a specific serialization format has also been fixed.</p>
+</section>
+<section aria-labelledby="heading-34-diagnosing-a-production-encoding-incident" id="34-diagnosing-a-production-encoding-incident"><h2 id="heading-34-diagnosing-a-production-encoding-incident">34. Diagnosing a Production Encoding Incident</h2>
+<p>A disciplined investigation starts with an affected record and follows the data path backward. Determine whether the original request bytes were retained (safely and lawfully), capture the applicable media type, inspect decoder errors, compare the application input string's code points, review driver/client encodings and column definitions, and read the record back through an independent database client. Inspect API response bytes and application rendering separately.</p>
+<p>Do not assume that <code>CafÃ©</code> proves one specific pair of mistaken encodings; it suggests a common pattern, but several conversion histories can lead to similar symptoms. If the original bytes were not preserved and replacement characters have appeared, explain that the initial information may be unrecoverable. Repairs should use a validated, reversible, sample-tested migration with logs, checksums or semantic field comparisons, and rollback procedures.</p>
+</section>
+<section aria-labelledby="heading-35-a-practical-data-contract-checklist" id="35-a-practical-data-contract-checklist"><h2 id="heading-35-a-practical-data-contract-checklist">35. A Practical Data-Contract Checklist</h2>
+<p>Before a service is considered Unicode-interoperable, confirm the following requirements:</p>
+<ol>
+<li><strong>Wire agreement:</strong> Request and response JSON use UTF-8; media types are correct; no unapproved decode fallback is present.</li>
+<li><strong>Parser validation:</strong> UTF-8 bytes are decoded strictly, JSON syntax is validated, and strings satisfy the chosen scalar-validity policy.</li>
+<li><strong>Field policy:</strong> Display names, identifiers, search keys, and binary payloads have different documented validation semantics.</li>
+<li><strong>Driver agreement:</strong> Client and server encodings are configured according to vendor contracts, with no implicit legacy-code-page conversion.</li>
+<li><strong>Storage fidelity:</strong> Retrieved scalar sequences equal the expected values or a specifically documented normalized representation.</li>
+<li><strong>Comparison semantics:</strong> The collation provider, locale, strength, and version are known where text sorting or uniqueness depends on them.</li>
+<li><strong>Size units:</strong> Byte, code-point, grapheme, and database length limits are not conflated.</li>
+<li><strong>Observability:</strong> Test fixtures and exception metrics can identify the boundary where characters changed.</li>
+<li><strong>Migration safety:</strong> Original source bytes and provenance are retained when archives or repair requirements demand it.</li>
+<li><strong>Versioned tests:</strong> Changes to runtime, database, driver, Unicode data, or API policy trigger regression checks.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th scope="col">Contract control</th>
+<th scope="col">Observable evidence</th>
+<th scope="col">Failure disposition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UTF-8 request decoding</td>
+<td>Strict decoder accepts known multilingual fixture</td>
+<td>Reject malformed byte stream with documented error</td>
+</tr>
+<tr>
+<td>JSON scalar validity</td>
+<td>No isolated UTF-16 surrogate survives parsing</td>
+<td>Reject non-scalar field before persistence</td>
+</tr>
+<tr>
+<td>Database write/read</td>
+<td>Input and retrieved code points match stated preservation policy</td>
+<td>Investigate driver or server conversion settings</td>
+</tr>
+<tr>
+<td>Unicode normalization</td>
+<td>Input and output changes match recorded normalization policy</td>
+<td>Preserve source and correct undocumented transformation</td>
+</tr>
+<tr>
+<td>Returned JSON encoding</td>
+<td>Strictly decoded UTF-8 bytes reproduce expected string fields</td>
+<td>Correct response serialization and media-type handling</td>
+</tr>
+<tr>
+<td>Search and collation</td>
+<td>Named comparison rules produce expected query outcomes</td>
+<td>Reconcile index provider, locale, and version</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section aria-labelledby="heading-36-architecture-selection-and-operational-tradeoffs" id="36-architecture-selection-and-operational-tradeoffs"><h2 id="heading-36-architecture-selection-and-operational-tradeoffs">36. Architecture Selection and Operational Tradeoffs</h2>
+<p>For a new multi-service application, a UTF-8 JSON wire contract, Unicode-capable application interfaces, an appropriate database text type, and exact or explicitly normalized preservation rules offer a clear baseline. That does not mandate a particular database's internal file encoding or imply that every collation should be binary. Use locale-aware comparisons where the user experience requires them, but isolate them from security-critical identifiers and exact archival content.</p>
+<p>Where legacy integrations force a non-Unicode client encoding, place the transcoding boundary in a documented adapter. Validate its repertoire, report unrepresentable input, and keep source data where legally appropriate. Treat opaque binary files as bytes, not strings. A system can accept legacy inputs while still offering a consistent modern UTF-8 JSON interface, provided each transition is explicit and measurable.</p>
+</section>
+<section aria-labelledby="heading-37-worked-review-questions" id="37-worked-review-questions"><h2 id="heading-37-worked-review-questions">37. Worked Review Questions</h2>
+<ol>
+<li>Why can a successful insert into a UTF-8 database still contain mojibake created earlier in the pipeline?</li>
+<li>Which RFC defines the UTF-8 exchange requirement for JSON exchanged between independent systems?</li>
+<li>How can two JSON documents have different bytes but the same parsed string value?</li>
+<li>What does a database collation control, and what does it not control?</li>
+<li>Why can a JavaScript string's <code>.length</code> differ from its UTF-8 byte count?</li>
+<li>Why does an escaped unpaired surrogate require a separate policy check after JSON parsing?</li>
+<li>Under what conditions does code-point inequality between submitted and stored text constitute a bug?</li>
+<li>How should a Unicode display name differ in validation policy from a machine-generated identifier?</li>
+<li>What should a migration audit record at every byte/character boundary?</li>
+<li>Why is checking a single ASCII test record insufficient for validating a cross-language API?</li>
+<li>How would you distinguish a database driver conversion problem from an HTML rendering problem?</li>
+<li>Why should archived original bytes sometimes be stored separately from decoded text values?</li>
+</ol>
+<p>For a complete response, use a concrete multilingual fixture, name the exact comparison layer, and explain whether the expected behavior follows a protocol standard or a local application policy. If a failure can occur at two layers, describe a specific observation that distinguishes them.</p>
+</section>
+<section aria-labelledby="heading-38-applied-exercises" id="38-applied-exercises"><h2 id="heading-38-applied-exercises">38. Applied Exercises</h2>
+<p><strong>Exercise A — Scalar-preserving round trip.</strong> Modify the Python SQLite fixture to use <code>naïve</code>, <code>مرحبا</code>, <code>東京</code>, a supplementary symbol, and a combining-mark sequence. Capture source code points, JSON request bytes, database-returned code points, and response bytes. Identify which comparisons should remain equal and which may vary across serializers.</p>
+<p><strong>Exercise B — Encoding mismatch.</strong> Starting from the original Unicode fixture, encode a copy as Windows-1252 using strict error handling. Identify the first unrepresentable character; do not substitute replacement output. Explain what a legacy adapter must report to its caller.</p>
+<p><strong>Exercise C — Normalization policy.</strong> Insert both precomposed and decomposed <code>é</code> forms into a test database. Compare exact values; then apply NFC only in a derived query layer. Record what changed, what did not, and how a uniqueness rule might be affected.</p>
+<p><strong>Exercise D — Bad-input contract.</strong> Send invalid UTF-8 bytes and a valid UTF-8 JSON body containing an escaped unpaired surrogate through separate simulated endpoints. Explain why each error belongs to a different validation step, and specify the response semantics.</p>
+<p><strong>Exercise E — Cross-language count.</strong> For <code>Café — 東京 😀</code>, compute byte length, Python <code>len</code>, JavaScript <code>.length</code>, and <code>Array.from(...).length</code>. State why none is automatically equal to a grapheme-cluster count.</p>
+<p><strong>Exercise F — Audit checklist.</strong> Draft a 10-point acceptance plan for a multilingual profile API spanning browser, server, database, and export job. Include exact source preservation and at least one negative test for each layer.</p>
+</section>
+<section aria-labelledby="heading-39-glossary-and-conceptual-summary" id="39-glossary-and-conceptual-summary"><h2 id="heading-39-glossary-and-conceptual-summary">39. Glossary and Conceptual Summary</h2>
+<table>
+<thead>
+<tr>
+<th scope="col">Term</th>
+<th scope="col">Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Character encoding</td>
+<td>Mapping between text values and a sequence of code units/bytes under a named scheme</td>
+</tr>
+<tr>
+<td>Unicode scalar value</td>
+<td>Unicode code point excluding surrogate code points</td>
+</tr>
+<tr>
+<td>UTF-8</td>
+<td>Variable-width encoding of Unicode scalar values into one to four bytes</td>
+</tr>
+<tr>
+<td>Client encoding</td>
+<td>Database protocol or driver-side encoding used for client/server exchange</td>
+</tr>
+<tr>
+<td>Server encoding</td>
+<td>Database server's configured internal text encoding or repertoire, where applicable</td>
+</tr>
+<tr>
+<td>JSON escape</td>
+<td>JSON notation representing a character through an escape sequence</td>
+</tr>
+<tr>
+<td>Collation</td>
+<td>Rule system for textual comparison and ordering, distinct from byte storage</td>
+</tr>
+<tr>
+<td>Normalization</td>
+<td>Transformation into a selected Unicode normalization form</td>
+</tr>
+<tr>
+<td>Code-point equality</td>
+<td>Exact equality of decoded scalar sequences</td>
+</tr>
+<tr>
+<td>Byte equality</td>
+<td>Identity of encoded octets under specified serialization rules</td>
+</tr>
+<tr>
+<td>Round-trip test</td>
+<td>Insert/serialize and retrieve/parse sequence verifying specified invariants</td>
+</tr>
+<tr>
+<td>Mojibake</td>
+<td>Wrong visible characters produced by an encoding or decoding mismatch</td>
+</tr>
+<tr>
+<td>Replacement character</td>
+<td>U+FFFD, frequently produced by lossy decoding recovery</td>
+</tr>
+<tr>
+<td>Parameterized SQL</td>
+<td>Binding values through driver parameters rather than embedding text in SQL syntax</td>
+</tr>
+<tr>
+<td>Opaque binary</td>
+<td>Byte data with no implied character encoding</td>
+</tr>
+</tbody>
+</table>
+<p>The central conclusion is that <strong>Unicode-capable components do not automatically create a lossless Unicode pipeline</strong>. Integrity depends on explicit encoding and equality contracts at every boundary. The database's internal storage encoding, the application's string representation, its collation rules, and JSON's UTF-8 wire requirement are different concerns. Test them separately, retain source evidence as needed, and make every intended text transformation observable.</p>
+</section>
+<section aria-labelledby="heading-40-sub-articles-and-related-topics" id="40-sub-articles-and-related-topics"><h2 id="heading-40-sub-articles-and-related-topics">40. Sub-Articles and Related Topics</h2>
+<p>This article is a Level 5 child of the <a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/">Character Encoding unit directory</a>. It does not commission a Level 6 companion subarticle at this stage. The following siblings are part of the same planned specialist sequence and provide deeper treatment of individual mechanisms:</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/html-http-and-text-file-encoding-declarations">HTML, HTTP, and Text-File Encoding Declarations</a> — format-dependent encoding declarations.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/character-transcoding-and-unrepresentable-text">Character Transcoding and Unrepresentable Text</a> — source and target byte conversion.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/encoding-detection-metadata-and-mojibake">Encoding Detection, Metadata, and Mojibake</a> — diagnosis of unknown and mismatched encodings.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/unicode-normalization-and-equivalent-text">Unicode Normalization and Equivalent Text</a> — normalization policy versus source preservation.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/unicode-collation-and-locale-aware-sorting">Unicode Collation and Locale-Aware Sorting</a> — comparison and ordering.</li>
+<li><a href="/library/encyclopedia/computer-science/data-systems/character-encoding-articles/text-input-validation-confusables-and-unicode-security">Text Input Validation, Confusables, and Unicode Security</a> — planned next subarticle on field-specific Unicode security.</li>
+</ul>
+<p><strong>Related encyclopedic subjects</strong> include <a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a>, <a href="/library/encyclopedia/computer-science/data-systems/data-modeling">Data Modeling</a>, <a href="/library/encyclopedia/computer-science/data-systems/databases-articles/database-transactions">Database Transactions</a>, <a href="/library/encyclopedia/computer-science/data-systems/databases-articles/structured-query-language">Structured Query Language</a>, and <a href="/library/encyclopedia/computer-science/data-systems/information-retrieval">Information Retrieval</a>. These are conceptual neighbors, not subordinate Character Encoding articles.</p>
+</section>
+<section aria-labelledby="heading-41-technical-references-and-further-reading" id="41-technical-references-and-further-reading"><h2 id="heading-41-technical-references-and-further-reading">41. Technical References and Further Reading</h2>
+<ol>
+<li>Bray, Tim, ed. <strong>RFC 8259 — The JavaScript Object Notation (JSON) Data Interchange Format</strong>. IETF, December 2017. <a href="https://www.rfc-editor.org/rfc/rfc8259.html">Read specification</a>. Normative JSON encoding, string escapes, and interoperability hazards.</li>
+<li>Bray, Tim. <strong>RFC 7493 — The I-JSON Message Format</strong>. IETF, March 2015. <a href="https://www.rfc-editor.org/rfc/rfc7493.html">Read specification</a>. Stricter character and format constraints for interoperable JSON.</li>
+<li>Fielding, Roy T., Mark Nottingham, and Julian Reschke, eds. <strong>RFC 9110 — HTTP Semantics</strong>. IETF, June 2022. <a href="https://www.rfc-editor.org/rfc/rfc9110.html">Read specification</a>. HTTP media types and content-type semantics.</li>
+<li>Unicode Consortium. <strong>The Unicode Standard, Version 18.0</strong>. September 2026. <a href="https://www.unicode.org/versions/Unicode18.0.0/">Unicode site</a>. Unicode scalar values, normalization, and text processing.</li>
+<li>WHATWG. <strong>Encoding Standard</strong>. <a href="https://encoding.spec.whatwg.org/">Living standard</a>. Web-platform encoding labels, decoding algorithms, and failure behavior.</li>
+<li>PostgreSQL Global Development Group. <strong>Character Set Support</strong>. <a href="https://www.postgresql.org/docs/18/multibyte.html">PostgreSQL documentation</a>. Client/server encodings and conversions.</li>
+<li>SQLite. <strong>Datatypes In SQLite</strong>. <a href="https://www.sqlite.org/datatype3.html">Official documentation</a>. SQLite text storage classes and database encoding.</li>
+<li>SQLite. <strong>PRAGMA Statements: encoding</strong>. <a href="https://www.sqlite.org/pragma.html#pragma_encoding">Official documentation</a>. SQLite database encoding inspection and limitations.</li>
+<li>Python Software Foundation. <strong>sqlite3 — DB-API 2.0 interface for SQLite databases</strong>. <a href="https://docs.python.org/3/library/sqlite3.html">Official documentation</a>. Text adaptation and <code>text_factory</code> behavior.</li>
+<li>ECMA International. <strong>ECMA-262, ECMAScript Language Specification</strong>. <a href="https://tc39.es/ecma262/">Current specification</a>. JavaScript strings, UTF-16 code-unit semantics, and serialization APIs.</li>
+<li>Unicode Consortium. <strong>Unicode Standard Annex #15 — Unicode Normalization Forms</strong>. <a href="https://www.unicode.org/reports/tr15/">Read annex</a>. Normalization policy and stability considerations.</li>
+<li>Unicode Consortium. <strong>Unicode Technical Standard #10 — Unicode Collation Algorithm</strong>. <a href="https://www.unicode.org/reports/tr10/">Read report</a>. Text comparison distinct from storage encoding.</li>
+</ol>
+</section>
+<section aria-labelledby="heading-42-publication-scope-and-reader-guidance" id="42-publication-scope-and-reader-guidance"><h2 id="heading-42-publication-scope-and-reader-guidance">42. Publication Scope and Reader Guidance</h2>
+<p>This article occupies the path <code>data-systems/character-encoding-articles/database-api-and-json-text-encoding-contracts.html</code> and extends the Character Encoding overview. Its primary concern is <strong>preservation and interpretation of text across database/API/JSON boundaries</strong>. It intentionally does not replace the dedicated database, SQL, HTTP, JSON-schema, access-control, or distributed-systems overviews. The code examples illustrate bounded local fixtures and must be adapted to actual production versions, driver contracts, database settings, and privacy obligations before operational use.</p>
+<p>For study, begin with the byte trace and Python SQLite round trip; then compare the escaped-JSON example, the surrogate failure example, and the JavaScript UTF-16 counting example. Finally, apply the contract checklist to a real system diagram. The key habit is to trace not just a displayed string, but its <em>declared and observable representation</em> at each transition.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== SHARED FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>
