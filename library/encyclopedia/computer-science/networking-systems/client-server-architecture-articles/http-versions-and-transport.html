@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HTTP Versions and Transport | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="MGU specialist reference on HTTP/1.1, HTTP/2 and HTTP/3: TCP, UDP, QUIC, TLS, ALPN, streams, HPACK/QPACK, head-of-line blocking, fallbacks, security and diagnostics."/>
+<meta name="keywords" content="HTTP/1.1, HTTP/2, HTTP/3, QUIC, TCP, UDP, TLS, ALPN, multiplexing, HTTP streams, HPACK, QPACK, Alt-Svc, flow control, congestion control, client server transport"/>
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-versions-and-transport"/>
+<meta property="og:type" content="article"/>
+<meta property="og:title" content="HTTP Versions and Transport | MGU Encyclopedia"/>
+<meta property="og:description" content="Understand how HTTP versions change wire framing, transport and operational behavior without changing the core HTTP contract."/>
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-versions-and-transport"/>
+<link href="/image/global/favicon.ico" rel="icon" type="image/x-icon"/>
+<link href="/component/lib.css" rel="stylesheet"/>
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero"><h1>HTTP Versions and Transport</h1><p class="subtitle">Comparing HTTP/1.1, HTTP/2, and HTTP/3 across TCP, QUIC, negotiation, multiplexing, security, and reliable service delivery.</p></section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#scope">Purpose, Scope, and Central Question</a></li>
+<li><a href="#same-semantics">Shared HTTP Semantics Across Versions</a></li>
+<li><a href="#transport-layering">Protocol Stack and Transport Mapping</a></li>
+<li><a href="#history">Historical Development and Standards Baseline</a></li>
+<li><a href="#http11-format">HTTP/1.1: Messages and Framing</a></li>
+<li><a href="#http11-reuse">HTTP/1.1 Persistent Connections and Pooling</a></li>
+<li><a href="#http11-hol">Pipelining and Application-Layer Head-of-Line Blocking</a></li>
+<li><a href="#http11-framing-security">Framing Disagreements and Request Smuggling</a></li>
+<li><a href="#http2-framing">HTTP/2: Binary Frames and Stream Identifiers</a></li>
+<li><a href="#http2-concurrency">Multiplexing, Concurrency, and Stream Limits</a></li>
+<li><a href="#http2-hpack">HTTP/2 Header Compression: HPACK</a></li>
+<li><a href="#http2-flow-priority">HTTP/2 Flow Control and Response Prioritization</a></li>
+<li><a href="#tcp-loss-hol">TCP Loss Recovery and Cross-Stream Blocking</a></li>
+<li><a href="#http2-negotiation">Negotiating HTTP/2: TLS ALPN and Cleartext Paths</a></li>
+<li><a href="#quic-model">QUIC: Reliable Multiplexed Transport over UDP</a></li>
+<li><a href="#quic-ids-migration">QUIC Connection IDs, Address Changes, and Migration</a></li>
+<li><a href="#quic-tls-early-data">QUIC Handshake, TLS 1.3, and 0-RTT Replay Risk</a></li>
+<li><a href="#http3-streams">HTTP/3: Request Streams and Connection Control</a></li>
+<li><a href="#http3-qpack">QPACK and Avoiding Compression-Related Blocking</a></li>
+<li><a href="#http3-errors">HTTP/3 Stream Closure, Cancellation, and Graceful Shutdown</a></li>
+<li><a href="#h3-alternative-service">Discovering HTTP/3: Alt-Svc and HTTPS Service Bindings</a></li>
+<li><a href="#h3-fallback">HTTP/3 Fallback When UDP Is Blocked</a></li>
+<li><a href="#alpn-tls">ALPN, SNI, and Authentication Boundaries</a></li>
+<li><a href="#origin-coalescing">Origins, Authority, and Connection Coalescing</a></li>
+<li><a href="#proxy-hops">Reverse Proxies and Protocol Translation</a></li>
+<li><a href="#flow-congestion">Flow Control, Congestion Control, and Backpressure</a></li>
+<li><a href="#latency-budget">Handshake and Latency Budgets</a></li>
+<li><a href="#loss-reordering">Packet Loss, Reordering, and Real Performance</a></li>
+<li><a href="#pools-idle">Connection Pools, Idle Timeouts, and Keepalive</a></li>
+<li><a href="#payload-caching">Payload Size, Content Encoding, and Caching</a></li>
+<li><a href="#streams-app">Streaming HTTP, Server-Sent Events, and WebSockets</a></li>
+<li><a href="#retry-safety">Retries, Idempotency, and Uncertain Completion</a></li>
+<li><a href="#security-version">Security Model and Version-Specific Risks</a></li>
+<li><a href="#doS-resilience">Stream Flooding, Resource Limits, and Service Resilience</a></li>
+<li><a href="#tracing">Observability: Protocol, Connection, and Request Layers</a></li>
+<li><a href="#powershell">Windows 11 and PowerShell: Read-Only Investigation</a></li>
+<li><a href="#fault-isolation">Systematic Fault Isolation and Decision Tree</a></li>
+<li><a href="#comparison">Comparative Reference: HTTP/1.1, HTTP/2, and HTTP/3</a></li>
+<li><a href="#selection-framework">Architecture and Protocol Selection Framework</a></li>
+<li><a href="#worked-first-load">Worked Example 1 — First Course-Catalog Page Load</a></li>
+<li><a href="#worked-loss">Worked Example 2 — One Lost Packet on a Multiplexed Connection</a></li>
+<li><a href="#worked-firewall">Worked Example 3 — Campus Firewall Blocks UDP/443</a></li>
+<li><a href="#worked-post">Worked Example 4 — Enrollment POST, Lost Response, and a Dangerous Retry</a></li>
+<li><a href="#worked-proxy">Worked Example 5 — HTTP/3 at the Edge, HTTP/1.1 at the Application</a></li>
+<li><a href="#worked-mobile">Worked Example 6 — A Mobile Device Changes Network</a></li>
+<li><a href="#worked-early-data">Worked Example 7 — Resumed HTTP/3 Connection and 0-RTT</a></li>
+<li><a href="#worked-stream">Worked Example 8 — Live Enrollment Availability Stream</a></li>
+<li><a href="#worked-headers">Worked Example 9 — A Compressed Header Attack at a Gateway</a></li>
+<li><a href="#worked-load">Worked Example 10 — Comparing Large-File Delivery under Load</a></li>
+<li><a href="#common-mistakes">Frequent Misconceptions and Design Errors</a></li>
+<li><a href="#review">Review Questions and Applied Exercises</a></li>
+<li><a href="#glossary">Specialist Glossary</a></li>
+<li><a href="#references">Standards and Technical References</a></li>
+<li><a href="#related">Related Encyclopedia Topics</a></li>
+<li><a href="#study-pathways">Study Pathways Within Client-Server Architecture</a></li>
+<li><a href="#editorial">Editorial Scope and Production Status</a></li>
+</ol></section>
+<section id="scope" aria-labelledby="heading-scope">
+<h2 id="heading-scope">Purpose, Scope, and Central Question</h2>
+<p><strong>HTTP versions and transport</strong> describes how a client and a server exchange the same fundamental HTTP methods, representations, and status meanings using different message encodings, connection models, and transport protocols. The critical distinction is between <em>what an HTTP exchange means</em> and <em>how that exchange is carried across a network</em>. A course-catalog request such as <code>GET /courses</code> does not become a different business operation because one connection uses HTTP/1.1 over TCP and another uses HTTP/3 over QUIC.</p>
+<p>Yet the mechanisms are not interchangeable in their operating characteristics. Protocol version affects message framing, simultaneous requests, header representation, flow control, stream cancellation, connection establishment, packet-loss behavior, intermediary support, and diagnostics. A browser may quietly negotiate different versions with the same website during a single day. A reverse proxy may accept HTTP/3 from the browser and contact its application origin over HTTP/1.1. Consequently, a production record saying simply “we use HTTP/3” is incomplete without naming the specific <strong>network hop, listener, TLS policy, client implementation, and fallback route</strong>.</p>
+<p>This Level 5 article is the fourth specialist in the <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/">Client-Server Architecture Unit</a>. It develops the transport and protocol-selection subjects introduced in <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client-Server Architecture</a>. The preceding <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/dns-and-service-endpoints">DNS and Service Endpoints</a> explains how a destination is found; the subsequent <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/tls-and-secure-client-connections">TLS and Secure Client Connections</a> treats detailed cryptographic authentication. The scope here is the relationship among protocol versions, transport behavior, performance, operational risk, and client-server design.</p>
+</section>
+<section id="same-semantics" aria-labelledby="heading-same-semantics">
+<h2 id="heading-same-semantics">Shared HTTP Semantics Across Versions</h2>
+<p>RFC 9110 defines the common semantic vocabulary of HTTP. A client constructs a request with a method and target, may include field values and content, and expects a response with a status and possibly content. Content negotiation, conditional requests, status codes, cache controls, authentication challenges, and the authority of a resource do not change merely because message framing changes. Protocol mappings must preserve these meanings; a reverse proxy translating between versions is not permitted to reinterpret a safe <code>GET</code> as a state-changing operation without another application-level rule.</p>
+<p>For a fictitious university API, the logical exchange might have the method <code>GET</code>, target <code>https://catalog.example.org/api/courses?term=2027-spring</code>, request field <code>Accept: application/json</code>, response status <code>200</code>, response field <code>Content-Type: application/json</code>, and a JSON representation. Under HTTP/1.1, these elements become a textual start line and header lines. Under HTTP/2 or HTTP/3, control data becomes pseudo-header fields and binary frames. The application can make the same authorization, validation, caching, and consistency decisions, but the connection-level observability will differ.</p>
+<p>Do not equate <strong>HTTP version</strong> with <strong>HTML version</strong>, a browser generation, an API version, or a TLS version. An API labeled <code>/v2/</code> may run over any supported HTTP protocol. Similarly, a new TLS handshake version does not guarantee HTTP/3: HTTP/2 normally runs over TLS/TCP, and QUIC uses TLS 1.3 to establish its own encrypted transport.</p>
+</section>
+<section id="transport-layering" aria-labelledby="heading-transport-layering">
+<h2 id="heading-transport-layering">Protocol Stack and Transport Mapping</h2>
+<p>HTTP is an application protocol. TCP is a reliable, ordered byte-stream transport. UDP is a datagram transport that, by itself, does not supply retransmission, ordered application delivery, or a connection handshake. <strong>QUIC is not “HTTP carried directly by raw UDP.”</strong> QUIC is a separately specified secure, reliable, multiplexed transport built over UDP; HTTP/3 maps HTTP exchanges onto QUIC streams. For encrypted HTTP/1.1 and HTTP/2, TLS typically secures the TCP-carried exchange. For HTTP/3, TLS 1.3 is integrated into QUIC rather than established as a conventional independent TLS-over-TCP record layer.</p>
+<pre><code>HTTP/1.1                  HTTP/2                    HTTP/3
+  HTTP messages            HTTP/2 frames              HTTP/3 frames
+  TLS (for HTTPS)          TLS (for HTTPS)            QUIC transport + TLS 1.3
+  TCP                      TCP                         UDP
+  IP                       IP                          IP
+
+Example standard HTTPS destination: origin hostname + port 443
+  HTTP/1.1 or HTTP/2 usually reaches TCP/443.
+  HTTP/3 generally reaches UDP/443 (or a discovered alternative port).
+
+A UDP reachability test alone does NOT prove HTTP/3 functionality.</code></pre>
+<p>These diagrams describe ordinary public HTTPS configurations, not every technically possible deployment. HTTP/1.1 can be carried over unencrypted TCP for <code>http</code> resources; HTTP/2 also has a cleartext <code>h2c</code> mode for appropriately configured environments. Modern browsers and public endpoints usually prefer encrypted HTTPS. The same numeric port is a separate port space for TCP and UDP; opening TCP port 443 does not implicitly permit QUIC packets on UDP port 443.</p>
+</section>
+<section id="history" aria-labelledby="heading-history">
+<h2 id="heading-history">Historical Development and Standards Baseline</h2>
+<p>HTTP/1.0 encouraged comparatively simple request-response communication but often established numerous connections for multi-object pages. HTTP/1.1 standardized persistent connections as the normal model, improved explicit message delimitation, and introduced additional transfer behaviors. HTTP/2 retained HTTP semantics while introducing binary framing and multiplexed streams over a connection. HTTP/3 replaced HTTP/2's TCP transport with QUIC, keeping most application semantics while changing stream mapping and loss recovery. Improvements in protocols were driven partly by the growing number of page resources, mobile access, high-latency paths, and the difficulty of hiding transport-level delays.</p>
+<table><caption>Principal specification families in the modern HTTP stack</caption><thead><tr><th scope="col">Subject</th><th scope="col">Core document</th><th scope="col">Role in the architecture</th></tr></thead><tbody>
+<tr><th scope="row">Shared semantics</th><td>RFC 9110</td><td>Methods, target resources, fields, status, content and caching-related meaning</td></tr>
+<tr><th scope="row">HTTP/1.1</th><td>RFC 9112</td><td>Textual message syntax, delimitation and connection management</td></tr>
+<tr><th scope="row">HTTP/2</th><td>RFC 9113</td><td>Framed streams, multiplexing, HPACK and flow control</td></tr>
+<tr><th scope="row">HTTP/3</th><td>RFC 9114</td><td>HTTP mapping over QUIC streams and protocol control</td></tr>
+<tr><th scope="row">QUIC</th><td>RFCs 9000, 9001, 9002</td><td>UDP-based transport, TLS integration, recovery and congestion control</td></tr>
+<tr><th scope="row">QPACK</th><td>RFC 9204</td><td>Header-field compression adapted to QUIC streams</td></tr>
+<tr><th scope="row">HTTP priorities</th><td>RFC 9218</td><td>Application hints about response urgency and incremental delivery</td></tr>
+</tbody></table>
+<p>The RFCs give protocol requirements; an application's effective behavior also depends on browser, operating system, edge service, network policy, and implementation configuration. Standards support a common foundation but do not guarantee that every deployment enables every optional feature. Operators should record both the standard identifier and the particular behavior they tested.</p>
+</section>
+<section id="http11-format" aria-labelledby="heading-http11-format">
+<h2 id="heading-http11-format">HTTP/1.1: Messages and Framing</h2>
+<p>HTTP/1.1 uses a human-readable textual wire format for its start line and header fields. An illustrative request begins <code>GET /api/courses HTTP/1.1</code> and includes a <code>Host</code> field to identify the target authority. The response begins with a status line such as <code>HTTP/1.1 200 OK</code>. Empty lines separate the field section from the optional message content. Although a protocol trace is readable, an application cannot safely parse HTTP/1.1 merely by splitting strings on line breaks: delimiters, transfer codings, message lengths and special cases matter.</p>
+<pre><code>GET /api/courses HTTP/1.1
+Host: catalog.example.org
+Accept: application/json
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 35
+
+{"courses":["history","computing"]}</code></pre>
+<p>The response above is a teaching illustration. In real traffic, <code>Content-Length</code> must equal the exact number of payload octets actually sent; an intentionally simplified trace must not be copied as a production test fixture without checking the byte count. Depending on response rules and coding, HTTP/1.1 messages use known content lengths, transfer coding such as chunked encoding, or a connection close to define completion. This is a framing property, not an application decision about whether the resource represents one record or a collection.</p>
+<p>Correct intermediaries must reject or normalize conflicting framing according to the applicable rules. When a frontend and backend disagree about where a message ends, an attacker can exploit the ambiguity. This transport-layer detail makes parser compatibility a security concern even when the application validates JSON correctly. RFC 9112 provides the controlling grammar and error-handling requirements.</p>
+</section>
+<section id="http11-reuse" aria-labelledby="heading-http11-reuse">
+<h2 id="heading-http11-reuse">HTTP/1.1 Persistent Connections and Pooling</h2>
+<p>Unlike a new connection per object, HTTP/1.1 normally permits multiple sequential requests on one TCP connection. This avoids repeatedly paying connection establishment and, for HTTPS, TLS setup costs. A client often maintains a <strong>connection pool</strong> keyed by appropriate origin and security properties. Pool configuration governs maximum connections, idle lifetimes, whether a connection may be reused after a response, and how queued requests are scheduled. Servers and proxies have corresponding resource costs for keeping connections available.</p>
+<p>A persistent connection is not a permanent connection. Idle timeout, network address translation expiration, rolling deployments, gateway configuration, remote closure, and local connection-pool eviction may end it. Clients must distinguish a connection closed before any request bytes were sent from one closed after a write that might have reached the server. That distinction affects safe replay and retry decisions, especially for payments or course enrollment submissions.</p>
+<p>Operators sometimes reduce HTTP/1.1 latency by opening several parallel TCP connections for the same origin, but this increases socket count, concurrent congestion controllers, TLS handshakes, and server state. A sensible performance comparison considers the entire request waterfall and the total connection budget, not only one isolated object. The client-server architecture can support the same API with one or many connections; the optimum varies with workload and network conditions.</p>
+</section>
+<section id="http11-hol" aria-labelledby="heading-http11-hol">
+<h2 id="heading-http11-hol">Pipelining and Application-Layer Head-of-Line Blocking</h2>
+<p>HTTP/1.1 pipelining allowed clients to send multiple requests without waiting for each response, but servers still had to return responses in request order on that connection. A slow response could delay subsequent responses, an application-level form of <em>head-of-line blocking</em>. In practice, browsers largely abandoned pipelining because intermediaries, error recovery and ordering behavior made it difficult to deploy reliably. The common approach was connection reuse with limited parallelism across multiple TCP connections.</p>
+<p>Imagine three course-catalog requests on one pipelined connection. Request A triggers a slow database read; requests B and C could be answered immediately. Their response bytes still cannot overtake A in the normal HTTP/1.1 ordered response stream. HTTP/2 offers independent HTTP streams on one transport connection and can interleave their frames. That removes the HTTP/1.1 response-order bottleneck, but, because HTTP/2 commonly runs on one TCP byte stream, loss of a TCP segment can temporarily prevent delivery of data for several HTTP/2 streams. That second phenomenon is <em>transport-layer</em> head-of-line blocking.</p>
+<p>These two forms must not be conflated. Application queuing, database locks, and server thread starvation can delay a response under any HTTP version. The appearance of multiplexed frames does not make a single overloaded backend process concurrent or eliminate contention inside the application.</p>
+</section>
+<section id="http11-framing-security" aria-labelledby="heading-http11-framing-security">
+<h2 id="heading-http11-framing-security">Framing Disagreements and Request Smuggling</h2>
+<p>When HTTP/1.1 traffic traverses an edge proxy and an origin server, both parsers must agree on the boundaries of each request. Discrepancies involving <code>Content-Length</code>, <code>Transfer-Encoding</code>, obsolete syntax, or normalization can cause one party to see a second request where the other sees more body content. This class of parser mismatch can lead to <strong>request smuggling</strong>, authorization bypass, cache poisoning, or cross-user response confusion.</p>
+<p>HTTP/2 and HTTP/3 eliminate several ambiguous textual-framing features on their native links, but they do not automatically eliminate the risk when a gateway converts a framed HTTP/2 or HTTP/3 request into HTTP/1.1 upstream. A trustworthy gateway must construct a valid normalized HTTP/1.1 message and must not copy prohibited or contradictory hop-by-hop fields. Security tests should cover both endpoints of the translation boundary, not just the public listener.</p>
+<p>Operational response should prioritize supported protocol libraries, strict parser validation, consistent upgrade handling, bounded field and body sizes, explicit rejection of invalid messages, and regular checks of proxy-to-origin compatibility. Packet traces useful for one segment of the request path may be insufficient because the proxy creates a new message on its upstream connection. See also the MGU <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/reverse-proxies-and-api-gateways">Reverse Proxies and API Gateways</a> specialist article.</p>
+</section>
+<section id="http2-framing" aria-labelledby="heading-http2-framing">
+<h2 id="heading-http2-framing">HTTP/2: Binary Frames and Stream Identifiers</h2>
+<p>HTTP/2 represents an HTTP exchange using binary frames identified by a frame type and, where appropriate, a stream identifier. Typical frame types include <code>HEADERS</code>, <code>DATA</code>, <code>SETTINGS</code>, <code>WINDOW_UPDATE</code>, <code>RST_STREAM</code>, <code>GOAWAY</code>, and <code>PING</code>. HTTP requests and responses are still defined semantically by RFC 9110; the representation of control data changes. The client and server exchange connection prefaces and settings before ordinary stream operation.</p>
+<p>A stream is a logical bidirectional conversation within the connection. Client-created streams use odd-numbered stream identifiers and server-created streams use even-numbered identifiers where permitted by the protocol. The zero stream identifier refers to connection-level control, not an ordinary request. Request control information is expressed through pseudo-header fields such as <code>:method</code>, <code>:scheme</code>, <code>:authority</code>, and <code>:path</code>. The <code>:status</code> pseudo-header conveys response status. These are not ordinary textual start lines embedded inside HTTP/2 frames.</p>
+<pre><code>One HTTP/2 connection, multiple concurrent streams
+
+Connection: SETTINGS -------------------------&gt;
+Stream 1:   HEADERS GET /courses ------------&gt;
+Stream 3:   HEADERS GET /calendar -----------&gt;
+Stream 5:   HEADERS GET /faculty ------------&gt;
+Stream 3:   &lt;--------------- HEADERS / DATA
+Stream 1:   &lt;------ HEADERS / DATA / DATA
+Stream 5:   &lt;----------- HEADERS / DATA
+Connection: shared transport, shared security and capacity limits</code></pre>
+<p>The interleaved frames can be carried over one TCP connection without requiring response completion in stream identifier order. Stream state is managed independently, but flow-control windows and the transport's available capacity remain shared. Binary framing makes packet-level captures less directly readable than HTTP/1.1; instrumentation should decode the protocol with authorized keys or use connection and application telemetry.</p>
+</section>
+<section id="http2-concurrency" aria-labelledby="heading-http2-concurrency">
+<h2 id="heading-http2-concurrency">Multiplexing, Concurrency, and Stream Limits</h2>
+<p>Multiplexing permits multiple HTTP requests to be active at once on one connection. This can reduce the proliferation of TCP connections and let a client start an important request without waiting for a different HTTP response to finish. However, the number of streams a peer is willing to receive concurrently is bounded by protocol settings and implementation policy. When that limit is reached, new requests may wait in the client's queue or use another appropriately permitted connection.</p>
+<p>Concurrency has costs. Every active stream consumes state, memory, and often application processing capacity. A burst of short requests mixed with large downloads can create contention even when frames are independently scheduled. In a gateway, the downstream stream limit is separate from the upstream pool size: 100 incoming HTTP/2 streams might feed an upstream HTTP/1.1 origin with only a few available connections. A proxy therefore needs explicit overload behavior rather than assuming the client's multiplexing automatically extends end to end.</p>
+<p>A reliable diagnostic report identifies where the queue formed: browser request scheduler, TCP or QUIC connection, HTTP stream limit, gateway-to-origin pool, application worker, or dependency. A low number of TCP connections and a high number of successful requests per connection can be a sign of efficient reuse, but also can conceal overload at a later tier.</p>
+</section>
+<section id="http2-hpack" aria-labelledby="heading-http2-hpack">
+<h2 id="heading-http2-hpack">HTTP/2 Header Compression: HPACK</h2>
+<p>HTTP/2 uses <strong>HPACK</strong> (RFC 7541) to compress header field sections. It takes advantage of repeated names and values and can maintain a dynamic table of field representations across requests on a connection. This can reduce repeated metadata when clients send many requests carrying similar header names, authentication context, accept preferences, or cookies. The method is distinct from compressing response bodies using content encodings such as gzip or Brotli.</p>
+<p>Header compression creates state and implementation obligations. Decoder limits, table updates, memory quotas, and the treatment of sensitive fields affect correctness and risk. Protocol implementations should avoid using dynamic indexing for sensitive values when context makes that inappropriate, and should never assume that compression is a confidentiality boundary. Confidential fields still need transport encryption and correct authorization controls.</p>
+<p>HPACK is designed for ordered frame delivery over HTTP/2's TCP-based framing. HTTP/3 uses <strong>QPACK</strong>, not HPACK, because QUIC streams do not provide one global ordering relation for all header blocks. The two compression formats are related but are not interchangeable byte streams. A reverse proxy translating HTTP/2 to HTTP/3 must decode and re-encode the HTTP field section appropriately.</p>
+</section>
+<section id="http2-flow-priority" aria-labelledby="heading-http2-flow-priority">
+<h2 id="heading-http2-flow-priority">HTTP/2 Flow Control and Response Prioritization</h2>
+<p>Flow control prevents senders from overwhelming receivers that cannot consume data at the offered rate. HTTP/2 supplies flow-control windows at both the stream and connection levels; <code>WINDOW_UPDATE</code> signals additional receive capacity. These limits are distinct from TCP's own receiver window and congestion control. A stream may be technically ready to send but unable to progress because its HTTP/2 receive window is exhausted, because the connection window is exhausted, or because TCP cannot deliver more bytes.</p>
+<p>Prioritization lets clients communicate which responses are more urgent, but it is a scheduling hint, not a guarantee. The HTTP/2 priority mechanisms in RFC 9113 coexist with the extensible prioritization framework of RFC 9218, which defines urgency and incremental behavior and supports prioritization across HTTP versions. Product implementations differ in how actively they apply hints; a default edge configuration might ignore them or enforce its own fairness policy.</p>
+<p>For a course-selection page, HTML and essential application data might merit earlier delivery than large decorative images, but such policy must be evaluated on real workloads. Prioritizing all requests as urgent defeats the signal. The correct performance target is useful completion for the user, not achieving the largest number of simultaneously open streams.</p>
+</section>
+<section id="tcp-loss-hol" aria-labelledby="heading-tcp-loss-hol">
+<h2 id="heading-tcp-loss-hol">TCP Loss Recovery and Cross-Stream Blocking</h2>
+<p>TCP supplies ordered byte delivery. If a segment is lost, bytes later in the stream cannot be released to the application until the missing sequence range has been recovered, even when later bytes arrived successfully. HTTP/2 multiplexes several logical exchanges into this one ordered byte stream. Consequently, packet loss can delay data from more than one HTTP/2 stream at a time, despite the HTTP/2 layer's ability to interleave request and response frames. This is <strong>transport-level head-of-line blocking</strong>.</p>
+<p>This does not mean HTTP/2 performs badly whenever packets are lost. TCP implementations have advanced loss-recovery algorithms, and many networks carry HTTP/2 efficiently. The severity depends on round-trip time, packet loss, data in flight, congestion controller, buffering, application demand, and whether the lost bytes were on a critical path. Measuring page load in an artificial loss environment may reveal differences that are insignificant on a stable campus LAN.</p>
+<p>HTTP/3 uses independently delivered QUIC streams so loss affecting one stream need not block delivery of a different stream's already received application data. Nevertheless, a lost packet still consumes recovery time, can reduce congestion window, and may affect multiple streams sharing the same path. QUIC removes a specific TCP-wide ordering constraint; it does not abolish network congestion, bandwidth scarcity, or server-side queuing.</p>
+</section>
+<section id="http2-negotiation" aria-labelledby="heading-http2-negotiation">
+<h2 id="heading-http2-negotiation">Negotiating HTTP/2: TLS ALPN and Cleartext Paths</h2>
+<p>On ordinary HTTPS connections, HTTP/2 is selected through <strong>Application-Layer Protocol Negotiation</strong> (ALPN) in the TLS handshake. The client offers protocol identifiers it supports, and the server selects an acceptable one; the usual HTTP/2 identifier is <code>h2</code>. A server that supports HTTP/1.1 and HTTP/2 may therefore accept both types of clients on the same TCP/TLS listener. The selection is local to that TLS connection, not a permanent property of the DNS hostname.</p>
+<p>RFC 9113 also defines HTTP/2 operation for cleartext <code>http</code> URIs, including an <code>h2c</code> upgrade path and a prior-knowledge connection preface. These modes are important to certain private deployments and test harnesses, but should not be assumed available in ordinary browsers or public APIs. An <code>Upgrade: h2c</code> field is not the mechanism by which an ordinary HTTPS browser negotiates HTTP/2.</p>
+<p>When diagnosing a surprising HTTP/1.1 connection, inspect the exact destination and protocol configuration: whether the TLS endpoint advertised <code>h2</code>, whether the client offered it, whether an enterprise inspection proxy terminated TLS, and whether an upstream hop deliberately uses HTTP/1.1. A browser's negotiated protocol for one request does not prove the version of every proxy-to-origin connection.</p>
+</section>
+<section id="quic-model" aria-labelledby="heading-quic-model">
+<h2 id="heading-quic-model">QUIC: Reliable Multiplexed Transport over UDP</h2>
+<p>QUIC, standardized in RFC 9000, builds a secure transport on UDP datagrams. It adds connection establishment, reliable stream delivery, packet acknowledgments, retransmission of lost information, stream-level flow control, connection-level flow control, congestion control, and connection IDs. Those functions are not inherited from UDP itself. QUIC can send multiple independently ordered streams within a connection, while packets containing fragments of different streams share a congestion budget.</p>
+<p>QUIC packets can carry multiple frames. Packet numbers help detect loss; retransmission normally retransmits the relevant lost information in new packets rather than attempting to reproduce the identical network packet. Packet-based loss recovery and congestion control are specified in RFC 9002, with room for compliant algorithm choices. QUIC encrypts most transport information as part of its security design. Some headers remain visible to network devices, but application content is protected and cannot simply be parsed as raw HTTP text.</p>
+<p>The transport is connection-oriented in its own sense even though it uses UDP. It has state, handshakes, flow control, idle timeouts, and graceful closure. Operators should not interpret the phrase “UDP is connectionless” as proof that QUIC has no connection lifecycle. They also should not interpret the phrase “UDP is unreliable” as proof that an HTTP/3 request or response is normally delivered without reliable recovery.</p>
+</section>
+<section id="quic-ids-migration" aria-labelledby="heading-quic-ids-migration">
+<h2 id="heading-quic-ids-migration">QUIC Connection IDs, Address Changes, and Migration</h2>
+<p>TCP connections are conventionally identified by a tuple of source and destination IP addresses and ports. QUIC supports <strong>connection IDs</strong> that allow endpoints to recognize a connection even if the IP path changes, subject to negotiated behavior and security validation. This matters on mobile devices that move from Wi-Fi to a cellular network. A supported QUIC connection may continue across an address change without discarding all higher-layer request state.</p>
+<p>Migration is not unlimited magic. The application and its transport library must support migration; the new route must pass network policy; path validation must succeed; routing and load-balancer infrastructure must deliver packets to a node that recognizes the connection; and address changes may still incur delay or congestion-control adjustments. QUIC also allows operators to constrain active migration. If a connection terminates on an edge worker that loses state, another worker cannot normally reconstruct it merely from the connection ID.</p>
+<p>Connection IDs can create privacy and operational considerations because a stable value could correlate activity across paths. The protocol therefore includes mechanisms for rotating identifiers, and implementations have responsibilities around identifier issuance and retirement. A design review should balance connection continuity, traffic distribution, privacy, and observability rather than describing migration simply as a guaranteed performance improvement.</p>
+</section>
+<section id="quic-tls-early-data" aria-labelledby="heading-quic-tls-early-data">
+<h2 id="heading-quic-tls-early-data">QUIC Handshake, TLS 1.3, and 0-RTT Replay Risk</h2>
+<p>QUIC version 1 integrates TLS 1.3 as its cryptographic handshake and key-establishment mechanism (RFC 9001). QUIC manages encryption of packets using keys derived through the TLS handshake; it does not send ordinary TLS records as a TCP/TLS stack does. Connection setup and protected transport establishment can be combined efficiently, but the number of round trips observed in a real request depends on whether the client has valid resumption information, the server accepts it, network delay, address validation, and any additional protocol exchange.</p>
+<p>Some returning clients can send <strong>0-RTT early data</strong> based on session resumption state. Early data can reduce waiting for a full handshake, but it has replay limitations: an attacker may cause already accepted early application data to be repeated under some conditions. Applications must not treat 0-RTT as automatically safe for an enrollment submission, financial transaction, permission change, or other non-idempotent side effect. RFC 8470 describes early-data handling considerations for HTTP; a service should apply explicit replay policy and can reject early data, causing a safe retry after the handshake.</p>
+<p>The name “0-RTT” does not mean a complete HTTP response appears with zero network delay. It refers to the ability to send certain application data without first completing a fresh handshake round trip. It does not eliminate propagation delay, server computation, congestion, or application authorization. The subsequent MGU article on TLS examines the deeper certificate and trust questions.</p>
+</section>
+<section id="http3-streams" aria-labelledby="heading-http3-streams">
+<h2 id="heading-http3-streams">HTTP/3: Request Streams and Connection Control</h2>
+<p>RFC 9114 defines HTTP/3 as the mapping of HTTP semantics onto QUIC. A typical HTTP request and its response use one client-initiated bidirectional QUIC stream. HTTP/3 also requires special unidirectional control streams for connection settings and uses QPACK-related encoder and decoder streams when appropriate. HTTP/3 frames such as <code>HEADERS</code> and <code>DATA</code> are not the same bytes or connection framing as similarly named HTTP/2 frames.</p>
+<p>Because QUIC exposes independent streams, a request can progress even if another request lost data on a different stream, subject to connection-level congestion and flow-control limits. Unlike HTTP/2, HTTP/3 does not multiplex all stream bytes through one TCP sequence. Stream cancellation and errors can be handled through QUIC and HTTP/3 mechanisms without necessarily closing the entire connection. Protocol errors on control streams can have connection-wide implications, however, and resource limits remain essential.</p>
+<p>In a distributed application, it is easy to confuse a <em>QUIC stream</em> with a server thread, request handler, coroutine, or database transaction. They are distinct. One stream may be suspended while backend work runs; the server might pool asynchronous handlers; and several upstream calls may service the same incoming stream. The HTTP transport controls delivery, not the business unit of work.</p>
+</section>
+<section id="http3-qpack" aria-labelledby="heading-http3-qpack">
+<h2 id="heading-http3-qpack">QPACK and Avoiding Compression-Related Blocking</h2>
+<p>HTTP/3 uses <strong>QPACK</strong>, defined in RFC 9204, to encode field sections. It was designed for QUIC streams, which do not impose a single global order of delivery. QPACK separates some dynamic table updates onto encoder and decoder streams, with mechanisms to limit situations in which an individual request cannot decode field references because information has not arrived. The protocol allows a configurable amount of potential blocking and includes state-management rules for dynamic entries.</p>
+<p>Compression remains beneficial for repeated field names and values, but requires explicit bounds. A server accepting untrusted client traffic must budget table memory, blocked streams, large decompressed field sections, and the CPU costs of decoding. A small wire representation can still expand to a large logical header field section; wire-size restrictions and application-size restrictions are not the same.</p>
+<p>Intermediary implementations should decode the incoming field section into an appropriate semantic representation, validate it, and re-encode for the outbound protocol. HPACK and QPACK are not transparent compressed blobs to tunnel through a version-translating reverse proxy. Deployment reviews should consider maliciously large or pathological field sets, not only typical browser behavior.</p>
+</section>
+<section id="http3-errors" aria-labelledby="heading-http3-errors">
+<h2 id="heading-http3-errors">HTTP/3 Stream Closure, Cancellation, and Graceful Shutdown</h2>
+<p>HTTP/3 distinguishes ordinary request-stream completion from stream-level resets, stop-sending behavior, protocol errors, and connection closure. A client canceling a large image request can signal that it no longer needs more response bytes without requiring every other request to fail. Servers must release corresponding resources, but cancellation at the transport layer does not guarantee that an already committed database transaction is rolled back. An application should define independently how cancellation affects work that has crossed an irreversible boundary.</p>
+<p>For graceful shutdown, HTTP/3 provides a <code>GOAWAY</code> mechanism that helps inform a peer that new requests should be directed elsewhere. HTTP/2 has its own GOAWAY semantics for managing stream acceptance. The two formats are not identical, and both have details that matter when determining whether a request might have been processed. Closing a transport without coordinating request handling risks losing in-flight work or causing retries of operations that actually completed.</p>
+<p>During rolling deployment, the gateway should stop admitting new work to draining backend instances, continue eligible in-flight requests, enforce an upper drain deadline, and report requests that could not be completed. A graceful shutdown strategy is effective only when upstream and downstream timeouts are aligned and when client retry policies respect operation semantics.</p>
+</section>
+<section id="h3-alternative-service" aria-labelledby="heading-h3-alternative-service">
+<h2 id="heading-h3-alternative-service">Discovering HTTP/3: Alt-Svc and HTTPS Service Bindings</h2>
+<p>A client must learn whether a service supports HTTP/3; merely resolving a hostname to an IP address does not reveal the HTTP version. One common mechanism is the <code>Alt-Svc</code> response field, specified by RFC 7838. A server reached over HTTP/1.1 or HTTP/2 can advertise an alternative service identified by an application protocol such as <code>h3</code> at a specified host or port. A supporting client may cache the advertisement according to its lifetime and attempt the alternative on later requests. An example field is <code>Alt-Svc: h3=":443"; ma=86400</code>, where the maximum age is an illustrative value, not a requirement.</p>
+<p>RFC 9460 adds DNS-based <strong>HTTPS</strong> and <strong>SVCB</strong> service binding records. These can advertise connection parameters and supported application protocols earlier in the setup process, when the client and resolver support them. DNS service-binding information and Alt-Svc can coexist; their combination has specified consistency and preference rules. Neither mechanism overrides the identity of the original HTTPS origin or makes an advertised endpoint trustworthy merely because it appears in DNS or an HTTP response. Normal certificate authentication and connection policy still apply.</p>
+<p>HTTP/3 discovery is a capability process, not a mandate to use it. The client may fail to negotiate HTTP/3, find UDP blocked, lack a compatible library, or select a different protocol based on policy. Observability should distinguish <em>advertised</em>, <em>attempted</em>, and <em>successfully negotiated</em> protocols. The companion <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/dns-and-service-endpoints">DNS and Service Endpoints</a> article explores the naming aspects in greater detail.</p>
+</section>
+<section id="h3-fallback" aria-labelledby="heading-h3-fallback">
+<h2 id="heading-h3-fallback">HTTP/3 Fallback When UDP Is Blocked</h2>
+<p>Many enterprise networks allow established TCP/443 traffic while filtering or restricting UDP/443. In that environment, an otherwise functioning HTTPS origin can serve HTTP/2 or HTTP/1.1 but fail when a client attempts QUIC. A robust client generally needs a version-appropriate fallback strategy: it can attempt an alternative transport under bounded deadlines and use a successfully negotiated protocol that preserves the same secure origin. Specific timing and racing behavior depend on the client implementation; there is no universal fallback interval.</p>
+<p>A proxy can also create asymmetric paths. For example, a laptop behind a corporate proxy might speak HTTP/1.1 to the proxy, while the proxy speaks HTTP/2 to the server. Another client directly reaching the edge might use HTTP/3. Users may report very different connection timing even though their URLs and application credentials are identical. Comparing only the origin server configuration would miss the controlling network policy.</p>
+<p>When investigating, distinguish an HTTP/3 <em>capability gap</em> from an HTTPS <em>availability failure</em>. An application that requires HTTP/3-only service without considering clients behind restricted networks can introduce avoidable reachability problems. At the same time, indiscriminate protocol fallback must not bypass certificate checking, downgrade the user from HTTPS to plaintext HTTP, or silence evidence of network interference.</p>
+</section>
+<section id="alpn-tls" aria-labelledby="heading-alpn-tls">
+<h2 id="heading-alpn-tls">ALPN, SNI, and Authentication Boundaries</h2>
+<p><strong>ALPN</strong> lets endpoints negotiate which application protocol uses a protected connection. For standard HTTPS over TCP, the usual choices include <code>h2</code> and <code>http/1.1</code>; for QUIC carrying HTTP/3, the usual ALPN identifier is <code>h3</code>. The mechanism is distinct from <strong>Server Name Indication</strong> (SNI), which lets the client indicate the intended server hostname to a TLS endpoint so it can select relevant identity and configuration. The HTTP authority further names the origin in the request. These concepts often coincide in ordinary hosting, but they serve different functions.</p>
+<p>A name may route to an edge, an edge may select a certificate, TLS or QUIC may negotiate an HTTP version, and a proxy may then route an HTTP request to a backend. An endpoint that supports HTTP/3 does not prove the certificate is valid; a valid certificate does not prove that every client offered <code>h3</code>; and a negotiated HTTP/2 session does not prove that the origin application's backend is using HTTP/2.</p>
+<p>Protocol negotiation should be treated as an authenticated connection property, not as a user-entered preference that overrides security requirements. Hints carried through DNS or HTTP may influence what the client tries, but the resulting connection must still satisfy the client's origin-identity and transport policy. See the next Unit specialist, <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/tls-and-secure-client-connections">TLS and Secure Client Connections</a>, for the certificate, key, and cryptographic detail.</p>
+</section>
+<section id="origin-coalescing" aria-labelledby="heading-origin-coalescing">
+<h2 id="heading-origin-coalescing">Origins, Authority, and Connection Coalescing</h2>
+<p>The HTTP <strong>origin</strong> is based on the URI scheme, host, and effective port. Two DNS hostnames pointing to the same IP address are not thereby the same origin. HTTP/2 and HTTP/3 deployments can sometimes <strong>coalesce</strong> requests for multiple origins onto one suitable connection when the protocol's authority, certificate, resolution, and applicable client-policy checks are satisfied. This can reduce connection count for related services, especially when a CDN serves multiple domain names. The detailed conditions are version- and implementation-dependent.</p>
+<p>Connection coalescing can introduce security and operational subtleties. A server receiving a request for an origin it is not configured to serve may need to reject it, including through an appropriate misdirected-request response when applicable. A shared certificate does not grant a backend authorization to process arbitrary tenant requests; virtual-host routing and access control still need trustworthy authority decisions. Also, coalescing does not merge browser same-origin access policy: cross-origin restrictions remain in force even if network transport is shared.</p>
+<p>An analyst comparing connection counts across browsers should account for coalescing, proxies, preconnect behavior, and service bindings. A low number of connections can represent good sharing, but can also be a symptom of an overloaded multiplexed connection. The key measurement is whether authorized requests reach their intended origin with acceptable service and isolation.</p>
+</section>
+<section id="proxy-hops" aria-labelledby="heading-proxy-hops">
+<h2 id="heading-proxy-hops">Reverse Proxies and Protocol Translation</h2>
+<p>Many applications have a chain of independently negotiated connections: <strong>browser → CDN → edge proxy → application server → downstream service</strong>. Each hop may have a different HTTP version, transport, TLS configuration, connection-pooling policy and failure behavior. The browser can negotiate HTTP/3 with a CDN that uses HTTP/2 to the gateway and HTTP/1.1 to a legacy backend. This is not an inconsistency; it is a normal possibility in layered architecture.</p>
+<pre><code>Browser                 CDN or edge                Service gateway           App
+   |                       |                            |                    |
+   |== H3 / QUIC / UDP ===&gt;|                            |                    |
+   |                       |== H2 / TLS / TCP ==========&gt;|                    |
+   |                       |                            |-- H1 / TCP / TLS --&gt;|
+   |                       |                            |&lt;-- HTTP response --|
+   |                       |&lt;====== HTTP response =====|                    |
+   |&lt;==== HTTP response ===|                            |                    |
+
+Same intended application request; separate connection state on each hop.</code></pre>
+<p>Version translation must preserve HTTP semantics, handle request and response content correctly, normalize forbidden hop-by-hop fields, respect authority and routing trust boundaries, and avoid converting cancellation into unsafe replay. End-to-end trace correlation is needed because one client request may correspond to different per-hop connection identifiers. A test showing HTTP/3 at the edge tells nothing decisive about the protocol between gateway and app without independent evidence.</p>
+</section>
+<section id="flow-congestion" aria-labelledby="heading-flow-congestion">
+<h2 id="heading-flow-congestion">Flow Control, Congestion Control, and Backpressure</h2>
+<p><strong>Flow control</strong> protects a receiver's ability to consume incoming data. <strong>Congestion control</strong> adjusts how quickly senders inject data into the network to avoid overloading the path. <strong>Application backpressure</strong> governs whether work is admitted or generated when the business service and its dependencies cannot keep pace. They operate at different boundaries and should be measured independently. An HTTP/2 stream window can be open while TCP's congestion window limits data in flight. A QUIC stream may have receive credit while the connection or network congestion budget is exhausted. A gateway can accept all network data but overwhelm its database queue.</p>
+<p>HTTP/2 adds stream and connection flow-control windows above TCP. QUIC supplies native stream and connection flow control plus transport congestion control; HTTP/3 uses these rather than duplicating HTTP/2's frame-level flow control. In both stacks, resource planning must also consider per-request limits, output buffering, upload sizes, slow readers, and the number of concurrent streams. Raising window sizes indiscriminately may improve throughput on some high-bandwidth-delay paths, but can also raise memory usage and amplify overload.</p>
+<p>The operator should ask what is actually scarce: receiver memory, link capacity, congestion window, stream allowance, worker threads, connection slots, CPU, or storage throughput. “HTTP/3 is faster” is not a substitute for capacity analysis. A properly bounded queue, adaptive admission policy and sensible deadline often matter more than changing the wire protocol.</p>
+</section>
+<section id="latency-budget" aria-labelledby="heading-latency-budget">
+<h2 id="heading-latency-budget">Handshake and Latency Budgets</h2>
+<p>On a new uncached request, perceived time can include name resolution, route selection, transport setup, cryptographic handshake, request upload, server queuing, application processing, response transfer and browser rendering. Persistent connections or preconnected clients can omit much of the setup on later requests. HTTP/3 can combine transport and cryptographic setup efficiently, but the benefit cannot be inferred from the protocol label alone: clients sometimes already have a warm HTTP/2 connection and no setup work to save.</p>
+<table><caption>Illustrative—not measured—request timing budget in milliseconds</caption><thead><tr><th scope="col">Phase</th><th scope="col">Cold connection</th><th scope="col">Reused connection</th><th scope="col">Operational explanation</th></tr></thead><tbody>
+<tr><th scope="row">Name/endpoint decision</th><td>18</td><td>0</td><td>Cached resolution or preselected route can avoid a lookup</td></tr>
+<tr><th scope="row">Transport + security setup</th><td>64</td><td>0</td><td>Negotiation cost varies with TCP, TLS, QUIC and session state</td></tr>
+<tr><th scope="row">Request transfer</th><td>7</td><td>7</td><td>Payload and connection conditions matter</td></tr>
+<tr><th scope="row">Queue + application work</th><td>140</td><td>140</td><td>Often dominates regardless of HTTP version</td></tr>
+<tr><th scope="row">Response transfer</th><td>31</td><td>31</td><td>Size, pacing, bandwidth and loss matter</td></tr>
+<tr><th scope="row">Total in this toy model</th><td><strong>260</strong></td><td><strong>178</strong></td><td>Absolute numbers are illustrative, not protocol benchmarks</td></tr>
+</tbody></table>
+<p>Timing is not always a simple sum. DNS and connection attempts may race; browsers may prefetch; requests may overlap; and server timing may be measured from a different boundary than client timing. For meaningful evaluation, record per-phase timings and compare cohorts with similar cache status, RTT, loss rate, device class and content. Use distributions, particularly tail latency, rather than extrapolating from one fast request.</p>
+</section>
+<section id="loss-reordering" aria-labelledby="heading-loss-reordering">
+<h2 id="heading-loss-reordering">Packet Loss, Reordering, and Real Performance</h2>
+<p>Network impairment is multi-dimensional. <strong>Packet loss</strong> may trigger retransmission and congestion adaptation. <strong>Reordering</strong> may complicate recovery and delay some delivery decisions. <strong>Latency</strong> determines how expensive a handshake or recovery round trip is. <strong>Jitter</strong> can affect interactive delivery and timeout interpretation. <strong>Bandwidth</strong> limits the best sustainable transfer rate even when every packet arrives. HTTP/1.1, HTTP/2 and HTTP/3 each inherit these network conditions but expose them through different transport models.</p>
+<p>The often-cited HTTP/3 advantage is avoidance of TCP-wide head-of-line blocking among independent QUIC streams. It is most visible for some multiplexed workloads under meaningful loss, not necessarily for a single large download or an already established connection on a stable link. QUIC still has shared congestion constraints, can lose multiple stream fragments in one datagram, and depends on server and client tuning. Stream independence is a necessary but not sufficient condition for good user-perceived latency.</p>
+<p>A credible test plan reports controlled variables and results: number of simultaneous objects, object sizes, cache status, cold/warm connections, RTT and packet-loss distributions, CPU saturation, TLS resumption, and both TCP and QUIC traffic policy. When the environment cannot support comparable transport paths, label the comparison as an observed deployment difference rather than an intrinsic protocol ranking.</p>
+</section>
+<section id="pools-idle" aria-labelledby="heading-pools-idle">
+<h2 id="heading-pools-idle">Connection Pools, Idle Timeouts, and Keepalive</h2>
+<p>Transport reuse can save work, but maintaining unused connections also consumes memory, identifiers and load-balancer state. HTTP/2 and HTTP/3 commonly support numerous concurrent exchanges per connection; HTTP/1.1 generally needs more connections when many requests should progress independently. Each connection has policy around idle expiration, maximum age, health, stream capacity and draining. Clients may retry or establish fresh connections after an idle close, while proxies may apply much shorter limits than the application expects.</p>
+<p>HTTP/2 includes a <code>PING</code> frame for connection-level liveness checks. QUIC provides its own mechanisms and idle timeout rules. Liveness traffic should not be confused with business transaction success: a connection can respond to a ping while the database behind it is unavailable. Excessive keepalive traffic may consume mobile power, NAT entries and server resources; an appropriate policy depends on actual interaction frequency and the user's access pattern.</p>
+<p>When an application appears to time out only after being idle, measure where the stale connection originates. A browser may believe a TCP connection is reusable even though a firewall silently discarded its state; a QUIC path may fail after a network transition; or a proxy may have drained its upstream. The client should have bounded recovery and safe idempotency behavior rather than a blanket rule to retry all submissions.</p>
+</section>
+<section id="payload-caching" aria-labelledby="heading-payload-caching">
+<h2 id="heading-payload-caching">Payload Size, Content Encoding, and Caching</h2>
+<p>Wire-protocol efficiency is only one part of transfer performance. Response content encoding, image sizes, API representation shape, cache placement, conditional requests and server computation can dominate. If a page downloads an unnecessary 8 MB image, migrating from HTTP/2 to HTTP/3 will not make that excess payload disappear. Conversely, content caching at the browser or CDN may avoid an origin connection entirely. Field-section compression under HPACK or QPACK is different from response-body compression and does not change the semantics of <code>Content-Encoding</code>.</p>
+<p>Caching also affects how transport benchmarks should be interpreted. A warm cache may make a network request so small that overhead dominates; a CDN may deliver the object from a nearby edge; and a browser might reuse a previously established origin connection. To compare versions fairly, label whether a request was cache hit or miss, identify which hop provided the response, and avoid using an altered resource version that invalidates a warm cache only in one group.</p>
+<p>HTTP response status, validators such as ETags, cache directives and representation integrity belong to common semantics or related specialist chapters. This article's concern is the interaction between those application mechanisms and the cost or concurrency of the underlying transport. Refer to <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-caching-and-content-delivery">HTTP Caching and Content Delivery</a> for the dedicated treatment.</p>
+</section>
+<section id="streams-app" aria-labelledby="heading-streams-app">
+<h2 id="heading-streams-app">Streaming HTTP, Server-Sent Events, and WebSockets</h2>
+<p>An HTTP response can be delivered incrementally rather than buffered to completion. A streaming API can send pieces as they become available, and <strong>Server-Sent Events</strong> use an HTTP response stream in a specified text/event-stream format for one-way server-to-client updates. Under a multiplexed protocol, another request can often share the connection without waiting for the long-lived stream to finish, as long as application and transport resource limits permit it.</p>
+<p><strong>WebSockets</strong> are different: they establish a bidirectional messaging channel using a defined handshake and framing model. Traditional WebSocket opening handshakes use HTTP/1.1 Upgrade. Extended CONNECT mechanisms can support WebSockets with HTTP/2 where negotiated, and HTTP/3 has additional defined support mechanisms. A developer should not assume that a WebSocket library's existence guarantees support on all three HTTP versions, especially through multiple reverse proxies. The negotiated route and intermediary configuration must be checked.</p>
+<p>Long-lived streams raise capacity questions: flow-control credit, idle timeouts, client disconnect detection, backpressure and reconnection semantics. For a course-enrollment dashboard, a live availability stream should not be the sole authoritative source of remaining seats. The final submission still needs server-side checks and transactional consistency. Transport-stream survival is not equivalent to application state validity.</p>
+</section>
+<section id="retry-safety" aria-labelledby="heading-retry-safety">
+<h2 id="heading-retry-safety">Retries, Idempotency, and Uncertain Completion</h2>
+<p>A connection-level error does not always indicate that an application operation never happened. If a client sends an enrollment request and loses the response, the server might already have committed the enrollment. Automatically replaying the request on a fresh HTTP/2 or HTTP/3 connection could duplicate a side effect unless the application has a safe retry contract. HTTP method semantics help: safe retrievals can usually be repeated, but even an HTTP method labeled idempotent must be implemented accordingly; a non-idempotent write needs stronger protections.</p>
+<p>A robust transaction may use a caller-generated <strong>idempotency key</strong> scoped to the principal, operation and request content, with a durable server-side record of the accepted outcome. The client uses the same key when retrying an uncertain attempt. Some APIs expose a status resource that lets callers reconcile the result rather than blindly submitting again. Servers must define duplicate response behavior, key lifetime, mismatched replay content, and concurrent requests with the same key.</p>
+<p>Protocol mechanisms like <code>GOAWAY</code> and QUIC stream resets provide evidence about transport state, but they do not replace application-level reconciliation. Clients should cap retries, apply deadlines and exponential backoff where suitable, and avoid multiplying traffic across every layer of a proxy chain. For user-visible writes, the priority is exactly interpreting whether the action succeeded, not maximizing the percentage of HTTP calls that returned 2xx.</p>
+</section>
+<section id="security-version" aria-labelledby="heading-security-version">
+<h2 id="heading-security-version">Security Model and Version-Specific Risks</h2>
+<p>All versions can be deployed securely when the service authenticates the intended origin and correctly enforces authorization. HTTP/1.1 over plaintext TCP offers no transport confidentiality. HTTPS over HTTP/1.1 or HTTP/2 normally uses TLS. HTTP/3 uses QUIC with TLS 1.3-derived encryption. This does not mean HTTP/3 offers automatic protection from application flaws: injection, insecure direct object references, cross-site scripting, broken authorization, vulnerable API logic and data leaks still require application-specific defenses.</p>
+<p>Distinct protocol architectures present distinct operational threats. HTTP/1.1 carries ambiguity risks when intermediary parsers disagree about message boundaries. HTTP/2 can face malicious stream churn, header resource exhaustion and concurrency abuse if implementations do not enforce limits. QUIC adds concerns such as UDP traffic policy, connection state management, address-validation rules, amplification controls and the safe handling of 0-RTT early data. A proxy translating between versions inherits the relevant risks from both sides of the boundary.</p>
+<p>A sound deployment baseline includes up-to-date maintained implementations, strict framing validation, bounded headers and bodies, per-client concurrency and request-rate budgets, appropriate transport timeouts, explicit client and server protocol policies, and telemetry for rejected traffic. Do not disable TLS validation merely to force a particular HTTP version to work. The most advanced wire format cannot compensate for accepting requests from an untrusted origin or failing object-level access control.</p>
+</section>
+<section id="doS-resilience" aria-labelledby="heading-doS-resilience">
+<h2 id="heading-doS-resilience">Stream Flooding, Resource Limits, and Service Resilience</h2>
+<p>Multiplexed protocols reduce overhead for honest concurrent requests, but the same feature can let an abusive client initiate large numbers of streams, send many headers, or cancel work repeatedly. Effective admission controls act on more than the number of network connections. Operators should consider concurrent streams, decompressed header-section size, outstanding request count, processing cost, per-principal request budget, bandwidth, response buffering, and duration of slow or incomplete streams.</p>
+<p>Rapid creation and cancellation of HTTP/2 streams illustrates a general problem: canceling a stream at the transport layer does not necessarily cancel all work already initiated in downstream services. A server may perform database or authorization work, then receive a reset before the response can be delivered. The fix is layered: bound per-connection and per-principal work, propagate cancellation where appropriate, shed excess requests and measure expensive operations that continue after clients stop waiting.</p>
+<p>Connection-based limits alone are often insufficient in HTTP/2 and HTTP/3 environments because many logical requests may share one connection. Conversely, excessively small limits can harm valid clients that efficiently multiplex requests. Rate policy should follow observed workload and identity context, with documented exception rules, transparent error handling and protection for unrelated users.</p>
+</section>
+<section id="tracing" aria-labelledby="heading-tracing">
+<h2 id="heading-tracing">Observability: Protocol, Connection, and Request Layers</h2>
+<p>To diagnose version-dependent behavior, instrument three distinct layers. At the <strong>application</strong> layer, record method, route template, status, error category and operation latency without exposing credentials. At the <strong>HTTP protocol</strong> layer, record the negotiated version, stream counts, request cancellation, response scheduling and any version-translation hop. At the <strong>transport</strong> layer, record connection setup, RTT, loss or retransmission indicators, congestion behavior, timeouts and path changes where exposed by the runtime.</p>
+<p>These observations must carry consistent request correlation. A client request identifier or trace context can be propagated through trusted proxies, while each hop also maintains its own connection identifier. Avoid treating connection IDs as stable user identifiers, especially with QUIC migration and privacy considerations. A client-side timing entry can capture total time, while server-side traces identify application queueing or backend work. Differences reveal whether the delay arose before, during or after request processing.</p>
+<table><caption>Operational symptoms and the first evidence to inspect</caption><thead><tr><th scope="col">Symptom</th><th scope="col">First evidence</th><th scope="col">Likely boundary to test</th></tr></thead><tbody>
+<tr><th scope="row">HTTP/3 never negotiated</th><td>ALPN, Alt-Svc/HTTPS RR, client support</td><td>Discovery, UDP routing or edge listener</td></tr>
+<tr><th scope="row">One stream stalls under loss</th><td>Per-stream timing and transport loss</td><td>QUIC/TCP recovery and application dependencies</td></tr>
+<tr><th scope="row">Many requests slow together</th><td>Queue times and connection saturation</td><td>Shared congestion, gateway pools or backend capacity</td></tr>
+<tr><th scope="row">Retry duplicates a write</th><td>Request IDs, idempotency records and commit log</td><td>Application consistency contract</td></tr>
+<tr><th scope="row">Edge is h3, origin shows h1</th><td>Per-hop negotiated protocol</td><td>Expected proxy translation</td></tr>
+<tr><th scope="row">Idle connection fails</th><td>Idle lifetime, close/reset reason and path state</td><td>Pool, proxy, firewall or NAT policy</td></tr>
+</tbody></table>
+<p>A standard HTTP request log often lacks enough information to distinguish these causes. The protocol field alone is not a performance diagnosis; pair it with network timing and backend traces. See <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-performance-and-observability">Client-Server Performance and Observability</a> for the related service-measurement discipline.</p>
+</section>
+<section id="powershell" aria-labelledby="heading-powershell">
+<h2 id="heading-powershell">Windows 11 and PowerShell: Read-Only Investigation</h2>
+<p>Windows PowerShell can help isolate hostname, TCP connectivity and HTTP behavior without modifying the machine. Use only a domain or service you administer or are authorized to test. The following illustration uses <code>example.org</code> as a documentation name. The separate <code>curl.exe</code> executable is intentionally named: in Windows PowerShell 5.1, <code>curl</code> may be an alias for <code>Invoke-WebRequest</code> and may not accept curl's command-line options. Whether <code>curl.exe</code> supports HTTP/2 or HTTP/3 depends on the exact curl build and its libraries.</p>
+<pre><code># Identify address resolution and TCP reachability.
+Resolve-DnsName example.org -Type A
+Resolve-DnsName example.org -Type AAAA
+Test-NetConnection example.org -Port 443 -InformationLevel Detailed
+
+# Inspect the actual curl executable and supported protocol features.
+curl.exe --version
+
+# Inspect one response with HTTP/1.1 forced when supported.
+curl.exe --http1.1 -I -v https://example.org/
+
+# On a curl build compiled with HTTP/2 support:
+curl.exe --http2 -I -v https://example.org/
+
+# Only on a build supporting HTTP/3, if authorized and available:
+curl.exe --http3 -I -v https://example.org/
+
+# Browser developer tools: inspect the negotiated protocol per request.</code></pre>
+<p><strong>Interpretation:</strong> <code>Test-NetConnection</code> with a port probes TCP connectivity; it is <em>not</em> an HTTP/3 or UDP/443 test. A successful A-record lookup is not a successful connection. A verbose curl trace can show negotiated protocol and certificate information, but a client compiled without HTTP/3 cannot establish that the server lacks HTTP/3. An HTTP <code>HEAD</code> test may follow a different application path than the real <code>GET</code> request, so use representative allowed operations for deeper investigation.</p>
+<p>For browser testing, open the network panel, reload the page, add the protocol column if available, and examine both the negotiated version and waterfall for actual requests. Cache hits and service worker responses may bypass network transport. To establish an end-to-end finding, combine local evidence with edge and upstream logs. Avoid enabling dangerous insecure flags or publishing secrets from verbose traces.</p>
+</section>
+<section id="fault-isolation" aria-labelledby="heading-fault-isolation">
+<h2 id="heading-fault-isolation">Systematic Fault Isolation and Decision Tree</h2>
+<p>Start with the user's exact URL and its expected HTTPS origin. Determine whether the problem is name resolution, endpoint reachability, handshake, HTTP negotiation, stream transfer or application processing. Then test the least disruptive independent evidence for each layer. This reduces the temptation to change several variables at once and lose the ability to attribute improvement to a specific fix.</p>
+<ol>
+<li><strong>Establish scope:</strong> Which users, devices, networks, URLs, regions and times are affected? Does the same origin work via another network?</li>
+<li><strong>Resolve and select:</strong> Confirm intended hostname, address candidates, HTTPS/SVCB and alternative-service policy; compare with the known-good environment.</li>
+<li><strong>Validate basic reachability:</strong> Test TCP/443 separately from UDP/443 using appropriate tools. Remember that UDP reachability alone does not guarantee an HTTP/3 listener.</li>
+<li><strong>Inspect security and ALPN:</strong> Verify certificate identity, trusted connection and the actually negotiated application protocol.</li>
+<li><strong>Observe one request:</strong> Compare request method, status, stream cancellation, time to first byte, total duration and any proxy translation.</li>
+<li><strong>Correlate upstream work:</strong> Identify gateway queueing, application processing, database calls and response buffering.</li>
+<li><strong>Change one variable:</strong> Compare H2 versus H3 on equivalent authorized requests and network conditions, noting cache and connection warmth.</li>
+<li><strong>Record disposition:</strong> Preserve evidence, the layer responsible, mitigation, rollback and monitoring criteria.</li>
+</ol>
+<p>Do not label a TLS failure as “DNS is down,” a blocked UDP path as “server unavailable,” or a slow database query as “HTTP/2 head-of-line blocking” without supporting evidence. Network protocol symptoms and application behavior can resemble each other; the diagnostic workflow separates them.</p>
+</section>
+<section id="comparison" aria-labelledby="heading-comparison">
+<h2 id="heading-comparison">Comparative Reference: HTTP/1.1, HTTP/2, and HTTP/3</h2>
+<table><caption>Key differences among modern HTTP mappings</caption><thead><tr><th scope="col">Property</th><th scope="col">HTTP/1.1</th><th scope="col">HTTP/2</th><th scope="col">HTTP/3</th></tr></thead><tbody>
+<tr><th scope="row">Typical secure transport</th><td>TLS over TCP</td><td>TLS over TCP</td><td>QUIC over UDP with integrated TLS 1.3</td></tr>
+<tr><th scope="row">Wire representation</th><td>Textual start lines and fields; message framing</td><td>Binary frames</td><td>HTTP/3 frames over QUIC streams</td></tr>
+<tr><th scope="row">Simultaneous HTTP exchanges</th><td>Normally parallel connections; limited ordered behavior per connection</td><td>Multiplexed HTTP/2 streams on one TCP connection</td><td>Multiplexed QUIC streams</td></tr>
+<tr><th scope="row">Header compression</th><td>No built-in HPACK/QPACK field compression</td><td>HPACK</td><td>QPACK</td></tr>
+<tr><th scope="row">Network loss impact</th><td>TCP ordering and per-connection request effects</td><td>One lost TCP range can block multiple HTTP streams</td><td>Independent streams avoid TCP-wide ordering blockage; congestion remains shared</td></tr>
+<tr><th scope="row">Application protocol negotiation</th><td>Typically <code>http/1.1</code> over TLS</td><td><code>h2</code> over TLS; optional h2c contexts</td><td><code>h3</code> over QUIC</td></tr>
+<tr><th scope="row">Deployment network path</th><td>TCP allowed by conventional HTTPS policies</td><td>TCP allowed by conventional HTTPS policies</td><td>Requires suitable UDP/QUIC path</td></tr>
+<tr><th scope="row">Migration across IP change</th><td>Ordinarily establishes new TCP connection</td><td>Ordinarily establishes new TCP connection</td><td>QUIC can support connection migration when conditions permit</td></tr>
+<tr><th scope="row">Semantics of GET/POST</th><td>RFC 9110</td><td>Same core semantics</td><td>Same core semantics</td></tr>
+<tr><th scope="row">Back-end compatibility</th><td>Widely supported</td><td>May require binary framing support or translation</td><td>May terminate at an edge and translate upstream</td></tr>
+</tbody></table>
+<p>None of these rows establishes a universal performance winner. HTTP/1.1 remains a practical compatibility and controlled-integration choice; HTTP/2 often supplies efficient general-purpose HTTPS multiplexing; HTTP/3 can provide advantages in particular high-latency or lossy path conditions. Measurement, end-to-end security, application behavior and operational support should govern adoption.</p>
+</section>
+<section id="selection-framework" aria-labelledby="heading-selection-framework">
+<h2 id="heading-selection-framework">Architecture and Protocol Selection Framework</h2>
+<p>Protocol selection is a service-delivery decision, not a marketing version ranking. First establish the application's workload: small cacheable reads, large downloads, streaming responses, interactive requests, bulk uploads or state-changing writes. Then characterize client diversity, network policy, traffic geography, certificate management, CDN and gateway features, telemetry, cost and staff expertise. Decide which client-edge versions to permit and which edge-origin versions to operate; the two boundaries need not match.</p>
+<table><caption>Decision considerations for illustrative service profiles</caption><thead><tr><th scope="col">Environment</th><th scope="col">Reasonable starting posture</th><th scope="col">Acceptance evidence</th></tr></thead><tbody>
+<tr><th scope="row">Public course catalog</th><td>Offer HTTP/2 and HTTP/3 where supported; retain compatible fallback</td><td>Real-user latency, completion rate, UDP accessibility, cache hit ratio</td></tr>
+<tr><th scope="row">Legacy application service</th><td>Retain HTTP/1.1 upstream where necessary; use trusted edge translation</td><td>No framing ambiguity; stable authorization and error propagation</td></tr>
+<tr><th scope="row">Enterprise proxy-restricted clients</th><td>Ensure robust HTTPS/TCP path, even if HTTP/3 is advertised elsewhere</td><td>Successful negotiation and request completion through approved proxies</td></tr>
+<tr><th scope="row">Mobile client with route changes</th><td>Evaluate QUIC migration alongside effective fallback and session state</td><td>Measured continuity, security policy, power impact and reconnect behavior</td></tr>
+<tr><th scope="row">High-value transactional API</th><td>Any supported secure protocol with strict idempotency and replay handling</td><td>Exactly understood success state after cancellation and retry</td></tr>
+</tbody></table>
+<p>Before enabling an additional version, define a rollback: which listener or advertisement can be changed, how clients will discover the change, how long alternative-service information may be cached, and what signals justify reverting. Avoid making authentication, authorization or data-integrity controls dependent on one wire-protocol generation. A good architecture can evolve its transport without changing the fundamental business contract.</p>
+</section>
+<section id="worked-first-load" aria-labelledby="heading-worked-first-load">
+<h2 id="heading-worked-first-load">Worked Example 1 — First Course-Catalog Page Load</h2>
+<p><strong>Scenario:</strong> A student opens <code>https://catalog.example.org/</code> for the first time after starting a browser. The page requests HTML, a stylesheet, a JavaScript bundle, a course list, and a handful of images. The origin is an illustrative example; no real school infrastructure is implied. The client has no previously established connection and may or may not have cached an alternative-service advertisement. Under HTTP/1.1, several network connections may be opened to handle independent resource requests efficiently. Under HTTP/2, the browser can multiplex them on one secured TCP connection. Under HTTP/3, supported requests may use QUIC streams on an authenticated connection once the client knows how to reach the service.</p>
+<p><strong>Analysis:</strong> A waterfall showing six connections under HTTP/1.1 and one HTTP/2 connection is consistent with connection reuse, but the comparison is not complete. If most content is cacheable, CDN caching and correct asset sizing might outweigh protocol improvements. If HTML depends on a slow origin database query, multiplexing cannot accelerate that query directly. If the browser receives an Alt-Svc advertisement only after the first response, initial navigation may use HTTP/2 while subsequent requests use HTTP/3.</p>
+<p><strong>Decision:</strong> Measure the full page's useful completion (e.g., a visible list of accessible courses), per-request protocol, cache state and server timing on similar networks. Do not rank versions by a single empty page-load test or a synthetic connection-establishment number.</p>
+</section>
+<section id="worked-loss" aria-labelledby="heading-worked-loss">
+<h2 id="heading-worked-loss">Worked Example 2 — One Lost Packet on a Multiplexed Connection</h2>
+<p><strong>Scenario:</strong> An HTTP/2 connection simultaneously carries a student schedule response, a small icon, and a large course handbook. A packet containing TCP bytes from the handbook stream is lost on a high-latency path. Later segments reach the client, possibly containing frames for the schedule stream. TCP cannot release later bytes across the missing sequence range until recovery; the schedule response may stall even though its own application processing finished. This demonstrates TCP-wide delivery ordering beneath HTTP/2.</p>
+<p><strong>Comparison:</strong> Under HTTP/3, the three requests are carried on independent QUIC streams. If loss affects information for the handbook stream, already received and decodable schedule-stream data need not wait for the handbook's missing stream data. However, if the lost packet held material for both streams, both need relevant recovery; loss may also reduce the congestion budget for the entire connection. If the application's course database is the actual bottleneck, none of these transport features solves it.</p>
+<p><strong>Diagnostic conclusion:</strong> Confirm that the schedule's server processing completed early, that loss occurred during response delivery, and that the client experienced blocked stream progress. Only then attribute the difference to transport head-of-line behavior. Otherwise the apparent win may simply reflect different CDN edges, caches, or queueing.</p>
+</section>
+<section id="worked-firewall" aria-labelledby="heading-worked-firewall">
+<h2 id="heading-worked-firewall">Worked Example 3 — Campus Firewall Blocks UDP/443</h2>
+<p><strong>Scenario:</strong> Off-campus students can access the course catalog over HTTP/3, while devices on a managed campus network show only HTTP/2. The campus firewall permits TCP port 443 but blocks outbound UDP port 443. DNS for the name succeeds and the HTTPS origin has a valid certificate. An operator observes that the HTTP/3 advertisement is present, yet requests complete over HTTP/2 on campus.</p>
+<p><strong>Diagnosis:</strong> The transport route is the differentiating factor. <code>Test-NetConnection</code> to TCP port 443 can establish that a TCP path exists but does not tell whether QUIC works. A browser can record the version actually negotiated. Comparing on-campus and off-campus traces while holding the URL and client configuration fixed can support the finding that UDP transport is restricted. The HTTP/2 fallback is not a security downgrade as long as the browser still authenticates the HTTPS origin and meets its policy.</p>
+<p><strong>Remediation:</strong> Either permit the required QUIC traffic after policy review or preserve HTTP/2/HTTP/1.1 support as a compatible route. Do not require students to disable firewall controls, use insecure HTTP, or circumvent the organization's approved network policy merely to obtain an HTTP/3 label.</p>
+</section>
+<section id="worked-post" aria-labelledby="heading-worked-post">
+<h2 id="heading-worked-post">Worked Example 4 — Enrollment POST, Lost Response, and a Dangerous Retry</h2>
+<p><strong>Scenario:</strong> A student submits <code>POST /api/enrollments</code> over a healthy HTTP/3 connection. The server commits an enrollment and responds, but the client loses connectivity before receiving a definitive response. The client interprets the missing response as a network failure. An automatic retry without an operation-level contract could attempt the enrollment twice or produce inconsistent visible status. The same hazard exists under HTTP/1.1 and HTTP/2.</p>
+<p><strong>Safer design:</strong> The client supplies a unique idempotency key bound to the intended operation. The server stores the outcome durably and returns the accepted result to later equivalent attempts with the same key. A query endpoint may also let the student retrieve the status of the operation. The implementation must decide how to handle mismatched payloads, keys that expire, duplicate concurrent requests, and requests already committed before cancellation.</p>
+<p><strong>Lesson:</strong> A stream reset, timeout or QUIC migration does not answer whether the enrollment transaction committed. Application-level idempotency and reconciliation are independent of HTTP version. Transport improvements can reduce some interruptions but do not turn an uncertain application outcome into a known one.</p>
+</section>
+<section id="worked-proxy" aria-labelledby="heading-worked-proxy">
+<h2 id="heading-worked-proxy">Worked Example 5 — HTTP/3 at the Edge, HTTP/1.1 at the Application</h2>
+<p><strong>Scenario:</strong> A browser's network inspector shows HTTP/3 for <code>GET /api/courses</code>. The CDN terminates QUIC and opens a separate HTTP/2 connection to the regional gateway. The gateway reaches a legacy application using HTTP/1.1. A backend engineer sees ordinary HTTP/1.1 requests in the application logs and claims the browser evidence must be wrong.</p>
+<p><strong>Analysis:</strong> Both observations can be correct because each is tied to a different network hop. The edge decodes the incoming HTTP exchange, maps the request to a new outbound message, and may reuse a connection to the gateway. The gateway then repeats the process. Content-length validation, authority routing, upstream connection pools and hop-by-hop field handling are important at every translation boundary. Client-perceived latency includes all hops and backend processing, not solely the edge transport.</p>
+<p><strong>Action:</strong> Document the actual protocol at client-edge, edge-gateway and gateway-origin boundaries; add trace correlation; and test security and retry behavior across the full path. Avoid a configuration statement such as “HTTP/3 end to end” unless every relevant hop has been independently verified.</p>
+</section>
+<section id="worked-mobile" aria-labelledby="heading-worked-mobile">
+<h2 id="heading-worked-mobile">Worked Example 6 — A Mobile Device Changes Network</h2>
+<p><strong>Scenario:</strong> A student on a tablet starts a large course-material download while on Wi-Fi, then walks outside and changes to mobile data. The device's IP address changes. A TCP connection serving HTTP/2 ordinarily cannot survive that address change as the same connection and must be reestablished or recovered through application logic. A QUIC implementation may use connection IDs and path validation to continue the HTTP/3 connection on the new route.</p>
+<p><strong>Limits:</strong> The client library must support migration; the service must route packets to the endpoint that knows the connection state; and the new network must permit QUIC traffic. The client may still observe a pause while a path is validated, and the server may deliberately disable migration. A content download should independently support robust resume or application recovery because transport-level continuity cannot be guaranteed across every failure or network transition.</p>
+<p><strong>Measurement:</strong> Record whether the connection actually migrated, the amount of data retransferred, pause duration, battery effects and user-visible completion. Do not assume that every cellular switch will succeed merely because QUIC has migration capabilities in its protocol specification.</p>
+</section>
+<section id="worked-early-data" aria-labelledby="heading-worked-early-data">
+<h2 id="heading-worked-early-data">Worked Example 7 — Resumed HTTP/3 Connection and 0-RTT</h2>
+<p><strong>Scenario:</strong> An authenticated student returns to an academic portal using a client with previously issued QUIC resumption material. The transport may support early request data before the full handshake completes. A cached, safe <code>GET</code> of the public catalog can be a plausible candidate under the service's policy. A state-changing course withdrawal is a different class of operation.</p>
+<p><strong>Risk:</strong> Early data has replay exposure. Replaying a public catalog lookup may have low business impact if it is genuinely safe, but replaying a withdrawal, enrollment or payment could cause harmful duplicate actions. A server may reject early data and request the client to retry after the handshake; that is not necessarily a service malfunction. Identity and authorization must still be checked for each request, and application policy must not equate a resumed transport session with a new authorization grant.</p>
+<p><strong>Design decision:</strong> Allow early data only for explicitly evaluated operations and uphold strong replay protections where applicable. Record whether 0-RTT was offered, accepted, rejected and retried rather than assuming every fast response used early data. Performance objectives must remain subordinate to operation correctness.</p>
+</section>
+<section id="worked-stream" aria-labelledby="heading-worked-stream">
+<h2 id="heading-worked-stream">Worked Example 8 — Live Enrollment Availability Stream</h2>
+<p><strong>Scenario:</strong> The portal displays changes in the number of remaining places in a seminar through a Server-Sent Events endpoint. A browser keeps a streaming response open while the user performs ordinary course searches. On HTTP/1.1, a long-lived connection can occupy one available origin connection; the browser may use additional connections for other work. Under HTTP/2 or HTTP/3, the live stream may share a multiplexed connection with other requests within configured stream and flow-control limits.</p>
+<p><strong>Capacity considerations:</strong> Many streaming clients can keep streams and associated application objects active for long periods. The gateway needs limits and the server must apply backpressure to slow readers. When the user closes the tab, cancellation should release upstream work. An unexpected disconnect should trigger a deliberate reconnection and event-reconciliation policy, not infinite immediate retries. Transport support for concurrent streams reduces one class of contention but does not eliminate CPU, memory or backend subscription costs.</p>
+<p><strong>Correctness:</strong> The stream should be advisory. When the user enrolls, the authoritative server must check current availability and commit a transaction. A UI showing one seat based on an event cannot reserve it simply because the event was delivered quickly.</p>
+</section>
+<section id="worked-headers" aria-labelledby="heading-worked-headers">
+<h2 id="heading-worked-headers">Worked Example 9 — A Compressed Header Attack at a Gateway</h2>
+<p><strong>Scenario:</strong> A gateway accepts HTTP/3 from public clients and forwards HTTP/2 to internal application services. An attacker supplies many requests with deliberately expensive field sections. The wire representation can be compressed using QPACK on the incoming hop and HPACK on the outbound hop. A small compressed representation does not guarantee a small decompressed field section or low parsing cost.</p>
+<p><strong>Review:</strong> The gateway should limit logical field counts, decompressed bytes, dynamic table state, stream concurrency and CPU spent in decoding. It must validate authority, reject malformed field sections, normalize hop-by-hop semantics and avoid forwarding contradictory framing. If it uses a shared upstream connection pool, it should ensure one abusive client cannot monopolize backend connection capacity. Alerting should cover both byte-based transport measurements and per-request processing costs.</p>
+<p><strong>Lesson:</strong> Multiplexing and field compression improve efficiency for ordinary clients while creating resource-management obligations. A secure deployment enforces quotas and monitors decoded application work, not merely total network bytes.</p>
+</section>
+<section id="worked-load" aria-labelledby="heading-worked-load">
+<h2 id="heading-worked-load">Worked Example 10 — Comparing Large-File Delivery under Load</h2>
+<p><strong>Scenario:</strong> A service delivers a 200 MB public lecture recording alongside interactive catalog requests. Operators replace HTTP/2 with HTTP/3 at the edge and expect every request to complete faster. On a stable broadband connection, the video transfer may remain limited primarily by available bandwidth and the edge's congestion behavior. The small interactive requests might improve under particular loss conditions, but they still compete for path capacity and server attention.</p>
+<p><strong>Evaluation:</strong> Test both protocols with equivalent connection warmth, network impairment, cache states and content. Record download completion, interactive request latency, bytes retransmitted or recovered, packet loss, edge CPU, client power where measurable and origin load. Keep the workload realistic: one large download and dozens of tiny cached resources is not the same as hundreds of uncached expensive API calls. If the gateway buffers or serializes upstream work, a network-layer upgrade can leave the actual bottleneck untouched.</p>
+<p><strong>Disposition:</strong> Deploy the protocol that meets measured service objectives across intended clients, preserving verified secure fallback. Document the conditions where HTTP/3 improves the user experience and those where the evidence does not show a benefit. Protocol adoption should be a reversible engineering decision with a monitoring plan.</p>
+</section>
+<section id="common-mistakes" aria-labelledby="heading-common-mistakes">
+<h2 id="heading-common-mistakes">Frequent Misconceptions and Design Errors</h2>
+<ul>
+<li><strong>“HTTP/2 and HTTP/3 change what GET means.”</strong> No; shared HTTP semantics remain, while the wire mapping and transport characteristics change.</li>
+<li><strong>“HTTP/3 is HTTP/2 over UDP.”</strong> No; it uses HTTP/3 framing over the independently specified QUIC transport, with QPACK instead of HPACK.</li>
+<li><strong>“UDP means no retransmission.”</strong> UDP itself provides none, but QUIC implements reliable stream delivery and loss recovery.</li>
+<li><strong>“HTTP/2 has eliminated head-of-line blocking.”</strong> It removes HTTP/1.1 response-order blocking among streams but still uses TCP's ordered byte stream.</li>
+<li><strong>“HTTP/3 always wins.”</strong> Performance depends on paths, connections, workload and implementation.</li>
+<li><strong>“One port number equals one transport.”</strong> TCP/443 and UDP/443 are distinct transport endpoints.</li>
+<li><strong>“An Alt-Svc or DNS HTTPS record proves HTTP/3 worked.”</strong> An advertisement is not evidence of successful negotiation.</li>
+<li><strong>“An edge using HTTP/3 means the application uses it.”</strong> Intermediaries can translate versions on independent upstream connections.</li>
+<li><strong>“0-RTT means every request is safe to send immediately.”</strong> Early data may be replayed and needs application-level policy.</li>
+<li><strong>“Connection cancellation means the database transaction was canceled.”</strong> Side effects may already have committed.</li>
+<li><strong>“A successful TCP test verifies HTTP/3.”</strong> QUIC's usual transport is UDP, requiring a distinct diagnostic path.</li>
+<li><strong>“Header compression encrypts credentials.”</strong> HPACK/QPACK are size-reduction techniques; confidentiality depends on the secure transport and correct handling.</li>
+<li><strong>“More streams always increase throughput.”</strong> Resource quotas, congestion and backend queues can make excessive concurrency harmful.</li>
+<li><strong>“A certificate shared between hosts merges their browser origins.”</strong> Origin boundaries remain based on scheme, host and port.</li>
+<li><strong>“A single HTTP timing proves transport causation.”</strong> Controlled measurement and per-layer evidence are needed.</li>
+</ul>
+</section>
+<section id="review" aria-labelledby="heading-review">
+<h2 id="heading-review">Review Questions and Applied Exercises</h2>
+<ol>
+<li>Distinguish HTTP semantics from the wire-level mapping used by HTTP/1.1, HTTP/2 and HTTP/3.</li>
+<li>Explain why TCP/443 being reachable does not establish UDP/443 or HTTP/3 availability.</li>
+<li>Compare HTTP/1.1 response-order blocking with TCP-wide blocking of HTTP/2 streams.</li>
+<li>Explain which QUIC guarantees are not provided by UDP itself.</li>
+<li>Identify the role of ALPN, SNI, HTTP authority and origin authentication in an HTTPS request.</li>
+<li>Explain the purpose of HPACK and QPACK, and why a gateway cannot blindly forward their encoded bytes between versions.</li>
+<li>Why does HTTP/2 use both stream-level and connection-level flow control, in addition to TCP?</li>
+<li>How can HTTP/3 avoid cross-stream ordering delays but still be affected by shared congestion?</li>
+<li>Describe a case where HTTP/2 on a warm connection is more useful than establishing a new QUIC connection.</li>
+<li>Describe how Alt-Svc and DNS HTTPS records can participate in HTTP/3 discovery without changing the origin.</li>
+<li>Under what conditions can QUIC connection migration fail after a device switches networks?</li>
+<li>Explain why a canceled transport stream cannot prove that a course-enrollment write did not commit.</li>
+<li>What specific risks must be evaluated before allowing early HTTP data with 0-RTT?</li>
+<li>Design per-hop telemetry for browser → CDN → gateway → app where three different HTTP versions are used.</li>
+<li>List indicators that point to backend queueing rather than an HTTP transport bottleneck.</li>
+<li>Why is an H3-only public endpoint potentially problematic in enterprise environments?</li>
+<li>Which limits help protect an HTTP/2 or HTTP/3 service from stream flooding and large decompressed fields?</li>
+<li>How can response caching distort a performance benchmark between two HTTP versions?</li>
+<li>What limitations apply when a curl binary is built without HTTP/3 and when a PowerShell TCP test succeeds?</li>
+<li>Develop an acceptance test for enabling HTTP/3 with controlled fallback, security assurance, and rollback criteria.</li>
+</ol>
+<h3>Applied exercise A — Design a three-hop protocol map</h3>
+<p>Draw the logical path from a browser to an edge, gateway and application server. Label the HTTP version, transport, TLS termination, connection pool, origin authority and failure-reporting boundary for each hop. Identify which evidence would demonstrate a genuine HTTP/3 connection from the browser and which would demonstrate the upstream HTTP/1.1 connection.</p>
+<h3>Applied exercise B — Investigate a stalled page</h3>
+<p>Given a page waterfall with one slow data request and many delayed images, construct two hypotheses: an HTTP/2 transport delivery stall and server-side worker saturation. List the specific packet or connection metrics and application trace evidence needed to discriminate between them. Explain why stream count alone is inconclusive.</p>
+<h3>Applied exercise C — Prepare a safe protocol rollout</h3>
+<p>Specify a service rollout with HTTP/2 as the existing baseline and HTTP/3 as an additional client-edge option. Set measurable success criteria for handshake failures, request completion, error rate, user latency, accessible network population and upstream load. Define fallback and rollback behavior without compromising TLS trust or transactional idempotency.</p>
+</section>
+<section id="glossary" aria-labelledby="heading-glossary">
+<h2 id="heading-glossary">Specialist Glossary</h2>
+<p>The terms below distinguish application, protocol and transport layers. They are scoped to client-server HTTP traffic and do not replace the detailed definitions in the cited standards.</p>
+<dl>
+<dt>Acknowledgment (ACK)</dt><dd>A transport signal confirming that particular transmitted information arrived; QUIC and TCP employ their own acknowledgment mechanisms.</dd>
+<dt>Alt-Svc</dt><dd>HTTP alternative-service mechanism that can advertise an equivalent endpoint or protocol for an origin.</dd>
+<dt>ALPN</dt><dd>Application-Layer Protocol Negotiation: selects an application protocol, such as h2 or h3, in a TLS/QUIC context.</dd>
+<dt>Application backpressure</dt><dd>Mechanisms that slow, queue or refuse work when the service cannot process it safely.</dd>
+<dt>Authority</dt><dd>HTTP control information identifying the target host and applicable port for a request.</dd>
+<dt>Binary framing</dt><dd>Structured non-text wire representation of message control and content fragments.</dd>
+<dt>Blocked stream</dt><dd>Logical stream whose progress waits on credit, loss recovery, header dependencies or application work.</dd>
+<dt>Cold connection</dt><dd>Connection whose establishment and security setup are part of the current request path.</dd>
+<dt>Congestion control</dt><dd>Transport behavior that regulates transmission based on inferred network capacity and congestion.</dd>
+<dt>Connection coalescing</dt><dd>Reusing a suitably authorized connection to carry requests for multiple HTTP origins.</dd>
+<dt>Connection ID</dt><dd>QUIC identifier that permits peers to recognize connections independently of an unchanged network address tuple.</dd>
+<dt>Connection pool</dt><dd>Managed collection of connections reused across requests according to origin and security policy.</dd>
+<dt>Control stream</dt><dd>HTTP/3 unidirectional stream reserved for connection control information.</dd>
+<dt>Early data</dt><dd>Application data sent during eligible resumed secure connection setup before the normal handshake completion point.</dd>
+<dt>Endpoint</dt><dd>Network destination comprising transport, address, port and the security/application context needed to contact a service.</dd>
+<dt>Flow control</dt><dd>Limits that protect a receiver from being sent more data than it can accept.</dd>
+<dt>GOAWAY</dt><dd>HTTP/2 or HTTP/3 protocol signal used to begin controlled connection shutdown and limit new requests.</dd>
+<dt>h2</dt><dd>ALPN application protocol identifier for HTTP/2.</dd>
+<dt>h2c</dt><dd>Cleartext HTTP/2 mode, not the ordinary TLS ALPN path for HTTPS.</dd>
+<dt>h3</dt><dd>ALPN application protocol identifier for HTTP/3.</dd>
+<dt>Handshake</dt><dd>Protocol exchange that establishes parameters, identities and keys or transport state before normal communication.</dd>
+<dt>Head-of-line blocking</dt><dd>Delay of independently useful work because earlier-ordered information has not yet been delivered or processed.</dd>
+<dt>Header field</dt><dd>HTTP request or response metadata field; called a field in contemporary HTTP terminology.</dd>
+<dt>HPACK</dt><dd>Field compression format defined for HTTP/2.</dd>
+<dt>HTTP origin</dt><dd>Origin identity determined by a URI scheme, host and effective port.</dd>
+<dt>HTTP semantics</dt><dd>Meaning of methods, status codes, target resources, field values and content across HTTP versions.</dd>
+<dt>HTTP stream</dt><dd>A logical exchange or request/response stream carried within a multiplexed HTTP/2 or QUIC-based HTTP/3 connection.</dd>
+<dt>HTTP/1.1</dt><dd>HTTP version using text-form start lines and field lines, with specified message delimitation over a byte transport.</dd>
+<dt>HTTP/2</dt><dd>HTTP version using binary framed streams, multiplexing and HPACK, commonly over TCP/TLS.</dd>
+<dt>HTTP/3</dt><dd>HTTP version mapping requests and responses over QUIC streams with QPACK field compression.</dd>
+<dt>Idempotency</dt><dd>Property that repeating an operation has the same intended effect as performing it once, as defined by its contract.</dd>
+<dt>Idempotency key</dt><dd>Application-supplied token that helps a server recognize repeat attempts of one intended operation.</dd>
+<dt>Idle timeout</dt><dd>Limit after which an unused connection can be closed or its state discarded.</dd>
+<dt>Intermediary</dt><dd>Gateway, proxy, CDN or other component that receives an HTTP message and may forward a corresponding message.</dd>
+<dt>Keepalive</dt><dd>Connection reuse or liveness behavior intended to maintain or check a usable connection.</dd>
+<dt>Loss recovery</dt><dd>Transport methods for detecting missing information and arranging reliable retransmission.</dd>
+<dt>Multiplexing</dt><dd>Carrying several logical exchanges concurrently on a shared connection.</dd>
+<dt>Network path migration</dt><dd>Continuing an eligible QUIC connection over a different network-address path after validation.</dd>
+<dt>Origin server</dt><dd>Authoritative HTTP responder for a target resource, potentially behind intermediaries.</dd>
+<dt>Packet loss</dt><dd>Failure of transmitted network packets to reach their destination.</dd>
+<dt>Packet reordering</dt><dd>Arrival of packets in a different sequence from the one in which they were sent.</dd>
+<dt>Persistent connection</dt><dd>Transport connection retained for reuse across multiple HTTP exchanges.</dd>
+<dt>Pipelining</dt><dd>HTTP/1.1 mechanism sending additional requests before prior responses finish, with ordered response constraints.</dd>
+<dt>Pseudo-header field</dt><dd>HTTP/2 or HTTP/3 control field with a colon-prefixed name, such as :method or :status.</dd>
+<dt>QPACK</dt><dd>Field compression format for HTTP/3 designed for independent QUIC streams.</dd>
+<dt>QUIC</dt><dd>Secure, reliable, stream-multiplexed transport protocol implemented over UDP.</dd>
+<dt>QUIC stream</dt><dd>Independently ordered byte-stream abstraction within one QUIC connection.</dd>
+<dt>Rate limiting</dt><dd>Policy limiting request activity to protect service capacity and fairness.</dd>
+<dt>Replay attack</dt><dd>Repetition of previously transmitted application data in a context that can cause an unintended repeated effect.</dd>
+<dt>Request smuggling</dt><dd>Class of attacks exploiting disagreement about HTTP request boundaries at intermediary parsing or translation boundaries.</dd>
+<dt>RTT</dt><dd>Round-trip time between transmission of information and receipt of a corresponding response or acknowledgment.</dd>
+<dt>Server Name Indication (SNI)</dt><dd>TLS extension indicating the server hostname so that an endpoint can choose appropriate security configuration.</dd>
+<dt>Server-Sent Events</dt><dd>HTTP-based stream of server-to-client events using text/event-stream formatting.</dd>
+<dt>Stream reset</dt><dd>Signal terminating one transport/application stream; does not prove business work was undone.</dd>
+<dt>Tail latency</dt><dd>Latency near the slow end of a distribution, such as the 95th or 99th percentile.</dd>
+<dt>TCP</dt><dd>Reliable, ordered byte-stream network transport with connection and congestion-control behavior.</dd>
+<dt>TLS</dt><dd>Cryptographic protocol securing communication and authenticating an endpoint according to trust policy.</dd>
+<dt>Transport endpoint</dt><dd>Destination IP address and transport port, with transport protocol (TCP/UDP) identified.</dd>
+<dt>UDP</dt><dd>Datagram transport without built-in reliable ordered delivery; used by QUIC as its underlying carrier.</dd>
+<dt>Version negotiation</dt><dd>Exchange or selection process for choosing compatible protocols or transport versions.</dd>
+<dt>Warm connection</dt><dd>An already established connection available for a new request without a fresh handshake.</dd>
+<dt>Window update</dt><dd>Flow-control signal increasing receiver-advertised capacity, such as in HTTP/2.</dd>
+<dt>0-RTT</dt><dd>Ability to send certain application data early during a resumed secure connection, subject to replay restrictions.</dd>
+</dl>
+</section>
+<section id="references" aria-labelledby="heading-references">
+<h2 id="heading-references">Standards and Technical References</h2>
+<p>The following technical standards are primary references. Their normative requirements supersede explanatory simplifications in this encyclopedia article. Tool capabilities and operational behavior vary by installed version and vendor.</p>
+<ol>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9110.html" target="_blank" rel="noopener noreferrer">RFC 9110 — HTTP Semantics</a>. Methods, status codes, field semantics, resource identifiers and origin authority.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9112.html" target="_blank" rel="noopener noreferrer">RFC 9112 — HTTP/1.1</a>. Textual wire syntax, content framing, connection semantics and security considerations.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9113.html" target="_blank" rel="noopener noreferrer">RFC 9113 — HTTP/2</a>. Frames, streams, multiplexing, flow control, settings and TLS negotiation.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9114.html" target="_blank" rel="noopener noreferrer">RFC 9114 — HTTP/3</a>. Mapping HTTP messages onto QUIC streams; settings, errors and discovery.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9000.html" target="_blank" rel="noopener noreferrer">RFC 9000 — QUIC: A UDP-Based Multiplexed and Secure Transport</a>. Connection IDs, packet and stream structure, flow control and migration.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9001.html" target="_blank" rel="noopener noreferrer">RFC 9001 — Using TLS to Secure QUIC</a>. QUIC handshake integration, security and early-data considerations.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9002.html" target="_blank" rel="noopener noreferrer">RFC 9002 — QUIC Loss Detection and Congestion Control</a>. Transport acknowledgment, loss recovery and congestion algorithms.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc7541.html" target="_blank" rel="noopener noreferrer">RFC 7541 — HPACK: Header Compression for HTTP/2</a>. HTTP/2 field compression and dynamic table operation.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9204.html" target="_blank" rel="noopener noreferrer">RFC 9204 — QPACK: Field Compression for HTTP/3</a>. QUIC-aware compressed field sections and blocking controls.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9218.html" target="_blank" rel="noopener noreferrer">RFC 9218 — Extensible Prioritization Scheme for HTTP</a>. Version-independent response prioritization parameters and signals.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc7838.html" target="_blank" rel="noopener noreferrer">RFC 7838 — HTTP Alternative Services</a>. Alt-Svc discovery and equivalent alternative endpoints.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9460.html" target="_blank" rel="noopener noreferrer">RFC 9460 — SVCB and HTTPS DNS Resource Records</a>. DNS-supplied service-binding and connection parameters.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc7301.html" target="_blank" rel="noopener noreferrer">RFC 7301 — Transport Layer Security Application-Layer Protocol Negotiation</a>. Application protocol negotiation during secure connection setup.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc8446.html" target="_blank" rel="noopener noreferrer">RFC 8446 — The Transport Layer Security (TLS) Protocol Version 1.3</a>. Handshake and secure transport primitives relevant to modern HTTPS.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc8470.html" target="_blank" rel="noopener noreferrer">RFC 8470 — Using Early Data in HTTP</a>. Handling HTTP early data and replay exposure.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc8305.html" target="_blank" rel="noopener noreferrer">RFC 8305 — Happy Eyeballs Version 2</a>. Connection establishment strategies across address families.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9297.html" target="_blank" rel="noopener noreferrer">RFC 9297 — HTTP Datagrams and the Capsule Protocol</a>. Extensions involving HTTP datagrams and the capsule protocol; distinct from ordinary HTTP responses.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc8441.html" target="_blank" rel="noopener noreferrer">RFC 8441 — Bootstrapping WebSockets with HTTP/2</a>. Extended CONNECT support for WebSockets with HTTP/2.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9220.html" target="_blank" rel="noopener noreferrer">RFC 9220 — Bootstrapping WebSockets with HTTP/3</a>. Extended CONNECT support for WebSockets with HTTP/3.</li>
+<li><a href="https://curl.se/docs/http3.html" target="_blank" rel="noopener noreferrer">curl Manual — HTTP Versions</a>. Client implementation capabilities and version-specific operation (check build support).</li>
+<li><a href="https://learn.microsoft.com/en-us/powershell/module/nettcpip/test-netconnection" target="_blank" rel="noopener noreferrer">Microsoft Learn — Test-NetConnection</a>. Windows TCP reachability diagnostics and their scope.</li>
+<li><a href="https://learn.microsoft.com/en-us/powershell/module/dnsclient/resolve-dnsname" target="_blank" rel="noopener noreferrer">Microsoft Learn — Resolve-DnsName</a>. Windows DNS inspection and address lookup.</li>
+</ol>
+</section>
+<section id="related" aria-labelledby="heading-related">
+<h2 id="heading-related">Related Encyclopedia Topics</h2>
+<p>These are parent or neighboring Level 4 subjects rather than new Level 5 children of this specialist article. Active links lead to their canonical destination; their depth and editorial status may differ.</p>
+<ul class="course-links">
+<li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture"><strong>Client-Server Architecture</strong></a> — Parent coverage of clients, servers, HTTP, tiers and reliability.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/tcp-ip-protocol-suite"><strong>TCP/IP Protocol Suite</strong></a> — Internet packet transport and forwarding foundations.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/network-protocols"><strong>Network Protocols</strong></a> — Layered communications and protocol compatibility.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/domain-name-system"><strong>Domain Name System</strong></a> — Names and records used before many connections.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/routing-and-switching"><strong>Routing and Switching</strong></a> — Packet forwarding and network-path engineering.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/virtual-private-networks"><strong>Virtual Private Networks</strong></a> — Tunneling and managed remote access that can affect UDP and TCP paths.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/cloud-computing"><strong>Cloud Computing</strong></a> — Edge, gateway, regional service and deployment environment.</li>
+<li><a href="/library/encyclopedia/computer-science/programming-and-development/web-apis-and-http"><strong>Web APIs and HTTP</strong></a> — API semantics and request-response contracts.</li>
+<li><a href="/library/encyclopedia/computer-science/programming-and-development/api-design"><strong>API Design</strong></a> — API evolution, compatibility and application contracts.</li>
+</ul>
+</section>
+<section id="study-pathways" aria-labelledby="heading-study-pathways">
+<h2 id="heading-study-pathways">Study Pathways Within Client-Server Architecture</h2>
+<p><strong>Foundation and protocol sequence:</strong> Begin with <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-and-server-roles">Client and Server Roles</a>, then <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-request-and-response-lifecycle">HTTP Request and Response Lifecycle</a> and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/dns-and-service-endpoints">DNS and Service Endpoints</a>. This article is the fourth specialist. Follow it with <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/tls-and-secure-client-connections">TLS and Secure Client Connections</a> to examine authentication, certificates and cryptographic policy in detail.</p>
+<p><strong>Infrastructure and scaling sequence:</strong> After understanding protocol negotiation and transport limitations, continue to <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/two-tier-and-three-tier-systems">Two-Tier and Three-Tier Systems</a>, <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/reverse-proxies-and-api-gateways">Reverse Proxies and API Gateways</a>, <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/server-load-balancing">Server Load Balancing</a>, and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-caching-and-content-delivery">HTTP Caching and Content Delivery</a>.</p>
+<p><strong>Reliability and operations sequence:</strong> Pair transport cancellation, protocol fallback and connection reuse with <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-reliability-patterns">Client-Server Reliability Patterns</a>, <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-performance-and-observability">Client-Server Performance and Observability</a>, and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-deployment-and-troubleshooting">Client-Server Deployment and Troubleshooting</a>. The linked specialist locations form the intended Unit plan; links are not proof that all articles are already published.</p>
+</section>
+<section id="editorial" aria-labelledby="heading-editorial">
+<h2 id="heading-editorial">Editorial Scope and Production Status</h2>
+<p><strong>Taxonomic position:</strong> Level 5 subarticle 4 of the Client-Server Architecture Unit in the Networking Systems division of the MGU Computer Science Encyclopedia. Parent article: <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client-Server Architecture</a>. Unit index: <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/">Client-Server Architecture — Sub-Articles</a>. Physical publication file: <code>networking-systems/client-server-architecture-articles/http-versions-and-transport.html</code>.</p>
+<p><strong>Editorial boundary:</strong> This article compares HTTP transport mappings, framing, connection negotiation, stream behavior, performance, secure fallback and operations. It does not redefine HTTP methods, implement QUIC cryptography, replace DNS administration, or assert real observations from MGU infrastructure. Names ending in <code>example.org</code> and scenario timings are documentation examples. Operational commands are read-only illustrations; results depend on tools, authorization, network policy and client support.</p>
+<p><strong>Publication status:</strong> Article HTML prepared for local placement and subsequent deployment. Cross-links to other planned Client-Server Architecture Unit subarticles are intentionally active canonical destinations; some targets may not yet exist on the public site. Standards and referenced URLs represent the editorial research basis as of November 23, 2026, and should be monitored for subsequent updates.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

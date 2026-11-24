@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPU Control Logic and Exception Handling | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Specialist CPU guide to decode control, trap entry and return, interrupt arbitration, synchronous faults, privileged state, precise exceptions, and hardware recovery.">
+<meta name="keywords" content="CPU control logic, exceptions, interrupts, trap handling, RISC-V mtvec, mepc, mcause, precise exception, retirement, controller, privilege transitions">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CPU Control Logic and Exception Handling | MGU Encyclopedia">
+<meta property="og:description" content="How CPU control sequences normal instructions and transfers to exception or interrupt handlers without corrupting precise architectural state.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>CPU Control Logic and Exception Handling</h1>
+<p class="subtitle">How processors coordinate ordinary execution, recognize faults and interrupts, enter privileged handlers, and preserve correct architectural state across recovery.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-ownership-and-scope">Definition, Ownership, and Scope</a></li>
+<li><a href="#learning-objectives-and-key-questions">Learning Objectives and Key Questions</a></li>
+<li><a href="#the-hardware-control-path-from-decode-to-trap-entry">The Hardware Control Path: From Decode to Trap Entry</a></li>
+<li><a href="#conceptual-controller-and-exception-handling-diagram">Conceptual Controller and Exception-Handling Diagram</a></li>
+<li><a href="#combinational-decode-versus-sequential-control">Combinational Decode Versus Sequential Control</a></li>
+<li><a href="#a-minimal-control-signal-inventory">A Minimal Control-Signal Inventory</a></li>
+<li><a href="#teaching-model-a-decoder-producing-control-decisions">Teaching Model: A Decoder Producing Control Decisions</a></li>
+<li><a href="#finite-state-sequencing-and-handshake-control">Finite-State Sequencing and Handshake Control</a></li>
+<li><a href="#teaching-model-multicycle-load-controller">Teaching Model: Multicycle Load Controller</a></li>
+<li><a href="#exception-interrupt-trap-and-abort-terminology">Exception, Interrupt, Trap and Abort: Terminology</a></li>
+<li><a href="#synchronous-exceptions-and-instruction-attribution">Synchronous Exceptions and Instruction Attribution</a></li>
+<li><a href="#asynchronous-interrupts-and-admission-windows">Asynchronous Interrupts and Admission Windows</a></li>
+<li><a href="#reset-nonmaskable-interrupts-and-debug-entry">Reset, Nonmaskable Interrupts and Debug Entry</a></li>
+<li><a href="#event-classification-and-handler-consequences">Event Classification and Handler Consequences</a></li>
+<li><a href="#event-provenance-tags-and-exception-metadata">Event Provenance, Tags and Exception Metadata</a></li>
+<li><a href="#priority-is-conditional-and-architecture-specific">Priority Is Conditional and Architecture-Specific</a></li>
+<li><a href="#instruction-fetch-exceptions-and-redirection">Instruction Fetch Exceptions and Redirection</a></li>
+<li><a href="#illegal-instructions-csr-privilege-and-software-calls">Illegal Instructions, CSR Privilege and Software Calls</a></li>
+<li><a href="#memory-faults-alignment-and-protection">Memory Faults, Alignment and Protection</a></li>
+<li><a href="#arithmetic-exceptions-and-status-are-isa-dependent">Arithmetic Exceptions and Status Are ISA-Dependent</a></li>
+<li><a href="#recoverable-faults-versus-machine-check-conditions">Recoverable Faults Versus Machine-Check Conditions</a></li>
+<li><a href="#a-compact-risc-v-trap-record">A Compact RISC-V Trap Record</a></li>
+<li><a href="#risc-v-machine-level-control-status-register-map">RISC-V Machine-Level Control/Status Register Map</a></li>
+<li><a href="#trap-entry-ordered-hardware-actions">Trap Entry: Ordered Hardware Actions</a></li>
+<li><a href="#teaching-model-trap-entry-and-mret-state-restoration">Teaching Model: Trap Entry and MRET State Restoration</a></li>
+<li><a href="#trap-vectors-direct-and-vectored-modes">Trap Vectors: Direct and Vectored Modes</a></li>
+<li><a href="#teaching-model-trap-vector-selection">Teaching Model: Trap Vector Selection</a></li>
+<li><a href="#pending-interrupts-enables-and-privilege-routing">Pending Interrupts, Enables and Privilege Routing</a></li>
+<li><a href="#teaching-model-eligible-pending-interrupt-mask">Teaching Model: Eligible Pending Interrupt Mask</a></li>
+<li><a href="#interrupt-arbitration-and-multiple-pending-sources">Interrupt Arbitration and Multiple Pending Sources</a></li>
+<li><a href="#interrupt-entry-and-resume-a-timeline">Interrupt Entry and Resume: A Timeline</a></li>
+<li><a href="#exception-delegation-and-supervisor-traps">Exception Delegation and Supervisor Traps</a></li>
+<li><a href="#privilege-checks-and-unauthorized-control-transfers">Privilege Checks and Unauthorized Control Transfers</a></li>
+<li><a href="#returning-from-a-trap-and-instruction-restart">Returning From a Trap and Instruction Restart</a></li>
+<li><a href="#nested-traps-and-safe-handler-prologues">Nested Traps and Safe Handler Prologues</a></li>
+<li><a href="#teaching-model-detecting-unsaved-nested-trap-state">Teaching Model: Detecting Unsaved Nested Trap State</a></li>
+<li><a href="#precise-exceptions-the-architectural-contract">Precise Exceptions: The Architectural Contract</a></li>
+<li><a href="#in-order-pipeline-precise-fault-handling">In-Order Pipeline Precise Fault Handling</a></li>
+<li><a href="#out-of-order-execution-reorder-buffers-and-retirement">Out-of-Order Execution, Reorder Buffers and Retirement</a></li>
+<li><a href="#teaching-model-oldest-instruction-determines-the-precise-fault">Teaching Model: Oldest Instruction Determines the Precise Fault</a></li>
+<li><a href="#fault-ordering-wrong-path-work-and-misprediction">Fault Ordering, Wrong-Path Work and Misprediction</a></li>
+<li><a href="#teaching-model-wrong-path-fault-suppression">Teaching Model: Wrong-Path Fault Suppression</a></li>
+<li><a href="#memory-side-effects-and-precise-store-semantics">Memory Side Effects and Precise Store Semantics</a></li>
+<li><a href="#pipeline-flushes-cancellation-and-replay">Pipeline Flushes, Cancellation and Replay</a></li>
+<li><a href="#interrupt-admission-and-commit-boundaries">Interrupt Admission and Commit Boundaries</a></li>
+<li><a href="#an-exception-trace-load-fault-with-a-younger-store">An Exception Trace: Load Fault With a Younger Store</a></li>
+<li><a href="#interrupt-and-exception-latency-metrics">Interrupt and Exception Latency Metrics</a></li>
+<li><a href="#teaching-model-interrupt-response-time-breakdown">Teaching Model: Interrupt Response Time Breakdown</a></li>
+<li><a href="#handler-software-interface-and-context-preservation">Handler Software Interface and Context Preservation</a></li>
+<li><a href="#privilege-isolation-trap-entry-and-security">Privilege Isolation, Trap Entry and Security</a></li>
+<li><a href="#virtualization-and-multi-level-trap-routing">Virtualization and Multi-Level Trap Routing</a></li>
+<li><a href="#debug-mode-breakpoints-and-exception-conflicts">Debug Mode, Breakpoints and Exception Conflicts</a></li>
+<li><a href="#designing-a-reference-exception-selection-model">Designing a Reference Exception-Selection Model</a></li>
+<li><a href="#teaching-model-reference-retired-instruction-trace">Teaching Model: Reference Retired-Instruction Trace</a></li>
+<li><a href="#verification-matrix-causes-ordering-and-privilege">Verification Matrix: Causes, Ordering and Privilege</a></li>
+<li><a href="#implementation-hazards-and-common-misconceptions">Implementation Hazards and Common Misconceptions</a></li>
+<li><a href="#applied-scenario-1-user-program-executes-an-illegal-instruction">Applied Scenario 1: User Program Executes an Illegal Instruction</a></li>
+<li><a href="#applied-scenario-2-demand-paged-load-and-precise-retry">Applied Scenario 2: Demand-Paged Load and Precise Retry</a></li>
+<li><a href="#applied-scenario-3-timer-interrupt-during-a-long-operation">Applied Scenario 3: Timer Interrupt During a Long Operation</a></li>
+<li><a href="#applied-scenario-4-two-pending-interrupt-sources">Applied Scenario 4: Two Pending Interrupt Sources</a></li>
+<li><a href="#applied-scenario-5-speculative-fault-before-branch-resolution">Applied Scenario 5: Speculative Fault Before Branch Resolution</a></li>
+<li><a href="#applied-scenario-6-fault-inside-a-privileged-handler">Applied Scenario 6: Fault Inside a Privileged Handler</a></li>
+<li><a href="#ten-gate-cpu-control-and-exception-engineering-framework">Ten-Gate CPU Control and Exception Engineering Framework</a></li>
+<li><a href="#guided-exercises-and-design-investigations">Guided Exercises and Design Investigations</a></li>
+<li><a href="#review-questions-and-answers">Review Questions and Answers</a></li>
+<li><a href="#glossary-of-control-and-exception-terminology">Glossary of Control and Exception Terminology</a></li>
+<li><a href="#sub-articles-complete-central-processing-unit-directory">Sub-Articles: Complete Central Processing Unit Directory</a></li>
+<li><a href="#related-encyclopedia-articles-and-taxonomy-boundaries">Related Encyclopedia Articles and Taxonomy Boundaries</a></li>
+<li><a href="#primary-documentation-and-further-reading">Primary Documentation and Further Reading</a></li>
+<li><a href="#editorial-publication-status-and-limitations">Editorial Publication Status and Limitations</a></li>
+</ol></section>
+<section id="definition-ownership-and-scope" aria-labelledby="heading-definition-ownership-and-scope">
+<h2 id="heading-definition-ownership-and-scope">Definition, Ownership, and Scope</h2>
+<p><strong>CPU control logic</strong> interprets decoded work, coordinates processor state changes, selects the next instruction address, and reacts to exceptional events. Control is not one physical box: an implementation may distribute it among a decoder, issue logic, pipeline-valid gates, finite-state sequencers, control/status registers, branch-resolution circuitry, interrupt arbitration, and completion or retirement hardware. These pieces together ensure that legal instructions make the promised architectural state transition and that exceptional events divert execution safely.</p>
+<p>An <strong>exception</strong> commonly arises synchronously from executing or attempting to execute an instruction: an illegal opcode, instruction-access fault, privilege violation, memory fault, breakpoint, or deliberate environment call. An <strong>interrupt</strong> is generally a request from a timer, device, interprocessor signal, or other source that need not correspond to the current instruction. RISC-V calls the transfer to a handler for either class a <em>trap</em>. Architectures vary in terminology and in which conditions are restartable, maskable, deferred, or fatal.</p>
+<p>This is <strong>Level 5 CPU specialist article 5 of 24</strong> under Hardware Systems. It owns control-signal sequencing, event detection and priority, trap entry and return, precise architectural boundaries, cancellation/replay and hardware/handler interfaces. Complete operating-system scheduling, page-replacement policy, assembler conventions, and microarchitectural speculation attacks have dedicated neighboring owners. The examples emphasize the programmer-visible behavior and selected hardware mechanisms; they are not an RTL implementation or an operating-system trap handler.</p>
+</section>
+<section id="learning-objectives-and-key-questions" aria-labelledby="heading-learning-objectives-and-key-questions">
+<h2 id="heading-learning-objectives-and-key-questions">Learning Objectives and Key Questions</h2>
+<p>A reader should be able to identify the source of a control decision, distinguish faults from interrupts, explain which state is saved on a trap, and trace how a processor cancels younger work while preserving earlier results. They should also be able to separate the ISA contract from implementation-specific priorities and software policy.</p><ul class="course-links"><li>What signals choose the ALU operation, register write, memory transfer, stall, flush, and next PC?</li><li>What is the difference between a synchronous exception, asynchronous interrupt, reset, NMI, and debug entry?</li><li>Why is a precise exception ordinarily reported at an instruction boundary rather than at an arbitrary intermediate cycle?</li><li>What happens if instruction fetch, data access, and an interrupt all appear near the same time?</li><li>Which RISC-V registers record a trap and which fields govern whether an interrupt is eligible?</li><li>How are interrupts re-enabled safely when trap state can be overwritten by a nested event?</li><li>How can tests establish that an interrupted instruction either committed once or can be retried correctly?</li></ul>
+</section>
+<section id="the-hardware-control-path-from-decode-to-trap-entry" aria-labelledby="heading-the-hardware-control-path-from-decode-to-trap-entry">
+<h2 id="heading-the-hardware-control-path-from-decode-to-trap-entry">The Hardware Control Path: From Decode to Trap Entry</h2>
+<p>A useful mental model has three interacting paths. The <strong>ordinary instruction-control path</strong> selects operands, function units, register destinations, and memory commands. The <strong>control-flow path</strong> decides sequential fetch versus branch, jump, or replay. The <strong>exception-control path</strong> takes error and interrupt reports, determines an eligible cause, prevents forbidden state updates, captures trap information, redirects fetch, and coordinates architectural state restoration.</p>
+<p>The same physical multiplexers may serve ordinary branches and trap-vector redirects, but the authorization conditions differ. A branch is part of instruction semantics; a trap can change privilege mode, update cause/status registers, suppress side effects, and transfer control to an architecturally designated handler. An exception reported by a load may be discovered many cycles after decode, while the controller must still attribute it to the load rather than to whatever younger instruction is currently at the front of the machine.</p>
+<p>The event logic often interacts with cache/TLB protection checks, error-correcting code reports, memory ordering, debug, and retirement. The key design objective is not just “jump to a handler”; it is to construct a well-defined machine state from which authorized software can diagnose, recover, retry, terminate, or report failure.</p>
+</section>
+<section id="conceptual-controller-and-exception-handling-diagram" aria-labelledby="heading-conceptual-controller-and-exception-handling-diagram">
+<h2 id="heading-conceptual-controller-and-exception-handling-diagram">Conceptual Controller and Exception-Handling Diagram</h2>
+<figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" role="img" aria-labelledby="ctl-title ctl-desc" style="max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px"><title id="ctl-title">Conceptual CPU control and trap-handling paths</title><desc id="ctl-desc">Instruction fetch and decode feed normal control, execution and retirement. Fault reports from instruction fetch, execution and memory join pending interrupts at an event arbiter. A selected event consults status and privilege state, then saves cause and trap PC, suppresses younger work, and redirects fetch to the handler. Trap return restores the authorized execution context.</desc><defs><marker id="arctl" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="currentColor"/></marker></defs><g fill="none" stroke="currentColor" stroke-width="2"><rect x="35" y="38" width="195" height="70" rx="8"/><rect x="280" y="38" width="195" height="70" rx="8"/><rect x="525" y="38" width="195" height="70" rx="8"/><rect x="770" y="38" width="290" height="70" rx="8"/><rect x="42" y="195" width="273" height="86" rx="8"/><rect x="359" y="195" width="309" height="86" rx="8"/><rect x="711" y="195" width="343" height="86" rx="8"/><rect x="355" y="362" width="405" height="89" rx="8"/><path d="M230 73 H280 M475 73 H525 M720 73 H770 M610 108 V195 M170 108 V195 M315 236 H359 M668 236 H711 M885 281 V331 H555 V362 M555 362 V326 H115 V108" marker-end="url(#arctl)"/><path d="M910 108 V159 H885 V195" marker-end="url(#arctl)"/></g><g fill="currentColor" font-family="system-ui, sans-serif" font-size="17" text-anchor="middle"><text x="132" y="69">Fetch + PC</text><text x="132" y="91">selection</text><text x="377" y="69">Decode +</text><text x="377" y="91">control signals</text><text x="623" y="69">Execution +</text><text x="623" y="91">fault reports</text><text x="912" y="68">Commit / retirement</text><text x="912" y="91">architectural boundary</text><text x="179" y="228">Pending interrupts</text><text x="179" y="252">and reset/debug inputs</text><text x="514" y="228">Cause / priority /</text><text x="514" y="252">eligibility arbitration</text><text x="880" y="226">Trap record, privileges,</text><text x="880" y="252">flush and PC redirect</text><text x="556" y="398">Handler execution → trap return</text><text x="556" y="424">preserve and restore context</text></g></svg><figcaption>Conceptual hardware integration only. A simple in-order core may use a central controller, while a superscalar machine may distribute these responsibilities across queues and retirement structures. A diagram arrow denotes a functional dependency rather than one physical wire.</figcaption></figure>
+</section>
+<section id="combinational-decode-versus-sequential-control" aria-labelledby="heading-combinational-decode-versus-sequential-control">
+<h2 id="heading-combinational-decode-versus-sequential-control">Combinational Decode Versus Sequential Control</h2>
+<p>An instruction decoder can generate control bits as combinational functions of opcode fields and privilege state: ALU selection, operand-source choice, memory-read/write intent, and register-write intent. This resembles a truth table mapping an instruction class to controls. However, multicycle operations and error recovery need state: the machine must remember whether a load is outstanding, whether a divider is busy, whether a flush is in progress, and whether it has entered a handler.</p>
+<p>A finite-state controller may move through RESET, FETCH, DECODE, EXECUTE, WAIT, WRITEBACK, and TRAP_ENTRY states. It can hold the same decoded instruction stable across several cycles, assert a request only when a bus is ready, and withhold completion until an acknowledgment arrives. A deeply pipelined core instead combines per-instruction valid bits, queues, hazard checks, exception metadata and retirement arbitration, preserving the same general architectural responsibilities with more decentralized hardware.</p>
+<p>The important distinction is that <strong>control state</strong> is not identical to <strong>architectural state</strong>. A pipeline occupancy bit or waiting-for-memory flag can change every cycle without changing a program register. Conversely, a committed register write changes architecturally visible state and must follow the ISA-defined ordering and privilege conditions.</p>
+</section>
+<section id="a-minimal-control-signal-inventory" aria-labelledby="heading-a-minimal-control-signal-inventory">
+<h2 id="heading-a-minimal-control-signal-inventory">A Minimal Control-Signal Inventory</h2>
+<table><thead><tr><th scope="col">Control family</th><th scope="col">Representative signals or decisions</th><th scope="col">Failure consequence</th></tr></thead><tbody><tr><td>Operand and function select</td><td>ALU operation, immediate select, destination register, FP mode</td><td>Wrong result or destination</td></tr><tr><td>Data movement</td><td>Load/store request, size, byte enables, memory ordering</td><td>Lost, duplicated, or unauthorized memory effect</td></tr><tr><td>Pipeline coordination</td><td>Valid, stall, kill, replay, writeback enable</td><td>Out-of-order visible changes or ghost instructions</td></tr><tr><td>PC selection</td><td>Sequential, branch/jump, prediction recovery, trap vector</td><td>Wrong instruction stream</td></tr><tr><td>Privilege and memory protection</td><td>Mode, CSR access permission, translation/protection context</td><td>Privilege escalation or invalid access</td></tr><tr><td>Trap state</td><td>Save exception PC/cause/value, mode transition, interrupt masks</td><td>Nonrecoverable or misattributed event</td></tr><tr><td>Power and debug</td><td>Sleep, wake, halt, debug-entry priority</td><td>Unresponsive or incorrectly resumed core</td></tr><tr><td>Reliability</td><td>ECC signal, error containment, poison/recovery action</td><td>Silent corruption or unsafe replay</td></tr></tbody></table>
+</section>
+<section id="teaching-model-a-decoder-producing-control-decisions" aria-labelledby="heading-teaching-model-a-decoder-producing-control-decisions">
+<h2 id="heading-teaching-model-a-decoder-producing-control-decisions">Teaching Model: A Decoder Producing Control Decisions</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Control:
+    alu: str
+    mem: str = &#x27;none&#x27;
+    reg_write: bool = False
+    next_pc: str = &#x27;sequential&#x27;
+
+CONTROL = {
+    &#x27;ADD&#x27;: Control(&#x27;add&#x27;, reg_write=True),
+    &#x27;AND&#x27;: Control(&#x27;and&#x27;, reg_write=True),
+    &#x27;LOAD&#x27;: Control(&#x27;add&#x27;, mem=&#x27;read&#x27;, reg_write=True),
+    &#x27;STORE&#x27;: Control(&#x27;add&#x27;, mem=&#x27;write&#x27;),
+    &#x27;BEQ&#x27;: Control(&#x27;eq&#x27;, next_pc=&#x27;conditional&#x27;),
+    &#x27;ECALL&#x27;: Control(&#x27;none&#x27;, next_pc=&#x27;exception&#x27;),
+}
+
+def decode(opcode):
+    if opcode not in CONTROL:
+        raise ValueError(&#x27;illegal instruction&#x27;)
+    return CONTROL[opcode]
+
+assert decode(&#x27;LOAD&#x27;).mem == &#x27;read&#x27;
+assert decode(&#x27;STORE&#x27;).reg_write is False
+assert decode(&#x27;ECALL&#x27;).next_pc == &#x27;exception&#x27;
+print(&#x27;Decoder control decisions passed&#x27;)</code></pre><p>This is a compact <em>instruction-class teaching table</em>, not an encoding decoder. Actual decode logic also checks bit fields, implemented extensions, current privilege, instruction legality and operand sizes. An illegal encoding is a synchronous exception in an architecture that defines that behavior; it must not silently become a no-op just because no matching row is found.</p>
+</section>
+<section id="finite-state-sequencing-and-handshake-control" aria-labelledby="heading-finite-state-sequencing-and-handshake-control">
+<h2 id="heading-finite-state-sequencing-and-handshake-control">Finite-State Sequencing and Handshake Control</h2>
+<p>A multicycle load provides a useful example of control state. After address generation, the load-store unit issues a request and waits for its response. The controller must not claim completion before data is valid, and it must not reissue the same request merely because the target stalls. If a bus fault arrives with the response, the instruction needs an exception record instead of a destination-register write. If an older branch invalidates the load as speculative work, the core may need to suppress the result or avoid making an irrevocable external effect.</p>
+<p>Handshake interfaces typically use valid/ready or request/grant conventions. Their exact timing depends on the bus protocol. A simple controller can assert a stable request until acceptance; a pipelined design may allow many transactions outstanding, match responses with transaction tags and route each error back to its originating instruction. Neither model makes a system correct unless write side effects, retries and cancellation obey the memory system contract.</p>
+<p>Control invariants include: a transaction is accepted at most once for a given request handshake; a register write occurs only for a valid, authorized instruction; a response is associated with the correct originating operation; and a faulted instruction does not commit a forbidden destination change.</p>
+</section>
+<section id="teaching-model-multicycle-load-controller" aria-labelledby="heading-teaching-model-multicycle-load-controller">
+<h2 id="heading-teaching-model-multicycle-load-controller">Teaching Model: Multicycle Load Controller</h2>
+<pre><code class="language-python">def load_controller(responses):
+    state, issued, result = &#x27;ISSUE&#x27;, 0, None
+    for ready, fault, data in responses:
+        if state == &#x27;ISSUE&#x27;:
+            if ready:
+                issued += 1
+                state = &#x27;WAIT&#x27;
+        elif state == &#x27;WAIT&#x27;:
+            if fault:
+                state = &#x27;TRAP&#x27;
+            elif data is not None:
+                result, state = data, &#x27;DONE&#x27;
+        if state in (&#x27;TRAP&#x27;, &#x27;DONE&#x27;):
+            break
+    return state, issued, result
+
+assert load_controller([(False,False,None),(True,False,None),
+                        (False,False,42)]) == (&#x27;DONE&#x27;,1,42)
+assert load_controller([(True,False,None),(False,True,None)]) == (&#x27;TRAP&#x27;,1,None)
+print(&#x27;Load sequencing and fault suppression passed&#x27;)</code></pre><p>The model deliberately splits request acceptance and response completion into separate observations. Some buses can return data in the same cycle as acceptance, and real designs must support their interface specification. The code illustrates suppression of a register result on a response fault; it does not model memory ordering, bus side effects, or speculative cancellation.</p>
+</section>
+<section id="exception-interrupt-trap-and-abort-terminology" aria-labelledby="heading-exception-interrupt-trap-and-abort-terminology">
+<h2 id="heading-exception-interrupt-trap-and-abort-terminology">Exception, Interrupt, Trap and Abort: Terminology</h2>
+<p>These words are frequently mixed across ISA manuals, operating systems and developer discussions. Here, a <strong>synchronous exception</strong> means an event causally associated with a particular instruction or attempted instruction; an <strong>asynchronous interrupt</strong> is an externally or independently signaled request that the processor elects to service at a permitted point. A <strong>trap</strong> is a transfer of control into an exception or interrupt handler under an ISA-defined rule. An <strong>abort</strong> often describes a condition that cannot be repaired by simply retrying, although formal classifications differ across processors.</p>
+<p>RISC-V explicitly uses <em>trap</em> as the umbrella term for an exception or an interrupt. x86 uses the terms <em>fault</em>, <em>trap</em>, and <em>abort</em> as classes of exceptions with different saved-instruction-pointer and restart semantics. Arm uses its own exception-level, vector and asynchronous exception categories. No single named processor’s terminology should silently be projected onto the others.</p>
+<p>Faults are not necessarily programmer errors. A page fault may be expected and recoverable under virtual memory; a deliberate environment-call instruction intentionally enters privileged code; a physical memory integrity error may require containment or shutdown. The control mechanism reports and transfers; software and platform policy decide the appropriate response.</p>
+</section>
+<section id="synchronous-exceptions-and-instruction-attribution" aria-labelledby="heading-synchronous-exceptions-and-instruction-attribution">
+<h2 id="heading-synchronous-exceptions-and-instruction-attribution">Synchronous Exceptions and Instruction Attribution</h2>
+<p>Synchronous events include decoding an unsupported instruction, violating an instruction-access permission, using a forbidden privileged instruction, triggering a breakpoint, and generating a data-access or address-translation fault. The event is tied to an instruction address and often a specific accessed address or additional fault information. This provenance enables software to distinguish whether it should emulate an instruction, map a missing page, signal a process, or treat the fault as unrecoverable.</p>
+<p>The detection point is not necessarily the architectural reporting point. Illegal-instruction detection often occurs during decode; a load fault may be detected during a cache/TLB walk or on a delayed memory response; some arithmetic operations detect their conditions during execute. A processor capable of out-of-order execution can have faults from several instructions “in flight,” yet it should present the oldest relevant fault at the required retirement boundary and cancel younger state updates.</p>
+<p>A synchronous exception need not be maskable via the ordinary interrupt enable bits. For example, illegal-instruction and access-fault exceptions in common RISC-V implementations remain active even when regular maskable interrupts are disabled. Whether an event can be delegated to a lower privileged handler is a separate question from whether it can be disabled.</p>
+</section>
+<section id="asynchronous-interrupts-and-admission-windows" aria-labelledby="heading-asynchronous-interrupts-and-admission-windows">
+<h2 id="heading-asynchronous-interrupts-and-admission-windows">Asynchronous Interrupts and Admission Windows</h2>
+<p>An interrupt may originate from a periodic timer, peripheral completion, interprocessor request, or platform interrupt controller. The source asserts a pending condition; interrupt eligibility depends on per-source enable, global enable, current privilege and delegation or routing settings. The CPU normally services an eligible interrupt at an instruction boundary defined by the architecture rather than during an uncontrolled half-written result.</p>
+<p>Pending does not necessarily mean immediately serviced. A higher-priority exception may be taken first; interrupts may be disabled in a critical section; a core may be unable to admit an interrupt until an architecturally uninterruptible operation or finite internal sequence reaches an acceptable boundary. Platform controllers and ISA extensions may alter the available priority policy. Source acknowledgment and deassertion are commonly the responsibility of the handler and interrupt-controller integration, not of the CPU datapath alone.</p>
+<p>“Interrupt latency” includes detection/synchronization, selection, completion of older work, redirect and pipeline refill, handler prologue, and potentially cache/TLB service. It is not simply one fixed number of clock cycles for all programs or cores.</p>
+</section>
+<section id="reset-nonmaskable-interrupts-and-debug-entry" aria-labelledby="heading-reset-nonmaskable-interrupts-and-debug-entry">
+<h2 id="heading-reset-nonmaskable-interrupts-and-debug-entry">Reset, Nonmaskable Interrupts and Debug Entry</h2>
+<p><strong>Reset</strong> establishes a documented initial hardware state and starting control flow; it is usually neither an ordinary software exception nor a recoverable interrupt. An <strong>NMI</strong> is intended for high-urgency situations and is not governed by the ordinary interrupt mask mechanism, but its nesting, exact vector, record and recoverability are implementation- or extension-specific. <strong>Debug entry</strong> may suspend ordinary execution and preserve separate debug state instead of entering the normal operating-system handler.</p>
+<p>Control units must define priority for simultaneous reset, debug request, NMI, synchronous fault and ordinary pending interrupt. A design might make reset unconditional, debug special, and maskable interrupts eligible only after older instructions commit; the actual order comes from the selected ISA and implementation specification, not from a universal list. A reliability-critical design also needs a defined response if an exception occurs while its trap entry is already underway.</p>
+<p>The open-source Ibex core is a useful concrete case: its controller coordinates boot, branch redirects, interrupts and debug, and its exception documentation distinguishes normal maskable interrupts from an external NMI and internal error indications. These details describe Ibex and its supported privilege modes, not every RISC-V processor.</p>
+</section>
+<section id="event-classification-and-handler-consequences" aria-labelledby="heading-event-classification-and-handler-consequences">
+<h2 id="heading-event-classification-and-handler-consequences">Event Classification and Handler Consequences</h2>
+<table><thead><tr><th scope="col">Event</th><th scope="col">Typical detection location</th><th scope="col">Usual action or decision</th></tr></thead><tbody><tr><td>Illegal opcode / privilege violation</td><td>Decode / privilege checks</td><td>Raise synchronous exception; no forbidden effect</td></tr><tr><td>Instruction fetch fault</td><td>Fetch and translation/protection path</td><td>Record faulting instruction PC; redirect when selected</td></tr><tr><td>Load or store fault</td><td>LSU, TLB or memory response</td><td>Associate event with originating instruction; suppress invalid completion</td></tr><tr><td>Breakpoint / environment call</td><td>Decode or execute</td><td>Deliberate synchronous transfer with proper saved state</td></tr><tr><td>Timer / device interrupt</td><td>Interrupt pending and enable arbitration</td><td>Service at permitted boundary; enter handler</td></tr><tr><td>NMI / fatal integrity event</td><td>Reliability / external platform logic</td><td>Special urgent flow; may require containment</td></tr><tr><td>Branch misprediction</td><td>Branch-resolution logic</td><td>Recover prediction; <em>not</em> an architectural exception</td></tr><tr><td>Reset</td><td>Reset/power controller</td><td>Initialize or restart core per documented reset contract</td></tr><tr><td>Debug halt</td><td>Debug-control interface</td><td>Enter debug mode; use debug-specific semantics</td></tr></tbody></table>
+</section>
+<section id="event-provenance-tags-and-exception-metadata" aria-labelledby="heading-event-provenance-tags-and-exception-metadata">
+<h2 id="heading-event-provenance-tags-and-exception-metadata">Event Provenance, Tags and Exception Metadata</h2>
+<p>Hardware needs to preserve enough information to identify the instruction that generated an exception. In a simple in-order core this can be its PC, instruction word and a fault-valid bit associated with the pipeline stage. In a machine with several outstanding memory operations, the load-store queue or reorder buffer may attach an exception tag, cause, fault address, and completion status to a particular instruction. That metadata must survive scheduling changes until a legal reporting boundary.</p>
+<p>A typical event record may contain <code>valid</code>, <code>cause</code>, <code>fault_pc</code>, <code>fault_address</code>, <code>instruction_id</code>, and optional auxiliary status. Some fields are architecture-defined control/status registers; others are transient microarchitectural tags. They should not be confused: the existence of a fault address in an internal queue does not imply the architecture exposes it in a particular CSR on every event.</p>
+<p>On squashing speculative work, a controller should discard or invalidate its exception metadata along with the instruction. Conversely, an older fault cannot be lost because a younger branch misprediction or new fetch event arrives. Event provenance is a correctness property, not just a debugging convenience.</p>
+</section>
+<section id="priority-is-conditional-and-architecture-specific" aria-labelledby="heading-priority-is-conditional-and-architecture-specific">
+<h2 id="heading-priority-is-conditional-and-architecture-specific">Priority Is Conditional and Architecture-Specific</h2>
+<p>At least three priorities must be distinguished. <strong>Within one instruction</strong>, more than one synchronous error condition may be possible and the ISA specifies which cause is reported. <strong>Across instructions</strong>, precise state usually requires honoring program-order commitment so an older fault takes precedence over a younger one. <strong>Among interrupt sources</strong>, the privileged architecture, interrupt controller and implementation jointly define eligibility and priority. A single global integer “priority of every possible event” is often an inaccurate model.</p>
+<p>For example, an instruction fetch can encounter address translation and access-check conditions along the way; the reported cause depends on architecture-specific priority rules and what checks are reached. An illegal instruction might also have would-be operand addresses, but speculative address computation must not create an externally visible younger fault. Interrupt-controller arbitration can change which pending interrupt is chosen without changing the older synchronous-exception rule.</p>
+<p>Practical verification should vary pending masks, privilege modes, outstanding instruction ages, and fault combinations. A simplistic model that always services the highest interrupt number first, or always makes a timer interrupt override a synchronous fault, is not a sound generic CPU model.</p>
+</section>
+<section id="instruction-fetch-exceptions-and-redirection" aria-labelledby="heading-instruction-fetch-exceptions-and-redirection">
+<h2 id="heading-instruction-fetch-exceptions-and-redirection">Instruction Fetch Exceptions and Redirection</h2>
+<p>Instruction-side translation, execute permission and physical access can each prevent fetching a legal instruction. The fetch pipeline may discover a fault for a predicted path that is later discarded; that speculative fault must not necessarily become an architectural exception if its instruction is never reached in the committed program path. A real exception is attributed to the architecturally relevant instruction and routed through the selected trap mechanism.</p>
+<p>Once a trap is selected, the controller redirects the fetch PC to the appropriate vector, invalidates wrong-path instruction buffers, and associates the new stream with a new privilege context. If a branch predictor or prefetch mechanism has outstanding work, the processor must distinguish data returned for the old path from data for the handler path. The exact flush granularity and whether speculative cache effects are also undone depend on microarchitecture; architectural flushing does not imply that every microarchitectural trace vanishes.</p>
+<p>Trap-vector alignment and permissions matter. If a handler address is invalid, or instruction fetch from the handler itself faults, recovery can escalate to special fault handling or a fatal condition. This is a separate design and software-integration problem from selecting the original exception cause.</p>
+</section>
+<section id="illegal-instructions-csr-privilege-and-software-calls" aria-labelledby="heading-illegal-instructions-csr-privilege-and-software-calls">
+<h2 id="heading-illegal-instructions-csr-privilege-and-software-calls">Illegal Instructions, CSR Privilege and Software Calls</h2>
+<p>An instruction can be illegal because its encoding is not defined, an optional extension is absent, a required privilege is not available, or some restricted control/status operation is prohibited. Control must reject it without allowing its nominal writes to leak into architectural state. Some systems intentionally handle absent instructions through emulation, but that policy belongs to the privileged software environment and depends on whether an appropriate handler exists.</p>
+<p>An environment call—<code>ECALL</code> in RISC-V, <code>SVC</code> in AArch64, or other architected system-call mechanisms—is a deliberately generated synchronous exception, not merely an ordinary function call. Hardware changes the exception context; the handler interprets service numbers and arguments according to an operating-system-defined ABI. The CPU does not inherently know that an integer means “open file” or “schedule a task.”</p>
+<p>Breakpoints may be explicit trap instructions or debug-triggered events. Their routing and saved state differ by architecture and debug configuration. The distinction matters in a debugger: stopping before an instruction, executing a breakpoint instruction, and triggering a hardware watchpoint are related but not interchangeable operations.</p>
+</section>
+<section id="memory-faults-alignment-and-protection" aria-labelledby="heading-memory-faults-alignment-and-protection">
+<h2 id="heading-memory-faults-alignment-and-protection">Memory Faults, Alignment and Protection</h2>
+<p>A load or store can encounter an unmapped virtual address, a forbidden access permission, an address alignment rule, a physical memory access error, or a bus/device fault. These mechanisms are distinct. A page fault often relates to page-table translation and permissions; an access fault may relate to physical access/protection or memory-system constraints. Some processors support misaligned memory operations directly, some handle them in multiple micro-operations, and others raise a synchronous condition.</p>
+<p>For stores the timing problem is especially important. Once a write reaches a device with irreversible effects, “undoing” it may be impossible. Many designs therefore hold stores until the required instruction-order safety point, or otherwise provide implementation-specific guarantees. A fault detected after partial externally visible effects can demand special handling and may not have the same simple restart semantics as a fault caught before memory modification.</p>
+<p>Page-table walks can themselves require memory accesses and generate translation-related failures. A TLB hit is not evidence that a program has blanket permission; the active translation context, privilege and access type are part of the checks. The handler may repair mapping and retry, terminate a process, or report a machine-level failure. CPU hardware supplies the evidence and enforcement mechanism; software chooses policy.</p>
+</section>
+<section id="arithmetic-exceptions-and-status-are-isa-dependent" aria-labelledby="heading-arithmetic-exceptions-and-status-are-isa-dependent">
+<h2 id="heading-arithmetic-exceptions-and-status-are-isa-dependent">Arithmetic Exceptions and Status Are ISA-Dependent</h2>
+<p>An integer divide-by-zero instruction is not automatically a processor trap. For example, the RISC-V integer M extension defines architectural quotient and remainder values for division by zero, whereas x86 integer divide instructions can raise a divide-error exception. Likewise, integer overflow may wrap by ISA definition or update condition flags without trapping. A high-level language runtime may raise an exception after detecting an overflow even if the underlying machine arithmetic did not trap.</p>
+<p>Floating-point exceptional conditions are also easy to mislabel. IEEE-style operations can generate accrued invalid-operation, divide-by-zero, overflow, underflow or inexact status, but the standard RISC-V floating-point extensions do not provide traps for these status conditions. Other ISAs may support masked or unmasked FP exceptions with different delivery rules. The ALU/FPU specialist article owns the arithmetic calculations and status formation; this article owns the control paths when an event is actually an architecturally reportable trap.</p>
+<p>An engineer should consult both the instruction semantics and privileged architecture before deciding whether a result is committed, whether a flag is set, and whether exception-control logic must enter a handler. The words “arithmetic exception” in application code do not prove that the processor took an architectural exception.</p>
+</section>
+<section id="recoverable-faults-versus-machine-check-conditions" aria-labelledby="heading-recoverable-faults-versus-machine-check-conditions">
+<h2 id="heading-recoverable-faults-versus-machine-check-conditions">Recoverable Faults Versus Machine-Check Conditions</h2>
+<p>Recoverability depends on provenance, the architectural contract and the system response. A demand-paged load can often be restarted after its mapping is installed. An ECC-detected correctable error may be corrected transparently, reported through telemetry, or delivered through a deferred notification. An uncorrectable cache or memory error, control corruption, or failure while entering a handler may require stopping a process, isolating a core, resetting a subsystem, or halting the machine.</p>
+<p>A machine-check or reliability event is not guaranteed to be a precise, synchronous instruction fault. Some errors are detected after data has moved across a system boundary; some are recorded after the affected operation; and some have insufficient provenance for safe restart. A system that claims universal precise recovery for every hardware error would be overstating what most architectures guarantee.</p>
+<p>Trap priority, error-containment domain, recovery register formats, logging interfaces, firmware involvement, and machine-check architecture vary widely. The hardware should avoid silently continuing with corrupted state where integrity cannot be established. Such mechanisms are developed more fully in the CPU Reliability, Error Detection, and Recovery specialist article.</p>
+</section>
+<section id="a-compact-risc-v-trap-record" aria-labelledby="heading-a-compact-risc-v-trap-record">
+<h2 id="heading-a-compact-risc-v-trap-record">A Compact RISC-V Trap Record</h2>
+<p>RISC-V’s machine-level trap architecture is a useful concrete example. When a trap is taken into M-mode, the hardware records the interrupted or faulting instruction address in <code>mepc</code>, a cause in <code>mcause</code>, and, for selected events, supplementary information in <code>mtval</code>. It also records and modifies privilege/interrupt-enable state in <code>mstatus</code> and directs execution using <code>mtvec</code>. These are <em>machine control and status registers</em> (CSRs), not ordinary integer registers.</p>
+<p>Not every cause supplies the same <code>mtval</code> data: it may hold a faulting address, relevant instruction bits, or zero, according to cause and implementation rules. The high interrupt-indicator bit in <code>mcause</code> differentiates interrupt causes from synchronous exception causes. Standard cause numbers represent classes such as illegal instruction, instruction access fault, load access fault, or machine external interrupt; extensions may add causes.</p>
+<p>The processor does not automatically save every general-purpose register to a software stack on normal trap entry. The trap handler prologue must preserve whatever general-purpose, floating-point, vector or other software-visible state is needed by its calling convention and execution path. Trap-state CSRs and software-saved register context are therefore different layers of the recovery protocol.</p>
+</section>
+<section id="risc-v-machine-level-control-status-register-map" aria-labelledby="heading-risc-v-machine-level-control-status-register-map">
+<h2 id="heading-risc-v-machine-level-control-status-register-map">RISC-V Machine-Level Control/Status Register Map</h2>
+<table><thead><tr><th scope="col">Register or field</th><th scope="col">Role on trap entry, selection or return</th><th scope="col">Important limitation</th></tr></thead><tbody><tr><td><code>mepc</code></td><td>PC to resume or faulting instruction PC</td><td>Handler must adjust only when required</td></tr><tr><td><code>mcause</code></td><td>Interrupt bit plus event cause code</td><td>Cause may require additional investigation</td></tr><tr><td><code>mtval</code></td><td>Optional event-specific address or instruction information</td><td>Content depends on event and implementation</td></tr><tr><td><code>mtvec</code></td><td>Trap handler base and direct/vectored mode</td><td>Vectored offset applies to interrupts, not ordinary synchronous exceptions</td></tr><tr><td><code>mstatus.MIE</code></td><td>M-level global interrupt-enable state</td><td>Eligibility also depends on current privilege and routing</td></tr><tr><td><code>mstatus.MPIE</code></td><td>Previous MIE saved across M-mode trap entry</td><td>Not a general-purpose stack of nested contexts</td></tr><tr><td><code>mstatus.MPP</code></td><td>Previous privilege level for MRET</td><td>Encodes only supported levels</td></tr><tr><td><code>mie</code> and <code>mip</code></td><td>Per-source enabled and pending signals</td><td>Interrupt controller and delegations also matter</td></tr><tr><td><code>medeleg</code> and <code>mideleg</code></td><td>Delegate supported exception/interrupt causes to lower privilege</td><td>Only present where supported; not a universal feature</td></tr><tr><td><code>mret</code></td><td>Architectural return from M-level trap</td><td>Uses saved PC and selected status fields</td></tr></tbody></table>
+</section>
+<section id="trap-entry-ordered-hardware-actions" aria-labelledby="heading-trap-entry-ordered-hardware-actions">
+<h2 id="heading-trap-entry-ordered-hardware-actions">Trap Entry: Ordered Hardware Actions</h2>
+<p>Consider a machine-level synchronous exception for an instruction whose PC is <code>0x120</code>. A simplified architectural transition is: select the valid exception in program order; write <code>mepc = 0x120</code>; put its cause into <code>mcause</code>; populate <code>mtval</code> as defined for that event; copy <code>mstatus.MIE</code> to <code>mstatus.MPIE</code>; clear <code>MIE</code>; save prior privilege in <code>MPP</code>; enter M-mode; and redirect the PC to the trap handler selected by <code>mtvec</code>. Architectural instructions younger than the trapping instruction must not commit forbidden effects.</p>
+<p>The hardware does not promise that these actions happen as separate visible clock cycles in that textual order. They describe the atomic architectural state that software observes on entry. Detailed control machines may perform redirect and CSR updates through different internal pipelines. The source of <code>mepc</code> differs for a synchronous exception versus an interrupt: an interrupt typically records the address at which execution should resume; it need not name an instruction that actually caused the interrupt.</p>
+<p>If software intends to skip a deliberate <code>ECALL</code> instruction after handling it, the handler must set an appropriate continuation PC before returning. It must know whether the trapped instruction was 2 or 4 bytes where compressed encodings are supported; unconditionally adding four to every fault PC is incorrect. Restarting a faulting load often means retaining the original fault PC instead.</p>
+</section>
+<section id="teaching-model-trap-entry-and-mret-state-restoration" aria-labelledby="heading-teaching-model-trap-entry-and-mret-state-restoration">
+<h2 id="heading-teaching-model-trap-entry-and-mret-state-restoration">Teaching Model: Trap Entry and MRET State Restoration</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass
+class PrivState:
+    pc: int = 0x120
+    privilege: str = &#x27;U&#x27;
+    mie: bool = True
+    mpie: bool = False
+    mpp: str = &#x27;U&#x27;
+    mepc: int = 0
+    mcause: int = 0
+    mtval: int = 0
+
+def trap_to_machine(state, cause, tval=0, vector=0x800):
+    state.mepc = state.pc
+    state.mcause = cause
+    state.mtval = tval
+    state.mpie = state.mie
+    state.mie = False
+    state.mpp = state.privilege
+    state.privilege = &#x27;M&#x27;
+    state.pc = vector
+
+def mret(state):
+    state.pc = state.mepc
+    state.privilege = state.mpp
+    state.mie = state.mpie
+    state.mpie = True
+    state.mpp = &#x27;U&#x27;   # Teaching platform implements U and M
+
+s = PrivState()
+trap_to_machine(s, cause=2, tval=0xFFFFFFFF)
+assert (s.mepc, s.privilege, s.mie, s.mpp) == (0x120,&#x27;M&#x27;,False,&#x27;U&#x27;)
+assert (s.mcause, s.mtval, s.pc) == (2,0xFFFFFFFF,0x800)
+mret(s)
+assert (s.pc, s.privilege, s.mie, s.mpie) == (0x120,&#x27;U&#x27;,True,True)
+print(&#x27;M-level trap-entry and MRET teaching model passed&#x27;)</code></pre><p>This demonstration represents selected standard state transitions and intentionally fixes a two-level U/M teaching machine. It omits privilege-sensitive routing, delegation, fields such as MPRV, and optional extensions. In a real MRET, state restoration follows the supported RISC-V privileged specification, including additional status effects; writing these fields as ordinary software assignments is merely a teaching device.</p>
+</section>
+<section id="trap-vectors-direct-and-vectored-modes" aria-labelledby="heading-trap-vectors-direct-and-vectored-modes">
+<h2 id="heading-trap-vectors-direct-and-vectored-modes">Trap Vectors: Direct and Vectored Modes</h2>
+<p>In RISC-V <code>mtvec</code> has a BASE and MODE component. Direct mode sends both synchronous exceptions and interrupts to the BASE address, where software examines <code>mcause</code>. In standard vectored mode, asynchronous interrupts dispatch to <code>BASE + 4 × interrupt_cause_code</code>, while synchronous exceptions still enter at the BASE. Supported modes and alignment restrictions are architecture-defined. Firmware or an OS must install valid handler code and configure the vector before enabling events that require it.</p>
+<p>The offset convention does not imply that every handler needs just four bytes. The target slot may contain a short branch to a larger routine. Nor does an interrupt vector replace source acknowledgment: handler code may still have to identify and clear a peripheral or platform interrupt-controller condition. On some implementations there are implementation-specific NMI or fast-interrupt vectors outside the baseline general rule.</p>
+<p>A design review should check vector alignment, writable CSR limitations, executable permissions, escalation on handler fetch faults, and the behavior when an unsupported MODE value is requested. Incorrect vector assumptions can create a chain of traps with no valid recovery path.</p>
+</section>
+<section id="teaching-model-trap-vector-selection" aria-labelledby="heading-teaching-model-trap-vector-selection">
+<h2 id="heading-teaching-model-trap-vector-selection">Teaching Model: Trap Vector Selection</h2>
+<pre><code class="language-python">def mtvec_target(base, mode, interrupt, cause_code):
+    assert base % 4 == 0 and cause_code &gt;= 0
+    if mode == &#x27;direct&#x27;:
+        return base
+    if mode == &#x27;vectored&#x27;:
+        return base + 4 * cause_code if interrupt else base
+    raise ValueError(&#x27;unsupported mtvec mode&#x27;)
+
+assert mtvec_target(0x800, &#x27;direct&#x27;, True, 7) == 0x800
+assert mtvec_target(0x800, &#x27;vectored&#x27;, True, 7) == 0x81c
+assert mtvec_target(0x800, &#x27;vectored&#x27;, False, 2) == 0x800
+print(&#x27;Direct versus vectored trap address selection passed&#x27;)</code></pre><p>The model omits platform-specific BASE alignment and special interrupt-vector behavior. It deliberately proves that a synchronous illegal-instruction exception does <em>not</em> use the interrupt-specific slot simply because the processor is configured for vectored trap entry.</p>
+</section>
+<section id="pending-interrupts-enables-and-privilege-routing" aria-labelledby="heading-pending-interrupts-enables-and-privilege-routing">
+<h2 id="heading-pending-interrupts-enables-and-privilege-routing">Pending Interrupts, Enables and Privilege Routing</h2>
+<p>For ordinary RISC-V machine-level interrupts, eligibility depends on pending and per-source enable bits, privilege routing, and global-enable rules. In M-mode, <code>mstatus.MIE</code> is relevant for M-level interrupt delivery; if execution is at lower privilege, the machine-level gating rules differ. <code>mip</code> represents pending indications and <code>mie</code> enable controls, but some bits may be read-only, supplied by external controllers, or affected by extensions and delegation.</p>
+<p>Supervisor-level routing introduces <code>mideleg</code>, <code>sie</code>, <code>sip</code>, and S-mode status where supported. A delegated interrupt is not merely the same M-mode interrupt at a lower numerical priority. It has a different target privilege, mask context, and possibly a different handler vector. Hardware also must avoid delivering a supervisor-directed interrupt when the target privilege is not eligible under its rules.</p>
+<p>Platform controllers such as PLIC or the Advanced Interrupt Architecture can identify and prioritize external sources; they should not be conflated with the per-hart privileged CSRs. A core-level model must say whether it assumes the platform has already selected an interrupt identity, rather than pretending that all possible devices directly occupy <code>mie</code> bits.</p>
+</section>
+<section id="teaching-model-eligible-pending-interrupt-mask" aria-labelledby="heading-teaching-model-eligible-pending-interrupt-mask">
+<h2 id="heading-teaching-model-eligible-pending-interrupt-mask">Teaching Model: Eligible Pending Interrupt Mask</h2>
+<pre><code class="language-python">def eligible_pending(pending, enabled, global_ok, delegated=0):
+    &quot;&quot;&quot;Simplified M-level eligibility, not an ISA priority encoder.&quot;&quot;&quot;
+    return (pending &amp; enabled &amp; ~delegated) if global_ok else 0
+
+PENDING = (1 &lt;&lt; 3) | (1 &lt;&lt; 7) | (1 &lt;&lt; 11)
+ENABLED = (1 &lt;&lt; 7) | (1 &lt;&lt; 11)
+assert eligible_pending(PENDING, ENABLED, True) == ((1 &lt;&lt; 7) | (1 &lt;&lt; 11))
+assert eligible_pending(PENDING, ENABLED, False) == 0
+assert eligible_pending(PENDING, ENABLED, True, delegated=1 &lt;&lt; 7) == (1 &lt;&lt; 11)
+print(&#x27;Pending/enable/routing filter passed&#x27;)</code></pre><p>The toy <code>global_ok</code> argument abstracts RISC-V’s privilege-dependent global eligibility rather than asserting that MIE always gates every interrupt in every mode. Source prioritization must be applied separately using the relevant specification and controller configuration; a larger cause-code number is not necessarily higher priority.</p>
+</section>
+<section id="interrupt-arbitration-and-multiple-pending-sources" aria-labelledby="heading-interrupt-arbitration-and-multiple-pending-sources">
+<h2 id="heading-interrupt-arbitration-and-multiple-pending-sources">Interrupt Arbitration and Multiple Pending Sources</h2>
+<p>If several interrupts are enabled and pending simultaneously, the system has to select one to deliver or expose to software. For standard RISC-V machine interrupts, the privileged architecture defines baseline priority relationships; extensions and platform facilities can supply additional source-specific priority controls. A core should not infer order merely from bit positions unless its implementation specification explicitly says so.</p>
+<p>An interrupt request can remain asserted after the CPU vectors to its handler. If the handler fails to clear the peripheral condition or acknowledge the interrupt controller, the same source can retrigger immediately on return. Conversely, edge-triggered information can be lost if crossing and latching are designed incorrectly. Correct integration requires specified level/edge behavior, synchronization to the CPU clock domain, pending persistence, acknowledgment and completion sequencing.</p>
+<p>Fairness is not automatic. A constant stream of high-priority events can starve low-priority work; systems may use coalescing, rate limiting or software dispatch. Those are system-level policies layered over the CPU’s eligibility and exception-entry mechanism.</p>
+</section>
+<section id="interrupt-entry-and-resume-a-timeline" aria-labelledby="heading-interrupt-entry-and-resume-a-timeline">
+<h2 id="heading-interrupt-entry-and-resume-a-timeline">Interrupt Entry and Resume: A Timeline</h2>
+<table><thead><tr><th scope="col">Step</th><th scope="col">Hardware state</th><th scope="col">Software or platform responsibility</th></tr></thead><tbody><tr><td>1. Event pending</td><td>Timer/device/controller signal visible or latched</td><td>Source remains well defined</td></tr><tr><td>2. Eligibility check</td><td>Check mode, masks, routing, priority</td><td>Configure enables and controller</td></tr><tr><td>3. Boundary selection</td><td>Choose permitted architectural interruption point</td><td>Avoid assuming a fixed latency</td></tr><tr><td>4. Trap record</td><td>Save continuation PC, cause and privilege status</td><td>Handler must not overwrite unsaved state</td></tr><tr><td>5. Redirect</td><td>Flush/refill fetch into handler vector</td><td>Provide executable valid handler</td></tr><tr><td>6. Handler prologue</td><td>Hardware is in privileged handler context</td><td>Save live registers and required state</td></tr><tr><td>7. Service event</td><td>Architectural handler instructions execute</td><td>Acknowledge/clear device or schedule work</td></tr><tr><td>8. Return</td><td>Restore status/privilege/PC through xRET rules</td><td>Restore software context before returning</td></tr><tr><td>9. Resume</td><td>Normal execution restarts or is rescheduled</td><td>Confirm progress, avoid duplicate effects</td></tr></tbody></table>
+</section>
+<section id="exception-delegation-and-supervisor-traps" aria-labelledby="heading-exception-delegation-and-supervisor-traps">
+<h2 id="heading-exception-delegation-and-supervisor-traps">Exception Delegation and Supervisor Traps</h2>
+<p>Many general-purpose operating systems need exceptions from applications to enter supervisor code without requiring every event to be handled first by the machine firmware. Where implemented, RISC-V exception and interrupt delegation registers allow selected causes to be handled at S-mode under the defined rules. A delegated trap uses the supervisor trap CSRs and handler vector instead of overwriting machine trap records, subject to the architecture’s routing constraints.</p>
+<p>Not all exceptions can be delegated in every configuration, and machine-level events cannot be redirected down into less privileged code merely because a bit was set. The available delegation masks are governed by implemented privilege levels and standardized capabilities. An instruction fault in S-mode may have different routing from the same kind of fault in U-mode, and virtualization adds virtual-supervisor/guest-specific trap state where the H extension is supported.</p>
+<p>Hardware controls the privilege transition and records why it occurred; the operating system owns page-table updates, system-call dispatch, signal delivery and other policies. Failing to separate these layers leads to diagrams that falsely claim that a CPU controller “allocates memory” or “opens a file” during trap entry.</p>
+</section>
+<section id="privilege-checks-and-unauthorized-control-transfers" aria-labelledby="heading-privilege-checks-and-unauthorized-control-transfers">
+<h2 id="heading-privilege-checks-and-unauthorized-control-transfers">Privilege Checks and Unauthorized Control Transfers</h2>
+<p>Privilege checks protect control/status registers, instruction classes, address-translation configuration and memory-mapped regions. A processor should verify the access rights for the current execution mode and report a defined exception for a prohibited operation. An ordinary program instruction cannot simply jump into kernel privilege by setting a branch target; privilege elevation is mediated by architected exception/trap mechanisms and privileged return rules.</p>
+<p>The handler entry must establish the proper target mode before fetching privileged instructions. Similarly, a trap return needs to restore a valid prior mode rather than taking arbitrary application bits as trusted privilege commands. System software may deliberately configure delegations, permissions and interrupt masks, but these configurations themselves require authorized access. A control block that suppresses memory protection checks only on the normal path but not on a replay or debug path would create a security boundary failure.</p>
+<p>Defense-in-depth testing includes illegal CSR accesses, attempted privileged instructions in U-mode, unexpected trap returns, virtual-memory permission failures, and simultaneous debug/exception events. The exact expected cause comes from the ISA and implementation configuration; tests should not invent generic trap numbers.</p>
+</section>
+<section id="returning-from-a-trap-and-instruction-restart" aria-labelledby="heading-returning-from-a-trap-and-instruction-restart">
+<h2 id="heading-returning-from-a-trap-and-instruction-restart">Returning From a Trap and Instruction Restart</h2>
+<p>A trap-return instruction restores machine state according to the privileged ISA and transfers execution to the saved continuation PC. In RISC-V, <code>MRET</code> uses machine trap state, restores relevant interrupt-enable and privilege fields, and jumps to <code>mepc</code>; <code>SRET</code> is the corresponding supervisor mechanism when supported. The handler is responsible for preserving software registers and updating the saved PC when continuing after a deliberately trapped instruction or a nonretriable event.</p>
+<p>Restart is not always the right policy. A page fault repaired by installing a mapping often retries the same load, so retaining its fault PC makes sense. A successful environment call generally must advance beyond the ECALL instruction, but the handler must respect instruction length and ABI policy. A fatal hardware fault may never return. For a breakpoint, behavior depends on debug and exception semantics, and the debugger may adjust the continuation address explicitly.</p>
+<p>If a retried instruction issues an external side effect twice, correctness can be lost. Architects try to make precise restart contracts enforceable; software must still treat memory-mapped device and partially complete operations carefully. “Resume from the PC” is not equivalent to a universal promise that every operation is safe to replay.</p>
+</section>
+<section id="nested-traps-and-safe-handler-prologues" aria-labelledby="heading-nested-traps-and-safe-handler-prologues">
+<h2 id="heading-nested-traps-and-safe-handler-prologues">Nested Traps and Safe Handler Prologues</h2>
+<p>Ordinary RISC-V M-level trap entry saves one level of interrupt-enable history in <code>MPIE</code> and the prior mode in <code>MPP</code>. It does not automatically push a complete per-nesting trap frame on a stack. A new event taken before the handler preserves <code>mepc</code>, <code>mcause</code> and required status may overwrite records needed to return from the earlier trap. Consequently, a safe handler begins with a carefully designed critical section in which its own trap context is preserved before permitting optional nested interrupts.</p>
+<p>After saving state, software may selectively re-enable interrupts, change the per-source enables, and service higher-priority work. Such nesting increases latency variability, stack consumption, reentrancy requirements, and risk of double faults. A new synchronous exception inside the handler can be particularly dangerous if it faults on the same invalid memory or privilege configuration needed for recovery.</p>
+<p>Ibex documentation explicitly warns about preserving machine trap CSRs before enabling nested interrupts and describes particular NMI/double-fault behavior. These are concrete implementation facts, not a basis for claiming that every RISC-V core has the same NMI mechanism or an unlimited nesting capability.</p>
+</section>
+<section id="teaching-model-detecting-unsaved-nested-trap-state" aria-labelledby="heading-teaching-model-detecting-unsaved-nested-trap-state">
+<h2 id="heading-teaching-model-detecting-unsaved-nested-trap-state">Teaching Model: Detecting Unsaved Nested Trap State</h2>
+<pre><code class="language-python">class TrapFrameManager:
+    def __init__(self):
+        self.critical = False
+        self.frames = []
+    def enter(self, pc, cause):
+        if self.critical:
+            raise RuntimeError(&#x27;trap before first frame preserved&#x27;)
+        self.critical = True
+        self.frames.append({&#x27;pc&#x27;:pc, &#x27;cause&#x27;:cause})
+    def preserve_and_unmask(self):
+        assert self.critical and self.frames
+        self.critical = False
+    def return_from_handler(self):
+        assert self.frames
+        self.critical = True
+        frame = self.frames.pop()
+        self.critical = False
+        return frame
+
+manager = TrapFrameManager()
+manager.enter(0x100, 7)
+try:
+    manager.enter(0x200, 2)
+    assert False, &#x27;must reject unpreserved nested trap&#x27;
+except RuntimeError:
+    pass
+manager.preserve_and_unmask()
+manager.enter(0x200, 2)
+manager.preserve_and_unmask()
+assert manager.return_from_handler()[&#x27;cause&#x27;] == 2
+assert manager.return_from_handler()[&#x27;cause&#x27;] == 7
+print(&#x27;Nested-trap preservation model passed&#x27;)</code></pre><p>The model represents a safety precondition; it is not real interrupt-enable control or a proper CSR-level implementation. Actual nested exception behavior is architecture- and platform-dependent, and a synchronous fault during critical state-saving may not be preventable merely by disabling interrupts. A real handler must allocate a safe stack and save its register state under an audited ABI.</p>
+</section>
+<section id="precise-exceptions-the-architectural-contract" aria-labelledby="heading-precise-exceptions-the-architectural-contract">
+<h2 id="heading-precise-exceptions-the-architectural-contract">Precise Exceptions: The Architectural Contract</h2>
+<p>A <strong>precise exception</strong> presents architectural state as though instructions before a well-defined boundary have completed and later instructions have not modified the visible state. For a fault on instruction <em>I</em>, the processor ordinarily makes earlier instructions visible according to the ISA and memory consistency contract, reports the faulting instruction and cause, and prevents younger instructions from committing architectural effects. A synchronous exception therefore appears at a stable program-order point even if fault detection occurred earlier or later inside the machine.</p>
+<p>Precision is a <em>visibility</em> property, not necessarily proof that no younger execution happened physically. Speculative branches, cache probes, and integer arithmetic may have run; their results can be marked invalid and their architectural writes suppressed. Internal resource use and some microarchitectural side effects can remain and must not be described as fully rolled back. This distinction also explains why speculative side-channel behavior is a separate security topic.</p>
+<p>Not every system error is precise. Some external faults, deferred memory errors or asynchronous machine checks cannot be attributed to one fully restartable instruction. A design must document where its guarantees end; falsely promising precise restart for an imprecise event can cause silent state corruption.</p>
+</section>
+<section id="in-order-pipeline-precise-fault-handling" aria-labelledby="heading-in-order-pipeline-precise-fault-handling">
+<h2 id="heading-in-order-pipeline-precise-fault-handling">In-Order Pipeline Precise Fault Handling</h2>
+<p>In a small in-order core, the controller can track exception metadata in successive pipeline registers and ensure that an older instruction has priority over younger work. When the selected fault becomes eligible for architectural reporting, the core blocks its writeback and memory side effects, invalidates later pipeline stages, redirects fetch and writes trap state. If earlier memory operations have not finished, the controller must coordinate their completion or provide an architecture-compliant ordering mechanism.</p>
+<p>The pipeline stage detecting an exception may differ by source. Illegal encoding often appears in decode, arithmetic legality in execute, and bus access failure after a memory operation has waited several cycles. A design that simply vectors on the earliest <em>signal in time</em> can report a younger load fault before an older instruction’s exception. Correctness requires instruction age or a suitable pipeline-order invariant, not just combinational OR-ing of all exception wires.</p>
+<p>Pipelined teaching diagrams should distinguish <code>kill</code> from <code>stall</code>. A stall retains the instruction for later progress, while a kill invalidates it and prevents future architectural side effects. A trap generally requires a controlled kill of younger instructions; a recoverable resource conflict may require only a stall.</p>
+</section>
+<section id="out-of-order-execution-reorder-buffers-and-retirement" aria-labelledby="heading-out-of-order-execution-reorder-buffers-and-retirement">
+<h2 id="heading-out-of-order-execution-reorder-buffers-and-retirement">Out-of-Order Execution, Reorder Buffers and Retirement</h2>
+<p>An out-of-order processor may execute an instruction as soon as operands and resources are available, regardless of its program-order position. It therefore needs a mechanism such as a reorder buffer (ROB), retirement queue, or equivalent commit structure to reestablish architectural order. An instruction can finish calculating a result and still be unable to retire because an older instruction is not ready. A fault may be recorded with the completed instruction and delivered only when it becomes the oldest retirement-eligible operation.</p>
+<p>This mechanism lets an earlier division, translation walk or cache miss defer architectural progress while younger independent operations execute transiently. If an older instruction faults, the machine squashes younger work, restores the proper speculative/renamed state and directs the exception to a handler. If a younger instruction faults but an older one later redirects the branch path, that younger fault may simply be discarded as wrong-path work.</p>
+<p>The ROB itself is a microarchitectural implementation, not a programmer-visible ISA requirement. Different processor designs can meet a precise exception contract through other commit or checkpoint techniques. The neighboring Instruction Completion and Retirement and Register Renaming specialist articles provide the deeper mechanics.</p>
+</section>
+<section id="teaching-model-oldest-instruction-determines-the-precise-fault" aria-labelledby="heading-teaching-model-oldest-instruction-determines-the-precise-fault">
+<h2 id="heading-teaching-model-oldest-instruction-determines-the-precise-fault">Teaching Model: Oldest Instruction Determines the Precise Fault</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Op:
+    pc: int
+    finished: bool
+    fault: str | None = None
+    value: int | None = None
+
+program = [
+    Op(0x100, True, value=4),
+    Op(0x104, True, fault=&#x27;load_access_fault&#x27;),
+    Op(0x108, True, value=9),
+]
+
+def retire_in_order(operations):
+    committed = []
+    for op in operations:
+        if not op.finished:
+            break
+        if op.fault is not None:
+            return committed, (op.pc, op.fault)
+        committed.append((op.pc, op.value))
+    return committed, None
+
+committed, event = retire_in_order(program)
+assert committed == [(0x100, 4)]
+assert event == (0x104, &#x27;load_access_fault&#x27;)
+assert (0x108, 9) not in committed
+print(&#x27;Program-order retirement and precise fault passed&#x27;)</code></pre><p>This is a program-order retirement abstraction. It does not represent a full ROB, load-store ordering, architectural register-renaming maps, memory coherence, or how a real core drains pending operations. Its key property is that the younger instruction’s completed numerical result never becomes committed after an older precise fault.</p>
+</section>
+<section id="fault-ordering-wrong-path-work-and-misprediction" aria-labelledby="heading-fault-ordering-wrong-path-work-and-misprediction">
+<h2 id="heading-fault-ordering-wrong-path-work-and-misprediction">Fault Ordering, Wrong-Path Work and Misprediction</h2>
+<p>Branch prediction allows a processor to fetch and execute instructions before it knows whether that control-flow path is correct. Suppose a predicted taken branch leads to a load from an invalid page, but the branch later resolves not taken. The load’s fault report should be tied to speculative work and suppressed when the mispredicted path is canceled. Otherwise an application could receive exceptions for instructions it never architecturally executed.</p>
+<p>If the branch resolves correctly and the load reaches the commit boundary, the page fault may need to be delivered. This difference means that an exception candidate must carry its instruction identity and validity status; it cannot be represented solely by a global “page_fault_now” line. When several outstanding memory requests exist, response tags and cancellation rules become central.</p>
+<p>Prediction recovery is a control redirect, but it is not itself an architected trap. It does not normally write exception cause registers or enter privileged software. The overlap in redirect wiring should not cause the documentation to conflate branch repair, fetch replay, interrupt admission and fault entry.</p>
+</section>
+<section id="teaching-model-wrong-path-fault-suppression" aria-labelledby="heading-teaching-model-wrong-path-fault-suppression">
+<h2 id="heading-teaching-model-wrong-path-fault-suppression">Teaching Model: Wrong-Path Fault Suppression</h2>
+<pre><code class="language-python">operations = [
+    {&#x27;id&#x27;:1, &#x27;older&#x27;:True, &#x27;path&#x27;:&#x27;real&#x27;, &#x27;fault&#x27;:None},
+    {&#x27;id&#x27;:2, &#x27;older&#x27;:False, &#x27;path&#x27;:&#x27;predicted&#x27;, &#x27;fault&#x27;:&#x27;page_fault&#x27;},
+    {&#x27;id&#x27;:3, &#x27;older&#x27;:False, &#x27;path&#x27;:&#x27;real&#x27;, &#x27;fault&#x27;:None},
+]
+
+def candidate_faults(ops, selected_path):
+    return [(op[&#x27;id&#x27;], op[&#x27;fault&#x27;]) for op in ops
+            if (op[&#x27;older&#x27;] or op[&#x27;path&#x27;] == selected_path)
+            and op[&#x27;fault&#x27;] is not None]
+
+assert candidate_faults(operations, &#x27;real&#x27;) == []
+assert candidate_faults(operations, &#x27;predicted&#x27;) == [(2, &#x27;page_fault&#x27;)]
+print(&#x27;Wrong-path speculative exception was suppressed&#x27;)</code></pre><p>This simple validity filter represents a branch being resolved before a wrong-path fault can retire. A hardware implementation needs age tags, branch checkpoints and ordering checks; the architectural principle is that speculative fault detection is not identical to trap delivery.</p>
+</section>
+<section id="memory-side-effects-and-precise-store-semantics" aria-labelledby="heading-memory-side-effects-and-precise-store-semantics">
+<h2 id="heading-memory-side-effects-and-precise-store-semantics">Memory Side Effects and Precise Store Semantics</h2>
+<p>Stores demand special caution because writing to physical memory or a device can have externally visible consequences. A processor may calculate an address and data early while deferring store commitment through a store buffer until it is safe. If the store later faults, implementation and ISA guarantees determine what may already have happened. A well-designed retirement protocol avoids allowing a younger store to perform irreversible actions ahead of an older fault.</p>
+<p>Under a memory consistency model, visibility to other cores is not identical to the local register-retirement event. Store buffers, fences, cache coherence and memory-mapped devices impose additional timing and ordering constraints. An engineer cannot prove exception correctness merely by showing that the integer register file is unchanged; memory effects and device operations also matter.</p>
+<p>For a device write, retrying an instruction after a bus timeout can be hazardous if the device already acted on the first transfer. Systems use idempotent protocols, completion tags, transactional mechanisms or explicit unrecoverable-error policies as appropriate. CPU hardware cannot universally guarantee exactly-once behavior for arbitrary external devices.</p>
+</section>
+<section id="pipeline-flushes-cancellation-and-replay" aria-labelledby="heading-pipeline-flushes-cancellation-and-replay">
+<h2 id="heading-pipeline-flushes-cancellation-and-replay">Pipeline Flushes, Cancellation and Replay</h2>
+<p>After selecting a trap, the controller must invalidate younger instructions and redirect future fetch. “Flush” can mean clearing valid bits, killing speculative queues, discarding prefetched instructions, draining or canceling memory work, restoring renaming checkpoints, or updating predictor-related state. Different implementations distribute these actions across several cycles; a single flush signal in a teaching diagram is a shorthand rather than a complete mechanism.</p>
+<p>Replay is used when an instruction must be retried after a temporary condition, such as a recoverable hazard or resource conflict. Replay can occur without a privileged trap. Restart following a true architectural fault is different: the handler may modify mappings, state or the PC and execute a trap-return instruction. The design needs clear rules for whether an instruction is replayable, its side effects are suppressed, and its fault metadata is retained or regenerated.</p>
+<p>Key control assertions include: a killed instruction never writes a destination register; a killed speculative store never reaches a forbidden externally visible commit point; any recorded fault maintains the correct original instruction identity; and a redirected fetch stream cannot be confused with an older pending request.</p>
+</section>
+<section id="interrupt-admission-and-commit-boundaries" aria-labelledby="heading-interrupt-admission-and-commit-boundaries">
+<h2 id="heading-interrupt-admission-and-commit-boundaries">Interrupt Admission and Commit Boundaries</h2>
+<p>In precise machines, asynchronous interrupts are generally sampled or admitted at an architectural instruction boundary. An interrupt must not arbitrarily split an instruction’s visible effects, such as updating one register and forgetting a required paired state update. A complex or multicycle instruction may have defined interruptibility/restart rules that differ from a simple one-cycle integer operation; the hardware and ISA jointly establish where interruption can occur.</p>
+<p>For an in-order machine, the controller may wait for an instruction to finish before servicing a pending timer event. In an out-of-order machine, the retirement mechanism can establish the continuation address and mark the exact boundary at which the event is taken. Interrupt latency therefore reflects both interrupt arbitration and the ability of the execution pipeline to reach a permitted boundary, not solely a hardware interrupt pin.</p>
+<p>Even when an interrupt is deferred, it should not silently disappear. Pending-state latching and source acknowledgment rules must ensure that a sustained request remains observable. A system may intentionally coalesce or throttle events, but that is explicit platform policy and cannot be assumed to follow automatically from CPU control logic.</p>
+</section>
+<section id="an-exception-trace-load-fault-with-a-younger-store" aria-labelledby="heading-an-exception-trace-load-fault-with-a-younger-store">
+<h2 id="heading-an-exception-trace-load-fault-with-a-younger-store">An Exception Trace: Load Fault With a Younger Store</h2>
+<table><thead><tr><th scope="col">Program-order operation</th><th scope="col">Possible internal progress</th><th scope="col">Architecturally required outcome</th></tr></thead><tbody><tr><td>1. ADD x3, x1, x2</td><td>Completes an integer result</td><td>May retire before the fault</td></tr><tr><td>2. LW x4, 0(x5)</td><td>Translation misses; later reports a page fault</td><td>No successful x4 write; cause and PC of load reported</td></tr><tr><td>3. SW x6, 0(x7)</td><td>Address/data may be calculated speculatively</td><td>Must not create forbidden younger committed store effect</td></tr><tr><td>4. BEQ x8, x9, target</td><td>May resolve speculatively</td><td>Must not override the older precise fault</td></tr><tr><td>5. Handler entry</td><td>Retirement selects load fault</td><td>Older state preserved; younger operations canceled</td></tr><tr><td>6. Handler policy</td><td>OS may map page or terminate task</td><td>If retrying, return to faulting load, not arbitrary next PC</td></tr></tbody></table>
+</section>
+<section id="interrupt-and-exception-latency-metrics" aria-labelledby="heading-interrupt-and-exception-latency-metrics">
+<h2 id="heading-interrupt-and-exception-latency-metrics">Interrupt and Exception Latency Metrics</h2>
+<p>Control design is constrained by latency and throughput. <strong>Detection latency</strong> measures how long after an event becomes observable the CPU recognizes it. <strong>Admission latency</strong> includes masking and the time until a permitted boundary. <strong>Vector latency</strong> includes trap-state capture and fetch redirection. <strong>Handler-first-instruction latency</strong> adds pipeline refill and memory behavior. Finally, <strong>service latency</strong> includes the handler code and device response. These are separate metrics; one aggregate number can obscure the real bottleneck.</p>
+<p>Stall cycles, pending older cache misses, long uninterruptible operations, deep speculation, cache warming, power states and memory translation can make worst-case latency significantly greater than the best case. Real-time systems should establish bound assumptions, not infer worst-case behavior from an average benchmark. Interrupt storms can consume substantial time even if each individual vector entry is fast.</p>
+<p>Performance measurements should include hot and cold handler paths, interrupt masking windows, nested events, cache/TLB misses, repeated faults, and the cost of restoring context. For systems that make certification claims, worst-case execution timing requires hardware-specific evidence and a defined workload/platform configuration.</p>
+</section>
+<section id="teaching-model-interrupt-response-time-breakdown" aria-labelledby="heading-teaching-model-interrupt-response-time-breakdown">
+<h2 id="heading-teaching-model-interrupt-response-time-breakdown">Teaching Model: Interrupt Response Time Breakdown</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class ResponseBudget:
+    synchronize: int
+    wait_boundary: int
+    arbitration: int
+    redirect: int
+    handler_prologue: int
+    def total(self):
+        return sum(vars(self).values())
+
+warm = ResponseBudget(2, 3, 1, 6, 4)
+blocked = ResponseBudget(2, 24, 1, 6, 4)
+assert warm.total() == 16
+assert blocked.total() == 37
+assert blocked.total() - warm.total() == 21
+print(&#x27;Example cycle response budgets:&#x27;, warm.total(), blocked.total())</code></pre><p>The numbers are illustrative, not claimed measurements from any particular processor. An architectural instruction boundary may be delayed by more than the few cycles shown here; service time and cache/TLB behavior can also dominate. A meaningful worst-case budget requires hardware measurement or a conservative verified timing model.</p>
+</section>
+<section id="handler-software-interface-and-context-preservation" aria-labelledby="heading-handler-software-interface-and-context-preservation">
+<h2 id="heading-handler-software-interface-and-context-preservation">Handler Software Interface and Context Preservation</h2>
+<p>Hardware saves the event records specified by its ISA, then privileged code performs the remainder of the handler protocol. The handler typically establishes a safe stack, preserves registers it will modify, retrieves cause and fault details, and dispatches according to the cause. For a normal interrupt it may interact with an interrupt controller and a device to acknowledge completion; for a page fault it may consult a mapping database; for an environment call it may execute a service governed by the OS ABI.</p>
+<p>A handler must know which registers are considered scratch, which are reserved for the calling convention, and which extended contexts—FP, vector, debug or performance-monitor state—need preservation. Lazy saving may be a valid optimization where the OS and architecture support it, but it introduces its own first-use traps and reentrancy rules. An interrupt controller cannot automatically save every task’s high-level runtime state; software remains accountable for the process context.</p>
+<p>Careful design isolates privileged entry from untrusted user pointers and unverified memory. It should avoid reading faulting user data before ensuring a safe execution context, and should not presume that the current user stack is suitable for kernel exception handling.</p>
+</section>
+<section id="privilege-isolation-trap-entry-and-security" aria-labelledby="heading-privilege-isolation-trap-entry-and-security">
+<h2 id="heading-privilege-isolation-trap-entry-and-security">Privilege Isolation, Trap Entry and Security</h2>
+<p>Trap entry is a security-sensitive transition from potentially untrusted code to more privileged instructions. Hardware must enforce privilege rules for vector configuration, trap return, memory protection, CSR access, instruction legality and address translation. Software must validate any user-controlled values before acting on them. A wrong saved PC, stale privilege field, or stale translation context can redirect execution into unintended address spaces.</p>
+<p>Fault metadata can reveal addresses or execution details. The architecture controls which registers are visible at which privilege level, but the operating system still needs policies for exposing diagnostic information to processes. Some microarchitectural events may be observable through timing even when the architectural exception path was correct; control correctness alone does not eliminate transient-execution side channels.</p>
+<p>Trap handling also creates opportunities for denial of service through repeated invalid instructions, excessive system calls, interrupt storms or deliberate page faults. Proper boundaries, rate control, process isolation and error policy are necessary in the surrounding system. The CPU’s primary obligation is to produce enforceable, architecturally correct transitions rather than to decide social or administrative policies itself.</p>
+</section>
+<section id="virtualization-and-multi-level-trap-routing" aria-labelledby="heading-virtualization-and-multi-level-trap-routing">
+<h2 id="heading-virtualization-and-multi-level-trap-routing">Virtualization and Multi-Level Trap Routing</h2>
+<p>A virtual machine introduces another layer of event control. The guest operating system may expect to receive its own exceptions and interrupts, while the hypervisor needs to intercept sensitive operations, protect host resources, and route virtualized events. RISC-V’s hypervisor extension, Arm virtualization extensions and x86 virtualization mechanisms provide different models for trap delegation, control/status state, virtual interrupts and returns.</p>
+<p>Some guest operations execute directly; others trap to a hypervisor or are emulated. A page fault may originate in guest virtual address translation or in the host’s second-stage mapping, and the handler needs to know which stage caused it. Hypervisor hardware can provide additional cause and fault-address registers or exit-qualification fields; these are not interchangeable with ordinary M-level <code>mepc</code>/<code>mcause</code> explanations.</p>
+<p>Correct routing requires that a guest cannot forge host privilege, bypass host memory protection, or access another guest’s interrupt/controller state. Real-world virtualization design should be grounded in the selected architecture’s virtualization manual rather than an assumed universal trap vector format.</p>
+</section>
+<section id="debug-mode-breakpoints-and-exception-conflicts" aria-labelledby="heading-debug-mode-breakpoints-and-exception-conflicts">
+<h2 id="heading-debug-mode-breakpoints-and-exception-conflicts">Debug Mode, Breakpoints and Exception Conflicts</h2>
+<p>Debug requests, hardware breakpoints and watchpoints can arrive concurrently with ordinary exceptions or interrupts. Implementations may give debug entry special priority, preserve a debug program counter and cause, halt the pipeline, or enter a separate privilege context. The same processor may also execute an architected breakpoint instruction whose semantics differ from entering an external debugger.</p>
+<p>A debugger stepping through a load fault, interrupt handler or system call needs to distinguish whether the core stopped before an instruction, after committing it, or at a trap boundary. When a faulting instruction is replayed after handler return, the debugger must not accidentally interpret the repeated execution as two successful commits. Some debug-trigger configurations suppress ordinary trap delivery in particular contexts; the exact rules must be read from the processor’s debug specification.</p>
+<p>Hardware debug facilities are powerful and must be access-controlled in deployed products. Debug unlocking, trace exposure, breakpoint configuration and secure-debug policy are platform matters. Ordinary application code should not be able to bypass production privilege protection merely by requesting debug entry.</p>
+</section>
+<section id="designing-a-reference-exception-selection-model" aria-labelledby="heading-designing-a-reference-exception-selection-model">
+<h2 id="heading-designing-a-reference-exception-selection-model">Designing a Reference Exception-Selection Model</h2>
+<p>A useful golden model should track an instruction stream, each instruction’s program-order identity, execution completion, exception candidate, and permitted architectural effects. The model should also represent privileged state, relevant interrupt pending/enables, trap vector configuration and a minimal handler. A check compares the implementation’s retired instruction stream and trap records against the reference rather than only comparing the PC each cycle.</p>
+<p>Directed sequences should deliberately place an illegal instruction before a younger speculative load fault; put a valid instruction before a page fault; raise a timer interrupt while a long division is pending; and trigger a fault around a branch-misprediction flush. Each case must state what is allowed to commit and where execution may legally resume. A pure numerical unit test cannot expose a pipeline that accidentally writes a younger result after an older fault.</p>
+<p>When formal verification is feasible, safety properties can be written as assertions: every committed instruction was valid and authorized; each trap record corresponds to an eligible event; no killed instruction commits; and the selected trap PC equals the correct boundary. Liveness properties about eventually servicing enabled interrupts require assumptions about masks, fairness, resource availability and platform signals.</p>
+</section>
+<section id="teaching-model-reference-retired-instruction-trace" aria-labelledby="heading-teaching-model-reference-retired-instruction-trace">
+<h2 id="heading-teaching-model-reference-retired-instruction-trace">Teaching Model: Reference Retired-Instruction Trace</h2>
+<pre><code class="language-python">def reference_trace(program, interrupt_after=None):
+    retired = []
+    for pc, kind, fault in program:
+        if fault:
+            return retired, (&#x27;exception&#x27;, pc, fault)
+        retired.append(pc)
+        if interrupt_after == pc:
+            return retired, (&#x27;interrupt&#x27;, pc + 4, &#x27;timer&#x27;)
+    return retired, None
+
+program = [
+    (0x100, &#x27;ADD&#x27;, None),
+    (0x104, &#x27;LOAD&#x27;, &#x27;page_fault&#x27;),
+    (0x108, &#x27;STORE&#x27;, None),
+]
+assert reference_trace(program) == ([0x100], (&#x27;exception&#x27;,0x104,&#x27;page_fault&#x27;))
+assert reference_trace(program, interrupt_after=0x100) == (
+    [0x100], (&#x27;interrupt&#x27;,0x104,&#x27;timer&#x27;))
+print(&#x27;Reference exception/interrupt boundaries passed&#x27;)</code></pre><p>The toy model uses fixed-width four-byte instructions and an artificially chosen interrupt admission point. Real processors may use compressed instructions, variable-length formats, architecture-specific interrupt boundaries, and memory side effects. It is an educational trace oracle for distinguishing “the instruction faulted” from “execution was interrupted before this instruction.”</p>
+</section>
+<section id="verification-matrix-causes-ordering-and-privilege" aria-labelledby="heading-verification-matrix-causes-ordering-and-privilege">
+<h2 id="heading-verification-matrix-causes-ordering-and-privilege">Verification Matrix: Causes, Ordering and Privilege</h2>
+<table><thead><tr><th scope="col">Test dimension</th><th scope="col">Important directed cases</th><th scope="col">Checkable property</th></tr></thead><tbody><tr><td>Exception source</td><td>Illegal opcode, instruction/data protection, ECALL, breakpoint</td><td>Correct cause, PC, status and prohibited-write suppression</td></tr><tr><td>Interrupt gating</td><td>Pending with mask off/on; global enable; delegation</td><td>Only eligible sources enter corresponding handler</td></tr><tr><td>Concurrent events</td><td>Two pending interrupts; older fault and younger fault</td><td>Correct priority and program-order presentation</td></tr><tr><td>Speculation</td><td>Wrong-path fault; branch redirect; misprediction replay</td><td>Squashed instructions generate no architectural traps</td></tr><tr><td>Trap handler fault</td><td>Invalid vector, nested error, double-fault path</td><td>Defined recovery/escalation and no silent context loss</td></tr><tr><td>Retirement and stores</td><td>Outstanding load, younger store, memory error</td><td>No forbidden younger write or duplicate device action</td></tr><tr><td>Privilege</td><td>U/S/M accesses, illegal CSR, bad return, virtualization</td><td>No unauthorized privilege or address-space escape</td></tr><tr><td>Timing</td><td>Cold TLB/cache, long divider, WFI, interrupt bursts</td><td>Bounded or documented response under explicit assumptions</td></tr><tr><td>Return and retry</td><td>ECALL continuation, page fault retry, nested return</td><td>Correct PC and preserved register context</td></tr></tbody></table>
+</section>
+<section id="implementation-hazards-and-common-misconceptions" aria-labelledby="heading-implementation-hazards-and-common-misconceptions">
+<h2 id="heading-implementation-hazards-and-common-misconceptions">Implementation Hazards and Common Misconceptions</h2>
+<ul class="course-links"><li><strong>“Exceptions and interrupts are the same.”</strong> Both can cause traps; their sources, timing and saved-PC semantics differ.</li><li><strong>“Every arithmetic error traps.”</strong> Arithmetic result and status behavior is ISA-dependent; many conditions only set flags or return specified values.</li><li><strong>“The earliest asserted fault signal wins.”</strong> Precise handling depends on instruction age and the architecture’s fault-priority rules.</li><li><strong>“The CPU saves all registers automatically.”</strong> Ordinary trap entry saves a defined subset of control state; software normally preserves the remaining context.</li><li><strong>“Vectored mode sends every exception to a distinct address.”</strong> Standard RISC-V vectored mtvec offsets apply to interrupts, not ordinary synchronous exceptions.</li><li><strong>“Disabling MIE blocks all errors.”</strong> Ordinary interrupt masking does not disable all synchronous exceptions, NMIs or reset.</li><li><strong>“A speculative page fault must reach software.”</strong> Wrong-path faults are normally suppressed before architectural delivery.</li><li><strong>“A flush undoes every physical effect.”</strong> Architectural cancellation does not guarantee removal of all caches, timing or externally visible effects.</li><li><strong>“A handler always resumes at PC+4.”</strong> Correct continuation depends on cause, instruction length, restart policy and ISA.</li><li><strong>“One priority table applies to all processors.”</strong> ISA revisions, implemented extensions and platform controllers can change priority and routing.</li><li><strong>“A short average interrupt latency proves real-time suitability.”</strong> Worst-case latency requires platform-specific constraints and evidence.</li></ul>
+</section>
+<section id="applied-scenario-1-user-program-executes-an-illegal-instruction" aria-labelledby="heading-applied-scenario-1-user-program-executes-an-illegal-instruction">
+<h2 id="heading-applied-scenario-1-user-program-executes-an-illegal-instruction">Applied Scenario 1: User Program Executes an Illegal Instruction</h2>
+<p><strong>Situation.</strong> An unprivileged process reaches a 32-bit instruction word that is not defined by the implemented ISA or is restricted at its current privilege. The decoder discovers a synchronous illegal-instruction condition. The controller must prevent that instruction’s destination register or memory intent from taking effect, preserve the faulting PC, and present the architecturally correct trap cause to the designated privileged handler.</p>
+<p><strong>Correct flow.</strong> A simple processor can hold the fault with the instruction while earlier work completes, then select the exception and redirect fetch. A superscalar processor may detect the invalid encoding early but defer its delivery until it reaches the retirement head. The handler might determine that the instruction is unsupported, emulate it under an approved policy, or report the failure to the task. The CPU does not make that administrative choice.</p>
+<p><strong>Review evidence.</strong> Inject several illegal encodings, including one on a predicted wrong path. Confirm that a real-path illegal instruction records the proper PC and cause, while a wrong-path illegal instruction leaves no architectural trap when canceled. Check that privileged registers, user memory and younger register destinations remain unchanged. Finally, test the handler’s continuation policy rather than assuming that incrementing the fault PC is always valid.</p>
+</section>
+<section id="applied-scenario-2-demand-paged-load-and-precise-retry" aria-labelledby="heading-applied-scenario-2-demand-paged-load-and-precise-retry">
+<h2 id="heading-applied-scenario-2-demand-paged-load-and-precise-retry">Applied Scenario 2: Demand-Paged Load and Precise Retry</h2>
+<p><strong>Situation.</strong> A program attempts to load a value through a mapped virtual address whose page is not resident or whose translation has not yet been installed. A translation walk identifies a page fault, and the load’s completion path produces fault metadata instead of a valid destination result. Younger arithmetic may have executed speculatively; a younger store may have an allocated queue entry.</p>
+<p><strong>Correct flow.</strong> The processor allows older instructions to reach their required architectural boundary, suppresses the faulting load’s writeback, prevents younger instructions from committing, records the load’s fault PC and relevant address information, and enters the authorized handler. Software checks whether the access is valid under its memory policy. If it installs a mapping and the instruction is restartable, trap return points to the original load so the load executes again with a valid translation.</p>
+<p><strong>Review evidence.</strong> Assert that the load destination is not overwritten with stale data and that the younger store does not cause an unwanted device/memory effect. Test a truly forbidden access as well as an ordinary missing page; the OS may respond differently. Examine how a TLB refill, page-table update and eventual return affect both data access and instruction ordering. This scenario connects exception-control hardware to, but does not duplicate, the separate virtual-memory and operating-system topics.</p>
+</section>
+<section id="applied-scenario-3-timer-interrupt-during-a-long-operation" aria-labelledby="heading-applied-scenario-3-timer-interrupt-during-a-long-operation">
+<h2 id="heading-applied-scenario-3-timer-interrupt-during-a-long-operation">Applied Scenario 3: Timer Interrupt During a Long Operation</h2>
+<p><strong>Situation.</strong> A timer requests service while the processor executes a long-latency integer division and several younger independent instructions are ready. The interrupt is pending, but trap entry must observe privilege routing and enable conditions. A microcontroller with a single iterative divider may have to reach a safe instruction boundary; a larger core may allow other instructions to finish execution but preserve an ordered retirement point.</p>
+<p><strong>Correct flow.</strong> At an eligible interruption boundary, the machine saves the continuation PC and trap status and transfers to the timer handler. The handler preserves its software context, acknowledges the timer as required, performs minimal time-critical work, and returns or schedules another task. The saved continuation address for an interrupt is not necessarily the PC of the division operation merely because division was active when the timer signal arrived.</p>
+<p><strong>Review evidence.</strong> Measure response with the divider idle and busy, interrupts enabled and disabled, and handler data in and out of cache. Confirm the timer cannot cause a partially updated architectural result and does not starve indefinitely under allowed assumptions. Document whether the implementation can interrupt or restart long internal sequences; do not infer that ability from a generic pipeline diagram.</p>
+</section>
+<section id="applied-scenario-4-two-pending-interrupt-sources" aria-labelledby="heading-applied-scenario-4-two-pending-interrupt-sources">
+<h2 id="heading-applied-scenario-4-two-pending-interrupt-sources">Applied Scenario 4: Two Pending Interrupt Sources</h2>
+<p><strong>Situation.</strong> A network receive condition and a timer signal become pending at nearly the same moment. The platform interrupt controller presents eligible sources; the processor applies the ISA-defined privilege, routing and mask rules. The selected interrupt enters an appropriate vector, and the second remains pending according to the platform’s persistence and acknowledgment design.</p>
+<p><strong>Correct flow.</strong> The handler examines the selected cause, performs the corresponding service and acknowledges the source without prematurely clearing unrelated pending information. If a high-priority source remains asserted continuously, system policy must address starvation, service batching and response fairness. If the handler enables nesting, it first preserves trap and general-purpose state so a subsequent interrupt does not destroy its return address.</p>
+<p><strong>Review evidence.</strong> Exercise all enable combinations, nested-event windows, and level/edge-trigger configurations of the actual platform. Confirm that only authorized sources reach S- or M-mode handlers and that the correct pending source remains serviceable after the first return. Avoid hardcoding an assumed numerical priority order in tests unless the implementation’s interrupt architecture actually specifies it.</p>
+</section>
+<section id="applied-scenario-5-speculative-fault-before-branch-resolution" aria-labelledby="heading-applied-scenario-5-speculative-fault-before-branch-resolution">
+<h2 id="heading-applied-scenario-5-speculative-fault-before-branch-resolution">Applied Scenario 5: Speculative Fault Before Branch Resolution</h2>
+<p><strong>Situation.</strong> A branch is predicted taken, and the predicted target contains a load to a prohibited address. The processor begins translation and recognizes a possible page fault. A few cycles later, branch execution shows that the prediction was wrong. The load belongs to an instruction stream that should not have been architecturally executed.</p>
+<p><strong>Correct flow.</strong> The branch-recovery mechanism squashes the load and its exception metadata, redirects fetch along the correct path, and ensures the load neither retires nor invokes the page-fault handler. If a similar load occurs on the actual committed path, its exception can be delivered normally. This behavior is fundamental to precise instruction semantics even when the implementation still incurred cache, TLB or timing effects from the speculative access.</p>
+<p><strong>Review evidence.</strong> Vary the relative timing of branch resolution and fault detection; verify the instruction-age tags and valid bits; compare the retired instruction trace with a sequential reference model. Also confirm that a different, older real-path exception is not lost during recovery. The scenario shows why “fault signal observed” and “architectural trap taken” are distinct engineering events.</p>
+</section>
+<section id="applied-scenario-6-fault-inside-a-privileged-handler" aria-labelledby="heading-applied-scenario-6-fault-inside-a-privileged-handler">
+<h2 id="heading-applied-scenario-6-fault-inside-a-privileged-handler">Applied Scenario 6: Fault Inside a Privileged Handler</h2>
+<p><strong>Situation.</strong> A processor takes an ordinary load access fault and enters a privileged handler. Before the handler saves its trap records, the handler attempts to read an invalid stack location and faults again. A second exception now risks overwriting the original saved PC, cause and privilege status, leaving no reliable return context. Ordinary interrupt masking cannot prevent a synchronous memory fault caused by the handler itself.</p>
+<p><strong>Correct flow.</strong> A robust system sets up a safe entry environment, provides a trustworthy trap stack or scratch register convention, avoids unvalidated memory access before critical state preservation, and defines double-fault escalation. The exact behavior can involve a special trap mechanism, separate emergency context, NMI/RNMI features or fatal reset, depending on the architecture and implementation. It should not rely on the fiction that nested fault recovery is automatically available.</p>
+<p><strong>Review evidence.</strong> Fault-inject into handler prologues, test missing stack mappings and invalid vectors, and verify whether the platform detects double faults or preserves sufficient state to diagnose them. Review the selected RISC-V privilege revision and actual silicon documentation, because extensions and core-specific mechanisms significantly affect what can be recovered.</p>
+</section>
+<section id="ten-gate-cpu-control-and-exception-engineering-framework" aria-labelledby="heading-ten-gate-cpu-control-and-exception-engineering-framework">
+<h2 id="heading-ten-gate-cpu-control-and-exception-engineering-framework">Ten-Gate CPU Control and Exception Engineering Framework</h2>
+<table><thead><tr><th scope="col">Gate</th><th scope="col">Decision question</th><th scope="col">Required engineering evidence</th></tr></thead><tbody><tr><td>1. Architectural contract</td><td>Which ISA, privilege levels and extensions apply?</td><td>Versioned architecture reference and feature matrix</td></tr><tr><td>2. Control decomposition</td><td>Which blocks generate decode, stall, flush, redirect and commit signals?</td><td>Control ownership map and dataflow diagram</td></tr><tr><td>3. Event classification</td><td>Which events are synchronous, asynchronous, debug or reset?</td><td>Cause catalogue and stimulus conditions</td></tr><tr><td>4. Priority and routing</td><td>How are same-instruction faults, instruction age and interrupt sources ordered?</td><td>Priority rules, delegation and platform-controller specification</td></tr><tr><td>5. Precise state</td><td>Which older effects must remain and which younger effects must be suppressed?</td><td>Retirement/replay model and memory-side-effect invariants</td></tr><tr><td>6. Trap record</td><td>Which PC, cause, value and status fields become visible?</td><td>Architectural CSR mapping and exception trace</td></tr><tr><td>7. Handler entry/exit</td><td>How are privilege, masks and saved contexts established and restored?</td><td>Prologue/epilogue ABI, trap return tests</td></tr><tr><td>8. Recovery and escalation</td><td>Which faults can retry, which require abort, and what if the handler faults?</td><td>Recovery policy, double-fault and reliability strategy</td></tr><tr><td>9. Performance and assurance</td><td>What are the acceptable latency bounds and verification coverage?</td><td>Measured latency distributions, assertions and directed tests</td></tr><tr><td>10. Publication and operations</td><td>Are assumptions, unsupported cases and external dependencies documented?</td><td>Clear architecture scope, conformance status and runbook</td></tr></tbody></table>
+</section>
+<section id="guided-exercises-and-design-investigations" aria-labelledby="heading-guided-exercises-and-design-investigations">
+<h2 id="heading-guided-exercises-and-design-investigations">Guided Exercises and Design Investigations</h2>
+<ol class="course-links"><li><strong>Control signal derivation:</strong> Given ADD, LOAD, STORE, BEQ and ECALL, complete a table for ALU select, register write, memory access, branch redirect and exception entry. Explain why an illegal opcode must not issue a store.</li><li><strong>Trap record trace:</strong> Starting in U-mode with <code>pc=0x120</code>, MIE enabled and <code>mtvec.BASE=0x800</code>, model a machine-mode illegal-instruction trap. Show <code>mepc</code>, <code>mcause</code>, MPP, MPIE, MIE and the new PC.</li><li><strong>Vector comparison:</strong> Determine entry addresses for a synchronous illegal instruction (code 2) and a timer interrupt (code 7) when <code>mtvec</code> uses direct and vectored modes with BASE <code>0x800</code>. Explain the different offsets.</li><li><strong>Precise fault:</strong> A program-order sequence ADD, LOAD, STORE has executed, but LOAD reports a data fault. Identify the permitted architectural register and memory effects and justify the required squashes.</li><li><strong>Wrong-path detection:</strong> A speculative instruction faults after a branch was predicted incorrectly. Write an invariant that prevents its exception from reaching software.</li><li><strong>Handler continuation:</strong> Compare the appropriate saved-PC policy after a demand page fault, an environment call and an unrecoverable hardware integrity error.</li><li><strong>Nested event:</strong> Construct an event trace where a second trap arrives before the first trap frame is preserved. Identify which fields can be lost and how a safer prologue reduces risk.</li><li><strong>Interrupt latency:</strong> Separate synchronization, pending arbitration, boundary delay, vector redirect, handler prologue and actual service. Discuss which portions can be measured and which need explicit worst-case assumptions.</li><li><strong>Formal check:</strong> State safety assertions for unauthorized CSR writes, a killed instruction’s register write enable, and correct trap-record provenance.</li><li><strong>Taxonomy review:</strong> Distinguish hardware mechanism from OS policy in a page fault, system call, machine-check log and timer preemption.</li></ol>
+</section>
+<section id="review-questions-and-answers" aria-labelledby="heading-review-questions-and-answers">
+<h2 id="heading-review-questions-and-answers">Review Questions and Answers</h2>
+<table><thead><tr><th scope="col">Question</th><th scope="col">Concise answer</th></tr></thead><tbody><tr><td>Does every interrupt correspond to a faulting instruction?</td><td>No. Interrupts are normally asynchronous requests admitted at a permitted boundary.</td></tr><tr><td>Why does a speculative fault not always reach software?</td><td>Wrong-path or killed instructions cannot create committed architectural exceptions.</td></tr><tr><td>What is a precise exception?</td><td>An event presented at a defined instruction-order boundary with earlier state preserved and forbidden later effects suppressed.</td></tr><tr><td>What distinguishes mtvec vectored mode?</td><td>The standard interrupt target adds 4 × cause code to BASE; synchronous exceptions use BASE.</td></tr><tr><td>What state does hardware generally save?</td><td>ISA-defined trap PC, cause and selected privilege/status; software saves the remaining execution context.</td></tr><tr><td>Why must a handler preserve trap state before enabling nesting?</td><td>Another event can overwrite one-level trap records and destroy the return context.</td></tr><tr><td>Why can a page fault be retried but a device timeout may not be safe to retry?</td><td>Page translation can often be repaired without an external effect; a device may have already performed an irreversible action.</td></tr><tr><td>Does a flush erase all speculative side effects?</td><td>It prevents invalid architectural commitment, not necessarily all internal cache or timing effects.</td></tr><tr><td>Is an integer divide-by-zero necessarily a synchronous trap?</td><td>No; the ISA specifies whether it traps or returns a conventional result.</td></tr><tr><td>Who decides whether a faulty user program is terminated?</td><td>Privileged system software or platform policy, based on information enforced and reported by hardware.</td></tr></tbody></table>
+</section>
+<section id="glossary-of-control-and-exception-terminology" aria-labelledby="heading-glossary-of-control-and-exception-terminology">
+<h2 id="heading-glossary-of-control-and-exception-terminology">Glossary of Control and Exception Terminology</h2>
+<table><thead><tr><th scope="col">Term</th><th scope="col">Meaning in this article</th></tr></thead><tbody><tr><td>Architectural state</td><td>Programmer-visible state defined by an ISA</td></tr><tr><td>Microarchitectural state</td><td>Internal pipeline, queue, predictor and control state</td></tr><tr><td>Controller</td><td>Hardware logic coordinating instruction progress and control transitions</td></tr><tr><td>Control signal</td><td>Decision that selects an operation, path, enable, hold or cancellation</td></tr><tr><td>Combinational decode</td><td>Decode output formed from current inputs without sequential memory</td></tr><tr><td>Finite-state sequencer</td><td>Control logic that remembers its current phase or state</td></tr><tr><td>Synchronous exception</td><td>Event causally associated with executing or attempting an instruction</td></tr><tr><td>Interrupt</td><td>Request admitted independently of a specific faulting instruction</td></tr><tr><td>Trap</td><td>Architecture-defined transfer to an exception or interrupt handler</td></tr><tr><td>Fault PC</td><td>Instruction address recorded for a synchronous fault</td></tr><tr><td>Continuation PC</td><td>Instruction address where execution can resume after an interrupt</td></tr><tr><td>Trap vector</td><td>Configured entry address or address-selection mechanism for a handler</td></tr><tr><td>Cause register</td><td>Architectural record identifying the class of trap</td></tr><tr><td>Privilege mode</td><td>Architectural access level such as user, supervisor or machine</td></tr><tr><td>CSR</td><td>Control and status register</td></tr><tr><td>Pending bit</td><td>Record indicating that an interrupt condition awaits service</td></tr><tr><td>Enable mask</td><td>Control that permits a class of maskable interrupt</td></tr><tr><td>Delegation</td><td>Routing of selected causes to an authorized lower-privilege handler</td></tr><tr><td>NMI</td><td>Nonmaskable interrupt, with system-specific entry and nesting semantics</td></tr><tr><td>Debug entry</td><td>Special control transfer into a debugging context</td></tr><tr><td>Precise exception</td><td>Exception presented at an architecturally well-defined instruction boundary</td></tr><tr><td>Retirement</td><td>Making an instruction’s architecturally allowed effects committed</td></tr><tr><td>Reorder buffer</td><td>Possible structure enforcing program-order retirement</td></tr><tr><td>Squash / kill</td><td>Invalidation of a not-yet-committed instruction</td></tr><tr><td>Stall</td><td>Temporary hold preserving work for future progress</td></tr><tr><td>Replay</td><td>Re-executing a previously attempted instruction or micro-operation</td></tr><tr><td>Trap return</td><td>Instruction restoring defined trap status and continuation PC</td></tr><tr><td>Handler prologue</td><td>Initial code that establishes and saves a safe handler context</td></tr><tr><td>Double fault</td><td>Failure condition arising from an additional fault during fault handling, per implementation rules</td></tr><tr><td>Machine check</td><td>Reliability/hardware integrity reporting mechanism, potentially imprecise</td></tr><tr><td>Interrupt latency</td><td>Elapsed time from eligible request to a defined service milestone</td></tr><tr><td>Idempotence</td><td>Property that repeating an action has no additional externally visible effect</td></tr><tr><td>Golden model</td><td>Reference behavioral implementation used for comparison</td></tr><tr><td>Liveness</td><td>Property describing eventual progress under explicit assumptions</td></tr><tr><td>Safety property</td><td>Invariant preventing forbidden architectural or privilege changes</td></tr></tbody></table>
+</section>
+<section id="sub-articles-complete-central-processing-unit-directory" aria-labelledby="heading-sub-articles-complete-central-processing-unit-directory">
+<h2 id="heading-sub-articles-complete-central-processing-unit-directory">Sub-Articles: Complete Central Processing Unit Directory</h2>
+<p>This page is article <strong>5 of 24</strong> in the established <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">Central Processing Unit specialist unit</a>. All sibling URLs are active navigation destinations according to the unit plan. An active destination is not a claim that its file has been deployed. Select a neighbor by the specific hardware issue being investigated.</p><ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a></li></ol><p><strong>Next recommended article:</strong> <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> develops the exact boundary where results, fault reports and state updates become architectural. For complementary background, read <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a>.</p>
+</section>
+<section id="related-encyclopedia-articles-and-taxonomy-boundaries" aria-labelledby="heading-related-encyclopedia-articles-and-taxonomy-boundaries">
+<h2 id="heading-related-encyclopedia-articles-and-taxonomy-boundaries">Related Encyclopedia Articles and Taxonomy Boundaries</h2>
+<ul class="course-links">
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems</a> — Division index for physical computing components.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> — Parent CPU overview.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a> — Ordinary instruction routing and datapath connections.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a> — Programmer-visible state including trap CSRs.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a> — Instruction legality and fetch fault origins.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a> — Arithmetic outcomes and floating-point status.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> — Architectural commitment and precise-state visibility.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a> — Stage-level stalls, dependencies and flushes.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a> — Wrong-path work and recovery.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a> — Integrity errors and escalation.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — General organization of core control and execution.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a> — ISA-defined instructions and visible state transitions.</li>
+<li><a href="/library/encyclopedia/computer-science/software-systems/">Software Systems</a> — Operating-system policies and user/kernel service interfaces.</li>
+<li><a href="/library/encyclopedia/computer-science/security-systems/">Security Systems</a> — Security architecture and isolation policy.</li>
+</ul><p><strong>Editorial boundary:</strong> the subject here is hardware control of instruction progress, traps, privilege transfer and recovery boundaries. Software scheduling, full kernel implementation, guest orchestration and detailed security mitigation design are related but separately owned subjects.</p>
+</section>
+<section id="primary-documentation-and-further-reading" aria-labelledby="heading-primary-documentation-and-further-reading">
+<h2 id="heading-primary-documentation-and-further-reading">Primary Documentation and Further Reading</h2>
+<ol class="course-links">
+<li><a href="https://docs.riscv.org/reference/isa/priv/machine.html">RISC-V International, <em>Machine-Level ISA</em>, Privileged Architecture</a> — Trap state (<code>mepc</code>, <code>mcause</code>, <code>mtval</code>), <code>mtvec</code>, interrupt gating, trap entry and <code>MRET</code> behavior. Use the current ratified version and check implemented extensions.</li>
+<li><a href="https://docs.riscv.org/reference/isa/priv/supervisor.html">RISC-V International, <em>Supervisor-Level ISA</em></a> — S-mode trap state, routing and supervisor-level interrupt/exception treatment.</li>
+<li><a href="https://docs.riscv.org/reference/isa/priv/hypervisor.html">RISC-V International, <em>Hypervisor Extension</em></a> — Guest and hypervisor-specific trap routing and additional fault records.</li>
+<li><a href="https://docs.riscv.org/reference/isa/v20250508/unpriv/intro.html">RISC-V International, <em>Unprivileged ISA: Introduction</em></a> — Architectural terminology distinguishing exceptions, interrupts and traps.</li>
+<li><a href="https://ibex-core.readthedocs.io/en/latest/03_reference/instruction_decode_execute.html">lowRISC, <em>Ibex Instruction Decode and Execute</em></a> — Real controller organization, decode signals, pipeline state and privilege-control integration.</li>
+<li><a href="https://ibex-core.readthedocs.io/en/latest/03_reference/exception_interrupts.html">lowRISC, <em>Ibex Exceptions and Interrupts</em></a> — Concrete machine trap behavior, interrupt sources, priority, nesting and double-fault details for an Ibex configuration.</li>
+<li><a href="https://ibex-core.readthedocs.io/en/latest/03_reference/pipeline_details.html">lowRISC, <em>Ibex Pipeline Details</em></a> — Stalls, flushes and control-flow effects in a small in-order processor.</li>
+<li><a href="https://docs.riscv.org/reference/aia/v1.0/MSLevel.html">RISC-V International, <em>Advanced Interrupt Architecture: Interrupts for Machine and Supervisor Levels</em></a> — Further details on interrupt source selection and extensible priority facilities.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Intel, <em>Intel 64 and IA-32 Architectures Software Developer's Manuals</em></a> — Exception classifications, interrupt/IDT behavior, privilege and machine-check architecture.</li>
+<li><a href="https://developer.arm.com/documentation/ddi0487/latest">Arm, <em>Arm Architecture Reference Manual for A-profile Architecture</em></a> — Exception levels, synchronous/asynchronous exception behavior and exception vectors on AArch64.</li>
+<li>David A. Patterson and John L. Hennessy, <em>Computer Organization and Design: The Hardware/Software Interface</em>, RISC-V edition — Datapath and control design, exception integration and single/multicycle processor organization.</li>
+<li>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em> — Precise exceptions, out-of-order retirement and processor performance trade-offs.</li>
+</ol><p>Version-sensitive implementation claims should be checked against the actual processor revision and configuration. The RISC-V privileged manual is the governing ISA source for RISC-V behavior; Ibex shows one implementation; x86 and Arm are comparative reference architectures with different rules.</p>
+</section>
+<section id="editorial-publication-status-and-limitations" aria-labelledby="heading-editorial-publication-status-and-limitations">
+<h2 id="heading-editorial-publication-status-and-limitations">Editorial Publication Status and Limitations</h2>
+<p><strong>Prepared November 23, 2026:</strong> This Level 5 article occupies the prescribed <code>cpu-control-logic-and-exception-handling.html</code> destination within the Central Processing Unit specialist directory. The local CPU unit index, division index, parent overview and neighboring articles are not modified by this file.</p>
+<p><strong>Coverage:</strong> combinational and sequential controller logic; instruction-control signals; synchronous exceptions, interrupts, reset, debug and NMI; RISC-V trap records, vectors and return; privilege routing; precise commit boundaries; speculative fault suppression; memory side effects; handler integration; timing, testing and six applied scenarios.</p>
+<p><strong>Scope and evidence limitations:</strong> illustrative Python models are not RTL or architectural conformance implementations. Hardware-specific priority, timing, double-fault behavior and optional privileges vary by processor and ISA revision. Normal trap entry does not automatically preserve every software register. No claim of a complete verified OS handler, formal proof of an actual CPU, or deployment of the other planned specialist pages is made.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

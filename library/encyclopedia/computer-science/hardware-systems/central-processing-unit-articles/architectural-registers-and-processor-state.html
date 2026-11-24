@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architectural Registers and Processor State | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Specialist guide to CPU architectural registers and execution state: GPRs, PC, condition flags, privilege, traps, floating-point and vector contexts, register renaming, and context switching.">
+<meta name="keywords" content="architectural registers, processor state, general-purpose registers, program counter, instruction pointer, flags, RISC-V registers, context switch, CSR, physical registers">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Architectural Registers and Processor State | MGU Encyclopedia">
+<meta property="og:description" content="How CPUs expose registers, status, PC and privilege as a software contract while hiding physical register and speculative execution machinery.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Architectural Registers and Processor State</h1>
+<p class="subtitle">Program-visible register banks, instruction pointers, flags, privilege status, extended execution contexts, and the architectural contract that implementations must preserve.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-and-specialist-scope">Definition and Specialist Scope</a></li>
+<li><a href="#learning-objectives-and-analytical-questions">Learning Objectives and Analytical Questions</a></li>
+<li><a href="#three-layers-of-state">Three Layers of State</a></li>
+<li><a href="#state-classification-matrix">State Classification Matrix</a></li>
+<li><a href="#illustrated-state-boundary">Illustrated State Boundary</a></li>
+<li><a href="#general-purpose-registers-meaning-and-roles">General-Purpose Registers: Meaning and Roles</a></li>
+<li><a href="#risc-v-integer-state-as-a-reference-model">RISC-V Integer State as a Reference Model</a></li>
+<li><a href="#executable-example-zero-register-and-machine-width">Executable Example: Zero Register and Machine Width</a></li>
+<li><a href="#register-names-aliases-and-debugger-output">Register Names, Aliases, and Debugger Output</a></li>
+<li><a href="#program-counter-and-instruction-address">Program Counter and Instruction Address</a></li>
+<li><a href="#sequential-branch-jump-and-return-transitions">Sequential, Branch, Jump, and Return Transitions</a></li>
+<li><a href="#executable-example-pc-updates-are-not-always-plus-four">Executable Example: PC Updates Are Not Always Plus Four</a></li>
+<li><a href="#condition-codes-and-status-flags">Condition Codes and Status Flags</a></li>
+<li><a href="#worked-arithmetic-flag-table">Worked Arithmetic Flag Table</a></li>
+<li><a href="#executable-example-deriving-n-z-c-and-v">Executable Example: Deriving N, Z, C, and V</a></li>
+<li><a href="#x86-64-aarch64-and-risc-v-register-comparison">x86-64, AArch64, and RISC-V Register Comparison</a></li>
+<li><a href="#partial-register-writes-and-register-aliasing">Partial-Register Writes and Register Aliasing</a></li>
+<li><a href="#executable-example-x86-64-subregister-view">Executable Example: x86-64 Subregister View</a></li>
+<li><a href="#special-purpose-registers-and-implicit-operands">Special-Purpose Registers and Implicit Operands</a></li>
+<li><a href="#calling-conventions-are-not-the-isa">Calling Conventions Are Not the ISA</a></li>
+<li><a href="#executable-example-caller-and-callee-saved-values">Executable Example: Caller- and Callee-Saved Values</a></li>
+<li><a href="#floating-point-register-state">Floating-Point Register State</a></li>
+<li><a href="#risc-v-floating-point-control-and-status-example">RISC-V Floating-Point Control and Status Example</a></li>
+<li><a href="#vector-and-simd-architectural-registers">Vector and SIMD Architectural Registers</a></li>
+<li><a href="#extension-and-feature-discovery">Extension and Feature Discovery</a></li>
+<li><a href="#privilege-levels-and-execution-modes">Privilege Levels and Execution Modes</a></li>
+<li><a href="#control-and-status-registers">Control and Status Registers</a></li>
+<li><a href="#risc-v-privileged-state-examples">RISC-V Privileged-State Examples</a></li>
+<li><a href="#synchronous-exceptions-and-asynchronous-interrupts">Synchronous Exceptions and Asynchronous Interrupts</a></li>
+<li><a href="#precise-exceptions-and-the-architectural-boundary">Precise Exceptions and the Architectural Boundary</a></li>
+<li><a href="#step-by-step-trap-entry-and-return">Step-by-Step Trap Entry and Return</a></li>
+<li><a href="#executable-example-trap-record-and-resumption">Executable Example: Trap Record and Resumption</a></li>
+<li><a href="#context-switching-between-threads">Context Switching Between Threads</a></li>
+<li><a href="#context-save-checklist">Context-Save Checklist</a></li>
+<li><a href="#executable-example-two-software-thread-contexts">Executable Example: Two Software Thread Contexts</a></li>
+<li><a href="#lazy-context-switching-and-dirty-state-tracking">Lazy Context Switching and Dirty-State Tracking</a></li>
+<li><a href="#executable-example-dirty-context-tracking">Executable Example: Dirty Context Tracking</a></li>
+<li><a href="#hardware-threads-cores-and-architectural-contexts">Hardware Threads, Cores, and Architectural Contexts</a></li>
+<li><a href="#register-renaming-versus-architectural-register-naming">Register Renaming Versus Architectural Register Naming</a></li>
+<li><a href="#example-two-versions-of-one-architectural-register">Example: Two Versions of One Architectural Register</a></li>
+<li><a href="#executable-example-rename-mapping-and-commit">Executable Example: Rename Mapping and Commit</a></li>
+<li><a href="#retirement-and-the-illusion-of-sequential-execution">Retirement and the Illusion of Sequential Execution</a></li>
+<li><a href="#register-hazards-and-false-dependencies">Register Hazards and False Dependencies</a></li>
+<li><a href="#memory-is-related-but-not-identical-to-register-state">Memory Is Related but Not Identical to Register State</a></li>
+<li><a href="#virtual-machines-and-guest-architectural-state">Virtual Machines and Guest Architectural State</a></li>
+<li><a href="#security-sensitive-register-state">Security-Sensitive Register State</a></li>
+<li><a href="#debugging-tracing-and-architectural-snapshots">Debugging, Tracing, and Architectural Snapshots</a></li>
+<li><a href="#executable-example-architectural-state-diff">Executable Example: Architectural State Diff</a></li>
+<li><a href="#worked-scenario-1-a-saved-register-is-corrupted-after-a-function-call">Worked Scenario 1 — A Saved Register Is Corrupted After a Function Call</a></li>
+<li><a href="#worked-scenario-2-floating-point-results-change-after-preemption">Worked Scenario 2 — Floating-Point Results Change After Preemption</a></li>
+<li><a href="#worked-scenario-3-the-program-counter-appears-to-skip-a-byte">Worked Scenario 3 — The Program Counter Appears to Skip a Byte</a></li>
+<li><a href="#worked-scenario-4-a-speculative-destination-seems-to-disappear">Worked Scenario 4 — A Speculative Destination Seems to Disappear</a></li>
+<li><a href="#worked-scenario-5-a-kernel-trap-returns-to-the-wrong-mode">Worked Scenario 5 — A Kernel Trap Returns to the Wrong Mode</a></li>
+<li><a href="#worked-scenario-6-live-migration-rejects-a-vector-heavy-workload">Worked Scenario 6 — Live Migration Rejects a Vector-Heavy Workload</a></li>
+<li><a href="#common-misconceptions-and-corrections">Common Misconceptions and Corrections</a></li>
+<li><a href="#architecture-and-implementation-review-framework">Architecture and Implementation Review Framework</a></li>
+<li><a href="#ten-gate-design-and-verification-matrix">Ten-Gate Design and Verification Matrix</a></li>
+<li><a href="#test-strategy-directed-register-cases">Test Strategy: Directed Register Cases</a></li>
+<li><a href="#test-strategy-metamorphic-and-invariant-checks">Test Strategy: Metamorphic and Invariant Checks</a></li>
+<li><a href="#performance-implications-of-register-state">Performance Implications of Register State</a></li>
+<li><a href="#instruction-state-trace-example">Instruction-State Trace Example</a></li>
+<li><a href="#executable-example-a-compact-architectural-trace-checker">Executable Example: A Compact Architectural Trace Checker</a></li>
+<li><a href="#review-questions-and-worked-checks">Review Questions and Worked Checks</a></li>
+<li><a href="#guided-exercise-1-build-an-architectural-register-specification">Guided Exercise 1 — Build an Architectural Register Specification</a></li>
+<li><a href="#guided-exercise-2-detect-a-broken-context-switch">Guided Exercise 2 — Detect a Broken Context Switch</a></li>
+<li><a href="#guided-exercise-3-verify-a-speculative-rename-sequence">Guided Exercise 3 — Verify a Speculative Rename Sequence</a></li>
+<li><a href="#glossary-of-architectural-state-terms">Glossary of Architectural-State Terms</a></li>
+<li><a href="#sub-articles-and-complete-cpu-specialist-directory">Sub-Articles and Complete CPU Specialist Directory</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#technical-references-and-primary-documentation">Technical References and Primary Documentation</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="definition-and-specialist-scope" aria-labelledby="heading-definition-and-specialist-scope">
+<h2 id="heading-definition-and-specialist-scope">Definition and Specialist Scope</h2>
+<p>A processor’s <strong>architectural state</strong> is the set of values and execution conditions that its instruction-set contract makes observable to software at an architectural boundary. The integer register contents, current instruction address, relevant condition codes, enabled extension registers, and privileged control state are examples. This is not a single universal list: it depends on the instruction set, enabled features, privilege level, and execution environment. A CPU may contain many internal latches and buffers that do not belong to the software-visible contract.</p>
+<p>A useful definition is operational: given the same defined initial architectural state and the same relevant environmental inputs, two conforming implementations should produce the same defined architectural effects when executing the same instruction sequence. They can use different pipelines, physical register counts, branch predictors, and clocks to do so. Architectural state is therefore a <em>software compatibility boundary</em>, not a photograph of the circuitry.</p>
+<p>This Level 5 article belongs to the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit overview</a> and the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">CPU specialist directory</a>. It concentrates on <strong>program-visible registers, status, instruction pointers, privilege state, and the rules software may rely on</strong>. The neighboring <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a> explains the hardware paths that carry values. Detailed register renaming, exception implementation, memory ordering, and ISA taxonomy have separate specialist homes.</p>
+</section>
+<section id="learning-objectives-and-analytical-questions" aria-labelledby="heading-learning-objectives-and-analytical-questions">
+<h2 id="heading-learning-objectives-and-analytical-questions">Learning Objectives and Analytical Questions</h2>
+<p>Readers should be able to distinguish architectural registers from physical storage; interpret the program counter and condition state across three ISA families; trace correct instruction and trap state transitions; identify which values calling conventions preserve; explain how a kernel saves a resumable hardware context; and specify how to test architectural correctness independently of microarchitectural optimization.</p>
+<ol><li>Which register values must be visible after an instruction retires?</li><li>Which apparently special registers are defined by hardware, and which receive their meaning from an ABI?</li><li>How do flags, PC updates, privilege status, and exception records affect subsequent execution?</li><li>What state must survive a thread switch or a virtual-machine transition?</li><li>How does a speculative CPU present the illusion of ordered architectural updates?</li><li>What can a debugger observe without reading implementation-private queues and predictors?</li></ol>
+</section>
+<section id="three-layers-of-state" aria-labelledby="heading-three-layers-of-state">
+<h2 id="heading-three-layers-of-state">Three Layers of State</h2>
+<p><strong>Architectural state</strong> comprises the registers and control effects that the ISA and privileged architecture define. <strong>Microarchitectural state</strong> is implementation-specific information such as physical register mappings, reorder-buffer entries, branch-predictor history, speculative cache activity, pipeline occupancy, and temporary execution tags. <strong>Software-maintained state</strong> includes thread stacks, operating-system save areas, scheduling metadata, and application data structures. Each layer has different persistence and observation rules.</p>
+<p>A user-space function can depend on an ISA-defined register value and an ABI-defined calling convention. It cannot assume that an internal physical register number remains fixed, because renaming hardware may allocate a different location on every invocation. A kernel may save selected architecturally defined values into memory; that save area is software-maintained state, even though its contents originated in hardware registers.</p>
+<p>The boundary is not equivalent to “on-chip versus off-chip.” Some architectural storage may be backed by different physical resources across designs, and some microarchitectural state lives on the same die as the register file. The classification concerns <em>contractual visibility and persistence</em>, not location.</p>
+</section>
+<section id="state-classification-matrix" aria-labelledby="heading-state-classification-matrix">
+<h2 id="heading-state-classification-matrix">State Classification Matrix</h2>
+<table><thead><tr><th scope="col">State or structure</th><th scope="col">Visible contract</th><th scope="col">Owner of specification</th><th scope="col">Typical persistence</th></tr></thead><tbody><tr><td>General-purpose integer registers</td><td>ISA-defined values and effects</td><td>Unprivileged ISA</td><td>Across normal instructions until overwritten</td></tr><tr><td>Program counter / instruction pointer</td><td>Control-flow address and legal update rules</td><td>ISA and privilege architecture</td><td>Advances, branches, or traps</td></tr><tr><td>Flags or predicate state</td><td>Condition tests and status effects if defined</td><td>ISA / extension</td><td>Across instructions unless affected</td></tr><tr><td>Floating-point and vector registers</td><td>Extension-defined numeric and vector state</td><td>ISA extensions</td><td>Must be managed when contexts change</td></tr><tr><td>Privileged control/status registers</td><td>Mode, trap, address-translation and status behavior</td><td>Privileged architecture</td><td>Across relevant privileged operations</td></tr><tr><td>Physical register file and rename map</td><td>Normally hidden; implementation-specific</td><td>Microarchitecture</td><td>Changes as instructions allocate and retire</td></tr><tr><td>Stack frame in memory</td><td>Software-visible but not an architectural register</td><td>ABI and program</td><td>Until overwritten, deallocated, or invalidated</td></tr><tr><td>Branch predictor / speculation queue</td><td>Not ordinary architectural registers</td><td>Implementation</td><td>May be discarded or updated invisibly</td></tr></tbody></table><p>Some hardware counters and debug facilities have architecturally defined interfaces yet implementation-dependent details. Classify such features by their documented exposure and access restrictions rather than putting every performance-related structure in one category.</p>
+</section>
+<section id="illustrated-state-boundary" aria-labelledby="heading-illustrated-state-boundary">
+<h2 id="heading-illustrated-state-boundary">Illustrated State Boundary</h2>
+<figure><svg viewBox="0 0 940 430" role="img" aria-labelledby="state-diagram-title state-diagram-desc" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px"><title id="state-diagram-title">Architectural and physical state boundary inside a processor</title><desc id="state-diagram-desc">Software observes an architectural register and status interface. A retirement boundary separates committed architectural state from speculative physical register files, rename tables, and execution queues. The operating system can save architectural context to memory.</desc><defs><marker id="arrcpu" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0 0L9 3.5L0 7Z" fill="currentColor"/></marker></defs><g stroke="currentColor" fill="none" stroke-width="2"><rect x="22" y="22" width="252" height="105" rx="9"/><rect x="344" y="22" width="259" height="105" rx="9"/><rect x="676" y="22" width="240" height="105" rx="9"/><rect x="24" y="203" width="285" height="190" rx="9"/><rect x="360" y="203" width="286" height="190" rx="9"/><rect x="697" y="203" width="215" height="190" rx="9"/><path d="M275 75H340" marker-end="url(#arrcpu)"/><path d="M604 75H670" marker-end="url(#arrcpu)"/><path d="M481 204V132" marker-end="url(#arrcpu)"/><path d="M798 204V132" marker-end="url(#arrcpu)"/><path d="M311 297H357" marker-end="url(#arrcpu)"/><path d="M647 297H692" marker-end="url(#arrcpu)"/></g><g fill="currentColor" font-family="sans-serif" font-size="17" text-anchor="middle"><text x="148" y="48">Program and debugger</text><text x="148" y="77">read specified state</text><text x="148" y="100">and execution results</text><text x="474" y="47">Architectural interface</text><text x="474" y="75">GPRs · PC · flags</text><text x="474" y="99">FP / vector · CSRs</text><text x="797" y="45">OS context image</text><text x="797" y="74">saved and restored</text><text x="797" y="98">by privileged code</text><text x="165" y="229">Decode and issue</text><text x="165" y="266">operands and tags</text><text x="165" y="295">speculative instructions</text><text x="165" y="324">may execute early</text><text x="500" y="229">Physical state</text><text x="500" y="266">rename maps · values</text><text x="500" y="295">queues · pending stores</text><text x="500" y="324">recovery checkpoints</text><text x="805" y="229">Retirement</text><text x="805" y="267">validated results</text><text x="805" y="295">become visible</text><text x="805" y="324">in program order</text></g></svg><figcaption>Conceptual model only. Actual processors differ in commit structures, physical state tracking, privileged save mechanisms, and whether some resources are shared among hardware threads.</figcaption></figure>
+</section>
+<section id="general-purpose-registers-meaning-and-roles" aria-labelledby="heading-general-purpose-registers-meaning-and-roles">
+<h2 id="heading-general-purpose-registers-meaning-and-roles">General-Purpose Registers: Meaning and Roles</h2>
+<p><strong>General-purpose registers</strong> hold machine-width values used as integer operands, pointers, counters, bit masks, temporary results, and sometimes return addresses. ISA encodings specify register indices; instructions define which operands are read and which destinations are written. Many ISAs treat these registers as raw bit patterns and interpret them as signed, unsigned, addresses, or logical values depending on the operation.</p>
+<p>A register label such as “stack pointer” may mean a hardware-designated special register, a designated member of a general register bank, or an ABI role. Those cases must not be conflated. Likewise, a source-language variable may remain in a register, move between registers, reside in memory, or disappear under optimization. Register allocation is an application of software compilation, not a change to the ISA-defined number of general registers.</p>
+<p>Register width matters. A 32-bit addition typically produces a 32-bit defined result under its ISA semantics; using a 64-bit host language to simulate it without masking may produce a wrong architectural value. The details of signed comparisons, sign extension, and upper-bit treatment differ across instruction families.</p>
+</section>
+<section id="risc-v-integer-state-as-a-reference-model" aria-labelledby="heading-risc-v-integer-state-as-a-reference-model">
+<h2 id="heading-risc-v-integer-state-as-a-reference-model">RISC-V Integer State as a Reference Model</h2>
+<p>For base <strong>RV32I</strong>, the unprivileged integer register state contains 32 registers <code>x0</code>–<code>x31</code>, each 32 bits wide, plus the program counter. <code>x0</code> is hardwired to zero: reading it returns zero, and instructions naming it as the destination discard the register result. Thus a programmer names 32 indices but has 31 writable integer registers. In RV64I, integer register width is 64 bits. The smaller RV32E/RV64E profiles use a reduced register set, so “32 registers in every RISC-V processor” would be incorrect.</p>
+<p>The standard RISC-V software convention calls <code>x1</code> <code>ra</code> (return address), <code>x2</code> <code>sp</code> (stack pointer), <code>x8</code> <code>s0/fp</code>, and certain registers <code>a</code>, <code>s</code>, or <code>t</code> according to calling-convention roles. Most of these names are <strong>ABI agreements</strong>, not hardwired functional limitations in the base ISA. The base integer architecture does not dedicate a hardware stack-pointer register or a hardware-enforced call-return register.</p>
+<p>This distinction is visible in machine-code behavior: an integer ADD to <code>x2</code> still uses register index 2, regardless of whether the software follows stack discipline. The <a href="https://docs.riscv.org/reference/isa/unpriv/rv32.html">RISC-V RV32I reference</a> and <a href="https://docs.riscv.org/reference/abi/v1.0/riscv-cc-register-convention.html">register convention</a> document separate layers of these rules.</p>
+</section>
+<section id="executable-example-zero-register-and-machine-width" aria-labelledby="heading-executable-example-zero-register-and-machine-width">
+<h2 id="heading-executable-example-zero-register-and-machine-width">Executable Example: Zero Register and Machine Width</h2>
+<pre><code class="language-python">MASK = (1 &lt;&lt; 32) - 1
+
+class RV32Registers:
+    def __init__(self):
+        self._gpr = [0] * 32
+
+    def read(self, index):
+        assert 0 &lt;= index &lt; 32
+        return 0 if index == 0 else self._gpr[index]
+
+    def write(self, index, value):
+        assert 0 &lt;= index &lt; 32
+        if index != 0:
+            self._gpr[index] = value &amp; MASK
+
+r = RV32Registers()
+r.write(0, 99)
+r.write(5, 0xFFFF_FFFF)
+r.write(6, r.read(5) + 1)
+assert (r.read(0), r.read(5), r.read(6)) == (0, MASK, 0)
+print(&quot;x0=0; x5=0xffffffff; x6=0x00000000&quot;)</code></pre><p>This is an instructional register bank, not a CPU emulator: it does not implement instruction decoding, traps, privilege, memory, or timing. Its value is making two architectural properties explicit—<code>x0</code> cannot change and ordinary 32-bit results wrap to the specified register width.</p>
+</section>
+<section id="register-names-aliases-and-debugger-output" aria-labelledby="heading-register-names-aliases-and-debugger-output">
+<h2 id="heading-register-names-aliases-and-debugger-output">Register Names, Aliases, and Debugger Output</h2>
+<p>Hardware instruction encodings generally identify registers through bit fields or special register encodings. Assemblers and disassemblers translate these into human-readable names. In RISC-V, the architectural name <code>x10</code> and ABI name <code>a0</code> denote the same integer register; displaying one instead of the other does not change the stored bits. Similarly, common x86-64 subregister names refer to overlapping portions of a wider architectural register, subject to specific partial-write rules.</p>
+<p>A debugger must distinguish a physical machine’s register inventory from a thread’s saved logical context. When a thread is not actively executing, debugger register values may come from an operating-system frame in memory. On another ISA, debug access may include system registers only at appropriate privilege, with some fields inaccessible or synthesized by the debugging environment.</p>
+<p>When reading assembly, identify whether a name is an ISA-defined register, a conventional alias, a compiler-generated symbol, or a display convention. Relying on a friendly alias without knowing its underlying encoding can obscure which register is truly modified.</p>
+</section>
+<section id="program-counter-and-instruction-address" aria-labelledby="heading-program-counter-and-instruction-address">
+<h2 id="heading-program-counter-and-instruction-address">Program Counter and Instruction Address</h2>
+<p>The <strong>program counter</strong> (PC), also called an instruction pointer in some ISAs, identifies the instruction address associated with the architectural execution stream. Ordinary sequential execution generally advances to the next instruction boundary; branches, calls, returns, exceptions, and privileged returns select another address. The correct update rule is ISA-specific and may depend on instruction encoding length.</p>
+<p>It is misleading to assert that every successful instruction advances a universal PC by four bytes. Fixed-width teaching examples often use +4, whereas variable-length instruction architectures—including x86 and RISC-V with a compressed-instruction extension—may have different sequential advances. Some ISAs allow the current PC to be read or used in address calculations through specific instructions rather than through a normal GPR read port.</p>
+<p>In a speculative core, the <em>fetch address</em> may point far ahead of the most recently retired instruction. A branch predictor and speculative queue may contain several predicted paths. Software’s architectural PC value is therefore not interchangeable with the implementation’s instantaneous instruction-fetch pointer.</p>
+</section>
+<section id="sequential-branch-jump-and-return-transitions" aria-labelledby="heading-sequential-branch-jump-and-return-transitions">
+<h2 id="heading-sequential-branch-jump-and-return-transitions">Sequential, Branch, Jump, and Return Transitions</h2>
+<table><thead><tr><th scope="col">Control event</th><th scope="col">Architectural transition</th><th scope="col">Important caveat</th></tr></thead><tbody><tr><td>Sequential instruction</td><td>PC becomes address of next instruction</td><td>Instruction size is not always fixed</td></tr><tr><td>Conditional branch taken</td><td>PC becomes computed target</td><td>Comparison and target legality follow the ISA</td></tr><tr><td>Conditional branch not taken</td><td>PC becomes next sequential address</td><td>A speculative taken path must be rolled back if wrong</td></tr><tr><td>Call / link operation</td><td>PC redirects; designated register or memory may receive return address</td><td>Link location depends on ISA and calling convention</td></tr><tr><td>Return instruction</td><td>PC obtains target specified by return mechanism</td><td>Stack or link-register protocol is often ABI-dependent</td></tr><tr><td>Synchronous exception</td><td>Instruction-level fault transfers control to defined handler</td><td>Faulting instruction must not produce forbidden committed effects</td></tr><tr><td>Interrupt</td><td>Execution transfers at a permitted architectural boundary</td><td>Precise capture and priority are implementation/ISA dependent</td></tr><tr><td>Privilege return</td><td>PC and selected status restore from trap state</td><td>Return permission and target constraints must be enforced</td></tr></tbody></table>
+</section>
+<section id="executable-example-pc-updates-are-not-always-plus-four" aria-labelledby="heading-executable-example-pc-updates-are-not-always-plus-four">
+<h2 id="heading-executable-example-pc-updates-are-not-always-plus-four">Executable Example: PC Updates Are Not Always Plus Four</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass
+class ControlState:
+    pc: int
+    link: int = 0
+
+    def sequential(self, instruction_length):
+        assert instruction_length in (2, 4)  # teaching RISC-V C/non-C subset
+        self.pc += instruction_length
+
+    def jal(self, target, instruction_length=4):
+        old = self.pc
+        self.link = old + instruction_length
+        self.pc = target
+
+s = ControlState(0x1000)
+s.sequential(2)
+assert s.pc == 0x1002
+s.jal(0x2000, 4)
+assert (s.pc, s.link) == (0x2000, 0x1006)
+print(hex(s.pc), hex(s.link))</code></pre><p>This example assumes a supported two-byte instruction encoding and uses an arbitrary link field. An actual RISC-V JAL writes a selectable integer destination register; it is not forced to use a separately stored <code>link</code> variable. The illustration isolates the architectural distinction between sequential advancement and a control-transfer return address.</p>
+</section>
+<section id="condition-codes-and-status-flags" aria-labelledby="heading-condition-codes-and-status-flags">
+<h2 id="heading-condition-codes-and-status-flags">Condition Codes and Status Flags</h2>
+<p>Some architectures expose a condition-code register whose bits summarize arithmetic, comparisons, or status. Conventional names include <strong>N</strong> (negative/sign bit), <strong>Z</strong> (zero), <strong>C</strong> (carry or a related borrow convention), and <strong>V</strong> (signed overflow). Their exact update and consumption rules differ by ISA and instruction. An ADD may set flags, leave them unchanged, or require a separately selected flag-setting variant.</p>
+<p><strong>Unsigned carry and signed overflow are different conditions.</strong> An 8-bit addition of 255 + 1 has a carry out and a zero 8-bit result, but it does not represent signed overflow when its operands are interpreted as -1 and 1. By contrast, signed 8-bit 127 + 1 yields -128 in two’s complement with no unsigned carry out, but does overflow signed representable range.</p>
+<p>Base RISC-V integer instructions have no general condition-code register. Conditional branches compare register operands directly. x86-64 exposes RFLAGS for many integer operations; AArch64 has condition flags held in PSTATE, with instructions that selectively update and test NZCV. Portable compilers implement equivalent high-level comparisons by using architecture-appropriate mechanisms rather than assuming a shared flags design.</p>
+</section>
+<section id="worked-arithmetic-flag-table" aria-labelledby="heading-worked-arithmetic-flag-table">
+<h2 id="heading-worked-arithmetic-flag-table">Worked Arithmetic Flag Table</h2>
+<table><thead><tr><th scope="col">8-bit operands</th><th scope="col">8-bit result</th><th scope="col">N</th><th scope="col">Z</th><th scope="col">C</th><th scope="col">V</th><th scope="col">Interpretation</th></tr></thead><tbody><tr><td>0x7F + 0x01</td><td>0x80</td><td>1</td><td>0</td><td>0</td><td>1</td><td>127 + 1 overflows signed range</td></tr><tr><td>0xFF + 0x01</td><td>0x00</td><td>0</td><td>1</td><td>1</td><td>0</td><td>255 + 1 carries unsigned</td></tr><tr><td>0x80 + 0x80</td><td>0x00</td><td>0</td><td>1</td><td>1</td><td>1</td><td>-128 + -128 overflows signed; unsigned carry</td></tr><tr><td>0x02 + 0x03</td><td>0x05</td><td>0</td><td>0</td><td>0</td><td>0</td><td>No arithmetic boundary</td></tr><tr><td>0x00 + 0x00</td><td>0x00</td><td>0</td><td>1</td><td>0</td><td>0</td><td>Zero result</td></tr></tbody></table><p>The table illustrates a common four-flag interpretation for <em>addition</em>; it is not a complete specification of any particular processor’s flags under subtraction, shifts, rotates, multiplication, or compare instructions.</p>
+</section>
+<section id="executable-example-deriving-n-z-c-and-v" aria-labelledby="heading-executable-example-deriving-n-z-c-and-v">
+<h2 id="heading-executable-example-deriving-n-z-c-and-v">Executable Example: Deriving N, Z, C, and V</h2>
+<pre><code class="language-python">def add8_flags(a, b):
+    assert 0 &lt;= a &lt;= 255 and 0 &lt;= b &lt;= 255
+    wide = a + b
+    r = wide &amp; 0xFF
+    n = (r &gt;&gt; 7) &amp; 1
+    z = int(r == 0)
+    c = int(wide &gt; 255)
+    # Signed overflow: same-sign operands, changed result sign
+    v = int(((~(a ^ b)) &amp; (a ^ r) &amp; 0x80) != 0)
+    return r, n, z, c, v
+
+assert add8_flags(0x7F, 1) == (0x80, 1, 0, 0, 1)
+assert add8_flags(0xFF, 1) == (0x00, 0, 1, 1, 0)
+assert add8_flags(0x80, 0x80) == (0, 0, 1, 1, 1)
+assert add8_flags(2, 3) == (5, 0, 0, 0, 0)
+print(&quot;Arithmetic flag cases match the table&quot;)</code></pre><p>The code calculates flags for unsigned 8-bit input bit patterns. It does not claim that all real ISAs update each flag for every arithmetic instruction. The signed-overflow formula uses input and result sign bits, so it remains correct even when host-language integers have arbitrary precision.</p>
+</section>
+<section id="x86-64-aarch64-and-risc-v-register-comparison" aria-labelledby="heading-x86-64-aarch64-and-risc-v-register-comparison">
+<h2 id="heading-x86-64-aarch64-and-risc-v-register-comparison">x86-64, AArch64, and RISC-V Register Comparison</h2>
+<table><thead><tr><th scope="col">Feature</th><th scope="col">x86-64</th><th scope="col">AArch64</th><th scope="col">Base RISC-V RV64I</th></tr></thead><tbody><tr><td>General-purpose set</td><td>16 64-bit GPRs in 64-bit mode</td><td>31 64-bit GPRs X0–X30</td><td>32 indices x0–x31, x0 fixed zero</td></tr><tr><td>Instruction address</td><td>RIP</td><td>PC</td><td>pc</td></tr><tr><td>Integer condition state</td><td>RFLAGS includes arithmetic flags</td><td>PSTATE contains NZCV flags</td><td>No general arithmetic flags register</td></tr><tr><td>Stack role</td><td>RSP is architecturally named</td><td>SP is distinct from X0–X30 in register selection</td><td>x2 called sp by standard ABI</td></tr><tr><td>Return link</td><td>Usually stack-based call/return</td><td>X30 commonly link register</td><td>x1 called ra by standard ABI</td></tr><tr><td>Floating/vector state</td><td>x87 / XMM / wider vector features as supported</td><td>FP/SIMD vector bank as supported</td><td>Optional F/D and V extensions</td></tr><tr><td>Privilege/system state</td><td>Control/MSR and other defined state</td><td>System registers and exception levels</td><td>CSRs and privilege modes as implemented</td></tr></tbody></table><p>This comparison deliberately omits many extension and execution-mode details. Use the specific ISA manuals for exact behavior, supported extensions, aliasing, read/write masks, and exception semantics. Counts are not comparisons of total on-die physical registers.</p>
+</section>
+<section id="partial-register-writes-and-register-aliasing" aria-labelledby="heading-partial-register-writes-and-register-aliasing">
+<h2 id="heading-partial-register-writes-and-register-aliasing">Partial-Register Writes and Register Aliasing</h2>
+<p>Some architectures expose multiple names for overlapping portions of a register. In x86-64, for example, <code>RAX</code>, <code>EAX</code>, <code>AX</code>, and byte-sized names access overlapping logical state, but their write semantics are not interchangeable. In 64-bit mode, a write to a 32-bit general register typically zero-extends the result into the corresponding 64-bit register; a narrow write can preserve unaffected bits. The precise rule depends on the instruction and operand width.</p>
+<p>This is <strong>architectural aliasing</strong>, not register renaming. It is part of what programs and debuggers must observe. A simulator that updates only the low 32 bits after an EAX write and leaves the high half of RAX unchanged would produce incorrect x86-64 state for instructions with the ordinary 32-bit GPR write rule.</p>
+<p>Other ISAs have distinct register-width views or zero-register encodings with their own rules. Never infer write masking or zero extension from the textual appearance of an assembly register name. Trace the exact instruction operation and defined destination width.</p>
+</section>
+<section id="executable-example-x86-64-subregister-view" aria-labelledby="heading-executable-example-x86-64-subregister-view">
+<h2 id="heading-executable-example-x86-64-subregister-view">Executable Example: x86-64 Subregister View</h2>
+<pre><code class="language-python">class SimplifiedRAX:
+    &quot;&quot;&quot;Only ordinary RAX/EAX/AX/AL writes; not all x86 semantics.&quot;&quot;&quot;
+    def __init__(self, value=0):
+        self.value = value &amp; ((1 &lt;&lt; 64) - 1)
+
+    def write_eax(self, value):
+        self.value = value &amp; 0xFFFF_FFFF  # clears upper 32 bits
+
+    def write_ax(self, value):
+        self.value = (self.value &amp; ~0xFFFF) | (value &amp; 0xFFFF)
+
+    def write_al(self, value):
+        self.value = (self.value &amp; ~0xFF) | (value &amp; 0xFF)
+
+r = SimplifiedRAX(0x1122_3344_5566_7788)
+r.write_ax(0xABCD)
+assert r.value == 0x1122_3344_5566_ABCD
+r.write_eax(0xDEAD_BEEF)
+assert r.value == 0x0000_0000_DEAD_BEEF
+r.write_al(0x12)
+assert r.value == 0x0000_0000_DEAD_BE12
+print(hex(r.value))</code></pre><p>This example isolates one well-defined aliasing rule. It does not implement AH/high-byte restrictions, vector register overlap, or every historical execution mode.</p>
+</section>
+<section id="special-purpose-registers-and-implicit-operands" aria-labelledby="heading-special-purpose-registers-and-implicit-operands">
+<h2 id="heading-special-purpose-registers-and-implicit-operands">Special-Purpose Registers and Implicit Operands</h2>
+<p>An ISA may designate some registers as special-purpose: PC/instruction pointer, status registers, a hardware stack pointer, system control registers, loop controls, floating-point status, or exception return registers. Some instructions read or update these values implicitly. For example, a procedure-call instruction may save a return location without spelling out a conventional general-purpose destination in its assembly form.</p>
+<p>The term “special-purpose” is relative to the architecture. An ordinary GPR used by convention as a frame pointer should not be mistaken for a privileged control register. Conversely, a dedicated exception-link register may have strict privilege and access controls even if its data looks like an ordinary address. Programmers should identify which instructions may legally access or modify such registers and how the hardware constrains certain bit fields.</p>
+<p>Access restrictions are part of architectural state semantics. A register visible to supervisor code is not necessarily readable by an application, and a register read from user mode can trap rather than return a meaningful value.</p>
+</section>
+<section id="calling-conventions-are-not-the-isa" aria-labelledby="heading-calling-conventions-are-not-the-isa">
+<h2 id="heading-calling-conventions-are-not-the-isa">Calling Conventions Are Not the ISA</h2>
+<p>An <strong>application binary interface</strong> (ABI) specifies how functions pass arguments, return values, preserve selected registers, maintain stack alignment, and interoperate with other object code. It builds on an instruction set but is a separate contract. On conventional RISC-V ABIs, registers named <code>s0</code>–<code>s11</code> are callee-saved, while argument and temporary registers have caller-saved rules. The ABI also assigns roles such as <code>sp</code> and <code>ra</code>.</p>
+<p>A caller-saved register may be overwritten by a called function unless the caller saves it. A callee-saved register must be restored by a function that changes it. These requirements are about <strong>function boundaries</strong>, not hardware-context switching between unrelated OS threads. The OS can need to preserve additional state—including registers the ABI declares caller-saved—because an asynchronous interruption may happen anywhere.</p>
+<p>Nonstandard ABIs, embedded profiles, interrupt handlers, and compiler-generated calling stubs may have extra requirements. Always check the exact platform ABI instead of assuming that a mnemonic register name alone defines preservation.</p>
+</section>
+<section id="executable-example-caller-and-callee-saved-values" aria-labelledby="heading-executable-example-caller-and-callee-saved-values">
+<h2 id="heading-executable-example-caller-and-callee-saved-values">Executable Example: Caller- and Callee-Saved Values</h2>
+<pre><code class="language-python">def modeled_call(caller, callee_body):
+    # Simplified ABI illustration: s0 survives; t0 may be clobbered.
+    before_s0 = caller[&quot;s0&quot;]
+    callee_body(caller)
+    assert caller[&quot;s0&quot;] == before_s0
+
+def function_body(reg):
+    saved = reg[&quot;s0&quot;]
+    reg[&quot;s0&quot;] = 999       # temporary callee use
+    reg[&quot;t0&quot;] = 123       # caller-saved register may change
+    reg[&quot;s0&quot;] = saved     # restore before return
+
+frame = {&quot;s0&quot;: 42, &quot;t0&quot;: 7}
+modeled_call(frame, function_body)
+assert frame == {&quot;s0&quot;: 42, &quot;t0&quot;: 123}
+print(&quot;Callee-saved s0 preserved; caller-saved t0 modified&quot;)</code></pre><p>The example demonstrates preservation rules, not a complete ABI: it omits stack-pointer alignment, argument passing, a return address, frame setup, signal handling, and the OS’s obligations.</p>
+</section>
+<section id="floating-point-register-state" aria-labelledby="heading-floating-point-register-state">
+<h2 id="heading-floating-point-register-state">Floating-Point Register State</h2>
+<p>Floating-point execution may have its own architectural registers, data formats, control state, and exception-status fields. For example, the standard RISC-V F floating-point extension adds floating-point register state and a floating-point control/status interface; the <code>fcsr</code> register contains rounding-mode and accrued exception information. Other ISA families expose different FP/vector register architectures, often with overlapping naming or legacy modes.</p>
+<p>Floating-point results are not determined solely by the input operand bit patterns. A specified operation can depend on rounding mode, supported format, exception handling, and modes permitted by the architecture. A context switch that restores data registers but loses the rounding control could make numerical code produce different results even if its source instructions and memory inputs appear unchanged.</p>
+<p>Floating-point accrued exception bits can be status records rather than immediate operating-system traps. A register-value dump that omits these controls is therefore not necessarily a complete snapshot of numerically observable execution state. The separate <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a> article owns the arithmetic-circuit detail.</p>
+</section>
+<section id="risc-v-floating-point-control-and-status-example" aria-labelledby="heading-risc-v-floating-point-control-and-status-example">
+<h2 id="heading-risc-v-floating-point-control-and-status-example">RISC-V Floating-Point Control and Status Example</h2>
+<table><thead><tr><th scope="col">RISC-V item</th><th scope="col">Architectural role</th><th scope="col">Context relevance</th></tr></thead><tbody><tr><td>f0–f31</td><td>Floating-point data registers with widths and behaviors according to implemented extensions</td><td>Live values must be preserved as required by execution context</td></tr><tr><td>fflags</td><td>Accrued floating-point exception flags</td><td>Changing them changes later observable status</td></tr><tr><td>frm</td><td>Dynamic rounding-mode field</td><td>Can change later arithmetic results</td></tr><tr><td>fcsr</td><td>Combined interface containing frm and fflags</td><td>Restore appropriate defined fields</td></tr><tr><td>mstatus.FS / sstatus.FS view</td><td>Privilege-visible tracking of FP state status when supported</td><td>Can support OS FP context management</td></tr></tbody></table><p>The table is illustrative for systems implementing relevant RISC-V floating-point and privilege facilities. Not every embedded RISC-V processor includes those extensions, and a control/status-field availability must be checked against the implemented architecture.</p>
+</section>
+<section id="vector-and-simd-architectural-registers" aria-labelledby="heading-vector-and-simd-architectural-registers">
+<h2 id="heading-vector-and-simd-architectural-registers">Vector and SIMD Architectural Registers</h2>
+<p>Vector and SIMD architectural state can be much larger than a scalar integer register bank. It may include vector lane values, masks, predicate bits, saturation flags, element-width controls, vector lengths, and restart positions. A system cannot regard “the integer registers and PC” as a complete thread context after software uses these features.</p>
+<p>The RISC-V V vector extension provides 32 architectural vector registers plus unprivileged vector control/status registers including <code>vl</code>, <code>vtype</code>, and <code>vstart</code>. Their semantics affect how many elements participate, how elements are interpreted, and where a resumable vector operation restarts. The hardware implementation may provide varying maximum vector length within the specification’s constraints, making portability a separate issue from mere register counting.</p>
+<p>On architectures with predicate masks or wider vector extensions, context-management cost and ABI preservation rules also depend on which features are enabled. OS support, feature discovery, per-thread enablement, and correct restore behavior matter as much as arithmetic throughput. This article addresses the <em>state contract</em>, not lane organization or tensor execution hardware.</p>
+</section>
+<section id="extension-and-feature-discovery" aria-labelledby="heading-extension-and-feature-discovery">
+<h2 id="heading-extension-and-feature-discovery">Extension and Feature Discovery</h2>
+<p>An application should not assume that every member of an ISA family implements the same optional register sets. Unsupported extension instructions may trap, and reading a register that belongs to an absent or disabled feature may fail. Operating systems often expose processor feature information to programs and decide which features they may use safely.</p>
+<p>Feature discovery should establish <strong>hardware capability, current OS enablement, execution-mode restrictions, and the ABI/toolchain contract</strong>. A processor may physically implement a feature that the operating system has not enabled for user-mode execution. It may also expose a register size or feature version that limits the supported vector instructions.</p>
+<p>Migration across physical CPUs with different features requires care. Threads or virtual machines using state unavailable at the destination cannot be migrated merely by copying a byte-array context image. The migration mechanism needs a compatible target, an allowed emulation strategy, or an explicit feature-use restriction.</p>
+</section>
+<section id="privilege-levels-and-execution-modes" aria-labelledby="heading-privilege-levels-and-execution-modes">
+<h2 id="heading-privilege-levels-and-execution-modes">Privilege Levels and Execution Modes</h2>
+<p>Modern CPUs define modes that govern which operations software may perform, which address spaces it may access, and which control registers it may modify. An architectural <strong>privilege state</strong> is not simply a boolean “kernel flag.” Some systems have multiple execution levels, virtualization modes, enclave-related modes, or implementation-dependent privilege features. The transition rules are part of the architectural contract.</p>
+<p>Privileged status can contain interrupt-enable bits, previous privilege level, extension context state, endianness controls where defined, or translation/protection settings. Certain values are restricted, reserved, or transformed on write. Software must use documented masked or field-specific updates rather than treating the whole word as unrestricted application data.</p>
+<p>The CPU changes relevant privileged state on exceptions, returns, and privileged instructions. Ordinary arithmetic on a general-purpose register does not authorize a user process to change its current privilege level. A correct system enforces these boundaries regardless of the instruction scheduling mechanism beneath them.</p>
+</section>
+<section id="control-and-status-registers" aria-labelledby="heading-control-and-status-registers">
+<h2 id="heading-control-and-status-registers">Control and Status Registers</h2>
+<p><strong>Control and status registers</strong> (CSRs), system registers, and model-specific registers provide architectural interfaces for control, observation, exception handling, feature configuration, or monitoring. RISC-V reserves a CSR encoding space; standardized locations include privileged and some unprivileged facilities. Other architectures use different register namespaces and access instructions.</p>
+<p>An important distinction is between a readable status field and an unrestricted writable register. Some registers are read-only, some are writable only at higher privilege, and some fields are <em>write-any-read-legal</em> or otherwise constrained. Reserved encodings and unsupported modes should not be assumed safe or portable. Reading back a value may not reproduce all bits requested by a write.</p>
+<p>When implementing a CSR emulator or hypervisor, it is not enough to store an arbitrary integer under a numeric register address. The implementation must enforce privilege checks, read/write masks, side effects, state relationships, and correct traps for unsupported access.</p>
+</section>
+<section id="risc-v-privileged-state-examples" aria-labelledby="heading-risc-v-privileged-state-examples">
+<h2 id="heading-risc-v-privileged-state-examples">RISC-V Privileged-State Examples</h2>
+<table><thead><tr><th scope="col">Register or field</th><th scope="col">Common meaning</th><th scope="col">Important behavior</th></tr></thead><tbody><tr><td>mstatus</td><td>Machine-mode control/status including interrupt and previous-mode fields</td><td>Some fields change on trap entry and return</td></tr><tr><td>mepc</td><td>Machine trap resume/instruction address</td><td>May be overwritten by a new trap unless preserved</td></tr><tr><td>mcause</td><td>Machine trap cause including interrupt indication</td><td>Identifies the cause category of the recorded trap</td></tr><tr><td>mtval</td><td>Additional trap value for selected trap conditions</td><td>Meaning and presence of useful data depend on trap</td></tr><tr><td>mtvec</td><td>Machine trap vector configuration</td><td>Controls handler entry according to implemented mode</td></tr><tr><td>sstatus</td><td>Supervisor-visible status subset/view</td><td>Supervisor access is constrained by privileged specification</td></tr><tr><td>sepc / scause / stval</td><td>Supervisor trap record</td><td>Used for supervisor-targeted trap handling when supported</td></tr><tr><td>satp</td><td>Supervisor address-translation configuration</td><td>Supported modes and changes follow implementation/architecture rules</td></tr></tbody></table><p>The table uses named examples rather than declaring that every RISC-V microcontroller supports all supervisor, translation, or virtualization features. For exact legal values and trap behavior, consult the <a href="https://docs.riscv.org/reference/isa/priv/machine.html">machine-level</a> and <a href="https://docs.riscv.org/reference/isa/priv/supervisor.html">supervisor-level</a> specifications.</p>
+</section>
+<section id="synchronous-exceptions-and-asynchronous-interrupts" aria-labelledby="heading-synchronous-exceptions-and-asynchronous-interrupts">
+<h2 id="heading-synchronous-exceptions-and-asynchronous-interrupts">Synchronous Exceptions and Asynchronous Interrupts</h2>
+<p>A <strong>synchronous exception</strong> is causally associated with execution of a particular instruction, such as an illegal encoding or disallowed memory access. An <strong>interrupt</strong> is triggered by an asynchronous event, but the architecture prescribes how and when execution may be interrupted. In both cases, control transfers to a handler according to applicable privilege and delegation rules.</p>
+<p>The processor records information needed to identify the event and resume, emulate, terminate, or redirect execution. Common categories include the saved instruction address, a cause value, additional fault information, and previous privilege/interrupt status. The exact saved PC and return behavior depend on the cause and ISA; handlers must not blindly skip the recorded instruction by a fixed number of bytes.</p>
+<p>A handler may have to save ordinary registers before using them, because the hardware does not necessarily preserve the complete interrupted register file in a dedicated bank. <strong>Trap entry</strong> and <strong>software context save</strong> are distinct operations. Nested or reentrant traps require deliberate preservation of earlier trap records and state.</p>
+</section>
+<section id="precise-exceptions-and-the-architectural-boundary" aria-labelledby="heading-precise-exceptions-and-the-architectural-boundary">
+<h2 id="heading-precise-exceptions-and-the-architectural-boundary">Precise Exceptions and the Architectural Boundary</h2>
+<p>In a processor supporting <strong>precise exceptions</strong>, software observes a state corresponding to a defined sequential execution boundary. Earlier instructions have their required committed effects, while younger instructions do not leave forbidden architectural effects. This property is particularly important when the core has executed later instructions speculatively, perhaps even before an older fault is discovered.</p>
+<p>A reorder buffer, in-order retirement, destination rename mapping, and store-commit controls are common implementation mechanisms for precise architectural visibility. But these are mechanisms, not necessarily the ISA’s mandated hardware structures. A simpler in-order core can achieve precise behavior without the same machinery; an advanced core can use other structures.</p>
+<p>Precision does not mean that every microarchitectural side effect has been erased. Fetch, cache fills, predictor updates, or resource contention may have occurred speculatively, subject to security considerations. It also does not imply that all external I/O actions are trivially reversible: correct cores arrange memory and device transactions according to their architectural and system contracts.</p>
+</section>
+<section id="step-by-step-trap-entry-and-return" aria-labelledby="heading-step-by-step-trap-entry-and-return">
+<h2 id="heading-step-by-step-trap-entry-and-return">Step-by-Step Trap Entry and Return</h2>
+<p>Consider a user instruction that makes a disallowed memory access. The machine determines that the access must fault under its protection and translation rules. Younger speculative work is prevented from committing forbidden results. The architecture records the relevant return PC/cause/previous-mode information, selects the handler, and changes execution privilege and interrupt status as required. The operating-system handler then performs any further save steps needed by its software conventions.</p>
+<p>The handler may resolve the event, signal the user program, deliver a page, emulate an operation, or terminate the faulting context. If execution is to resume, it must restore or reconstruct the required general, floating-point, vector, status, and address-space context and perform the prescribed privileged return instruction. Returning to the same faulting instruction without resolving the cause can simply trigger the same fault again.</p>
+<p>This sequence is conceptual; real ISAs specify details such as trap delegation, vectored entry, PC alignment, interrupt masking, and return privilege that cannot be inferred from the diagram. The separate <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> article owns detailed trap control.</p>
+</section>
+<section id="executable-example-trap-record-and-resumption" aria-labelledby="heading-executable-example-trap-record-and-resumption">
+<h2 id="heading-executable-example-trap-record-and-resumption">Executable Example: Trap Record and Resumption</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass
+class ToyTrapCPU:
+    pc: int = 0x1000
+    mode: str = &quot;U&quot;
+    status_prev_mode: str = &quot;U&quot;
+    epc: int = 0
+    cause: str = &quot;&quot;
+
+    def trap(self, cause, handler=0x80000000):
+        # Teaching-only abstraction; not complete RISC-V mstatus semantics.
+        self.epc = self.pc
+        self.cause = cause
+        self.status_prev_mode = self.mode
+        self.mode = &quot;M&quot;
+        self.pc = handler
+
+    def resume(self):
+        assert self.mode == &quot;M&quot;
+        self.mode = self.status_prev_mode
+        self.pc = self.epc
+
+cpu = ToyTrapCPU()
+cpu.trap(&quot;load-access-fault&quot;)
+assert (cpu.epc, cpu.pc, cpu.mode) == (0x1000, 0x80000000, &quot;M&quot;)
+cpu.resume()
+assert (cpu.pc, cpu.mode) == (0x1000, &quot;U&quot;)
+print(&quot;Faulting PC and prior mode restored&quot;)</code></pre><p>This deliberately simplified model does not implement CSR side effects, delegation, trap-vector modes, permission checks, or nested trap storage. It highlights why recording an instruction address and prior execution privilege is not equivalent to saving every general-purpose register.</p>
+</section>
+<section id="context-switching-between-threads" aria-labelledby="heading-context-switching-between-threads">
+<h2 id="heading-context-switching-between-threads">Context Switching Between Threads</h2>
+<p>A scheduler can stop one software thread and resume another by preserving the outgoing thread’s required execution context and restoring the incoming context. Such a context typically includes the program counter, relevant general registers, stack pointer, flags or control state, and any enabled floating-point/vector state. It also requires an appropriate address-space and privilege environment. The exact saved set depends on the platform, thread implementation, interruption point, and kernel design.</p>
+<p>The process is not the same as an ordinary function call. An asynchronous preemption may happen between arbitrary instructions, including a point at which caller-saved ABI registers hold live values. A kernel that saves only callee-saved GPRs under the assumption that “function rules apply” can corrupt an interrupted computation.</p>
+<p>Conversely, it may be unnecessary to save every register on every context switch if the OS has a correct, documented deferred-save mechanism or can prove some state is already recorded elsewhere. Such optimizations must preserve the full architectural illusion, including error paths and migration between cores.</p>
+</section>
+<section id="context-save-checklist" aria-labelledby="heading-context-save-checklist">
+<h2 id="heading-context-save-checklist">Context-Save Checklist</h2>
+<table><thead><tr><th scope="col">Category</th><th scope="col">Questions before switching</th><th scope="col">Potential failure</th></tr></thead><tbody><tr><td>Instruction pointer</td><td>Where must the thread resume, and what instruction boundary was interrupted?</td><td>Return to wrong instruction</td></tr><tr><td>Integer GPRs / stack</td><td>Which live values and stack root must survive?</td><td>Corrupted calculations or stack</td></tr><tr><td>Condition flags / predicates</td><td>Are subsequent conditional operations affected?</td><td>Incorrect branch or conditional move</td></tr><tr><td>FP / SIMD / vector</td><td>Which extensions were used and what controls accompany their data?</td><td>Numerical or vector-state corruption</td></tr><tr><td>Privilege / status</td><td>Is mode and interrupt control restored lawfully?</td><td>Unauthorized access or masking errors</td></tr><tr><td>Address-space context</td><td>Which translation/protection metadata selects the intended memory?</td><td>Access to wrong address space</td></tr><tr><td>Security domain</td><td>Should sensitive registers or caches be cleared, partitioned, or otherwise mitigated?</td><td>Cross-domain information exposure</td></tr><tr><td>Debug / performance state</td><td>Which tools require reproducible per-thread observation?</td><td>Misleading debugger context</td></tr></tbody></table>
+</section>
+<section id="executable-example-two-software-thread-contexts" aria-labelledby="heading-executable-example-two-software-thread-contexts">
+<h2 id="heading-executable-example-two-software-thread-contexts">Executable Example: Two Software Thread Contexts</h2>
+<pre><code class="language-python">from copy import deepcopy
+
+class ToyScheduler:
+    def __init__(self):
+        self.hardware = {&quot;pc&quot;: 0, &quot;gpr&quot;: [0] * 32, &quot;flags&quot;: 0}
+        self.saved = {
+            &quot;A&quot;: deepcopy(self.hardware),
+            &quot;B&quot;: deepcopy(self.hardware),
+        }
+        self.current = &quot;A&quot;
+
+    def switch(self, target):
+        self.saved[self.current] = deepcopy(self.hardware)
+        self.hardware = deepcopy(self.saved[target])
+        self.current = target
+
+scheduler = ToyScheduler()
+scheduler.hardware[&quot;gpr&quot;][5] = 42
+scheduler.hardware[&quot;pc&quot;] = 0x1000
+scheduler.switch(&quot;B&quot;)
+scheduler.hardware[&quot;gpr&quot;][5] = 99
+scheduler.hardware[&quot;pc&quot;] = 0x2000
+scheduler.switch(&quot;A&quot;)
+assert (scheduler.hardware[&quot;gpr&quot;][5], scheduler.hardware[&quot;pc&quot;]) == (42, 0x1000)
+scheduler.switch(&quot;B&quot;)
+assert (scheduler.hardware[&quot;gpr&quot;][5], scheduler.hardware[&quot;pc&quot;]) == (99, 0x2000)
+print(&quot;Independent architectural contexts preserved&quot;)</code></pre><p>This is an explicitly incomplete scheduler model. A real operating system manages privilege, address spaces, device and interrupt state, stack-switch mechanics, and extensions. The demonstration isolates the essential invariant: restoring thread A must not expose values written only by thread B.</p>
+</section>
+<section id="lazy-context-switching-and-dirty-state-tracking" aria-labelledby="heading-lazy-context-switching-and-dirty-state-tracking">
+<h2 id="heading-lazy-context-switching-and-dirty-state-tracking">Lazy Context Switching and Dirty-State Tracking</h2>
+<p>Saving a large floating-point or vector register bank at every task switch can be expensive, particularly if some tasks never use those features. Operating systems may track whether an extension’s state is initialized, clean, dirty, enabled, or owned by a particular thread. RISC-V privileged state includes FS/VS-related tracking fields where the relevant extensions are present. Other architectures provide different facilities for state enablement and deferred saving.</p>
+<p>The optimization must not lose state or expose one thread’s values to another. A correct sequence might save an outgoing owner’s extended state when necessary and arrange for a later thread’s first use to initialize or restore its own values before allowing observation. The correct trap/enable sequence is platform-specific, and not every architecture or operating system supports the same strategy.</p>
+<p>A simple “do not save the vector registers unless the task marked itself as using vectors” is unsafe if the marker can be stale, if an interrupt handler uses the unit without preserving its owner, or if migration changes the available vector hardware. Correctness, security, and scheduling overhead must be evaluated together.</p>
+</section>
+<section id="executable-example-dirty-context-tracking" aria-labelledby="heading-executable-example-dirty-context-tracking">
+<h2 id="heading-executable-example-dirty-context-tracking">Executable Example: Dirty Context Tracking</h2>
+<pre><code class="language-python">class ExtendedStateOwner:
+    &quot;&quot;&quot;Abstract ownership model, not a real kernel FPU save routine.&quot;&quot;&quot;
+    def __init__(self):
+        self.saved = {&quot;A&quot;: 0, &quot;B&quot;: 0}
+        self.owner = None
+        self.hardware_vector = 0
+        self.dirty = False
+
+    def activate(self, who):
+        if self.owner == who:
+            return
+        if self.owner is not None and self.dirty:
+            self.saved[self.owner] = self.hardware_vector
+        self.hardware_vector = self.saved[who]
+        self.owner = who
+        self.dirty = False
+
+    def write_vector(self, value):
+        assert self.owner is not None
+        self.hardware_vector = value
+        self.dirty = True
+
+unit = ExtendedStateOwner()
+unit.activate(&quot;A&quot;)
+unit.write_vector(123)
+unit.activate(&quot;B&quot;)
+assert unit.hardware_vector == 0
+unit.write_vector(456)
+unit.activate(&quot;A&quot;)
+assert unit.hardware_vector == 123
+unit.activate(&quot;B&quot;)
+assert unit.hardware_vector == 456
+print(&quot;Dirty extended state retained per owner&quot;)</code></pre><p>One scalar stands in for an entire vector context. This toy model illustrates owner and dirty-state bookkeeping; it cannot substitute for actual privilege checks, instruction restart semantics, thread cancellation, or heterogeneous-CPU migration.</p>
+</section>
+<section id="hardware-threads-cores-and-architectural-contexts" aria-labelledby="heading-hardware-threads-cores-and-architectural-contexts">
+<h2 id="heading-hardware-threads-cores-and-architectural-contexts">Hardware Threads, Cores, and Architectural Contexts</h2>
+<p>A multicore processor may expose several separately schedulable <strong>hardware contexts</strong>. Each context needs the architecturally visible state required to progress its own instruction stream, even when the cores or hardware threads share caches and execution units. Simultaneous multithreading can provide multiple PC/register contexts inside one core while sharing some physical datapath resources.</p>
+<p>It is incorrect to count a shared cache, an internal branch predictor, or an execution port as part of one thread’s saved architectural register file merely because the unit influences its performance. The architecture may prescribe isolation or memory-order behavior without exposing the resource’s internal table as a programmer-visible register.</p>
+<p>Operating-system scheduling treats architectural contexts as independent execution targets, but the physical sharing pattern influences resource contention and security analysis. See <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multicore CPU Topology</a> for resource allocation detail.</p>
+</section>
+<section id="register-renaming-versus-architectural-register-naming" aria-labelledby="heading-register-renaming-versus-architectural-register-naming">
+<h2 id="heading-register-renaming-versus-architectural-register-naming">Register Renaming Versus Architectural Register Naming</h2>
+<p>An out-of-order CPU may maintain <strong>more physical registers than architecturally named registers</strong>. Rename logic maps an instruction’s architectural source and destination names to physical tags. A new write can allocate a new physical destination while an older version remains live for instructions that still need it. This removes false name-based dependencies such as write-after-write and write-after-read hazards while retaining true data dependencies.</p>
+<p>Crucially, physical register numbers are not ABI-visible architectural identities. A software function can require that architectural register x5 hold 42 at retirement; it cannot require that the hardware store 42 in physical register P17. In a different machine, the same architectural result could reside in another physical register, a different register file organization, or a reconstructed checkpoint.</p>
+<p>Rename maps, free lists, checkpoints, and retirement maps are implementation-defined. The architectural name is stable only at the contract boundary. This distinction is developed in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a>.</p>
+</section>
+<section id="example-two-versions-of-one-architectural-register" aria-labelledby="heading-example-two-versions-of-one-architectural-register">
+<h2 id="heading-example-two-versions-of-one-architectural-register">Example: Two Versions of One Architectural Register</h2>
+<p>Consider <code>ADD x5,x1,x2</code> followed by <code>MUL x5,x3,x4</code> and then <code>SUB x6,x5,x7</code>. A renaming engine may allocate physical P41 for the first write to x5 and P42 for the second. The SUB reading x5 maps to P42, because it must see the second instruction’s value. An earlier independent consumer could still reference P41 until it is safe to release that physical storage.</p>
+<p>The visible architectural instruction sequence remains ordered: at the relevant retirement boundary x5 has the value specified by the most recent committed write, and x6 is computed from the instruction-defined source state. If the second instruction faults or the branch speculation leading to it is invalid, the machine may discard its physical result and restore an earlier mapping.</p>
+<p>This example also explains why a processor with many physical registers does not offer more GPR names to application assembly code. Its additional registers are available to implementation machinery rather than being extensions to the programmer’s instruction encoding.</p>
+</section>
+<section id="executable-example-rename-mapping-and-commit" aria-labelledby="heading-executable-example-rename-mapping-and-commit">
+<h2 id="heading-executable-example-rename-mapping-and-commit">Executable Example: Rename Mapping and Commit</h2>
+<pre><code class="language-python">class TinyRenamer:
+    def __init__(self):
+        self.arch = {&quot;x5&quot;: 0}
+        self.physical = {0: 0}
+        self.map = {&quot;x5&quot;: 0}
+        self.next_tag = 1
+        self.pending = []
+
+    def issue_write(self, name, value):
+        tag = self.next_tag
+        self.next_tag += 1
+        self.physical[tag] = value
+        self.map[name] = tag
+        self.pending.append((name, tag))
+        return tag
+
+    def retire_oldest(self):
+        name, tag = self.pending.pop(0)
+        self.arch[name] = self.physical[tag]
+
+cpu = TinyRenamer()
+a = cpu.issue_write(&quot;x5&quot;, 11)
+b = cpu.issue_write(&quot;x5&quot;, 22)
+assert (a, b, cpu.physical[cpu.map[&quot;x5&quot;]]) == (1, 2, 22)
+assert cpu.arch[&quot;x5&quot;] == 0
+cpu.retire_oldest()
+assert cpu.arch[&quot;x5&quot;] == 11
+cpu.retire_oldest()
+assert cpu.arch[&quot;x5&quot;] == 22
+print(&quot;Architectural x5 changes only at modeled retirement&quot;)</code></pre><p>This toy illustrates mappings and in-order commit only. It omits exceptions, true operand dependencies, speculative checkpoints, value readiness, register reclamation, and reorder-buffer capacity. A real renamer must track these safely.</p>
+</section>
+<section id="retirement-and-the-illusion-of-sequential-execution" aria-labelledby="heading-retirement-and-the-illusion-of-sequential-execution">
+<h2 id="heading-retirement-and-the-illusion-of-sequential-execution">Retirement and the Illusion of Sequential Execution</h2>
+<p>Superscalar processors can fetch, decode, and execute multiple instructions before their final architectural effects are committed. An instruction may finish its arithmetic early but still wait for older instructions, unresolved faults, or ordering constraints. <strong>Completion</strong> and <strong>retirement</strong> should therefore not be used as synonyms.</p>
+<p>Architectural retirement ordinarily determines when a computed register update becomes irrevocable in a precise execution model. The physical hardware may have already created several transient register values and speculative PC candidates. Invalidated paths must not leave unauthorized architectural updates, even if they consumed power or influenced hidden microarchitectural resources.</p>
+<p>Memory and device operations have additional ordering and visibility rules. A store may be allocated and prepared before it becomes safe to make globally visible. This article’s register-state emphasis is only part of the larger contract addressed by <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a>.</p>
+</section>
+<section id="register-hazards-and-false-dependencies" aria-labelledby="heading-register-hazards-and-false-dependencies">
+<h2 id="heading-register-hazards-and-false-dependencies">Register Hazards and False Dependencies</h2>
+<p>A <strong>read-after-write</strong> dependency is a true data dependency: a consumer needs the value produced by a preceding instruction. A <strong>write-after-read</strong> or <strong>write-after-write</strong> relationship can be a false dependency caused by reuse of an architectural name. Hardware renaming or compiler register allocation can reduce some false dependencies without altering program semantics.</p>
+<p>In an in-order machine, the register file and bypass network may supply correct values through scheduled reads, forwards, or stalls. In an out-of-order machine, source operand tags and rename maps must identify the intended producer. Merely comparing architectural register numbers late in execution can select the wrong version.</p>
+<p>Dependency tracking also interacts with partial-register writes and special state such as flags. If two instructions update overlapping architectural state with different masks, renaming and merging rules can be more complex than allocating one whole-register destination. The implementation must honor every architecturally specified preserved bit.</p>
+</section>
+<section id="memory-is-related-but-not-identical-to-register-state" aria-labelledby="heading-memory-is-related-but-not-identical-to-register-state">
+<h2 id="heading-memory-is-related-but-not-identical-to-register-state">Memory Is Related but Not Identical to Register State</h2>
+<p>Processor architectural state exists within a broader <strong>architectural machine state</strong> that includes memory and possibly I/O-visible effects. A load can update a general-purpose register based on memory contents; a store can change memory without changing a destination GPR. If two executions have identical PC and register snapshots but different memory at a future load address, they can legitimately diverge on the next step.</p>
+<p>A context switch need not copy all process memory into CPU registers. An operating system usually changes which address space is active and protects processes through translation and permissions. Address-translation registers or other system controls may be part of privileged architectural state, while the backing page tables remain memory-resident software-managed structures with architectural interpretation.</p>
+<p>For test replay, preserve enough memory, I/O input, interrupt scheduling, and timing assumptions to reproduce the observed architectural behavior. A CPU register dump alone is not a complete replay artifact.</p>
+</section>
+<section id="virtual-machines-and-guest-architectural-state" aria-labelledby="heading-virtual-machines-and-guest-architectural-state">
+<h2 id="heading-virtual-machines-and-guest-architectural-state">Virtual Machines and Guest Architectural State</h2>
+<p>Virtualization introduces distinct architectural contexts: a guest operating system expects its own visible register and privilege behavior, while the hypervisor manages the physical processor and translation controls. Hardware virtualization extensions can provide dedicated guest state fields, traps on selected system instructions, and mechanisms for efficiently switching between host and guest execution.</p>
+<p>A virtual-machine monitor must preserve the illusion that guest software sees a conforming machine, not the host’s transient rename maps or physical register tags. It may virtualize control registers, mask unsupported features, and emulate certain operations. Compatibility requires handling exceptions and architectural state precisely, not merely copying general-purpose values.</p>
+<p>Migration requires agreement on CPU feature exposure and extended-state size. A saved guest vector register file from one host cannot simply be interpreted under a different, incompatible guest vector contract. The exact rules depend on the virtualization architecture, guest configuration, and hypervisor.</p>
+</section>
+<section id="security-sensitive-register-state" aria-labelledby="heading-security-sensitive-register-state">
+<h2 id="heading-security-sensitive-register-state">Security-Sensitive Register State</h2>
+<p>Architectural registers may hold cryptographic material, memory pointers, stack canaries, privileged configuration, return addresses, or data from another security domain. Context switching and privilege transitions must prevent unintended reads of protected state. Systems may zero selected buffers or registers, restrict debug access, and arrange state save/restore policies to avoid stale-data exposure.</p>
+<p>At the same time, microarchitectural side channels can leak information even where architectural register reads are correctly blocked. Speculative execution, caches, timing, and shared physical resources may create exposure not visible in the register-state contract. The existence of a software-visible privilege bit does not by itself solve side-channel isolation.</p>
+<p>Privilege-state writes are especially security critical. A control register that changes interrupt state or address translation must be accessed only through allowed instructions and valid modes. Review the ISA’s write constraints and test illegal accesses. See <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a>.</p>
+</section>
+<section id="debugging-tracing-and-architectural-snapshots" aria-labelledby="heading-debugging-tracing-and-architectural-snapshots">
+<h2 id="heading-debugging-tracing-and-architectural-snapshots">Debugging, Tracing, and Architectural Snapshots</h2>
+<p>Debuggers commonly display general registers, PC, stack pointer, flags/status, and selected extension registers. Some debugging hardware can single-step, set breakpoints, access privileged state, or inspect implementation-specific counters. The precise abilities and security restrictions differ across processors and execution modes.</p>
+<p>A useful register-state snapshot records: target ISA and extensions, execution mode, instruction boundary, PC, GPR values, enabled extended-state values and controls, and the accompanying memory/thread context. A raw integer dump without architecture metadata can be ambiguous: the same bits may be interpreted differently as addresses, signed numbers, vectors, or IEEE 754 values.</p>
+<p>Single-stepping in a debugger need not expose each internal micro-operation. Macroinstruction completion and visible architectural effects are the relevant software boundary. Similarly, a hardware counter measuring instructions retired is not a direct count of all internal micro-operations executed.</p>
+</section>
+<section id="executable-example-architectural-state-diff" aria-labelledby="heading-executable-example-architectural-state-diff">
+<h2 id="heading-executable-example-architectural-state-diff">Executable Example: Architectural State Diff</h2>
+<pre><code class="language-python">def state_diff(before, after):
+    keys = sorted(set(before) | set(after))
+    return {k: (before.get(k), after.get(k))
+            for k in keys if before.get(k) != after.get(k)}
+
+before = {&quot;pc&quot;: 0x1000, &quot;x1&quot;: 7, &quot;x5&quot;: 0, &quot;x6&quot;: 11, &quot;mode&quot;: &quot;U&quot;}
+after  = {&quot;pc&quot;: 0x1004, &quot;x1&quot;: 7, &quot;x5&quot;: 18, &quot;x6&quot;: 11, &quot;mode&quot;: &quot;U&quot;}
+changes = state_diff(before, after)
+assert changes == {&quot;pc&quot;: (0x1000, 0x1004), &quot;x5&quot;: (0, 18)}
+print({k: tuple(hex(v) if isinstance(v, int) else v for v in pair)
+       for k, pair in changes.items()})</code></pre><p>State-diff tooling can verify expected instruction effects, but this example checks a partial snapshot only. It cannot infer whether a store changed memory or a floating-point instruction modified hidden extension state omitted from the input.</p>
+</section>
+<section id="worked-scenario-1-a-saved-register-is-corrupted-after-a-function-call" aria-labelledby="heading-worked-scenario-1-a-saved-register-is-corrupted-after-a-function-call">
+<h2 id="heading-worked-scenario-1-a-saved-register-is-corrupted-after-a-function-call">Worked Scenario 1 — A Saved Register Is Corrupted After a Function Call</h2>
+<p>A compiled routine keeps a live pointer in a register designated <em>caller-saved</em> by its ABI, calls a helper, and later assumes that register still contains the pointer. The helper legitimately overwrites it while computing its result. The caller resumes with the wrong address even though neither instruction violated the underlying ISA. The failure is an ABI-contract error, not a CPU register-file fault.</p>
+<p>The investigation begins by identifying the platform ABI, then tracing the function-call boundary and the register’s live range. The fix is to preserve the value in an allowed callee-saved location, memory spill slot, or another compiler-approved strategy before the call. A compiler configured with an incorrect calling convention can produce the same symptom across multiple routines.</p>
+<p>The transferable lesson is that hardware-visible state and software preservation rules form distinct layers. Both must be satisfied for reliable low-level code.</p>
+</section>
+<section id="worked-scenario-2-floating-point-results-change-after-preemption" aria-labelledby="heading-worked-scenario-2-floating-point-results-change-after-preemption">
+<h2 id="heading-worked-scenario-2-floating-point-results-change-after-preemption">Worked Scenario 2 — Floating-Point Results Change After Preemption</h2>
+<p>A numerical worker produces correct results when running uninterrupted but intermittently differs after preemption. Its integer registers and PC appear to be restored. A closer inspection reveals that the floating-point rounding control or accrued exception status was not returned to the previous per-thread value. The thread computes from the same inputs under a different effective arithmetic environment.</p>
+<p>A correct investigation inventories the FP instruction extension, its data-register bank, control/status fields, OS save policy, and interrupt handlers that might use FP facilities. A targeted test switches two threads with intentionally different rounding modes and verifies that each regains its own state.</p>
+<p>The remedy is not to store more integer registers. It is to preserve the complete architecturally relevant extended context, with appropriate initialization and feature enablement.</p>
+</section>
+<section id="worked-scenario-3-the-program-counter-appears-to-skip-a-byte" aria-labelledby="heading-worked-scenario-3-the-program-counter-appears-to-skip-a-byte">
+<h2 id="heading-worked-scenario-3-the-program-counter-appears-to-skip-a-byte">Worked Scenario 3 — The Program Counter Appears to Skip a Byte</h2>
+<p>A disassembler shows a program executing a compressed instruction followed by a 32-bit instruction. A monitoring script asserts that every instruction must advance the PC by four, and flags the trace as corrupted when it observes a two-byte advance. The assertion incorrectly applies a fixed-width model to an instruction set configuration that permits mixed instruction lengths.</p>
+<p>The investigator should establish the active ISA mode and instruction encoding lengths, then distinguish sequential execution from branches or traps. For RISC-V, a correctly configured compressed-instruction environment can include 16-bit instructions; this affects sequential PC advances, legal alignment, and saved return addresses.</p>
+<p>The appropriate test records decoded instruction boundaries rather than imposing a single stride. This illustrates why “the PC is software-visible” does not imply one universal PC update formula.</p>
+</section>
+<section id="worked-scenario-4-a-speculative-destination-seems-to-disappear" aria-labelledby="heading-worked-scenario-4-a-speculative-destination-seems-to-disappear">
+<h2 id="heading-worked-scenario-4-a-speculative-destination-seems-to-disappear">Worked Scenario 4 — A Speculative Destination Seems to Disappear</h2>
+<p>A performance trace shows an ALU instruction finished and wrote a physical result. A few cycles later a branch misprediction is discovered; the instruction belonged to the wrong path and does not appear in the retired architectural trace. A novice concludes that the CPU lost a committed register write.</p>
+<p>The distinction is between an implementation-private completed value and an architecturally retired update. Correct speculation permits the physical calculation, but the recovery mechanism must invalidate the wrong-path result and restore the appropriate rename mapping before it can affect software-visible register state.</p>
+<p>Cross-check the retirement trace and architectural destination rather than assuming that every execution-unit completion is committed. This scenario is not an excuse to ignore side-channel implications of speculative work; it only describes the visible register-state contract.</p>
+</section>
+<section id="worked-scenario-5-a-kernel-trap-returns-to-the-wrong-mode" aria-labelledby="heading-worked-scenario-5-a-kernel-trap-returns-to-the-wrong-mode">
+<h2 id="heading-worked-scenario-5-a-kernel-trap-returns-to-the-wrong-mode">Worked Scenario 5 — A Kernel Trap Returns to the Wrong Mode</h2>
+<p>A privileged handler modifies status bits using a generic read-modify-write routine, unintentionally overwriting fields that record prior privilege or interrupt enablement. Its return instruction subsequently resumes at an unexpected privilege or interrupt state. The handler may also clobber a prior trap record if a nested trap reuses registers such as a saved exception PC.</p>
+<p>The engineering review must use the architecture’s legal bit masks, trap-entry state transitions, nested-trap policy, and return instruction requirements. The handler should save any trap-record values that must survive further traps and restore user-visible registers under the OS’s calling and context rules.</p>
+<p>Broadly copying a register word back without understanding writable fields is not a safe state-restoration method. The issue is control-state semantics, not arithmetic-register capacity.</p>
+</section>
+<section id="worked-scenario-6-live-migration-rejects-a-vector-heavy-workload" aria-labelledby="heading-worked-scenario-6-live-migration-rejects-a-vector-heavy-workload">
+<h2 id="heading-worked-scenario-6-live-migration-rejects-a-vector-heavy-workload">Worked Scenario 6 — Live Migration Rejects a Vector-Heavy Workload</h2>
+<p>A virtual machine is scheduled for migration between hosts with different exposed processor extensions. The guest has used vector instructions and expects its saved architectural vector values and control registers to remain meaningful. Copying the integer registers and guest PC alone leaves the destination unable to resume the instruction stream compatibly.</p>
+<p>The migration team should check the advertised guest ISA and extension set, vector-state dimensions and representation, control/status fields, OS enablement, and virtualization-specific migration constraints. If the destination lacks the guest’s required feature contract, the system needs a supported compatible target, controlled emulation, or migration rejection—not a silent truncation of state.</p>
+<p>This scenario demonstrates that an architectural-state inventory is a compatibility requirement for a distributed computing platform, not just a debugger convenience.</p>
+</section>
+<section id="common-misconceptions-and-corrections" aria-labelledby="heading-common-misconceptions-and-corrections">
+<h2 id="heading-common-misconceptions-and-corrections">Common Misconceptions and Corrections</h2>
+<table><thead><tr><th scope="col">Misconception</th><th scope="col">Correction</th></tr></thead><tbody><tr><td>Every register visible to a debugger is a general-purpose register.</td><td>Some are status, privilege, vector, FP, debug, or synthesized context values.</td></tr><tr><td>A physical register and an architectural register are one-to-one.</td><td>Renaming engines can use multiple physical versions for one architectural name.</td></tr><tr><td>RISC-V x2 is a mandatory hardware stack pointer.</td><td>The standard ABI names x2 sp; base integer hardware permits ordinary GPR operations.</td></tr><tr><td>Every CPU has arithmetic flags.</td><td>Base RISC-V integer compares can branch directly without a general condition-code register.</td></tr><tr><td>A function ABI tells the OS exactly what to save on preemption.</td><td>Preemption can occur at any instruction, including with caller-saved registers live.</td></tr><tr><td>The fetch PC is always the retired architectural PC.</td><td>Speculative fetch can run ahead and follow predicted paths.</td></tr><tr><td>A trap automatically saves all thread registers.</td><td>Hardware often records selected trap/status fields; the handler must preserve other values.</td></tr><tr><td>Saved GPRs are sufficient for vector programs.</td><td>Extended register and control state can be architecturally significant.</td></tr><tr><td>If a result executed, it became visible to the program.</td><td>Speculatively executed results may be discarded before retirement.</td></tr><tr><td>Architectural isolation prevents every possible leak.</td><td>Microarchitectural timing and resource sharing create separate concerns.</td></tr></tbody></table>
+</section>
+<section id="architecture-and-implementation-review-framework" aria-labelledby="heading-architecture-and-implementation-review-framework">
+<h2 id="heading-architecture-and-implementation-review-framework">Architecture and Implementation Review Framework</h2>
+<p>To assess a processor’s architectural-state design or a low-level software integration, begin with a written state inventory rather than a generic block diagram. For every visible register category, identify its accessibility, width, aliases, legal values, modifying instructions, exception behavior, save/restore requirements, and feature gating. Then distinguish observed outcomes from unobservable implementation machinery.</p>
+<p>The ten decision gates below are useful when developing a debugger, context switch, simulator, hypervisor, OS port, or new core. They are an editorial engineering framework rather than an ISA conformance standard. Each gate should produce evidence: a trace, specification link, test vector, documented privilege rule, or an explicit unresolved limitation.</p>
+</section>
+<section id="ten-gate-design-and-verification-matrix" aria-labelledby="heading-ten-gate-design-and-verification-matrix">
+<h2 id="heading-ten-gate-design-and-verification-matrix">Ten-Gate Design and Verification Matrix</h2>
+<table><thead><tr><th scope="col">Gate</th><th scope="col">Decision question</th><th scope="col">Evidence to retain</th></tr></thead><tbody><tr><td>1. Scope the ISA</td><td>Which architecture version, execution mode, and optional extensions are exposed?</td><td>Feature matrix and authoritative specification versions</td></tr><tr><td>2. Enumerate visible state</td><td>Which GPR, PC, status, FP, vector, and system fields are required?</td><td>Named state inventory with widths and masks</td></tr><tr><td>3. Resolve aliases</td><td>Do multiple names overlap, zero-extend, sign-extend, or discard writes?</td><td>Bit-accurate alias and write semantics tests</td></tr><tr><td>4. Trace updates</td><td>How does each instruction affect PC, destinations, flags, and status?</td><td>Instruction-state transition tables</td></tr><tr><td>5. Define privilege</td><td>Who may access each register and which writes are constrained?</td><td>Privilege and illegal-access tests</td></tr><tr><td>6. Prove exception precision</td><td>What has committed before a trap, and which results must disappear?</td><td>Retirement and trap-recovery traces</td></tr><tr><td>7. Specify context switching</td><td>Which values must survive preemption, migration, and re-entry?</td><td>Switch/restore test with mixed register workloads</td></tr><tr><td>8. Separate physical mappings</td><td>Can renaming and speculation change without changing software behavior?</td><td>Independent architectural reference model</td></tr><tr><td>9. Test security boundaries</td><td>Can one context observe another’s register values or unauthorized controls?</td><td>Isolation, wipe and permission regression tests</td></tr><tr><td>10. Maintain compatibility</td><td>How are feature upgrades, debug views, and emulation versions controlled?</td><td>Compatibility and reproducibility records</td></tr></tbody></table>
+</section>
+<section id="test-strategy-directed-register-cases" aria-labelledby="heading-test-strategy-directed-register-cases">
+<h2 id="heading-test-strategy-directed-register-cases">Test Strategy: Directed Register Cases</h2>
+<p>A conformance-oriented test suite begins with each register class and write mode. Test zero-register behavior where defined; lower/upper-bit interactions for partial writes; arithmetic condition-state boundaries; control-transfer link values; illegal CSR accesses; status masks; extension enablement; and exact restoration across traps. For value tests, use patterns such as all zeros, all ones, sign-bit-only, alternating bits, boundary integers, and noncanonical addresses where the ISA defines them.</p>
+<p>Construct <strong>differential tests</strong> against an independent architectural reference model where one exists and is appropriate. The reference should compare committed architectural outcomes, not internal cycle counts. A hardware design can be correct while running at a different pipeline depth, employing a different number of physical registers, or reordering independent instruction execution.</p>
+<p>Include interrupt injection at multiple boundaries, nested traps when supported, thread switches under heavy vector/FP use, and virtualization transitions. A single successful arithmetic program cannot establish that the architecture’s whole state contract is implemented correctly.</p>
+</section>
+<section id="test-strategy-metamorphic-and-invariant-checks" aria-labelledby="heading-test-strategy-metamorphic-and-invariant-checks">
+<h2 id="heading-test-strategy-metamorphic-and-invariant-checks">Test Strategy: Metamorphic and Invariant Checks</h2>
+<p>An invariant can test behavior without requiring a complete expected register image for every instruction. Examples include: RISC-V x0 remains zero; an ordinary GPR addition has no unrequested memory side effect; a saved/restored thread returns to the same defined PC and live register values; a speculative wrong-path destination does not alter committed state; and a user-mode access to a forbidden control register cannot silently succeed.</p>
+<p>Metamorphic tests vary an irrelevant implementation detail while expecting identical architectural results. One can run the same instruction stream through two permitted pipeline configurations or compare a reference interpreter and a hardware trace. The test should account for explicitly nondeterministic environmental inputs such as interrupts, I/O, and concurrency to avoid misclassifying legitimate variation as a CPU bug.</p>
+<p>Where features are optional, unsupported-extension behavior must be tested separately from implemented-extension semantics. A feature absent by design should not be scored as a defective implementation of that feature.</p>
+</section>
+<section id="performance-implications-of-register-state" aria-labelledby="heading-performance-implications-of-register-state">
+<h2 id="heading-performance-implications-of-register-state">Performance Implications of Register State</h2>
+<p>Architectural register count and register widths influence compiler code generation and calling conventions, but they are not sufficient performance indicators. The implementation also depends on register-file read/write ports, operand forwarding, rename capacity, physical register access timing, instruction mix, caches, frequency, and scheduling policy. Increasing a programmer-visible register set does not automatically accelerate a workload.</p>
+<p>Likewise, saving a large vector context can increase scheduler overhead, yet measuring only byte count may overstate real impact if hardware or operating systems support deferred saves or optimized restore paths. A proper performance evaluation includes workload behavior, switch frequency, enabled extensions, cache effects, and the state actually saved. Performance should never justify exposing stale sensitive state or weakening the architectural contract.</p>
+<p>For quantitative performance, consult <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock, Frequency, Voltage, and Power States</a>.</p>
+</section>
+<section id="instruction-state-trace-example" aria-labelledby="heading-instruction-state-trace-example">
+<h2 id="heading-instruction-state-trace-example">Instruction-State Trace Example</h2>
+<table><thead><tr><th scope="col">Instruction or event</th><th scope="col">PC before</th><th scope="col">Visible effect</th><th scope="col">PC after (example)</th></tr></thead><tbody><tr><td>ADDI x5,x0,7</td><td>0x1000</td><td>x5 = 7; x0 stays 0</td><td>0x1004</td></tr><tr><td>ADDI x6,x5,11</td><td>0x1004</td><td>x6 = 18</td><td>0x1008</td></tr><tr><td>BEQ x5,x6,target (not taken)</td><td>0x1008</td><td>No GPR change</td><td>0x100C</td></tr><tr><td>JAL x1,target</td><td>0x100C</td><td>x1 = 0x1010</td><td>Example target 0x2000</td></tr><tr><td>Exception at target</td><td>0x2000</td><td>Trap record captures relevant PC/cause; mode changes</td><td>Handler address</td></tr><tr><td>Permitted privileged return</td><td>Handler</td><td>Restores selected prior status and return location</td><td>Saved resume PC</td></tr></tbody></table><p>The trace assumes a simplified RV32I-like 32-bit-instruction sequence; exact trap behavior depends on the implemented privileged architecture. The return to a saved faulting address can re-execute the same instruction unless the handler resolves the cause or adjusts flow as legally required.</p>
+</section>
+<section id="executable-example-a-compact-architectural-trace-checker" aria-labelledby="heading-executable-example-a-compact-architectural-trace-checker">
+<h2 id="heading-executable-example-a-compact-architectural-trace-checker">Executable Example: A Compact Architectural Trace Checker</h2>
+<pre><code class="language-python">def rv32_trace(instructions):
+    MASK = 0xFFFF_FFFF
+    gpr = [0] * 32
+    pc = 0x1000
+    history = []
+    for op, rd, rs1, imm in instructions:
+        assert op == &quot;ADDI&quot;
+        before = pc
+        value = (gpr[rs1] + imm) &amp; MASK
+        if rd != 0:
+            gpr[rd] = value
+        pc += 4
+        history.append((before, rd, gpr[rd], pc))
+        assert gpr[0] == 0
+    return gpr, pc, history
+
+program = [(&quot;ADDI&quot;, 5, 0, 7),
+           (&quot;ADDI&quot;, 6, 5, 11),
+           (&quot;ADDI&quot;, 0, 6, 999)]
+gpr, pc, trace = rv32_trace(program)
+assert (gpr[0], gpr[5], gpr[6], pc) == (0, 7, 18, 0x100C)
+assert [entry[0] for entry in trace] == [0x1000, 0x1004, 0x1008]
+print(trace)</code></pre><p>This reference is intentionally limited to ADDI and a fixed four-byte encoding. It does not model compressed instructions, interrupts, exception handling, memory, instruction fetch, or privilege. Such narrow, explicit test scopes are more defensible than claiming full ISA conformance from a toy interpreter.</p>
+</section>
+<section id="review-questions-and-worked-checks" aria-labelledby="heading-review-questions-and-worked-checks">
+<h2 id="heading-review-questions-and-worked-checks">Review Questions and Worked Checks</h2>
+<ol>
+<li><strong>Definitions:</strong> State why a rename-map entry is not an architectural register. What observable outcomes must a conforming core preserve?</li>
+<li><strong>RISC-V:</strong> If an instruction writes x0, what value must a subsequent read return? Why is x2’s name sp a separate issue?</li>
+<li><strong>Condition codes:</strong> For 8-bit 0x7F + 1, distinguish the carry bit from signed overflow.</li>
+<li><strong>PC:</strong> Explain why a mixed 16-bit/32-bit instruction stream invalidates a universal PC + 4 model.</li>
+<li><strong>Context:</strong> Why can a kernel preemption require preservation of caller-saved ABI registers?</li>
+<li><strong>Extended state:</strong> Identify two ways a context switch could corrupt floating-point execution without changing integer GPR contents.</li>
+<li><strong>Traps:</strong> Distinguish hardware trap-record updates from the operating system’s subsequent save area.</li>
+<li><strong>Renaming:</strong> Explain why a later physical version of x5 may exist before its earlier instruction retires.</li>
+<li><strong>Security:</strong> Give one example of a violation detectable by architectural register tests and one microarchitectural leakage risk not captured by ordinary register dumps.</li>
+<li><strong>Compatibility:</strong> Explain why migrating a vector-using thread or virtual machine demands more than copying GPRs and the PC.</li>
+</ol>
+</section>
+<section id="guided-exercise-1-build-an-architectural-register-specification" aria-labelledby="heading-guided-exercise-1-build-an-architectural-register-specification">
+<h2 id="heading-guided-exercise-1-build-an-architectural-register-specification">Guided Exercise 1 — Build an Architectural Register Specification</h2>
+<p>Choose an ISA configuration such as RV32I without optional floating-point/vector extensions. Create a table for every architecturally visible integer register, PC, and any privilege-state feature included in the chosen execution environment. Record width, legal access mode, alias, instruction writers, fixed bits, and initial-state assumptions. Clearly distinguish base ISA requirements from ABI conventions.</p>
+<p>Implement a tiny register-bank model and test normal writes, attempts to write the zero register, values beyond the machine width, and PC updates. Document omissions such as memory, instruction decoding, and interrupts. The exercise is complete when another reader can reproduce the expected state transitions without relying on informal assumptions.</p>
+</section>
+<section id="guided-exercise-2-detect-a-broken-context-switch" aria-labelledby="heading-guided-exercise-2-detect-a-broken-context-switch">
+<h2 id="heading-guided-exercise-2-detect-a-broken-context-switch">Guided Exercise 2 — Detect a Broken Context Switch</h2>
+<p>Create two simulated threads, each with a distinct PC, GPR pattern, condition field, and numerical-control field. Switch between them repeatedly while modifying only one context at a time. First deliberately omit one field from save/restore; observe how an otherwise valid operation in the resumed thread can go wrong. Then restore the missing field and run the sequence again.</p>
+<p>For an extension-aware design, incorporate a dirty flag and exercise both never-used and frequently-updated states. Demonstrate that laziness does not expose one thread’s data to another. Explain what your simulation cannot verify, especially privilege, actual interrupt timing, memory isolation, and native extension instruction restart.</p>
+</section>
+<section id="guided-exercise-3-verify-a-speculative-rename-sequence" aria-labelledby="heading-guided-exercise-3-verify-a-speculative-rename-sequence">
+<h2 id="heading-guided-exercise-3-verify-a-speculative-rename-sequence">Guided Exercise 3 — Verify a Speculative Rename Sequence</h2>
+<p>Model at least two writes to the same architectural register and a third instruction that consumes the newer version. Associate a physical tag with each write, record issue and completion order, then retire in order. Inject a branch misprediction before the later write retires. Verify that architectural state after recovery matches the correctly executed prefix.</p>
+<p>The important evidence is not merely that the program computes the expected final number. Record the rename mapping before and after recovery and demonstrate why a completed wrong-path physical result is not permitted to modify the retired architectural register image.</p>
+</section>
+<section id="glossary-of-architectural-state-terms" aria-labelledby="heading-glossary-of-architectural-state-terms">
+<h2 id="heading-glossary-of-architectural-state-terms">Glossary of Architectural-State Terms</h2>
+<table><thead><tr><th scope="col">Term</th><th scope="col">Working definition</th></tr></thead><tbody><tr><td>Architectural state</td><td>Software-visible instruction and execution state defined by the architecture</td></tr><tr><td>Microarchitectural state</td><td>Implementation-private machinery and transient physical values</td></tr><tr><td>GPR</td><td>General-purpose register used for integer and related bit-pattern operations</td></tr><tr><td>PC / instruction pointer</td><td>Architectural instruction-address/control-flow state</td></tr><tr><td>ABI</td><td>Software convention for calls, registers, stacks, data representation, and interoperation</td></tr><tr><td>Caller-saved</td><td>Register a callee may overwrite unless the caller preserves its needed value</td></tr><tr><td>Callee-saved</td><td>Register whose required prior value must be preserved by the callee</td></tr><tr><td>Condition code</td><td>Architecturally defined status bit used by eligible conditional operations</td></tr><tr><td>CSR / system register</td><td>Architecturally exposed control or status register with access rules</td></tr><tr><td>Privilege mode</td><td>Architectural execution level governing permitted operations</td></tr><tr><td>Trap</td><td>Architectural transfer to a handler for an exception or interrupt</td></tr><tr><td>Precise exception</td><td>Exception exposure at an architecture-defined ordered boundary</td></tr><tr><td>Context switch</td><td>Preservation and restoration of execution context when changing a running entity</td></tr><tr><td>Extended state</td><td>Floating-point, SIMD, vector, predicate, and other enabled architectural facilities</td></tr><tr><td>Register renaming</td><td>Mapping architectural names to implementation-private physical versions</td></tr><tr><td>Physical register</td><td>Hardware storage or tag used internally to hold an operand/value</td></tr><tr><td>Retirement / commit</td><td>Point at which an instruction’s architectural effect becomes irrevocable under the model</td></tr><tr><td>Speculation</td><td>Execution of work before its control/data prerequisites are fully resolved</td></tr><tr><td>Dirty-state tracking</td><td>Mechanism indicating that an extended context must be saved or otherwise managed</td></tr><tr><td>Alias</td><td>Another name or view of some of the same architecturally defined state</td></tr><tr><td>WARL field</td><td>Write-any-read-legal field whose implemented readback is constrained to legal values</td></tr><tr><td>Feature gating</td><td>Rules controlling whether an ISA extension is present and available to software</td></tr></tbody></table>
+</section>
+<section id="sub-articles-and-complete-cpu-specialist-directory" aria-labelledby="heading-sub-articles-and-complete-cpu-specialist-directory">
+<h2 id="heading-sub-articles-and-complete-cpu-specialist-directory">Sub-Articles and Complete CPU Specialist Directory</h2>
+<p>This page is the second CPU specialist article in the governing 24-destination unit index. The following active hyperlinks point to the <em>intended</em> child destinations, including planned files not yet confirmed as installed. They are not evidence of deployment. For the full grouped production scope, consult the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">Central Processing Unit specialist index</a>.</p>
+<ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a></li></ol>
+<p><strong>Suggested next reading:</strong> <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a> explains how instruction addresses and bit patterns enter the core. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> covers trap sequencing. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a> expands on physical versions and commit.</p>
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<ul class="course-links">
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems</a> — Division-level inventory of physical computing components.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> — Parent overview of processor cores and instruction execution.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/">Computer Architecture</a> — Broader execution and machine-organization concepts.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a> — Normative software-machine interface and instruction semantics.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — Generic internal processor design principles.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing">Pipeline Processing</a> — Staged instruction execution and timing.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/memory-hardware">Memory Hardware</a> — Physical memory technologies, distinct from architectural registers.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/binary-logic">Binary Logic</a> — Bit patterns, arithmetic representation, and combinational logic foundations.</li>
+</ul>
+<p><strong>Ownership:</strong> this specialist article explains the values and modes software can observe at the CPU architecture boundary. Detailed circuit routes, instruction decoding, arithmetic-unit design, exception sequencers, register-renaming hardware, and memory-system ordering remain subjects of their respective neighboring articles.</p>
+</section>
+<section id="technical-references-and-primary-documentation" aria-labelledby="heading-technical-references-and-primary-documentation">
+<h2 id="heading-technical-references-and-primary-documentation">Technical References and Primary Documentation</h2>
+<ol class="course-links">
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/rv32.html">RISC-V International, <em>RV32I Base Integer Instruction Set</em></a>. Normative description of x0–x31, pc, and integer instruction state.</li>
+<li><a href="https://docs.riscv.org/reference/isa/priv/machine.html">RISC-V International, <em>Machine-Level ISA</em></a>. Machine-status fields, traps, control registers, and privilege behavior.</li>
+<li><a href="https://docs.riscv.org/reference/isa/priv/supervisor.html">RISC-V International, <em>Supervisor-Level ISA</em></a>. Supervisor status, trap records, and address-space context.</li>
+<li><a href="https://docs.riscv.org/reference/isa/priv/priv-csrs.html">RISC-V International, <em>Control and Status Registers</em></a>. Register naming, privilege access, and CSR assignment conventions.</li>
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/f-st-ext.html">RISC-V International, <em>F Floating-Point Extension</em></a>. Floating-point data and control/status behavior.</li>
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/v-st-ext">RISC-V International, <em>V Vector Extension</em></a>. Vector registers, vector lengths, restart position, and control fields.</li>
+<li><a href="https://docs.riscv.org/reference/abi/v1.0/riscv-cc-register-convention.html">RISC-V International, <em>Register Convention</em></a>. ABI register names and caller/callee preservation obligations.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Intel, <em>Intel 64 and IA-32 Architectures Software Developer’s Manuals</em></a>. GPR, subregister, RFLAGS, vector and privilege state in x86.</li>
+<li><a href="https://support.arm.com/documentation/ddi0487">Arm, <em>Arm Architecture Reference Manual for A-profile Architecture</em></a>. AArch64 register model, PSTATE, system registers, and exception behavior.</li>
+<li>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em>. Architecture–microarchitecture distinctions, state, performance and speculation.</li>
+<li>David A. Patterson and John L. Hennessy, <em>Computer Organization and Design: The Hardware/Software Interface</em>, RISC-V edition. Instruction-state examples, machine organization, and hardware/software boundary.</li>
+</ol>
+<p>ISA documents govern claims about defined machine behavior; examples of internal register renaming and the toy Python models are explanatory constructs rather than vendor-specific implementations. Optional extensions and execution environments must be checked against the actual system configuration.</p>
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope">
+<h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Article prepared:</strong> November 23, 2026. This Level 5 article fulfills the prescribed <code>architectural-registers-and-processor-state.html</code> destination in the existing CPU specialist index. The parent summary and index were not edited.</p>
+<p><strong>Coverage:</strong> architectural versus physical state, general and special registers, program counter, condition codes, partial-register rules, RISC-V/x86/AArch64 comparisons, FP/vector control state, privileged status, traps, precise exceptions, context switching, lazy saving, renaming, virtualization, security, six applied scenarios, decision framework, tests, exercises, and references.</p>
+<p><strong>Limits:</strong> the Python programs are transparent teaching models, not a full CPU, kernel, synthesizable RTL, formal ISA compliance suite, or certified security implementation. The execution and state-restoration behavior of real platforms depends on their ISA revisions, implemented extensions, OS conventions, and device environment. Links to planned neighboring articles do not establish those pages’ publication status.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

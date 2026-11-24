@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DNS and Service Endpoints | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Specialist MGU Encyclopedia article on DNS resolution and client-server service endpoints: hostnames, origin authority, A and AAAA records, HTTPS/SVCB, TLS identity, caching, failover, security, diagnostics and applied cases."/>
+<meta name="keywords" content="DNS, service endpoints, origin, hostname, A records, AAAA records, DNS cache, DNSSEC, HTTPS SVCB, SRV, TCP, TLS, IPv4, IPv6, service discovery, client server architecture"/>
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/dns-and-service-endpoints"/>
+<meta property="og:type" content="article"/>
+<meta property="og:title" content="DNS and Service Endpoints | MGU Encyclopedia"/>
+<meta property="og:description" content="How clients translate service names into authenticated endpoints across DNS, transport, proxies, and application boundaries."/>
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/dns-and-service-endpoints"/>
+<link href="/image/global/favicon.ico" rel="icon" type="image/x-icon"/>
+<link href="/component/lib.css" rel="stylesheet"/>
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero"><h1>DNS and Service Endpoints</h1><p class="subtitle">Name resolution, network destinations, HTTPS authority, and reliable endpoint selection in modern client-server applications.</p></section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#purpose-and-scope">Purpose and Scope</a></li>
+<li><a href="#the-four-identities">Name, Address, Endpoint, and Origin</a></li>
+<li><a href="#url-decomposition">Decomposing a Service URL</a></li>
+<li><a href="#end-to-end-path">From a Typed Address to a Server Response</a></li>
+<li><a href="#dns-namespace-delegation">DNS Hierarchy, Zones, and Delegation</a></li>
+<li><a href="#stub-recursive-authoritative">Stub Resolvers, Recursive Resolvers, and Authoritative Servers</a></li>
+<li><a href="#dns-records">Records That Matter to Service Discovery</a></li>
+<li><a href="#address-selection">A, AAAA, and Address Selection</a></li>
+<li><a href="#dns-aliases">Aliases and Canonical Service Names</a></li>
+<li><a href="#ttl-caching">Time-to-Live, Resolver Caches, and Stale Answers</a></li>
+<li><a href="#negative-answers">NXDOMAIN, NODATA, SERVFAIL, and Negative Caching</a></li>
+<li><a href="#port-and-transport">Ports, Transport Protocols, and Listener Selection</a></li>
+<li><a href="#http-authority">HTTP Authority, Host Headers, and Virtual Hosting</a></li>
+<li><a href="#tls-reference-identity">DNS Addresses Are Not TLS Identity</a></li>
+<li><a href="#https-svcb">HTTPS and SVCB Service Binding Records</a></li>
+<li><a href="#srv-discovery">SRV Records and Protocol-Specific Service Discovery</a></li>
+<li><a href="#service-discovery-beyond-dns">Service Registries, Internal Names, and Non-DNS Endpoints</a></li>
+<li><a href="#proxies-and-dns">Proxies, Load Balancers, and Who Performs the Lookup</a></li>
+<li><a href="#health-and-failover">Endpoint Health, Failover, and Traffic Steering</a></li>
+<li><a href="#multi-region">Multi-Region and Geographic Endpoint Policies</a></li>
+<li><a href="#split-dns">Private DNS, Search Domains, and VPN Views</a></li>
+<li><a href="#search-path-hosts">Local Hosts Mappings and Name-Resolution Overrides</a></li>
+<li><a href="#internationalized-names">Internationalized Domain Names and Exact Host Comparison</a></li>
+<li><a href="#configuration-lifecycle">Endpoint Configuration and Environment Separation</a></li>
+<li><a href="#threat-model">Threat Boundaries in Name Resolution and Endpoint Selection</a></li>
+<li><a href="#privacy">DNS Privacy, Encrypted Resolution, and Trust</a></li>
+<li><a href="#performance">Resolution Latency, Connection Reuse, and Timing Budgets</a></li>
+<li><a href="#observability">Tracing the Endpoint Decision</a></li>
+<li><a href="#powershell-inspection">Windows PowerShell: A Read-Only Investigation Workflow</a></li>
+<li><a href="#diagnostic-sequence">A Fault-Isolation Sequence for Named Services</a></li>
+<li><a href="#endpoint-comparison">Endpoint Discovery Methods Compared</a></li>
+<li><a href="#worked-campus">Worked Example 1 — A University Course-Catalog Request</a></li>
+<li><a href="#worked-vpn">Worked Example 2 — Internal Academic Records over a VPN</a></li>
+<li><a href="#worked-alias">Worked Example 3 — Address Migration and a Long TTL</a></li>
+<li><a href="#worked-ipv6">Worked Example 4 — IPv6 Works, IPv4 Does Not</a></li>
+<li><a href="#worked-security">Worked Example 5 — A Server Fetches an Untrusted URL</a></li>
+<li><a href="#worked-service-binding">Worked Example 6 — HTTPS Service Binding and Alternative Transport</a></li>
+<li><a href="#worked-failure">Worked Example 7 — DNS Works but the Course API Times Out</a></li>
+<li><a href="#worked-negative-cache">Worked Example 8 — A New Subdomain Still Returns NXDOMAIN</a></li>
+<li><a href="#design-checklist">Endpoint Design and Change-Control Checklist</a></li>
+<li><a href="#common-mistakes">Common Misconceptions and Design Mistakes</a></li>
+<li><a href="#review-questions">Review Questions and Applied Exercises</a></li>
+<li><a href="#glossary">Specialist Glossary</a></li>
+<li><a href="#references">Scholarly and Technical References</a></li>
+<li><a href="#related-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#unit-study-sequence">Study Pathways Within Client-Server Architecture</a></li>
+<li><a href="#editorial-scope">Editorial Scope and Production Status</a></li>
+</ol></section>
+<section id="purpose-and-scope" aria-labelledby="heading-purpose-and-scope">
+<h2 id="heading-purpose-and-scope">Purpose and Scope</h2>
+<p><strong>DNS and service endpoints</strong> concerns the steps by which a client turns a service name or URL into a usable communication destination while preserving the identity and meaning of the requested service. A user types a web address, an application calls an API, or a background job contacts another service. The apparent simplicity of that action hides several different decisions: which name is requested, who can supply an address, which port and transport to use, which reachable address to attempt, which certificate should be trusted, and which application interface is authorized to respond.</p>
+<p>The Domain Name System (DNS) is a distributed naming database and query protocol. It commonly associates hostnames with IPv4 and IPv6 addresses, but also publishes information about delegation, mail routing, service locations, and connection parameters. <strong>DNS resolution is not equivalent to a successful or trusted application connection.</strong> A name can resolve yet connect to a closed port; a connection can succeed while its certificate fails identity validation; a correctly authenticated server can reject an application request. A sound client-server design treats name resolution, transport connectivity, cryptographic authentication, and application behavior as separate evidence.</p>
+<p>This Level 5 article specializes the <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client-Server Architecture</a> parent. It addresses the client's <em>endpoint discovery and selection process</em>, not the entire DNS protocol, the detailed internals of a transport, or application authorization. The neighboring MGU articles on <a href="/library/encyclopedia/computer-science/networking-systems/domain-name-system">Domain Name System</a>, <a href="/library/encyclopedia/computer-science/networking-systems/tcp-ip-protocol-suite">TCP/IP Protocol Suite</a>, and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/tls-and-secure-client-connections">TLS and Secure Client Connections</a> treat those other subjects at their proper boundaries.</p>
+</section>
+<section id="the-four-identities" aria-labelledby="heading-the-four-identities">
+<h2 id="heading-the-four-identities">Name, Address, Endpoint, and Origin</h2>
+<p>Four terms are often collapsed into the phrase “the server,” but each describes a different layer. A <strong>domain name</strong> is a structured identifier in the DNS namespace. An <strong>IP address</strong> identifies a network-layer interface or addressing destination. A <strong>transport endpoint</strong> normally combines an address, transport protocol, and port, such as a TCP connection to a destination address on port 443. An <strong>HTTP origin</strong> is determined by the scheme, hostname, and effective port of a URI. The authority of an HTTPS origin is a security property established by valid authentication of that origin, not by whichever IP address a resolver returned.</p>
+<p>For example, <code>https://api.example.org:8443/v1/courses</code> describes an HTTPS resource at a host named <code>api.example.org</code>, using port 8443, with path <code>/v1/courses</code>. The path is not part of a DNS lookup, and the query, if one existed, would not be either. The DNS answer might contain multiple addresses; the chosen address might belong to a content-delivery edge or reverse proxy rather than the application process. A connection to that address does not change the origin named in the URL.</p>
+<table><caption>Four different identifiers in a single service request</caption><thead><tr><th scope="col">Term</th><th scope="col">Example</th><th scope="col">What it decides</th><th scope="col">What it does not prove</th></tr></thead><tbody>
+<tr><th scope="row">DNS hostname</th><td><code>api.example.org</code></td><td>Name to resolve and origin hostname to authenticate</td><td>That any address will respond</td></tr>
+<tr><th scope="row">IP address</th><td><code>192.0.2.42</code> (documentation only)</td><td>Candidate network destination</td><td>That the machine is authorized for the original hostname</td></tr>
+<tr><th scope="row">Transport endpoint</th><td><code>192.0.2.42:8443/TCP</code></td><td>Where the client attempts a connection</td><td>That the HTTP resource is valid or permitted</td></tr>
+<tr><th scope="row">HTTPS origin</th><td><code>https://api.example.org:8443</code></td><td>Security and resource identity for the HTTP service</td><td>That the request is authenticated as a user</td></tr>
+</tbody></table>
+<p>The IPv4 address above belongs to the documentation-only TEST-NET-1 range. It is not a real deployment address. This distinction is especially important when developers override DNS during a test: the network destination may change, while the requested URL and the TLS reference identity should remain tied to the intended service.</p>
+</section>
+<section id="url-decomposition" aria-labelledby="heading-url-decomposition">
+<h2 id="heading-url-decomposition">Decomposing a Service URL</h2>
+<p>Consider the illustrative URL <code>https://catalog.example.org:443/api/courses?term=fall</code>. The <strong>scheme</strong> is <code>https</code>; the <strong>host</strong> is <code>catalog.example.org</code>; the explicit <strong>port</strong> is 443; the <strong>path</strong> is <code>/api/courses</code>; and the <strong>query</strong> is <code>term=fall</code>. The client resolves a host candidate, constructs or reuses a suitable secure connection, and then sends an HTTP request representing the target resource. It does not send the whole URL to DNS. Fragments such as <code>#schedule</code> identify a client-side part of a document and are not sent as part of an HTTP request target.</p>
+<p>If an HTTPS URL omits its port, the effective default port is 443. If an HTTP URL omits its port, the effective default is 80. An explicitly different port identifies a different origin; the same name on ports 443 and 8443 is not necessarily the same service or security principal. Scheme changes also matter: <code>http://example.org</code> and <code>https://example.org</code> are distinct origins even when they ultimately reach the same physical infrastructure. HTTPS is a secure transport and authenticated-origin arrangement, not merely a convention about port numbers.</p>
+<pre><code>https://catalog.example.org:443/api/courses?term=fall
+|----|  |-----------------| |-| |----------| |-------|
+ scheme          host          port      path       query
+
+HTTP origin: https://catalog.example.org:443
+DNS question (typical): A or AAAA for catalog.example.org
+Connection destination: selected IP address, port and transport
+Requested resource: /api/courses?term=fall</code></pre>
+<p>Applications frequently construct URLs from configuration. That configuration is security-critical: changing the host silently can redirect credentials or personal information to another destination. Validate intended schemes and permitted hosts and ports instead of simply concatenating untrusted strings into an address.</p>
+</section>
+<section id="end-to-end-path" aria-labelledby="heading-end-to-end-path">
+<h2 id="heading-end-to-end-path">From a Typed Address to a Server Response</h2>
+<p>A first-time browser connection to a public HTTPS service may involve these logical steps. The browser parses the URL, checks relevant local or browser-managed information, obtains suitable DNS answers, chooses an address and transport, establishes a protected connection, validates the service's identity, and sends an HTTP request. A reverse proxy or load balancer might receive the request and forward it to an application server. Each step has an independent potential failure.</p>
+<pre><code>Browser / API client                         Internet / service estate
+         |                                             |
+         | 1. Parse https://catalog.example.org/        |
+         | 2. Resolve hostname (local cache/stub)       |
+         +---------------------> Recursive resolver    |
+         |                       | queries/uses cache   |
+         |                       +----> Authoritative DNS
+         |&lt;--------------------- A/AAAA and/or HTTPS RR |
+         |                                             |
+         | 3. Select candidate address/endpoint        |
+         +---------------------- TCP/TLS or QUIC ------> Edge / gateway
+         |&lt;--------------------- Validate origin ID ---|
+         | 4. GET /api/courses                         |
+         +-------------------------------------------->|
+         |                         gateway -> app -> data
+         |&lt;--------------------------------------------|
+         | 5. HTTP response                            |
+         |                                             |</code></pre>
+<p>This is a model, not a claim about exact ordering in every client. Name or address information may already be cached; a browser may open connections ahead of a user action; and one connection can carry multiple HTTP requests. In proxy-based environments the proxy might perform the origin-facing DNS lookup rather than the user's device. Some clients use HTTPS service-binding records to discover supported protocols or alternative endpoints. Other clients use directly configured endpoints, local service discovery, or a transport such as a local domain socket without consulting public DNS at all.</p>
+<p>The central diagnostic principle is that <strong>one successful step cannot stand in for the next</strong>. An A record does not guarantee a working route; a completed TCP handshake does not establish trust; a valid TLS connection does not prove business-level authorization; and an HTTP 200 response does not always mean that the client has interpreted the application result correctly.</p>
+</section>
+<section id="dns-namespace-delegation" aria-labelledby="heading-dns-namespace-delegation">
+<h2 id="heading-dns-namespace-delegation">DNS Hierarchy, Zones, and Delegation</h2>
+<p>DNS names form a hierarchical namespace usually written with labels separated by dots. The fully qualified name <code>catalog.example.org.</code> has a trailing dot indicating the DNS root in formal presentation. Authority for a part of the namespace is managed through <strong>zones</strong>, which may be delegated using name-server records. A resolver uses referrals or its cache to reach servers able to answer for the requested zone. The public DNS root, top-level domains, and authoritative zones cooperate to support resolution without requiring one global database server.</p>
+<p>A zone and a domain name are not identical concepts. A zone is an administrative portion of the namespace served by a particular set of authoritative servers; a domain may contain multiple delegated zones. The registrar that manages a domain registration, the registry operating a top-level domain, the DNS hosting provider maintaining a zone, and the application operator deploying an endpoint may be different organizations. This separation influences incident response: expiration of a registration, broken delegation, and failure of an application service require different owners to act.</p>
+<p>DNS delegation is also not a security guarantee. It establishes where a resolver expects authoritative answers, but traditional DNS alone does not cryptographically validate the content of those answers. Validating DNSSEC can protect the authenticity and integrity of signed DNS records when an appropriate chain of trust is present; HTTPS certificate validation remains independently necessary for the requested web origin.</p>
+</section>
+<section id="stub-recursive-authoritative" aria-labelledby="heading-stub-recursive-authoritative">
+<h2 id="heading-stub-recursive-authoritative">Stub Resolvers, Recursive Resolvers, and Authoritative Servers</h2>
+<p>A <strong>stub resolver</strong> is the name-resolution facility used by an application or operating system to ask a configured DNS service for an answer. A <strong>recursive resolver</strong> carries out or delegates the resolution process and usually caches answers. An <strong>authoritative server</strong> supplies data for zones it serves. These roles can be distributed across several programs or combined in products; saying “the DNS server” without naming its role can mislead an investigation.</p>
+<p>On a managed university device, applications might ask the operating system, which uses enterprise-designated resolvers. A browser may have its own DNS cache or configured encrypted resolver. A VPN can change which resolver or DNS suffixes apply. The answers observed with a command-line lookup may therefore differ from those the browser uses, especially when local hosts mappings, split DNS, or application-level caching are involved. Record the resolver actually consulted before attributing discrepancies to authoritative DNS.</p>
+<p>In a normal recursive resolution, the resolver checks an eligible cache, then makes necessary referrals or authoritative queries. The sequence may involve root and top-level delegations if they are not already known. It is incorrect to assume that every request repeats the entire root-to-authority walk: resolvers cache delegation and answer data, and clients can reuse connections or responses.</p>
+</section>
+<section id="dns-records" aria-labelledby="heading-dns-records">
+<h2 id="heading-dns-records">Records That Matter to Service Discovery</h2>
+<p>Different record types answer different questions. An <strong>A</strong> record supplies an IPv4 address and an <strong>AAAA</strong> record supplies an IPv6 address. A <strong>CNAME</strong> record aliases one owner name to another canonical name; it is not itself an IPv4 or IPv6 address. <strong>NS</strong> and <strong>SOA</strong> records are involved in zone authority and administration. <strong>SRV</strong> records can advertise service targets and ports for applications that explicitly support SRV-based discovery. <strong>TXT</strong> records carry application-defined text data; they are not, by themselves, a reliable mechanism for finding a web server's IP address.</p>
+<table><caption>Representative DNS resource records and their service implications</caption><thead><tr><th scope="col">RR type</th><th scope="col">Representative information</th><th scope="col">Client-server interpretation</th></tr></thead><tbody>
+<tr><th scope="row">A</th><td>IPv4 address</td><td>Candidate destination address for a named host</td></tr>
+<tr><th scope="row">AAAA</th><td>IPv6 address</td><td>Candidate IPv6 destination; clients may choose among A and AAAA answers</td></tr>
+<tr><th scope="row">CNAME</th><td>Another DNS name</td><td>Follow an alias according to DNS rules; keep the requested origin identity distinct</td></tr>
+<tr><th scope="row">NS</th><td>Authoritative name servers</td><td>Delegation and zone service, not the address of an arbitrary API endpoint</td></tr>
+<tr><th scope="row">SOA</th><td>Zone administration parameters</td><td>Authority information; relevant to negative caching</td></tr>
+<tr><th scope="row">SRV</th><td>Target, port, priority, weight</td><td>Service location when the specific application protocol defines SRV use</td></tr>
+<tr><th scope="row">TXT</th><td>Text attributes</td><td>Often policy or verification information, not a general endpoint-routing contract</td></tr>
+<tr><th scope="row">HTTPS / SVCB</th><td>Service binding and parameters</td><td>Can convey supported protocols, alternate endpoints, and connection hints to supporting clients</td></tr>
+</tbody></table>
+<p>Do not infer that a web browser will read an arbitrary SRV record when accessing an ordinary HTTPS URL. Standard web-origin discovery follows the semantics of the URL and the relevant HTTP and HTTPS service-binding specifications. Likewise, email's MX-based routing and other protocol-specific uses of DNS should not be confused with browsing a web service.</p>
+</section>
+<section id="address-selection" aria-labelledby="heading-address-selection">
+<h2 id="heading-address-selection">A, AAAA, and Address Selection</h2>
+<p>A host may publish multiple A records, multiple AAAA records, or both. Several addresses can represent geographically distributed front ends, replicas, traffic policies, or compatibility with different IP families. The client must select a reachable address, often using operating-system or application algorithms that combine DNS results with local routing information and past connection behavior. The order in a DNS response is not a universal promise of priority or availability.</p>
+<p>Modern dual-stack clients can use a <strong>Happy Eyeballs</strong> style connection strategy, which attempts suitable IPv6 and IPv4 paths in a managed sequence or with limited concurrency to avoid excessive delay when one address family is impaired. The precise scheduling depends on the implementation. An IPv6-capable client might succeed on an AAAA destination while an IPv4-only client needs an A address. These are independent reachability questions, not evidence that DNS itself is broken.</p>
+<p>IP selection can interact with routing policy and network location. A campus device and a remote mobile phone might receive different address sets, reach different edge locations, or encounter different firewalls. Tests should identify the <em>client network and address family</em> rather than treating one successful server-side lookup as proof that all users can connect.</p>
+</section>
+<section id="dns-aliases" aria-labelledby="heading-dns-aliases">
+<h2 id="heading-dns-aliases">Aliases and Canonical Service Names</h2>
+<p>An operator may expose <code>catalog.example.org</code> as a stable public name while an infrastructure provider manages a less memorable backend name. A CNAME may express that relationship when appropriate. Alternatively, an application may use direct address records or an HTTPS service binding. An alias lets operations change infrastructure without asking users to learn a new interface name, but it can also add dependencies and caching behavior that matter during migrations.</p>
+<p>For HTTPS, <strong>the URL's hostname remains the identity the client intends to authenticate</strong> even when a CNAME or service-binding chain points to another operational endpoint. Do not treat successful DNS aliasing as permission to accept an arbitrary certificate for the alias target or to send original-origin credentials to an unrelated service. The actual connection and certificate handling must follow the applicable HTTPS authority rules.</p>
+<p>Publication tools must also respect DNS ownership and type rules. Traditional CNAME records have restrictions about coexisting with other data at the same owner name. Some providers offer proprietary alias-like records at a zone apex; their control-plane behavior should not be mistaken for a standardized CNAME returned at the apex. This distinction is relevant when designing a resilient public domain and avoiding contradictory records.</p>
+</section>
+<section id="ttl-caching" aria-labelledby="heading-ttl-caching">
+<h2 id="heading-ttl-caching">Time-to-Live, Resolver Caches, and Stale Answers</h2>
+<p>A DNS resource record includes a <strong>time-to-live (TTL)</strong> value describing the maximum time for which a compliant cache may reuse the data without refreshing it under ordinary caching rules. As a cached answer ages, its remaining TTL decreases. Short TTLs can reduce the expected persistence of old answers during an address cutover but increase query volume and dependence on the availability of resolving infrastructure. Long TTLs reduce normal query traffic but can extend the period during which old addresses remain in circulation after a change.</p>
+<p>TTL is not a guarantee that all clients will move at precisely the same moment. Applications may hold previously established connections, operating systems may have separate caches, resolvers may impose implementation policies, and clients may use information stored outside a traditional DNS cache. A deployment plan should account for both DNS caching and the continued lifetime of existing connections. Lowering a TTL <em>just before</em> an urgent change does not retroactively shorten copies that were already cached with a longer TTL.</p>
+<p>For planned migration, reduce a TTL sufficiently in advance, verify the new infrastructure, observe authoritative answers from multiple locations, and retain the former endpoint long enough to accommodate relevant caches and connection reuse. Monitor both domains and service health rather than interpreting an updated zone file as proof of a completed user migration.</p>
+</section>
+<section id="negative-answers" aria-labelledby="heading-negative-answers">
+<h2 id="heading-negative-answers">NXDOMAIN, NODATA, SERVFAIL, and Negative Caching</h2>
+<p>Failure responses from DNS have different meanings. <strong>NXDOMAIN</strong> means the requested domain name does not exist according to the answering DNS context. <strong>NODATA</strong> generally means the name exists but no records of the requested type are available; it is not an official DNS response code in the same way as NXDOMAIN. <strong>SERVFAIL</strong> indicates that a name server could not process the query successfully. A query that times out may not have produced any DNS response at all. These outcomes suggest different recovery strategies.</p>
+<p>Resolvers can cache certain negative results using an appropriate time limit based on authoritative zone information. Standards also address caching of resolution failures to prevent repeated queries from producing excessive upstream load. Thus a newly created record may not become immediately observable to every client if a prior negative answer remains cached. Never respond to a DNSSEC validation failure by automatically disabling validation or trusting the first unverified result; that would convert an availability problem into a loss of authenticity.</p>
+<table><caption>DNS observations and what they establish</caption><thead><tr><th scope="col">Observation</th><th scope="col">Likely layer</th><th scope="col">Useful next check</th></tr></thead><tbody>
+<tr><th scope="row">NXDOMAIN</th><td>Name does not exist in consulted DNS view</td><td>Spelling, suffix search, delegation, authoritative answer, cached negative state</td></tr>
+<tr><th scope="row">No A record but AAAA exists</th><td>Name exists; address-family limitation</td><td>Query both types and test source-network IPv6 reachability</td></tr>
+<tr><th scope="row">SERVFAIL</th><td>Resolver or upstream processing/validation</td><td>Compare resolver, authoritative health, DNSSEC status and failure logs</td></tr>
+<tr><th scope="row">Timeout</th><td>No DNS result within allotted time</td><td>Resolver reachability, firewall/transport and request deadline</td></tr>
+<tr><th scope="row">Records returned, connection refused</th><td>Transport endpoint</td><td>Correct destination port, listener, firewall and health</td></tr>
+<tr><th scope="row">Records returned, certificate mismatch</th><td>Authenticated service identity</td><td>Origin hostname, certificate names, SNI and gateway configuration</td></tr>
+</tbody></table>
+</section>
+<section id="port-and-transport" aria-labelledby="heading-port-and-transport">
+<h2 id="heading-port-and-transport">Ports, Transport Protocols, and Listener Selection</h2>
+<p>An IP address alone rarely identifies an application service. Operating systems and network devices use transport protocol and port numbers to direct traffic to suitable listeners. An HTTPS client usually uses port 443 when no explicit port is supplied, but services can publish or configure other ports. A process may listen on one interface, several interfaces, loopback only, or a Unix-domain socket. A DNS record does not establish which ports are listening on those addresses.</p>
+<p>The selected transport affects endpoint establishment. HTTP/1.1 and HTTP/2 normally use TCP for conventional web deployment; HTTP/3 uses QUIC, which operates over UDP. The client's supported transport, site configuration, advertisement, and actual network path all matter. A healthy TCP port 443 does not prove that an alternative QUIC/UDP path is working, nor does a failed UDP test prove that HTTPS is unavailable through TCP.</p>
+<p>A firewall can permit DNS lookups while blocking outbound application connections or can permit a gateway's public port while blocking a backend port. Architecture diagrams should list both the public-facing endpoint and the protected backend endpoint rather than silently implying that the database, web server, and user-agent interface share the same exposure.</p>
+</section>
+<section id="http-authority" aria-labelledby="heading-http-authority">
+<h2 id="heading-http-authority">HTTP Authority, Host Headers, and Virtual Hosting</h2>
+<p>Several unrelated applications can be served from one destination address or proxy. The server may use the HTTP request authority to route a request to the intended application. In HTTP/1.1 this commonly appears in the <code>Host</code> header; HTTP/2 and HTTP/3 use an <code>:authority</code> pseudo-header for authority information. The requested host is not interchangeable with the address selected during DNS resolution. A single IP can host many names, and one name can resolve to many IPs.</p>
+<p>HTTPS connections also commonly use Server Name Indication (SNI) during TLS establishment to indicate the intended server name for certificate and configuration selection. A mismatched Host or authority value, incorrect SNI, or an unexpected proxy route may cause a certificate failure, an HTTP 404, an unexpected default site, or an authorization problem. These outcomes need not be rooted in DNS despite their appearance to an end user.</p>
+<p>Because the authority field helps determine where requests are handled, applications should validate trusted hostnames and not accept arbitrary client-supplied host values as the basis for password-reset links, redirects, or tenant selection. The name that the client <em>intends</em> to contact and the host fields that the server <em>accepts</em> are both security-relevant, but they are enforced at different boundaries.</p>
+</section>
+<section id="tls-reference-identity" aria-labelledby="heading-tls-reference-identity">
+<h2 id="heading-tls-reference-identity">DNS Addresses Are Not TLS Identity</h2>
+<p>When connecting to <code>https://catalog.example.org/</code>, a conforming HTTPS client must authenticate the intended reference identity according to the secure HTTP protocol rules. In ordinary DNS-named deployments, this means checking that the certificate is valid for <code>catalog.example.org</code> and that its chain and use satisfy the client's trust policy. A CNAME target name, a load balancer's internal hostname, or the selected IP address does not by itself replace the reference identity from the URL. Literal-IP HTTPS URLs require the corresponding IP-address identity rules.</p>
+<p>DNSSEC and TLS serve complementary purposes. DNSSEC can authenticate DNS responses under a validated chain of trust; TLS authenticates the remote HTTPS service and protects data in transit. DNSSEC alone does not establish authorization to access student records, and a valid TLS certificate does not prove the application made a correct access decision. A secure connection to a malicious service would still be secure transport <em>to the wrong service</em> if the user or software was tricked into choosing the wrong origin.</p>
+<p>Development shortcuts such as suppressing certificate validation or replacing a hostname with an IP in the URL can conceal important production defects. For an authorized troubleshooting test, retain the intended URL hostname and use tooling that allows a controlled address override while preserving normal TLS identity checking. Disable or bypass trust checks only in strictly isolated educational demonstrations whose limitations are explicitly documented, not as an operational fix.</p>
+</section>
+<section id="https-svcb" aria-labelledby="heading-https-svcb">
+<h2 id="heading-https-svcb">HTTPS and SVCB Service Binding Records</h2>
+<p>RFC 9460 specifies <strong>HTTPS</strong> and <strong>SVCB</strong> DNS resource records that can advertise how a client may reach a service, including alternative endpoints and connection parameters. These records supplement the traditional approach of resolving a hostname to A and AAAA addresses. They support an <strong>AliasMode</strong> for service-oriented aliasing and a <strong>ServiceMode</strong> for binding a service to one or more offered endpoints and parameters. Supporting clients evaluate the records according to the protocol; ordinary A/AAAA-only clients may use their established fallback paths.</p>
+<p>Possible parameters include application-layer protocol negotiation hints such as support for HTTP/3, alternative ports, and address hints. An advertised hint is not equivalent to confirmed reachability. An operator might specify an endpoint at an edge provider while the original URL's authority and authentication requirements remain in force. Correct client behavior depends on the HTTPS/SVCB rules, origin identity, transport availability, and any mandatory parameters.</p>
+<p>These records must not be described as HTTP redirects, universal proof that an endpoint is healthy, or a substitute for certificate validation. They add an endpoint discovery mechanism and can reduce unnecessary connection attempts for clients that understand them. Their detailed wire format and edge cases belong to the standards themselves and the separate Domain Name System article.</p>
+</section>
+<section id="srv-discovery" aria-labelledby="heading-srv-discovery">
+<h2 id="heading-srv-discovery">SRV Records and Protocol-Specific Service Discovery</h2>
+<p>Some application protocols use DNS SRV records to look up services by a named combination of service and transport, typically using labels such as <code>_service._tcp.example.org</code>. SRV responses can include targets, ports, priority values, and relative weights. Such information is useful for protocols that explicitly define it, allowing the service configuration to be separated from a particular host address.</p>
+<p>For ordinary website browsing, SRV is not a general substitute for URL authority or HTTPS service-binding discovery. A browser accessing <code>https://example.org/</code> should not be expected to seek a made-up <code>_http._tcp</code> record. Applications must define their discovery contract, including how priorities are interpreted, how failed targets are handled, and how the chosen service identity is authenticated. SRV records may also point to names that must themselves be resolved before a connection can be attempted.</p>
+</section>
+<section id="service-discovery-beyond-dns" aria-labelledby="heading-service-discovery-beyond-dns">
+<h2 id="heading-service-discovery-beyond-dns">Service Registries, Internal Names, and Non-DNS Endpoints</h2>
+<p>Public DNS is not the only endpoint discovery system. An enterprise application may consult an internal service registry, a platform control plane, a configuration service, or a stable internal gateway. Container orchestration can expose service names backed by internal DNS and virtual service addresses. A development process can listen on <code>127.0.0.1</code> or <code>::1</code> without a public DNS name; some local processes communicate through named pipes or Unix-domain sockets.</p>
+<p>These alternatives solve different problems: service registry health can track rapidly changing instances, DNS supplies interoperable names, and a gateway can hide infrastructure changes behind a stable interface. The operational design should identify the <strong>source of truth for service membership</strong>, the update path when an instance is replaced, and the trust mechanism used after discovery. An internal name should not be assumed trustworthy merely because it is inaccessible from the public Internet.</p>
+<p>When choosing a discovery system, consider change rate, control-plane availability, supported clients, recovery policy, and observability. Extra discovery machinery can become an additional point of failure. A simple stable URL may be preferable for a modest application, while dynamic service registration may be justified for a fleet with frequent workload changes.</p>
+</section>
+<section id="proxies-and-dns" aria-labelledby="heading-proxies-and-dns">
+<h2 id="heading-proxies-and-dns">Proxies, Load Balancers, and Who Performs the Lookup</h2>
+<p>A reverse proxy or gateway often receives public HTTPS traffic at a stable service name and forwards it to an internal workload. The client resolves and authenticates the public origin, while the proxy may separately resolve an internal backend name or consult a service registry. A forward proxy can reverse part of this picture: the client might connect to its configured proxy, and the proxy might perform destination resolution on the client's behalf. Therefore a user-device DNS capture may not show every lookup involved in the application request.</p>
+<p>CDNs and global traffic systems can return different address records based on client-network context, resolver location, policy, or geography. The resulting address identifies a candidate edge, not necessarily the server hosting the authoritative data. The edge may cache an eligible response, re-encrypt traffic to an origin, or route the request to a regional application. Failure to distinguish <em>public edge</em>, <em>gateway</em>, <em>application instance</em>, and <em>data store</em> can make a seemingly simple DNS investigation misleading.</p>
+<p>For security and resilience, document which intermediary supplies the public certificate, how it authenticates downstream connections, what it does with host and forwarding headers, and whether the backend trusts only approved proxies. An operational change that preserves the public DNS name may still introduce a certificate, routing, or proxy-health regression.</p>
+</section>
+<section id="health-and-failover" aria-labelledby="heading-health-and-failover">
+<h2 id="heading-health-and-failover">Endpoint Health, Failover, and Traffic Steering</h2>
+<p>A DNS record advertises an address or service configuration; it does not perform an application-level health check. Operators may integrate monitoring with DNS updates, use a network load balancer with independent probes, or place a health-aware gateway behind a stable address. These mechanisms have different convergence and cache characteristics. Removing an address from authoritative DNS will not instantly close all existing client connections or invalidate every cached copy.</p>
+<p>Application health probes should assess readiness to perform the needed operation. A server process can accept TCP connections while its identity service or database is unavailable. For a public course catalog, a cached read-only response may remain usable when enrollment writes cannot proceed. The endpoint's health policy should therefore specify <em>which functions must be available</em>, rather than equating reachability with correctness.</p>
+<p>Failover planning should specify normal and alternate endpoints, credentials and certificate coverage for each, expected propagation time, draining of existing connections, and tests for partial outages. A successful failover also requires sufficient remaining capacity; directing all traffic to a smaller backup can turn a single instance failure into a larger service outage.</p>
+</section>
+<section id="multi-region" aria-labelledby="heading-multi-region">
+<h2 id="heading-multi-region">Multi-Region and Geographic Endpoint Policies</h2>
+<p>Large systems sometimes offer the same hostname through geographically separated endpoints. Resolution and routing may reflect estimated proximity, policy, the location of a recursive resolver, or the distribution of address anycast announcements. Anycast permits the same network address to be advertised from more than one place; it is a routing technique, not a DNS record type. One visible hostname may lead to different network and application paths without changing the client's requested origin.</p>
+<p>Regional selection has consequences for consistency, jurisdiction, data residency, latency, and failure recovery. A user might reach a nearby edge while an API request still depends on a distant database. A low-resolution time from DNS is not proof of a low end-to-end request time. Architects should map each dependency's actual location and authority, including whether a failover region can serve reads, writes, or both.</p>
+<p>Do not hard-code a nearest-region assumption into correctness-sensitive workflows. If a failover sends requests across regions, the system must still apply the intended authorization and state-consistency rules. Network proximity and data ownership are independent design dimensions.</p>
+</section>
+<section id="split-dns" aria-labelledby="heading-split-dns">
+<h2 id="heading-split-dns">Private DNS, Search Domains, and VPN Views</h2>
+<p>Organizations often use <strong>split DNS</strong> arrangements in which a name may have different answers depending on the resolver, source network, or administrative view. A private service name might resolve inside a campus or VPN but not from the public Internet. Search suffixes can also cause a short name entered on a workstation to expand into different candidate fully qualified names. These configurations simplify internal access but complicate debugging when devices roam between networks.</p>
+<p>VPN configuration may change the resolver list or route only selected DNS suffixes to internal resolvers. A failed corporate application may therefore have a name-resolution problem, a VPN route problem, an authorization problem, or all three. The investigator should verify the full hostname, the effective DNS policy, the source network, and the expected answer. Relying on one public resolver for an internal-only domain will usually be uninformative.</p>
+<p>Private DNS answers do not make an application inherently private. If an internal service can be reached through an unintended route, missing authorization controls remain dangerous. Conversely, a public hostname may intentionally resolve to a private address in controlled contexts; the client must still apply the appropriate TLS trust and hostname validation.</p>
+</section>
+<section id="search-path-hosts" aria-labelledby="heading-search-path-hosts">
+<h2 id="heading-search-path-hosts">Local Hosts Mappings and Name-Resolution Overrides</h2>
+<p>Operating systems can consult local hosts mappings, configured DNS suffixes, multicast or link-local mechanisms, and multiple caches depending on the environment. An application might also use its own resolver library. As a result, an answer returned by a DNS query tool is only evidence about the particular query path used by that tool. It may differ from what a browser or application obtains through system name resolution.</p>
+<p>Local overrides are useful for development, but they can mask an authoritative record change or accidentally redirect a production host. For repeatable troubleshooting, document whether a test uses the normal resolver, a specific DNS server, a hosts override, or a client-specific mapping. Prefer fully qualified names in operational configuration when ambiguity from suffix search would be harmful.</p>
+</section>
+<section id="internationalized-names" aria-labelledby="heading-internationalized-names">
+<h2 id="heading-internationalized-names">Internationalized Domain Names and Exact Host Comparison</h2>
+<p>Domain names used by people may contain non-ASCII characters. Applications typically handle such names through Internationalized Domain Name (IDN) conventions that map eligible user-facing labels to DNS-compatible ASCII forms. Security-sensitive systems must apply the appropriate parsing, normalization, and validation rules consistently. Two characters that look similar on screen may have different underlying code points and belong to different domain names.</p>
+<p>This creates both usability and anti-phishing concerns. A service registry should distinguish a canonical internal identifier from a display label, while a browser must still authenticate the correct origin. Avoid inferring service identity from visual resemblance or from substring tests such as “contains example.org.” Authorization decisions should not be made by loosely comparing rendered hostnames.</p>
+</section>
+<section id="configuration-lifecycle" aria-labelledby="heading-configuration-lifecycle">
+<h2 id="heading-configuration-lifecycle">Endpoint Configuration and Environment Separation</h2>
+<p>Developers often store service endpoints in environment variables, deployment configuration, or managed secrets/configuration facilities. A typical configuration distinguishes development, staging, and production, each with its own allowed base URL, TLS expectations, and authorization controls. The client should be explicit about scheme, hostname, port, timeout, and the permitted routing policy rather than assuming an address that happened to work on a laptop is appropriate in production.</p>
+<p>Endpoint changes require governance. A typo can direct a production client toward a test environment, an obsolete service, or an attacker-controlled domain. Maintain a documented inventory of service names and owners, who can change their DNS configuration, which certificates cover them, and how dependencies are notified of changes. Treat endpoint configuration as a deployment artifact subject to review, not a disposable string.</p>
+<p>Credentials should not be embedded in public URLs or committed to source code alongside endpoint settings. Even when transmitted over HTTPS, URLs can appear in logs, browser history, and monitoring outputs. Use appropriate authentication mechanisms and limit where secrets can be sent.</p>
+</section>
+<section id="threat-model" aria-labelledby="heading-threat-model">
+<h2 id="heading-threat-model">Threat Boundaries in Name Resolution and Endpoint Selection</h2>
+<p>Name resolution and endpoint selection are security-relevant because they influence where information travels. Threats include manipulated DNS answers, mistaken trust in unvalidated records, hijacked domain control, misconfigured redirects, exposed management interfaces, and misrouting of requests to internal destinations. A resilient design pairs DNS and domain governance with HTTPS identity validation, least-privilege networking, service-specific authorization, and monitoring of changes.</p>
+<p><strong>DNS rebinding</strong> attacks exploit changes in name-to-address mapping to reach network destinations that would not ordinarily be reachable from an untrusted client context. <strong>Server-side request forgery (SSRF)</strong> is related but distinct: an application accepts a user-controlled URL or destination and makes an outbound request with server-side network access. Defenses must consider both the supplied hostname and the addresses reached at connection time, including redirects, alternative IP families, and resolution changes between checking and connecting. Filtering only the first textual URL is insufficient.</p>
+<p>Domain management is another boundary. Access to a registrar or DNS hosting account can enable major service disruption or traffic redirection. Use strong authentication, limited administrative roles, change logging, secure recovery processes, and an inventory of renewals and dependencies. Monitor unexpected delegation and record changes. DNSSEC can help with authenticated DNS answers but does not replace registrar account security or application-level authorization.</p>
+</section>
+<section id="privacy" aria-labelledby="heading-privacy">
+<h2 id="heading-privacy">DNS Privacy, Encrypted Resolution, and Trust</h2>
+<p>Ordinary DNS queries can expose information about the names a device or application attempts to contact. DNS over TLS (DoT) and DNS over HTTPS (DoH) encrypt the transport between a client and the chosen resolver, limiting observation or manipulation on that leg. They do not make the complete browsing activity anonymous, do not prevent the chosen resolver from seeing the names it processes, and do not themselves authenticate the origin of a subsequent website connection.</p>
+<p>DNSSEC has a different purpose: authenticating DNS data, not hiding DNS questions. Using DoH does not automatically mean that the resolver validates DNSSEC, and a validating resolver can operate without encrypted transport to the client. Public networks, enterprise DNS policy, browsers, and VPN clients may make different tradeoffs among resolver privacy, filtering, availability, and administrative control.</p>
+<p>A privacy assessment should describe who can see the query, which resolver receives it, how records and logs are retained, and whether the configuration bypasses an organization's expected protective controls. Encryption is valuable but should not be presented as a general substitute for consent, governance, or secure endpoint selection.</p>
+</section>
+<section id="performance" aria-labelledby="heading-performance">
+<h2 id="heading-performance">Resolution Latency, Connection Reuse, and Timing Budgets</h2>
+<p>A user's page-load time may include name resolution, route selection, a transport handshake, secure connection establishment, one or more HTTP exchanges, server queueing, application work, and rendering. These steps can overlap. A warm cache can make resolution nearly invisible, while a cold lookup or a failing DNS server can dominate a connection attempt. Modern browsers may prefetch DNS answers or establish connections proactively, so traces must distinguish what happened during the specific measured request.</p>
+<p>Once a secure connection exists, subsequent HTTP requests may reuse it. HTTP/2 and HTTP/3 can multiplex multiple exchanges, and some clients can reuse an appropriately authenticated connection for more than one origin subject to protocol rules. Counting each API call as if it performed a fresh DNS lookup and TLS handshake will overstate costs and may lead to poor optimization decisions.</p>
+<p>For an explanatory budget, suppose name resolution takes 18 ms, address/transport setup 35 ms, secure negotiation 25 ms, and the first application response 82 ms. Under the simplifying assumption of sequential non-overlapping stages, the total is 160 ms. If the connection is reused and the DNS answer is cached, later requests need not pay those setup costs. The actual measurement should use client network timing rather than inferring precise stages from a single total.</p>
+</section>
+<section id="observability" aria-labelledby="heading-observability">
+<h2 id="heading-observability">Tracing the Endpoint Decision</h2>
+<p>Useful telemetry separates <strong>requested origin</strong>, <strong>resolver consulted</strong>, <strong>record type and result</strong>, <strong>selected address</strong>, <strong>transport and port</strong>, <strong>TLS identity result</strong>, and <strong>HTTP outcome</strong>. These signals need not all appear in one log, but they should be correlatable during an incident. A client that logs only “connection error” obscures the difference between a missing name, a firewall rejection, and certificate mismatch.</p>
+<p>Be cautious about what is recorded. DNS queries, full URLs, and client identifiers can reveal personal or sensitive activity. Logs should minimize unnecessary names and paths, avoid credentials, and apply defined retention and access controls. For privacy-sensitive systems, aggregate metrics and deliberate sampling can preserve useful diagnosis without exhaustive request disclosure.</p>
+<p>During an incident, the operator should obtain evidence from the affected client and network, the recursive resolver, the authoritative DNS service, the gateway, and the application as needed. An authoritative answer observed from the operations center does not prove that an affected client already discarded its cache, received the same split-DNS view, or completed an authenticated connection.</p>
+</section>
+<section id="powershell-inspection" aria-labelledby="heading-powershell-inspection">
+<h2 id="heading-powershell-inspection">Windows PowerShell: A Read-Only Investigation Workflow</h2>
+<p>On Windows 11, PowerShell provides several built-in tools for observing different stages. These are <strong>read-only diagnostic examples</strong> using a public demonstration hostname, not commands to modify a user's DNS settings or bypass security. Output depends on the environment, Windows version, connectivity, DNS policy, and the target's current records. A command that fails can itself provide diagnostic information but does not establish a universal service outage.</p>
+<pre><code class="language-powershell"># Check DNS answers of a public demonstration host.
+Resolve-DnsName -Name example.com -Type A
+Resolve-DnsName -Name example.com -Type AAAA
+
+# Show the network and DNS configuration for this Windows system.
+Get-DnsClientServerAddress
+Get-DnsClientGlobalSetting
+
+# Check whether a TCP connection to the standard HTTPS port is reachable.
+Test-NetConnection -ComputerName example.com -Port 443
+
+# Exercise the HTTPS application path with ordinary certificate validation.
+Invoke-WebRequest -Uri 'https://example.com/' -Method Head
+
+# Inspect an HTTP exchange, where curl.exe is installed.
+curl.exe -I -v 'https://example.com/'</code></pre>
+<p><code>Resolve-DnsName</code> demonstrates DNS resolution using the chosen Windows resolution path; it does not prove that the application has a valid HTTPS certificate. <code>Test-NetConnection</code> tests a transport reachability path; it does not validate the application or response status. <code>Invoke-WebRequest</code> and <code>curl.exe</code> exercise higher layers. A HEAD request may be unsupported for a particular API, so a non-success response must be interpreted under that server's documented contract.</p>
+<p>When testing a private service, use the <em>authorized</em> internal hostname and do not paste tokens, certificates, personal records, or private resolver output into public support channels. Do not disable TLS validation merely to make a test succeed. A deployment-specific diagnostic script should record which names and endpoints were tested, when, and from which client context.</p>
+</section>
+<section id="diagnostic-sequence" aria-labelledby="heading-diagnostic-sequence">
+<h2 id="heading-diagnostic-sequence">A Fault-Isolation Sequence for Named Services</h2>
+<p>Follow a layered sequence rather than changing DNS records at the first sign of trouble. First capture the exact URL and error. Identify whether the user is on the intended network or VPN. Determine which resolver the affected application uses, including caches or proxy mediation. Query the specific record types needed by the client. Next test the selected address and port, verify the secure origin, and finally inspect the HTTP and application response. Record each result separately so a later change can be shown to address the actual failure.</p>
+<table><caption>Operational decision sequence</caption><thead><tr><th scope="col">Question</th><th scope="col">Evidence to collect</th><th scope="col">Next boundary</th></tr></thead><tbody>
+<tr><th scope="row">Is the intended hostname correct?</th><td>Full URL, scheme, port and expected DNS view</td><td>Resolver and DNS result</td></tr>
+<tr><th scope="row">Did the name resolve in this client context?</th><td>A/AAAA/HTTPS response, cache status, error code</td><td>Address selection and network path</td></tr>
+<tr><th scope="row">Is the selected endpoint reachable?</th><td>Address family, destination port, transport outcome</td><td>TLS identity and protocol negotiation</td></tr>
+<tr><th scope="row">Is the intended HTTPS origin authenticated?</th><td>Certificate hostname/chain outcome, SNI, date and policy</td><td>HTTP request and response</td></tr>
+<tr><th scope="row">Did the server handle the operation?</th><td>HTTP status, meaningful error payload and correlation ID</td><td>Application dependencies and authority</td></tr>
+<tr><th scope="row">Does the problem affect all clients?</th><td>Network, region, resolver and device comparisons</td><td>Scope of incident and remediation owner</td></tr>
+</tbody></table>
+<p>Changing the DNS provider or flushing caches can occasionally help an individual client, but doing so indiscriminately can destroy evidence or introduce new inconsistencies. Prefer non-destructive observation first; make a deliberate, reversible change only after the failure layer is understood.</p>
+</section>
+<section id="endpoint-comparison" aria-labelledby="heading-endpoint-comparison">
+<h2 id="heading-endpoint-comparison">Endpoint Discovery Methods Compared</h2>
+<table><caption>Selection framework for common service discovery approaches</caption><thead><tr><th scope="col">Approach</th><th scope="col">Best fit</th><th scope="col">Strengths</th><th scope="col">Limitations</th></tr></thead><tbody>
+<tr><th scope="row">Static URL + A/AAAA</th><td>Stable web and API interfaces</td><td>Wide interoperability, simple operations</td><td>Address changes subject to caching; does not convey service health</td></tr>
+<tr><th scope="row">DNS alias (CNAME)</th><td>Stable name fronting managed infrastructure</td><td>Operational indirection</td><td>Extra naming dependency; does not change origin identity</td></tr>
+<tr><th scope="row">HTTPS/SVCB</th><td>Supporting modern clients seeking connection parameters</td><td>Protocol and endpoint information through DNS</td><td>Client support varies; complex fallback/security semantics</td></tr>
+<tr><th scope="row">SRV</th><td>Protocols explicitly specifying SRV discovery</td><td>Can express target, port, priority and weight</td><td>Not universal browser HTTP discovery</td></tr>
+<tr><th scope="row">Internal DNS / service name</th><td>Managed private applications and orchestration</td><td>Stable interface for private workload membership</td><td>Depends on internal DNS policy and network context</td></tr>
+<tr><th scope="row">Health-aware gateway</th><td>Services with multiple dynamic instances</td><td>Request routing and health-based instance choice</td><td>Gateway availability and authorization become critical</td></tr>
+<tr><th scope="row">Service registry</th><td>Rapidly changing or heterogeneous service fleets</td><td>Dynamic instance and metadata registration</td><td>Extra control-plane complexity and failure modes</td></tr>
+<tr><th scope="row">Loopback or local socket</th><td>Local development and same-host services</td><td>No public naming dependency</td><td>Limited to an intended local scope; isolation still required</td></tr>
+</tbody></table>
+<p><strong>Selection principle:</strong> use the least complex discovery scheme that meets the workload's scale, isolation, portability, security, and change-rate requirements. A service-discovery product is not a substitute for a stable application contract or a trustworthy connection. If the service is public, a durable origin name is often more important to clients than which internal deployment tool supplies the instances behind it.</p>
+</section>
+<section id="worked-campus" aria-labelledby="heading-worked-campus">
+<h2 id="heading-worked-campus">Worked Example 1 — A University Course-Catalog Request</h2>
+<p>Assume a fictional student visits <code>https://catalog.example.org/courses</code>. The URL implies HTTPS on port 443 unless another port is stated. The client resolves the host using the applicable resolver and receives one or more candidate addresses. It chooses a path supported by its network, establishes the secure connection, authenticates <code>catalog.example.org</code>, and sends an HTTP request for the courses resource.</p>
+<p>The chosen address may lead to an edge gateway rather than the application server. The gateway selects an application instance, which retrieves published descriptions from the course-catalog data store. The response travels back through the gateway to the browser. At no point does the browser's DNS lookup reveal the internal database address, and knowing the public edge IP gives the student no authority to read protected enrollment records.</p>
+<p><strong>Variation:</strong> suppose the university moves the catalog behind a new provider. It may update the DNS configuration while retaining the same URL. Operators must verify that the new edge is reachable from different networks, presents a certificate valid for the original hostname, preserves required HTTP behavior, and can reach the application backend. DNS convergence alone is not enough to declare the migration complete.</p>
+</section>
+<section id="worked-vpn" aria-labelledby="heading-worked-vpn">
+<h2 id="heading-worked-vpn">Worked Example 2 — Internal Academic Records over a VPN</h2>
+<p>An authorized registrar uses <code>https://records.campus.example.org/</code>, a fictional internal service. On the campus network, the institution's private resolver returns an internal service address. From an ordinary off-campus network, the name may return no usable public address. The registrar connects to an approved VPN; DNS policy and routing then permit the correct private endpoint to be discovered and reached.</p>
+<p>Suppose the VPN reports connected but the application still fails. The operator first verifies whether this name is being answered by the enterprise resolver rather than a public one. Next the operator checks the appropriate private route and port. Finally, the operator confirms HTTPS origin identity and application authorization. If DNS returns the right address but the firewall blocks port 443, changing the DNS zone is not a useful repair. If the login succeeds but the registrar lacks permission to modify a record, the remaining problem is an application authorization issue.</p>
+<p>The example illustrates the boundary between <strong>name visibility</strong>, <strong>network reachability</strong>, <strong>service authentication</strong>, and <strong>user permission</strong>. All four must be correct for the intended operation to work.</p>
+</section>
+<section id="worked-alias" aria-labelledby="heading-worked-alias">
+<h2 id="heading-worked-alias">Worked Example 3 — Address Migration and a Long TTL</h2>
+<p>Imagine that a public API's authoritative A record is changing from <code>192.0.2.10</code> to <code>192.0.2.20</code>, both documentation addresses. Before the change, a recursive resolver caches the old record with a TTL of 3,600 seconds. Updating the authoritative record five minutes later does not force that resolver to discard the already cached record. Clients reusing established connections to the old gateway may also continue using that gateway.</p>
+<p>An appropriate planned cutover would lower the published TTL well before migration, keep the former gateway operating during the transition, verify new certificates and routing, and inspect error rates and request destinations across representative client networks. It would not assume every device switches at the same instant or that decreasing the TTL to 60 seconds guarantees 60-second migration. Some caches and applications have additional behaviors that must be considered.</p>
+<p>After the new service proves healthy, the former gateway can be retired under a documented traffic-drain and rollback policy. The important design artifact is an <em>end-to-end change window</em>, not just a DNS edit.</p>
+</section>
+<section id="worked-ipv6" aria-labelledby="heading-worked-ipv6">
+<h2 id="heading-worked-ipv6">Worked Example 4 — IPv6 Works, IPv4 Does Not</h2>
+<p>A dual-stack API publishes an AAAA record and an A record. A campus network with working IPv6 connectivity successfully reaches the IPv6 endpoint. A separate client using only IPv4 cannot connect because the IPv4 listener is misconfigured. The fact that DNS resolves the hostname and some students can browse the site does not eliminate a transport-specific issue.</p>
+<p>Compare A and AAAA answers from each affected network; test the corresponding address family and port; examine the application gateway's listener configuration; and verify that both paths offer the same intended HTTPS origin with a valid certificate. Address-selection algorithms may conceal a partial failure for some clients by reaching the healthy family. Monitoring should independently exercise the families the institution claims to support.</p>
+</section>
+<section id="worked-security" aria-labelledby="heading-worked-security">
+<h2 id="heading-worked-security">Worked Example 5 — A Server Fetches an Untrusted URL</h2>
+<p>A document-preview service accepts a URL supplied by an external user and retrieves the target on the server's behalf. The user might submit a hostname that resolves to a public address during validation but later resolves to a private service, or a public URL might redirect to a private destination. If the preview service has access to internal systems, an otherwise legitimate fetch feature may become a route into unauthorized resources.</p>
+<p>Defensive design begins with a clear destination policy and an explicit business need for remote fetches. Evaluate the scheme and requested host; resolve and check every address that may actually be connected to; prevent unauthorized private, loopback, link-local, and metadata-service access; re-evaluate after redirects and resolution changes; and use network-level egress controls so application mistakes do not grant unrestricted reachability. The precise implementation should be based on the platform's resolver and HTTP client's behavior, rather than on a single hostname string comparison.</p>
+<p>This is a threat-model teaching case, not an instruction to probe private services. The legitimate service must remain subject to application authorization, reasonable fetch limits, and logging that does not expose secret URLs.</p>
+</section>
+<section id="worked-service-binding" aria-labelledby="heading-worked-service-binding">
+<h2 id="heading-worked-service-binding">Worked Example 6 — HTTPS Service Binding and Alternative Transport</h2>
+<p>A fictional service operator publishes HTTPS service-binding information advertising a modern application protocol and a compatible alternative endpoint. A supporting client may use that information to attempt a connection using an advertised configuration, while another client that does not support the record may use ordinary address resolution. Both clients still request the same HTTPS origin and must apply the applicable authentication rules.</p>
+<p>If the advertised alternative path fails because a network blocks a transport or because the service configuration is inconsistent, compliant fallback and failure behavior matters. The operator should test clients with and without HTTPS/SVCB support, both address families, and the public certificate chain. Merely observing an HTTPS resource record is not evidence that HTTP/3 is functioning or that every client will attempt it.</p>
+</section>
+<section id="worked-failure" aria-labelledby="heading-worked-failure">
+<h2 id="heading-worked-failure">Worked Example 7 — DNS Works but the Course API Times Out</h2>
+<p>Users report that a catalog API is timing out. A responder queries the intended hostname and receives valid-looking address records. The TCP connection on the selected endpoint succeeds, and the TLS certificate validates. Nonetheless, an HTTP request takes 30 seconds to time out. DNS has completed its role, so repeatedly altering records is unlikely to solve the root cause.</p>
+<p>Investigation moves to proxy request queues, upstream application dependencies, timeout budgets, and the database. A gateway could be routing to unhealthy application instances, or the application might be waiting on a saturated connection pool. Timeouts should be bounded and diagnostic IDs used to correlate traces across components. A service-health check should exercise the actual operation that is failing rather than only confirming that a socket is open.</p>
+</section>
+<section id="worked-negative-cache" aria-labelledby="heading-worked-negative-cache">
+<h2 id="heading-worked-negative-cache">Worked Example 8 — A New Subdomain Still Returns NXDOMAIN</h2>
+<p>A team creates <code>api-new.example.org</code> shortly after testers queried it while no record existed. A recursive resolver may have cached a valid negative DNS result. After the zone update, the authoritative server returns the new address, but some clients still receive the cached negative result until its applicable cache lifetime expires. Other clients using another resolver already succeed.</p>
+<p>The correct response is to compare authoritative and recursive answers, inspect negative-cache behavior, and allow for controlled expiration or safe local remediation where authorized. Repeatedly restarting the application server or changing its firewall does not address the name-resolution state. This illustrates why testing planned hostnames and controlling their introduction should be part of deployment planning.</p>
+</section>
+<section id="design-checklist" aria-labelledby="heading-design-checklist">
+<h2 id="heading-design-checklist">Endpoint Design and Change-Control Checklist</h2>
+<p>A durable endpoint contract should answer all of the following questions before a service is declared ready for public or internal use:</p>
+<ol>
+<li><strong>Identity:</strong> What exact scheme, hostname, port, and application origin are supported? Who owns each name?</li>
+<li><strong>Discovery:</strong> Which DNS views, records, alias chains, or registries are consulted? Which clients understand them?</li>
+<li><strong>Connectivity:</strong> Which IPv4/IPv6 routes, transports, firewalls, and proxy paths must work?</li>
+<li><strong>Authentication:</strong> Which certificate or trust policy establishes the origin's identity? What remains private behind the gateway?</li>
+<li><strong>Failure behavior:</strong> What happens for NXDOMAIN, a resolver timeout, address-family failure, certificate mismatch, or backend outage?</li>
+<li><strong>Migration:</strong> What TTLs, connection lifetimes, readiness probes, rollback routes, and overlap windows are required?</li>
+<li><strong>Governance:</strong> Who can change registrar settings, DNS records, gateways, service configuration, and trust settings?</li>
+<li><strong>Evidence:</strong> Which client-side and server-side measurements show successful service access, not just a successful lookup?</li>
+<li><strong>Privacy:</strong> What information do resolver logs, connection logs, URLs, and diagnostics retain?</li>
+<li><strong>Compatibility:</strong> Can older clients still reach the service if they do not understand newer discovery records or transports?</li>
+</ol>
+<p>These questions form a practical release gate for a new institutional service, a cloud migration, or an incident response. They also keep the boundary of this article distinct from the more specialized subjects of DNS zone administration, TLS engineering, and application authorization.</p>
+</section>
+<section id="common-mistakes" aria-labelledby="heading-common-mistakes">
+<h2 id="heading-common-mistakes">Common Misconceptions and Design Mistakes</h2>
+<table><caption>Incorrect inference and its correction</caption><thead><tr><th scope="col">Mistaken assumption</th><th scope="col">Correct principle</th></tr></thead><tbody>
+<tr><td>“The hostname resolves, so the website is up.”</td><td>DNS resolution precedes separate network, TLS, HTTP, and application checks.</td></tr>
+<tr><td>“An IP address is the server's permanent identity.”</td><td>One service can have many addresses, one address can serve many origins, and routes can change.</td></tr>
+<tr><td>“The CNAME target is the website's security identity.”</td><td>The intended HTTPS origin remains the reference identity.</td></tr>
+<tr><td>“A short TTL makes failover instantaneous.”</td><td>Already cached data and established connections can persist.</td></tr>
+<tr><td>“The DNS answer order defines failover priority.”</td><td>Client address-selection and reachability behavior are implementation-dependent.</td></tr>
+<tr><td>“A valid certificate means the user may access every record.”</td><td>Server authentication does not replace resource authorization.</td></tr>
+<tr><td>“DNSSEC encrypts DNS lookups.”</td><td>DNSSEC authenticates DNS data; DoT and DoH protect specified transport legs.</td></tr>
+<tr><td>“An SRV record always redirects browsers to a port.”</td><td>SRV requires explicit application-protocol support.</td></tr>
+<tr><td>“Changing the public DNS record fixes internal VPN routing.”</td><td>Private DNS policy, routes, firewalls, and internal service health are separate.</td></tr>
+<tr><td>“One successful regional probe proves global health.”</td><td>Different resolvers, networks, and address families may behave differently.</td></tr>
+</tbody></table>
+<p>Corrective practice begins by naming the observed failure layer and the responsible component. This is more reliable than immediately modifying DNS records, certificate settings, or client security policy in response to a generic connection error.</p>
+</section>
+<section id="review-questions" aria-labelledby="heading-review-questions">
+<h2 id="heading-review-questions">Review Questions and Applied Exercises</h2>
+<ol>
+<li>In a URL with an HTTPS scheme, hostname, custom port, and path, which parts define the HTTP origin?</li>
+<li>Why can two browsers resolve the same hostname but connect to different IP addresses?</li>
+<li>How do a stub resolver, recursive resolver, and authoritative DNS server differ?</li>
+<li>What is the difference between an A and an AAAA record?</li>
+<li>Why is a CNAME not evidence that a target server is authorized to represent the original HTTPS origin?</li>
+<li>Which DNS records are primarily associated with zone delegation and administration?</li>
+<li>What is the difference between an NXDOMAIN answer and a name that lacks an A record but has an AAAA record?</li>
+<li>How can negative caching affect the launch of a new hostname?</li>
+<li>Why does lowering a TTL just before an address change not guarantee an immediate cutover?</li>
+<li>What do HTTPS/SVCB records add beyond ordinary A/AAAA resolution?</li>
+<li>Under what circumstances should an application use SRV records?</li>
+<li>How can a connection succeed at the TCP layer but fail at the HTTPS layer?</li>
+<li>Why should an API client keep the intended hostname when testing a different destination IP?</li>
+<li>How can a forward proxy change which machine performs a DNS lookup?</li>
+<li>What kinds of evidence distinguish an unreachable port from a slow backend?</li>
+<li>How can split DNS explain a name that works on campus but not off campus?</li>
+<li>What is the difference between encrypted DNS transport and DNSSEC validation?</li>
+<li>Which address-selection failures might appear only to IPv4 or only to IPv6 clients?</li>
+<li>Why is DNS filtering alone insufficient defense against server-side request forgery?</li>
+<li>What are the minimum observations needed to describe a safe service cutover?</li>
+</ol>
+<h3>Applied exercise A — Separate the layers</h3>
+<p>Draw the request path for <code>https://catalog.example.org/courses</code>, starting with the user agent and ending at an application database. Mark the hostname the client authenticates, the address returned by DNS, the externally visible proxy, the internal application endpoint, and the point where data authorization is enforced. State which components could change without changing the public URL.</p>
+<h3>Applied exercise B — Diagnose a dual-stack fault</h3>
+<p>Given a hypothetical report that IPv6-capable clients succeed while IPv4-only clients fail, list the DNS, routing, listener, and TLS observations that would distinguish a missing A record from an unreachable IPv4 listener. Explain how connection fallback might conceal the issue from some users.</p>
+<h3>Applied exercise C — Plan an endpoint migration</h3>
+<p>Propose a phased migration from a legacy API gateway to a new provider. Include TTL planning, certificate validation, overlapping service windows, smoke tests from different networks, rollback criteria, and a method for checking whether old client connections remain active.</p>
+</section>
+<section id="glossary" aria-labelledby="heading-glossary">
+<h2 id="heading-glossary">Specialist Glossary</h2>
+<dl>
+<dt>A record</dt><dd>DNS resource record containing an IPv4 address for a name.</dd>
+<dt>AAAA record</dt><dd>DNS resource record containing an IPv6 address for a name.</dd>
+<dt>AliasMode</dt><dd>RFC 9460 service-binding mode that aliases one service name to another target for the relevant SVCB or HTTPS lookup.</dd>
+<dt>Anycast</dt><dd>Routing arrangement in which more than one network location advertises the same address or prefix.</dd>
+<dt>Authoritative server</dt><dd>DNS server that serves authoritative data for a zone.</dd>
+<dt>Cache</dt><dd>Store of prior resolution results or other reusable data governed by freshness and validity rules.</dd>
+<dt>CNAME</dt><dd>DNS alias record identifying another name rather than an IP address.</dd>
+<dt>Connection reuse</dt><dd>Using an existing transport association for subsequent requests instead of setting up a fresh connection each time.</dd>
+<dt>DNS</dt><dd>Domain Name System, a distributed namespace and resolution protocol.</dd>
+<dt>DNSSEC</dt><dd>DNS Security Extensions, mechanisms for authenticating the origin and integrity of DNS data using signed records.</dd>
+<dt>DNS view</dt><dd>An answer policy or administrative perspective that can present different DNS information to different clients.</dd>
+<dt>DoH</dt><dd>DNS over HTTPS, encrypted transport for DNS messages between a client and resolver over HTTPS.</dd>
+<dt>DoT</dt><dd>DNS over TLS, encrypted transport for DNS messages over TLS.</dd>
+<dt>Endpoint</dt><dd>Addressable interface or destination through which a client communicates with a service.</dd>
+<dt>FQDN</dt><dd>Fully qualified domain name, a DNS name expressed with its complete namespace context.</dd>
+<dt>Happy Eyeballs</dt><dd>Connection-selection approach intended to reduce delays when available address families have different reachability.</dd>
+<dt>Host</dt><dd>URI component identifying the intended networked service host, usually as a DNS name or IP literal.</dd>
+<dt>HTTPS origin</dt><dd>HTTP origin identified by scheme, host, and effective port, with authority established under secure HTTP rules.</dd>
+<dt>HTTPS resource record</dt><dd>DNS record defined by RFC 9460 to provide binding and connection parameters for HTTPS services.</dd>
+<dt>IP address</dt><dd>Network-layer address used to route traffic to a destination.</dd>
+<dt>Negative caching</dt><dd>Temporary storage of certain unsuccessful DNS resolution results.</dd>
+<dt>NODATA</dt><dd>Common descriptive term for a DNS response indicating no data of the requested type for an existing name.</dd>
+<dt>NXDOMAIN</dt><dd>DNS response code indicating that the requested domain name does not exist in the consulted DNS context.</dd>
+<dt>Port</dt><dd>Transport-layer numerical identifier distinguishing an application endpoint on a host.</dd>
+<dt>Recursive resolver</dt><dd>Resolver that performs or coordinates resolution on behalf of a client and commonly caches results.</dd>
+<dt>Reference identity</dt><dd>The intended service identity against which an HTTPS client's authentication check is performed.</dd>
+<dt>Reverse proxy</dt><dd>Intermediary receiving requests on behalf of one or more application backends.</dd>
+<dt>ServiceMode</dt><dd>RFC 9460 service-binding mode that advertises endpoint and connection parameters for a service.</dd>
+<dt>SNI</dt><dd>Server Name Indication, a TLS mechanism by which a client can indicate the intended server name during connection establishment.</dd>
+<dt>Split DNS</dt><dd>Arrangement that provides different name-resolution information depending on administrative or client context.</dd>
+<dt>SRV record</dt><dd>DNS resource record describing a service target, port, priority, and weight for supporting applications.</dd>
+<dt>Stub resolver</dt><dd>Client-facing resolver function that normally delegates full name resolution to another resolver.</dd>
+<dt>TTL</dt><dd>Time-to-live, a cache lifetime associated with a DNS resource record.</dd>
+<dt>Virtual hosting</dt><dd>Serving different logical HTTP origins through shared server or gateway infrastructure.</dd>
+<dt>Zone</dt><dd>Administrative portion of DNS namespace served by a set of authoritative data.</dd>
+</dl>
+</section>
+<section id="references" aria-labelledby="heading-references">
+<h2 id="heading-references">Scholarly and Technical References</h2>
+<ol>
+<li>P. Mockapetris, <a href="https://www.rfc-editor.org/rfc/rfc1034.html" target="_blank" rel="noopener noreferrer">RFC 1034: Domain Names — Concepts and Facilities</a>, IETF, 1987. Foundation of the DNS namespace, referrals, and resolver model.</li>
+<li>P. Mockapetris, <a href="https://www.rfc-editor.org/rfc/rfc1035.html" target="_blank" rel="noopener noreferrer">RFC 1035: Domain Names — Implementation and Specification</a>, IETF, 1987. Resource record types and message structures.</li>
+<li>P. Hoffman et al., <a href="https://www.rfc-editor.org/rfc/rfc9499.html" target="_blank" rel="noopener noreferrer">RFC 9499: DNS Terminology</a>, IETF, 2024. Updated terminology for resolvers, authority, and split DNS.</li>
+<li>M. Andrews, <a href="https://www.rfc-editor.org/rfc/rfc2308.html" target="_blank" rel="noopener noreferrer">RFC 2308: Negative Caching of DNS Queries</a>, IETF, 1998. Negative answers and their cache lifetimes.</li>
+<li>W. Kumari et al., <a href="https://www.rfc-editor.org/rfc/rfc9520.html" target="_blank" rel="noopener noreferrer">RFC 9520: Negative Caching of DNS Resolution Failures</a>, IETF, 2023. Requirements to cache resolution failures.</li>
+<li>R. Arends et al., <a href="https://www.rfc-editor.org/rfc/rfc4033.html" target="_blank" rel="noopener noreferrer">RFC 4033: DNS Security Introduction and Requirements</a>, IETF, 2005. DNSSEC purpose and security model.</li>
+<li>B. Schwartz et al., <a href="https://www.rfc-editor.org/rfc/rfc9460.html" target="_blank" rel="noopener noreferrer">RFC 9460: Service Binding and Parameter Specification via the DNS (SVCB and HTTPS Resource Records)</a>, IETF, 2023. Modern connection information in DNS.</li>
+<li>R. Fielding, M. Nottingham and J. Reschke, <a href="https://www.rfc-editor.org/rfc/rfc9110.html" target="_blank" rel="noopener noreferrer">RFC 9110: HTTP Semantics</a>, IETF, 2022. URI origins, authority, and secure HTTP identity.</li>
+<li>D. Schinazi and T. Pauly, <a href="https://www.rfc-editor.org/rfc/rfc8305.html" target="_blank" rel="noopener noreferrer">RFC 8305: Happy Eyeballs Version 2: Better Connectivity Using Concurrency</a>, IETF, 2017. Candidate-address and connection strategy.</li>
+<li>R. Gulbrandsen, P. Vixie and L. Esibov, <a href="https://www.rfc-editor.org/rfc/rfc2782.html" target="_blank" rel="noopener noreferrer">RFC 2782: A DNS RR for Specifying the Location of Services (DNS SRV)</a>, IETF, 2000. SRV discovery model.</li>
+<li>Z. Hu et al., <a href="https://www.rfc-editor.org/rfc/rfc7858.html" target="_blank" rel="noopener noreferrer">RFC 7858: Specification for DNS over Transport Layer Security (TLS)</a>, IETF, 2016. Encrypted resolver transport.</li>
+<li>P. Hoffman and P. McManus, <a href="https://www.rfc-editor.org/rfc/rfc8484.html" target="_blank" rel="noopener noreferrer">RFC 8484: DNS Queries over HTTPS (DoH)</a>, IETF, 2018. DNS queries encapsulated in HTTPS.</li>
+<li>IANA, <a href="https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml" target="_blank" rel="noopener noreferrer">Domain Name System (DNS) Parameters Registry</a>. Canonical resource-record type assignments.</li>
+<li>Microsoft Learn, <a href="https://learn.microsoft.com/en-us/powershell/module/dnsclient/resolve-dnsname" target="_blank" rel="noopener noreferrer">Resolve-DnsName</a>. Windows DNS inspection tooling.</li>
+<li>Microsoft Learn, <a href="https://learn.microsoft.com/en-us/powershell/module/nettcpip/test-netconnection" target="_blank" rel="noopener noreferrer">Test-NetConnection</a>. Windows network-path testing.</li>
+</ol>
+</section>
+<section id="related-topics" aria-labelledby="heading-related-topics">
+<h2 id="heading-related-topics">Related Encyclopedia Topics</h2>
+<p>These links lead to <strong>parent or neighboring summary articles</strong>, not additional children of this specialist page.</p>
+<ul class="course-links">
+<li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture"><strong>Client-Server Architecture</strong></a> — Parent treatment of service responsibilities, HTTP, security, and reliability.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/domain-name-system"><strong>Domain Name System</strong></a> — DNS hierarchy, record administration, protocol operation, and resolver infrastructure.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/tcp-ip-protocol-suite"><strong>TCP/IP Protocol Suite</strong></a> — Addressing, routing, and transport protocols.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/routers"><strong>Routers</strong></a> — Forwarding devices and routes that influence endpoint reachability.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/routing-and-switching"><strong>Routing and Switching</strong></a> — Local and interdomain forwarding decisions.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/cloud-computing"><strong>Cloud Computing</strong></a> — Managed deployments, regions, gateways, and internal endpoint names.</li>
+<li><a href="/library/encyclopedia/computer-science/programming-and-development/web-apis-and-http"><strong>Web APIs and HTTP</strong></a> — The application request and response contracts at a named origin.</li>
+<li><a href="/library/encyclopedia/computer-science/security-systems/network-security"><strong>Network Security</strong></a> — Network trust boundaries and protective controls.</li>
+</ul>
+</section>
+<section id="unit-study-sequence" aria-labelledby="heading-unit-study-sequence">
+<h2 id="heading-unit-study-sequence">Study Pathways Within Client-Server Architecture</h2>
+<p><strong>Foundational sequence:</strong> Begin with <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-and-server-roles">Client and Server Roles</a> to identify participants, then read <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-request-and-response-lifecycle">HTTP Request and Response Lifecycle</a> and this article to connect requests with named destinations. Follow with <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-versions-and-transport">HTTP Versions and Transport</a> and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/tls-and-secure-client-connections">TLS and Secure Client Connections</a>. These links are active intended Unit destinations; publication status varies.</p>
+<p><strong>Architecture sequence:</strong> Continue to <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/reverse-proxies-and-api-gateways">Reverse Proxies and API Gateways</a> and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/server-load-balancing">Server Load Balancing</a> to understand how one public endpoint can represent many backend instances.</p>
+<p><strong>Operations sequence:</strong> Pair this article's fault-isolation process with <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-performance-and-observability">Client-Server Performance and Observability</a> and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-deployment-and-troubleshooting">Client-Server Deployment and Troubleshooting</a> for end-to-end incident diagnosis.</p>
+</section>
+<section id="editorial-scope" aria-labelledby="heading-editorial-scope">
+<h2 id="heading-editorial-scope">Editorial Scope and Production Status</h2>
+<p><strong>Taxonomic position:</strong> Level 5 subarticle 3 in the Client-Server Architecture Unit of the Networking Systems division of the MGU Computer Science Encyclopedia. Parent article: <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client-Server Architecture</a>. Unit directory: <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/">Client-Server Architecture — Sub-Articles</a>. Physical target file: <code>networking-systems/client-server-architecture-articles/dns-and-service-endpoints.html</code>.</p>
+<p><strong>Editorial boundary:</strong> This article focuses on selecting and authenticating a service endpoint from a name and application intent. Detailed DNS zone operation, HTTP message syntax, cryptographic protocol internals, load-balancer algorithms, and application authorization remain with their own dedicated encyclopedia articles. Addresses in examples are documentation addresses or fictional hostnames. DNS, infrastructure, and client behavior in illustrative scenarios should not be interpreted as observations about an actual MGU network.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

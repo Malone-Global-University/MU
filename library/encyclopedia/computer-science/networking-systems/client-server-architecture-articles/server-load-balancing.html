@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Server Load Balancing | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="MGU Encyclopedia specialist study of server load balancing: algorithms, target health, connection and request selection, session affinity, capacity, multi-zone failover, overload and operational evidence."/>
+<meta name="keywords" content="server load balancing, layer 4, layer 7, round robin, least connections, least outstanding requests, consistent hashing, load shedding, health checks, outlier detection, session affinity, Envoy, NGINX, HAProxy, AWS ALB, Kubernetes, high availability"/>
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/server-load-balancing"/>
+<meta property="og:type" content="article"/>
+<meta property="og:title" content="Server Load Balancing | MGU Encyclopedia"/>
+<meta property="og:description" content="Comprehensive treatment of selecting healthy servers, controlling in-flight work, and recovering safely across application and infrastructure failures."/>
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/server-load-balancing"/>
+<link href="/image/global/favicon.ico" rel="icon" type="image/x-icon"/>
+<link href="/component/lib.css" rel="stylesheet"/>
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero"><h1>Server Load Balancing</h1><p class="subtitle">Request and connection distribution, target health, capacity-aware algorithms, session persistence, failure isolation, and operational resilience.</p></section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#purpose">Purpose, Scope, and Architectural Boundaries</a></li>
+<li><a href="#mental-model">The Request Path and Selection Point</a></li>
+<li><a href="#terminology">Listeners, Target Groups, Pools, and Members</a></li>
+<li><a href="#l4-vs-l7">Layer 4 and Layer 7 Balancing</a></li>
+<li><a href="#selection-unit">Connections, Requests, Streams, and Work Units</a></li>
+<li><a href="#eligibility-and-weight">Eligibility, Capacity Weights, and Admission</a></li>
+<li><a href="#round-robin">Round Robin and Weighted Round Robin</a></li>
+<li><a href="#least-connections">Least Connections and Its Limitations</a></li>
+<li><a href="#least-requests">Least Outstanding Requests and Power of Two Choices</a></li>
+<li><a href="#latency-aware">Latency-Aware and Adaptive Target Selection</a></li>
+<li><a href="#hashing">Consistent Hashing, Rendezvous Hashing, and Maglev</a></li>
+<li><a href="#algorithm-matrix">Algorithm Comparison and Selection Matrix</a></li>
+<li><a href="#health-checks">Active Health Checks and Passive Failure Signals</a></li>
+<li><a href="#readiness-vs-liveness">Readiness, Liveness, Startup, and Dependency Depth</a></li>
+<li><a href="#outlier-detection">Outlier Detection, Ejection, and Recovery</a></li>
+<li><a href="#slow-start">Slow Start, Connection Warmup, and Cold Targets</a></li>
+<li><a href="#draining">Connection Draining and Graceful Target Removal</a></li>
+<li><a href="#affinity">Session Affinity and Sticky Routing</a></li>
+<li><a href="#stateful-systems">State, Data Consistency, and Backend Portability</a></li>
+<li><a href="#zones-regions">Availability Zones, Regions, and Failure Domains</a></li>
+<li><a href="#dns-gslb">DNS Traffic Management Versus Backend Load Balancing</a></li>
+<li><a href="#autoscaling">Load Balancing, Autoscaling, and Feedback Delays</a></li>
+<li><a href="#capacity-model">Capacity Planning and Back-of-the-Envelope Calculations</a></li>
+<li><a href="#queueing">Queueing, Concurrency Budgets, and Backpressure</a></li>
+<li><a href="#retries">Retry Safety, Hedging, and Amplification</a></li>
+<li><a href="#timeouts-errors">Timeout Budgets and Gateway Error Attribution</a></li>
+<li><a href="#http2-http3">HTTP/2, HTTP/3, and Multiplexed Balancing</a></li>
+<li><a href="#websockets-streams">WebSockets, gRPC, Large Uploads, and Streaming</a></li>
+<li><a href="#tls-security">TLS Termination, Identity, and Security Boundaries</a></li>
+<li><a href="#ddos-quotas">Edge Protection, Quotas, and Tenant Fairness</a></li>
+<li><a href="#observability">Metrics, Logs, Traces, and Allocation Evidence</a></li>
+<li><a href="#slo-reliability">User-Facing SLOs, Tail Latency, and Error Budgets</a></li>
+<li><a href="#common-failures">Common-Mode Failures and Cascading Outages</a></li>
+<li><a href="#kubernetes">Kubernetes Services, EndpointSlices, and Readiness</a></li>
+<li><a href="#platforms">Implementation Families and Feature Verification</a></li>
+<li><a href="#nginx-example">Illustrative NGINX HTTP Upstream Configuration</a></li>
+<li><a href="#haproxy-example">Illustrative HAProxy Backend Configuration</a></li>
+<li><a href="#change-governance">Configuration, Rollout, and Change Governance</a></li>
+<li><a href="#operations-runbook">Operational Runbook: Diagnosing Imbalance or Failure</a></li>
+<li><a href="#powershell">Windows PowerShell: Read-Only Diagnostic Workflow</a></li>
+<li><a href="#selection-framework">Architecture Selection and Review Framework</a></li>
+<li><a href="#failure-matrix">Failure Ownership and Control Matrix</a></li>
+<li><a href="#worked-1">Worked Scenario 1 — Campus Portal: Equal Requests but Unequal Work</a></li>
+<li><a href="#worked-2">Worked Scenario 2 — A Server Fails but Its Readiness Endpoint Responds</a></li>
+<li><a href="#worked-3">Worked Scenario 3 — A Gray Failure and Passive Outlier Detection</a></li>
+<li><a href="#worked-4">Worked Scenario 4 — Sticky Sessions During Scale-Out</a></li>
+<li><a href="#worked-5">Worked Scenario 5 — Unequal Target Capacity and Weighted Routing</a></li>
+<li><a href="#worked-6">Worked Scenario 6 — A Non-Idempotent Enrollment Request Is Retried</a></li>
+<li><a href="#worked-7">Worked Scenario 7 — One Availability Zone Fails During Registration</a></li>
+<li><a href="#worked-8">Worked Scenario 8 — A Long-Lived WebSocket Fleet Will Not Rebalance</a></li>
+<li><a href="#worked-9">Worked Scenario 9 — Least Connections Misreads HTTP/2 Work</a></li>
+<li><a href="#worked-10">Worked Scenario 10 — Every Target Fails Health Checks</a></li>
+<li><a href="#worked-11">Worked Scenario 11 — Cold Auto-Scaled Instances Overload the Database</a></li>
+<li><a href="#worked-12">Worked Scenario 12 — Canary Traffic and Backward-Compatible Releases</a></li>
+<li><a href="#practice">Applied Design and Investigation Exercises</a></li>
+<li><a href="#review">Review Questions</a></li>
+<li><a href="#glossary">Specialist Glossary</a></li>
+<li><a href="#references">Selected Technical References</a></li>
+<li><a href="#related">Related Encyclopedia Topics</a></li>
+<li><a href="#study-pathways">Study Pathways and Planned Specialist Links</a></li>
+<li><a href="#editorial">Editorial Scope and Publication Status</a></li>
+</ol></section>
+<section id="purpose" aria-labelledby="heading-purpose">
+<h2 id="heading-purpose">Purpose, Scope, and Architectural Boundaries</h2>
+<p><strong>Server load balancing</strong> is the controlled distribution of eligible requests or transport connections among multiple service instances. A load balancer decides <em>which</em> backend should receive work, subject to route eligibility, health, capacity, policy, and failure conditions. It is not automatically an application firewall, durable message queue, autoscaler, database replication system, or authorization engine. Good balancing can increase availability and prevent individual targets from becoming unnecessary bottlenecks, but it cannot add capacity to a saturated shared database or repair a defect deployed to every backend.</p>
+<p>This Level 5 entry extends <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client–Server Architecture</a>, within the <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/">Client–Server Architecture Unit</a>. It follows <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/reverse-proxies-and-api-gateways">Reverse Proxies and API Gateways</a>, which treats ingress policy and forwarding. The present entry concentrates on target selection, fleet health, traffic distribution, persistence, capacity, resilience, and observability. Subsequent entries treat HTTP caching, sessions, reliability patterns, and performance as separate specializations.</p>
+<p>The central engineering objective is <strong>successful work delivered within an acceptable latency and error budget</strong>, not an even-looking request count. A balanced fleet must avoid failed targets, respect different workloads and target capacities, preserve request semantics during failover, and degrade predictably under overload. An operator must know whether selection occurs per connection, per request, per HTTP stream, per session, or by a sticky assignment. That unit of selection changes which algorithm is suitable and what a traffic distribution chart actually means.</p>
+
+</section>
+<section id="mental-model" aria-labelledby="heading-mental-model">
+<h2 id="heading-mental-model">The Request Path and Selection Point</h2>
+<p>A typical browser first resolves a public hostname and connects to a public frontend. That frontend may be a cloud load balancer, CDN, gateway, reverse proxy, or a layered combination. The frontend accepts or rejects the connection and request, resolves a route, identifies eligible backend instances, selects a target, and forwards work. The target carries out application logic and often consults stateful downstream systems. Multiple frontends may run across zones; each can have its own connection pools and partial view of backend health.</p>
+<pre><code class="language-text">User agent / API caller
+    | DNS + HTTPS connection
+    v
+[Public edge or load-balancer fleet]  &lt;-- listener, TLS policy, routes
+    |          |         |
+    |      selected target based on algorithm + health
+    +----&gt; [App A: zone 1] ----+
+    +----&gt; [App B: zone 2] ----+----&gt; [Shared database / queue]
+    +----&gt; [App C: zone 3] ----+
+                   ^
+       readiness, metrics, scaling and drain control
+</code></pre>
+<p>For a complete incident narrative, preserve the distinction between the client-to-balancer leg, balancer-to-target leg, and target-to-dependency leg. A <code>504</code> can arise because the intermediary waited too long for a target; a target may actually be waiting on a database. A connection reset may occur before any request reaches an application, or after a committed change whose response was lost. Load-balancer logs, application traces, and business transaction records must be correlated rather than interpreted separately.</p>
+
+</section>
+<section id="terminology" aria-labelledby="heading-terminology">
+<h2 id="heading-terminology">Listeners, Target Groups, Pools, and Members</h2>
+<p>A <strong>listener</strong> is a configured network entry point, usually identified by address, port, and protocol. A <strong>route</strong> maps the accepted traffic to a destination policy, potentially using the hostname, path, method, or another trusted attribute. A <strong>backend pool</strong> or <strong>target group</strong> contains candidate service instances; a <strong>member</strong> or <strong>target</strong> is one addressable instance of that pool. <strong>Eligibility</strong> means the target satisfies policy constraints such as correct service identity, health, zone, version, tenancy, and sometimes connection or concurrency limits. The selected target can still reject the request.</p>
+<p>A <strong>virtual service address</strong> is the client-facing endpoint, not necessarily a single physical computer. Health can be established through active probes, observed failures, orchestration readiness, explicit endpoint metadata, or combinations thereof. A <strong>control plane</strong> supplies configuration and endpoint membership, while a <strong>data plane</strong> actually handles packets or requests. A data plane may continue forwarding with previously known configuration during a control-plane outage; this does not make control-plane availability irrelevant, because rollout, discovery, and recovery can stall.</p>
+<p>Distinguish <strong>load balancing</strong> from <strong>load shedding</strong>: balancing reallocates accepted work; shedding rejects or defers some new work to preserve service quality for the remainder. An autoscaler provisions or removes computing capacity based on observed or predictive signals; it does not necessarily govern whether a new instance is ready to accept traffic. The interaction among these mechanisms is more important than the marketing name of any individual product.</p>
+
+</section>
+<section id="l4-vs-l7" aria-labelledby="heading-l4-vs-l7">
+<h2 id="heading-l4-vs-l7">Layer 4 and Layer 7 Balancing</h2>
+<p><strong>Layer 4 (L4)</strong> balancing typically selects a backend using transport-level information such as address, port, and protocol, commonly at connection or flow granularity. It may preserve end-to-end TLS when operating as a pass-through transport proxy. L4 selection is useful for general TCP and UDP traffic and for workloads where the intermediary should not parse HTTP application semantics. However, one long-lived flow can carry far more work than another, and many HTTP/2 streams may share a single TCP connection.</p>
+<p><strong>Layer 7 (L7)</strong> balancing understands an application protocol such as HTTP. It can route by authority and path, apply request-aware limits, and make target choices per request or stream where supported. This increases control and observability but also introduces parsing, TLS termination, header trust, buffering, and failure responsibilities. In an L7 architecture, the client-facing HTTP connection and the upstream HTTP connection are not necessarily identical or one-to-one. For example, one HTTP/3 connection can originate upstream HTTP/2 or HTTP/1.1 work.</p>
+<p>Layer number is not a security or performance ranking. A transparent L4 design can be appropriate for a protocol that requires end-to-end encryption at the application servers. L7 can be necessary when one public origin serves several applications. Be precise when saying that a product &quot;supports HTTP/2&quot;: verify whether that refers to client-facing traffic, upstream target connections, or both. Algorithmic comparisons must use the real decision unit rather than assuming every request creates a new connection.</p>
+
+</section>
+<section id="selection-unit" aria-labelledby="heading-selection-unit">
+<h2 id="heading-selection-unit">Connections, Requests, Streams, and Work Units</h2>
+<p>The selection unit can be a TCP connection, UDP flow, HTTP request, HTTP/2 stream, HTTP/3 stream, WebSocket connection, gRPC call, authenticated session, or application-specific job. A naive per-connection rotation of four backend servers produces four allocations, but if the first connection is a three-hour data stream and the others contain a single short query, the resulting resource utilization can be severely skewed. Counting connections and counting completed requests measure different workloads.</p>
+<p>In HTTP/2 and HTTP/3, multiplexing allows many concurrent application exchanges over one client connection. A reverse proxy can distribute streams among different upstream targets only if its architecture and routing support that behavior; a transport-only L4 device usually cannot see the streams. Long-lived WebSocket or gRPC streams often remain pinned until disconnection, so adding a new server does not automatically redistribute established sessions. Target removal and draining must consider whether an existing flow should finish, receive a graceful protocol notification, or reconnect.</p>
+<p>A useful design document states: &quot;Target choice is per HTTP request, excluding already established streaming upgrades&quot; or &quot;Target choice is per TCP connection with source-address affinity.&quot; That statement is more operationally meaningful than &quot;round robin is enabled.&quot; It defines what fairness can mean, how to calculate active work, and when a failure will force a client to establish a new assignment.</p>
+
+</section>
+<section id="eligibility-and-weight" aria-labelledby="heading-eligibility-and-weight">
+<h2 id="heading-eligibility-and-weight">Eligibility, Capacity Weights, and Admission</h2>
+<p>A selection algorithm only operates on a candidate set. Candidate members may be excluded for failed health checks, wrong protocol, disabled route, draining state, maintenance, lack of readiness, incompatible software version, tenant isolation, zone restrictions, or an explicit resource ceiling. Filter first, select second. A policy that promises &quot;round robin across three targets&quot; is misleading if only two pass readiness checks, one is draining, or a gateway chooses from a local-zone subset.</p>
+<p><strong>Weights</strong> represent intended relative selection shares or capacities, depending on implementation. A weight of two beside a weight of one is not a guarantee that twice as many <em>completed operations</em> will occur, especially if requests have unequal costs, clients have affinity, or the target becomes unhealthy. Some implementations support slow start, dynamically reduced weights, or adaptive weights informed by errors and utilization. The administrative meaning of weight and the runtime algorithm must be documented separately.</p>
+<p>Backend admission controls, such as maximum concurrent requests, connection limits, queue bounds, and overload rejection, are complementary to weighting. If a target cannot accept work, an ideal selector recognizes that limit before sending more; if all targets are at their safe limit, controlled rejection may be preferable to unbounded waiting. A healthy node is not the same as an idle node, and an idle node is not necessarily ready for every request.</p>
+
+</section>
+<section id="round-robin" aria-labelledby="heading-round-robin">
+<h2 id="heading-round-robin">Round Robin and Weighted Round Robin</h2>
+<p><strong>Round robin</strong> visits eligible members cyclically. It is simple, predictable, inexpensive, and often a reasonable starting point for a homogeneous pool of targets processing similarly priced short requests. With three equally eligible nodes A, B, and C, selections can follow A, B, C, A, B, C. <strong>Weighted round robin</strong> allocates more selections to members with greater configured weight, often using a smooth or scheduling-specific implementation to avoid abrupt bursts.</p>
+<p>The limitation is that allocation counts do not account for the service time or processing cost of each request. Suppose node A receives two file-export requests that occupy workers for twenty seconds while B and C receive small metadata reads that finish in milliseconds. Equal selection counts do not imply equal worker demand. Nor should a system use round robin to predict an exact request count for short samples: traffic bursts, connection reuse, multiple load-balancer nodes, target churn, and retries affect observed distribution.</p>
+<p>Use round robin when targets are similar, workloads are sufficiently uniform, and simplicity is valuable. Reevaluate if response-time tails diverge across members, active worker counts vary widely, or scaling events cause prolonged imbalance. Avoid placing radically different machine sizes into an unweighted pool without considering their capacity. All algorithms should still be tested under healthy, degraded, and target-change conditions.</p>
+
+</section>
+<section id="least-connections" aria-labelledby="heading-least-connections">
+<h2 id="heading-least-connections">Least Connections and Its Limitations</h2>
+<p><strong>Least connections</strong> selects a member with comparatively few active connections, often adjusting for configured target weight. It can outperform round robin for long-lived, roughly equivalent connections because a server occupied by many existing clients receives fewer new ones. It is common in TCP proxying, database connection proxies, and some HTTP deployments. However, it assumes that connection count correlates with load; this assumption breaks when connections differ dramatically in work or when pooled keepalive connections are mostly idle.</p>
+<p>For example, a server holding thirty idle HTTP keepalive connections may be less busy than one holding four CPU-intensive streaming connections. An L4 view of connection count cannot observe the work per HTTP request. Weighted least connections may also behave differently from simple &quot;connections divided by weight&quot; formulas. Each implementation defines tie-breakers, local versus global counters, and how a target's zero-connection startup influences selection.</p>
+<p>Design an experiment comparing queue wait, CPU saturation, in-flight calls, and latency tails rather than relying only on a &quot;connections balanced&quot; chart. When outstanding application requests matter more than transport sockets, a request-based selection policy may be more appropriate. When resources are dominated by long-lived connections, accurately configured connection-aware selection remains valuable.</p>
+
+</section>
+<section id="least-requests" aria-labelledby="heading-least-requests">
+<h2 id="heading-least-requests">Least Outstanding Requests and Power of Two Choices</h2>
+<p><strong>Least outstanding requests</strong> tries to send new work to the target with relatively few in-flight requests. This better approximates load than simple round robin when request durations vary, but it still assumes that every request costs roughly comparable resources or that the number outstanding is a useful proxy. A five-millisecond cache lookup and a five-minute analytical query should not automatically count as equivalent units of work. Some implementations select the minimum among all targets, while others choose a small random sample, often two candidates, then favor the less loaded member.</p>
+<p>The <strong>power-of-two-choices</strong> approach limits selection overhead: sample two eligible targets and choose the one with fewer active requests (sometimes weighted). This can reduce hotspots without a globally synchronized scan of a large fleet. Its behavior depends on whether counters are local to each proxy, how weights influence choice, what happens under a tie, and whether the sample is zone-aware. Do not assume &quot;least request&quot; is the same algorithm in NGINX, Envoy, HAProxy, and AWS.</p>
+<p>A practical evaluation uses the distribution of active requests, queue delay, and user-visible p95/p99 latency during bursts. If each target maintains its own internal queue, observe both proxy and application queues. A successful least-request policy can reduce uneven demand, but it cannot rescue a service in which all targets depend on the same exhausted database pool.</p>
+
+</section>
+<section id="latency-aware" aria-labelledby="heading-latency-aware">
+<h2 id="heading-latency-aware">Latency-Aware and Adaptive Target Selection</h2>
+<p>A <strong>latency-aware</strong> balancer uses observed request completion time, time to first byte, or a moving estimate to direct traffic toward better-performing instances. <strong>Adaptive</strong> policies may also ingest CPU, error rates, capacity reports, or backend-advertised workload signals. Envoy, for example, documents load-balancer policies and mechanisms that can factor in observed or reported load; the precise features vary by policy and version. These approaches can improve unequal-fleet performance but must avoid mistaking workload mix for backend quality.</p>
+<p>If one server receives expensive reporting requests while another receives simple status reads, the slow response time may reflect request type rather than server degradation. Shifting traffic away from a temporarily slow node can create positive feedback: the remaining nodes become overloaded, then appear slow themselves. Observation windows, outlier thresholds, smoothing, and minimum traffic floors determine whether adaptive control stabilizes a fleet or causes oscillation.</p>
+<p>Use real experiments and guardrails. Monitor route- and method-specific latency rather than a single pooled average; distinguish backend processing time from queue and network time; and verify that an instance can recover after temporary de-prioritization. Adaptive balancing is a control system with delayed, noisy feedback, not a proof that the fastest healthy target will always be selected.</p>
+
+</section>
+<section id="hashing" aria-labelledby="heading-hashing">
+<h2 id="heading-hashing">Consistent Hashing, Rendezvous Hashing, and Maglev</h2>
+<p><strong>Key-based selection</strong> uses a stable key, such as a tenant identifier, to direct related operations toward a consistent subset of instances. Ordinary modulo hashing is simple but remaps many keys when the number of targets changes. <strong>Consistent hashing</strong>, <strong>rendezvous hashing</strong>, and table-based approaches such as <strong>Maglev</strong> are designed to reduce unnecessary remapping or provide stable mappings under certain pool changes. The exact movement properties depend on implementation, table size, weighting, and how unhealthy targets are handled.</p>
+<p>Hash-based selection is useful for warm local caches, stateful connection affinities, or workloads where repeated access to related data benefits from locality. It is not equivalent to correctness-preserving state replication. If a session exists only in a target's memory and that target fails, hashing cannot recover the missing session. Likewise, a single &quot;hot key&quot; can overwhelm the target assigned to it while other targets remain idle. Countermeasures include key salting or partitioning where safe, per-tenant limits, shared state, and a bounded fallback path.</p>
+<p>Choose trusted, stable, privacy-conscious keys. Client IP is often a poor user key because NAT aggregates many users, mobile addresses change, and IP-derived affinity can produce severe hotspots. A hash of a verified session identifier may be more stable, but the session still needs authorization and recovery rules. Map stability is useful only if it improves an application property that matters.</p>
+
+</section>
+<section id="algorithm-matrix" aria-labelledby="heading-algorithm-matrix">
+<h2 id="heading-algorithm-matrix">Algorithm Comparison and Selection Matrix</h2>
+<p>The following matrix is a <strong>design guide</strong>, not a claim that every implementation offers each policy. “Work signal” describes the main quantity that influences selection; a product may modify it with weighting, topology, or health.</p>
+<table>
+<thead>
+<tr>
+  <th>Algorithm</th>
+  <th>Main work signal</th>
+  <th>Best starting context</th>
+  <th>Main risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Round robin</td>
+  <td>Turn in sequence</td>
+  <td>Homogeneous short requests</td>
+  <td>Ignores request duration</td>
+</tr>
+<tr>
+  <td>Weighted round robin</td>
+  <td>Configured share</td>
+  <td>Unequal known target capacity</td>
+  <td>Incorrect or stale weights</td>
+</tr>
+<tr>
+  <td>Least connections</td>
+  <td>Active transport connections</td>
+  <td>Similar-cost long-lived connections</td>
+  <td>Idle sockets distort load</td>
+</tr>
+<tr>
+  <td>Least outstanding requests</td>
+  <td>In-flight HTTP work</td>
+  <td>Variable request duration</td>
+  <td>Request cost remains unequal</td>
+</tr>
+<tr>
+  <td>Power of two choices</td>
+  <td>Sampled in-flight load</td>
+  <td>Large dynamic pools</td>
+  <td>Proxy-local counters and sampling variance</td>
+</tr>
+<tr>
+  <td>Latency-aware</td>
+  <td>Observed response performance</td>
+  <td>Uneven target latency</td>
+  <td>Feedback oscillation and workload-mix bias</td>
+</tr>
+<tr>
+  <td>Consistent / rendezvous hashing</td>
+  <td>Stable key-to-target mapping</td>
+  <td>Cache locality and limited affinity</td>
+  <td>Hot keys, remapping, state loss</td>
+</tr>
+<tr>
+  <td>Locality-aware / priority</td>
+  <td>Zone, region, priority, health</td>
+  <td>Multizone cost and failure containment</td>
+  <td>Concentrated regional overload</td>
+</tr>
+</tbody>
+</table>
+<p>A useful decision sequence is to identify the <strong>selection unit</strong>, <strong>actual bottleneck</strong>, <strong>required stickiness</strong>, <strong>health reliability</strong>, and <strong>failure-domain boundaries</strong> before selecting an algorithm. Test a realistic request mix against a simple baseline. Sophisticated policies should demonstrate measurable improvement in completed operations, tail latency, cost, or recovery rather than merely introducing more tunable parameters.</p>
+
+</section>
+<section id="health-checks" aria-labelledby="heading-health-checks">
+<h2 id="heading-health-checks">Active Health Checks and Passive Failure Signals</h2>
+<p><strong>Active health checks</strong> send periodic probes to a target and compare the outcome against expected behavior. A TCP accept, TLS handshake, HTTP status code, or small application-level readiness response can provide progressively different evidence. Check interval, timeout, success/failure thresholds, and target start-up delay together: a five-second interval with several consecutive failures may require much longer than five seconds to remove a broken target, while too aggressive a setting can eject a transiently slow but recoverable instance.</p>
+<p><strong>Passive health</strong> uses observed production outcomes such as connection resets, upstream 5xx responses, timeouts, or other configured error signals. Systems such as Envoy document passive outlier detection, but the errors counted and ejection policy are implementation-specific. An application returning a legitimate business error should not automatically be treated as a broken target. Passive observations can be biased by traffic distribution: a target receiving little work may appear healthy merely because it has few opportunities to fail.</p>
+<p>A robust health policy distinguishes routing reachability, process liveness, readiness for <em>new</em> work, and application dependency health. It also defines what happens when every target fails checks. Some managed products implement a documented <strong>fail-open</strong> policy in that condition; AWS Application Load Balancer target groups are an important example. Operators must not assume that &quot;unhealthy&quot; always means no traffic is sent. Diagnose check failures before widening thresholds or bypassing safeguards.</p>
+
+</section>
+<section id="readiness-vs-liveness" aria-labelledby="heading-readiness-vs-liveness">
+<h2 id="heading-readiness-vs-liveness">Readiness, Liveness, Startup, and Dependency Depth</h2>
+<p><strong>Readiness</strong> asks whether an instance is currently prepared to serve new requests. <strong>Liveness</strong> asks whether the running process should be restarted. <strong>Startup</strong> guards a slow-initializing process from being judged by normal liveness or readiness expectations before initialization finishes. In Kubernetes, these probe types have distinct effects and misconfiguration can create restart loops or remove all endpoints from a Service. The balancing layer should consume readiness and termination signals through a documented integration path.</p>
+<p>An application that can serve public documentation even when an optional analytics service fails should not necessarily declare itself entirely unready because analytics is unavailable. Conversely, an enrollment-writing endpoint may require a functioning transactional datastore. One universal readiness endpoint is frequently an approximation: document which dependencies it tests and which critical requests it covers. A dependency check must not become so expensive that the health system itself overloads a shared database.</p>
+<p>Distinguish <strong>instance health</strong> from <strong>service health</strong>. All application instances can pass a shallow <code>/ready</code> response while database transactions are timing out. A meaningful readiness probe is one element in broader service-level observation. For a multi-service application, consider route-specific circuit breakers and degraded modes rather than taking every healthy process offline at the same instant.</p>
+
+</section>
+<section id="outlier-detection" aria-labelledby="heading-outlier-detection">
+<h2 id="heading-outlier-detection">Outlier Detection, Ejection, and Recovery</h2>
+<p>An outlier detector can temporarily exclude a target whose observed error rate, consecutive failures, or latency exceeds a configured threshold. This provides an answer to gray failures: the target remains reachable and may even pass a simple health probe, yet real requests to it are failing. The detector must avoid overreacting to a few noisy samples or to legitimate application responses that differ by user input. Establish a minimum volume of observations before making strong health decisions.</p>
+<p>Recovery is as important as ejection. A temporarily excluded target should have a bounded path to reenter service, such as a periodic probe, an ejection timeout, or controlled low-volume verification. Avoid all-or-nothing oscillation in which a target is alternately overwhelmed and expelled. Limit how many members can be ejected at once and retain overload protections for the members that remain, or the balancing system may amplify the original problem.</p>
+<p>Analyze whether errors are <strong>correlated</strong>. If all endpoints begin returning timeouts after a database migration, ejection can remove the whole pool; that is not a set of independent bad instances. Correlated failures call for incident diagnosis, dependency recovery, capacity containment, and possibly controlled admission reduction—not merely more aggressive outlier thresholds.</p>
+
+</section>
+<section id="slow-start" aria-labelledby="heading-slow-start">
+<h2 id="heading-slow-start">Slow Start, Connection Warmup, and Cold Targets</h2>
+<p>New targets may be formally ready yet lack warm caches, established database connections, compiled code paths, loaded models, or a steady garbage-collection profile. Sending a full equal share immediately can create latency spikes and false health failures. A <strong>slow-start</strong> policy gradually increases selection weight or available concurrency while observing whether the target performs acceptably. The warmup period should reflect real startup behavior rather than an arbitrary number borrowed from another application.</p>
+<p>Cold starts matter in autoscaled cloud services and after maintenance. A fleet of new instances that simultaneously opens its database pool can overwhelm the database even though individual instances are healthy. Stagger initialization, cap pool sizes, bound concurrency, and use admission control. Do not use request-derived latency from a cold node as permanent evidence that it is inferior; a measured warmup stage can distinguish startup from sustained underperformance.</p>
+<p>Balance warmup with recovery urgency. If only a few targets remain after an outage, an excessively slow ramp can prolong overload. A good procedure describes the minimum checks for promotion, an initial safe share, observation thresholds, maximum ramp speed, and the conditions that reverse or halt the ramp. Record the change in telemetry so analysts do not misinterpret a deliberate ramp as an organic traffic decline.</p>
+
+</section>
+<section id="draining" aria-labelledby="heading-draining">
+<h2 id="heading-draining">Connection Draining and Graceful Target Removal</h2>
+<p><strong>Draining</strong> removes a target from new allocations while allowing some established requests or connections to finish. The exact behavior depends on the load balancer, protocol, instance shutdown hook, request duration, and configured deadline. For a simple HTTP request, a short drain interval may suffice; for large uploads, streaming responses, WebSocket connections, or gRPC sessions, removal may require application-level notifications or reconnect contracts. Drain behavior is not the same as instantaneous unregistration.</p>
+<p>A safe rollout usually follows: mark the target unavailable for new work; wait for relevant readiness and endpoint changes to propagate; stop new allocations; finish or explicitly terminate active requests within a bounded grace period; flush durable logs and state; then terminate the process. An instance that exits immediately after signaling unready can still break requests in flight because the network control plane and all proxies do not update atomically.</p>
+<p>Kubernetes documents termination and EndpointSlice conditions, while managed load balancers offer their own deregistration delay settings. Do not assume those times are identical or that all frontends learn of termination simultaneously. Use observed connection counts and synthetic long-running operations to verify drain behavior under deployments, node loss, and forced termination.</p>
+
+</section>
+<section id="affinity" aria-labelledby="heading-affinity">
+<h2 id="heading-affinity">Session Affinity and Sticky Routing</h2>
+<p><strong>Session affinity</strong> attempts to direct related client requests to the same target. Techniques include client-IP hashing, load-balancer cookies, application cookies, or consistent selection from a verified session key. This can improve cache locality or sustain legacy applications whose state lives in server memory. It also introduces failure coupling: when the chosen target disappears, the client may lose in-memory state or be sent to a replacement that cannot interpret it.</p>
+<p>Prefer externalized or replicated authoritative session state when availability and horizontal scaling matter. Sticky routing should be treated as a performance optimization or transitional compatibility mechanism, not an access-control boundary. Applications must authorize each request regardless of which backend receives it. Cookie scope, integrity, confidentiality, expiration, and cross-origin behavior remain important if affinity metadata is stored on the client.</p>
+<p>Affinity changes fairness: one high-volume tenant can dominate a single node even while aggregate traffic appears balanced. During scale-out, long-lived sticky sessions may remain on existing targets, leaving new nodes underutilized. During scale-in, forced reassignments may cause reconnect storms. Report both per-target load and per-affinity-key concentration to make these effects visible.</p>
+
+</section>
+<section id="stateful-systems" aria-labelledby="heading-stateful-systems">
+<h2 id="heading-stateful-systems">State, Data Consistency, and Backend Portability</h2>
+<p>Balanced application replicas are easiest to operate when each eligible instance can complete the same authorized request using shared or appropriately replicated state. A <strong>stateless request handler</strong> may still rely on stateful databases, caches, queues, and identity systems. Load balancing does not provide transaction isolation, durable commits, consistency guarantees, or distributed locking. Those properties must be designed in the stateful components and application contracts.</p>
+<p>An app server that stores an in-progress shopping basket only in local memory may behave correctly under sticky sessions until a failure causes reassignment. A server that writes a payment and then loses its response creates uncertainty for the client regardless of the balancing policy. Durable transaction identifiers and idempotency controls, where required, are the responsibility of the application and persistence layer. A retried request must not silently duplicate a completed business operation.</p>
+<p>For stateful databases or brokers, blindly applying HTTP request-balancing assumptions is dangerous. A primary/replica database topology may need explicit read/write routing and consistency rules, not equal distribution. An instance can be network-reachable but not permitted to accept writes. Build separate routing and health contracts for each service class rather than treating all network endpoints as interchangeable workers.</p>
+
+</section>
+<section id="zones-regions" aria-labelledby="heading-zones-regions">
+<h2 id="heading-zones-regions">Availability Zones, Regions, and Failure Domains</h2>
+<p><strong>Locality-aware</strong> balancing attempts to prefer nearby or same-zone targets when that reduces latency or cross-zone transfer costs. <strong>Priority-based</strong> balancing can reserve another zone or region for fallback. Both must preserve enough spare capacity to tolerate the failure of the preferred area. A policy that sends 100 percent of a zone's work to its local targets may fail catastrophically if the zone loses only its application replicas while client-facing entry points remain available.</p>
+<p>Define the actual failure domains: racks, nodes, availability zones, regions, DNS control, identity provider, secret distribution, databases, and common deployment pipelines. Multiple target instances are not independent when all depend on one shared database or the same flawed configuration revision. A single global load balancer can also create a common-mode control risk even if every backend region is healthy.</p>
+<p>Failover has a <strong>capacity price</strong>. A region that normally receives half of total traffic must have room, throttling capacity, or a degraded mode for an additional half after the other region fails. Measure both normal efficiency and survival under planned failures. Locality preferences should not override strict compliance or data-residency boundaries; those are architectural requirements, not merely cost knobs.</p>
+
+</section>
+<section id="dns-gslb" aria-labelledby="heading-dns-gslb">
+<h2 id="heading-dns-gslb">DNS Traffic Management Versus Backend Load Balancing</h2>
+<p>DNS-based traffic management can select among public frontends, regions, or sites by returning different records or directing a resolver toward a chosen answer. It operates at a different point from an L7 proxy choosing a backend for an individual HTTP request. DNS answers may be cached by recursive resolvers, operating systems, applications, or local networks; a low authoritative TTL does not guarantee every existing connection will move immediately when a region is declared unhealthy.</p>
+<p>An already established TCP or QUIC connection generally continues to the endpoint it selected before DNS changes, absent connection breakage or protocol-specific migration. That means DNS failover and request-level backend failover have different recovery timelines. Some cloud global acceleration services use anycast and network routing rather than relying solely on DNS answer selection; document the specific architecture before describing it as DNS-only global balancing.</p>
+<p>Use DNS or global routing to manage large-scale regional steering, then use zone or service-level balancing for fine-grained target selection. Monitor propagation, resolver behavior, target availability, connection lifetime, and rollback risk. Maintain control-plane access and a tested emergency runbook for when the preferred region or the global steering mechanism fails.</p>
+
+</section>
+<section id="autoscaling" aria-labelledby="heading-autoscaling">
+<h2 id="heading-autoscaling">Load Balancing, Autoscaling, and Feedback Delays</h2>
+<p>Autoscaling changes the number of candidate workers; load balancing allocates work among currently eligible workers. Scale-out is not instantaneous: a new instance must be allocated, started, configured, made ready, discovered, and warmed up. If the balancer spreads traffic to new instances before they are truly ready, failed requests increase just when demand is high. If it waits too long to add them, old targets may remain overloaded and trigger cascading errors.</p>
+<p>Choose scaling signals that reflect the constrained resource: concurrent requests, queue wait, processor use, memory pressure, or application throughput. Request rate alone can be misleading when each request's cost varies by route. Control-loop timing matters. A surge that rises and falls within a minute may be better handled partly through preprovisioned headroom, admission control, and fast queuing than through slow instance provisioning alone.</p>
+<p>Scale-in needs stronger safety checks than scale-out. Select candidates for removal, shift new work away, allow active requests to drain, and avoid evicting the only copy of local state. Check for interactions among autoscaler, load-balancer health, and application self-protection. Three independent controllers responding aggressively to the same latency spike can cause oscillation, repeated deployments, and reduced usable capacity.</p>
+
+</section>
+<section id="capacity-model" aria-labelledby="heading-capacity-model">
+<h2 id="heading-capacity-model">Capacity Planning and Back-of-the-Envelope Calculations</h2>
+<p>A useful starting approximation is <strong>Little's Law</strong>, <em>L = λW</em>, where <em>L</em> is average concurrent work in a stable system, <em>λ</em> is average completed request throughput, and <em>W</em> is average time in the modeled system. If the application completes 400 requests per second at an average response time of 0.20 seconds, the approximate average concurrency is 80 in-flight requests, <em>provided the measured scope and stable-system assumptions match</em>. This is not a CPU formula and does not directly predict p99 latency or required spare capacity.</p>
+<p>Capacity must also account for service-time distribution, dependencies, queue limits, uneven routing, scheduled work, retries, and expected component failure. Consider six replicas each able to sustain 100 representative requests per second at the required latency. Their nominal combined capacity may be 600 requests per second, but if one replica can fail and four are fully needed for regular traffic, the fleet has limited headroom. Use empirical load tests and define a safe operational utilization target; do not translate a vendor maximum throughput directly into a production service-level objective.</p>
+<p>For the simplest weighted allocation, targets A/B/C with weights 2/1/1 have nominal selection shares 50/25/25 percent <strong>among eligible candidates</strong>, assuming the algorithm interprets weights proportionally and the observed sample is sufficiently large. These shares are not guarantees of identical work, equal bytes, or equal end-to-end latency. Compare those calculations with actual request counts and resource utilization during a realistic sustained experiment.</p>
+
+</section>
+<section id="queueing" aria-labelledby="heading-queueing">
+<h2 id="heading-queueing">Queueing, Concurrency Budgets, and Backpressure</h2>
+<p>Every extra request consumes a resource somewhere: proxy sockets, request buffers, worker slots, database connections, memory, and potentially storage bandwidth. When arrival rate persistently exceeds completion capacity, waiting work grows until a queue bound, timeout, or hardware limit is reached. A load balancer that blindly forwards to every saturated target merely moves the queue downstream. Explicit, bounded queues and admission limits make failure more predictable and protect the capacity needed to complete already accepted requests.</p>
+<p><strong>Backpressure</strong> communicates or enforces the inability to accept more work. It may appear as an early <code>503</code>, a quota response, a bounded queue, a protocol flow-control limit, or a caller-side concurrency cap. Different layers need compatible policies. If the balancer allows thousands of concurrent requests but the database allows only a few hundred connections, the application can spend most of its time waiting while client timeouts continue to accumulate.</p>
+<p>Design queue budgets for user-visible deadlines. A request waiting 1.8 seconds in a proxy queue cannot satisfy a two-second deadline if the backend normally requires another 0.5 seconds. Observability should distinguish queue wait from active service time. Favor bounded, explainable rejection over accepting work that has no credible chance of meeting the client's time budget.</p>
+
+</section>
+<section id="retries" aria-labelledby="heading-retries">
+<h2 id="heading-retries">Retry Safety, Hedging, and Amplification</h2>
+<p>A load balancer may attempt another target after a connection failure or timeout, but <strong>retrying is a business-semantics decision as well as a network decision</strong>. HTTP standards treat idempotence as central to automatic retries: it is unsafe to assume that a failed response means the original operation never executed. For a money transfer, course enrollment, or order submission, the target might commit the change before the connection drops. A blind retry can duplicate an operation without an application-level idempotency contract.</p>
+<p>Use explicit retry eligibility, maximum attempts, per-attempt timeouts, an overall deadline, backoff with jitter, and a bounded retry budget. A retry should not exceed the caller's remaining deadline. <strong>Hedged requests</strong>, which issue another copy before the first finishes, may improve tail latency for safe read-only work, but also multiply load and can violate semantics for side-effecting operations. Never turn on generic retries across all methods solely because a load-balancer product offers the feature.</p>
+<p>During overload, retries can produce a feedback loop: a slow target triggers retry traffic, the extra traffic overloads healthy targets, and those targets now trigger additional retries. Calculate retry amplification as the ratio of total backend attempts to original client requests and monitor it. If a fleet is saturated, reducing retries and shedding early work may preserve more successful outcomes than aggressively searching for a supposedly faster target.</p>
+
+</section>
+<section id="timeouts-errors" aria-labelledby="heading-timeouts-errors">
+<h2 id="heading-timeouts-errors">Timeout Budgets and Gateway Error Attribution</h2>
+<p>Load-balanced requests face multiple timeouts: DNS and connection establishment, client TLS, proxy request headers and bodies, upstream connect, upstream response headers, idle connections, streaming inactivity, and the application deadline. Set them consistently. A five-second upstream timeout cannot be expected to work reliably for a legitimate ten-second report generator. Conversely, a thirty-second proxy timeout for a two-second user interaction wastes resources and can hide a stalled dependency.</p>
+<p>A <code>502</code> can indicate an invalid upstream response or forwarding failure; a <code>504</code> generally indicates a gateway timeout; a <code>503</code> often represents unavailable service or overload. The exact point producing the status varies by product, and an application can originate the same status itself. Record a <em>response flag</em> or equivalent attribution that distinguishes proxy-generated failure, target-generated HTTP error, circuit breaker rejection, and aborted client connection.</p>
+<p>Debug the chain in time order. Did the frontend accept the connection? Was any backend selected? Did it establish upstream transport? Did the target begin processing? Was there a timeout waiting on a database? Did the client abandon the request before the result returned? Without per-attempt timestamps and target identifiers, an operator can misdiagnose application overload as a network outage and intensify the problem through unnecessary failover.</p>
+
+</section>
+<section id="http2-http3" aria-labelledby="heading-http2-http3">
+<h2 id="heading-http2-http3">HTTP/2, HTTP/3, and Multiplexed Balancing</h2>
+<p>HTTP/2 and HTTP/3 carry multiple independent request streams over a persistent client connection. A modern HTTP frontend can terminate that connection and select different upstream targets for separate requests, depending on its configuration and supported protocol versions. A simple L4 device only observes the enclosing transport flow and ordinarily pins it to one selected destination. This distinction affects fairness, observability, session persistence, and recovery when a target leaves service.</p>
+<p>HTTP/3 uses QUIC over UDP, introducing connection IDs, stream-level behavior, and connection migration properties not identical to TCP. A load balancer that must route QUIC packets consistently cannot assume every packet's four-tuple remains constant throughout the logical connection. The design may require QUIC-aware routing or controlled termination at a supported edge. Do not equate the existence of an HTTP/3 listener with HTTP/3 capability all the way to backend applications.</p>
+<p>When testing, generate the right traffic pattern: reused HTTP/1.1 keepalive connections, multiplexed HTTP/2 streams, HTTP/3 requests, and long-lived streaming calls can produce very different allocation patterns. Count requests and service time rather than simply counting front-end sockets. Track graceful protocol shutdown, retries, and target draining under multiplexed traffic.</p>
+
+</section>
+<section id="websockets-streams" aria-labelledby="heading-websockets-streams">
+<h2 id="heading-websockets-streams">WebSockets, gRPC, Large Uploads, and Streaming</h2>
+<p>A WebSocket upgraded connection or a long-lived gRPC stream usually continues to the target selected at the beginning of the session. Conventional per-request load redistribution no longer applies to that established flow. When many connections persist for hours, newly added replicas may appear empty while older replicas retain almost all the load. Use separate pool sizing and drain policies for persistent sessions when their resource profile differs from normal short HTTP requests.</p>
+<p>Large file uploads create additional concerns. If a proxy buffers an upload before selecting or contacting the target, the load reflected in backend request counts may not reveal pressure on the frontend's memory or storage. If it streams directly, a slow or failed target can require the client to restart or resume work according to an explicit application protocol. A load balancer cannot guarantee transparent replay of an already partially processed multi-gigabyte upload.</p>
+<p>For gRPC, distinguish connection health from per-method health and per-call deadline. A single client connection can multiplex many RPCs with very different service times. Appropriate telemetry includes active streams, per-method latency, message bytes, cancellation counts, and reconnect behavior. Where possible, give streaming traffic distinct capacity budgets and SLOs rather than hiding it inside generic &quot;requests per second&quot; metrics.</p>
+
+</section>
+<section id="tls-security" aria-labelledby="heading-tls-security">
+<h2 id="heading-tls-security">TLS Termination, Identity, and Security Boundaries</h2>
+<p>A load balancer may terminate client TLS, pass encrypted transport through, or terminate TLS and establish a separate encrypted upstream session. The choice affects certificate identity, header visibility, protocol inspection, monitoring, and the trust boundary for client credentials. If the public connection is HTTPS but the internal hop is unencrypted, assess the network and threat model explicitly; a private address alone is not proof of security. Re-encryption or mutual TLS may be necessary when passing across less trusted network segments.</p>
+<p>When TLS terminates at an edge, the backend sees the edge as its direct peer. Client address and original scheme may be passed in standardized or product-specific forwarding headers only through an <strong>explicit trusted-proxy policy</strong>. Attackers must not be able to supply authoritative identity information by injecting their own <code>X-Forwarded-For</code> or similar values. A balancer's cookie or hashing decision is not user authentication, and targeting a particular replica does not grant access to protected data.</p>
+<p>Observe certificate expiration, trust chains, TLS protocol versions, route-to-upstream name validation, and secret rotation without unnecessary service disruption. A load balancer can centralize public certificate management, but application authentication and object-level authorization remain authoritative in the appropriate service. Related detail belongs in <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/tls-and-secure-client-connections">TLS and Secure Client Connections</a>.</p>
+
+</section>
+<section id="ddos-quotas" aria-labelledby="heading-ddos-quotas">
+<h2 id="heading-ddos-quotas">Edge Protection, Quotas, and Tenant Fairness</h2>
+<p>A healthy pool can be overwhelmed by malicious traffic, a faulty client, or one legitimate high-volume tenant. Rate limiting and quotas prevent one source from consuming an unreasonable portion of the service, while authentication and authorization determine whether specific operations are permitted. Define the enforcement key carefully: per-IP controls can penalize users behind a campus NAT, while per-account controls require validated identity and may be vulnerable before authentication completes.</p>
+<p>Different classes of work require different budgets. An inexpensive public catalog read and an expensive report export should not share the same concurrency limit simply because both are HTTP requests. Separate critical user operations from lower-priority batch processing, establish fair shares for tenants when appropriate, and cap request sizes and time spent holding resources. A balanced fleet can still violate fairness when a small number of hot sessions or tenants consume disproportionate backend capacity.</p>
+<p>Under an attack, adding more application servers may increase costs without restoring availability. WAF decisions, ingress capacity, network protection, request-cost limits, and application dependency ceilings should form a layered policy. Measure rejection reasons to distinguish protective controls from outages. Failure to enforce resource policy at the edge can allow inexpensive public requests to trigger expensive downstream work repeatedly.</p>
+
+</section>
+<section id="observability" aria-labelledby="heading-observability">
+<h2 id="heading-observability">Metrics, Logs, Traces, and Allocation Evidence</h2>
+<p>Load-balancer observability should include <strong>accepted and rejected requests</strong>, response codes by origin, target-selection counts, active requests or connections, backend health states, time to connect, upstream response time, queue wait, retries, timeouts, and response sizes. Group metrics by route, target pool, zone, software release, and application endpoint while controlling cardinality. User-visible p50, p95, and p99 latency should be reported beside error rate and successful completed throughput; averages alone conceal hotspots and tail failures.</p>
+<p>Proxy logs and application traces need compatible identifiers. Generate or propagate trusted correlation IDs and W3C trace context where appropriate, but avoid exposing authentication credentials and personal data. Multiple retry attempts for a single client request should share a logical parent identity while recording distinct target attempts. Without this structure, retry traffic may be counted as independent user demand and cause erroneous capacity planning.</p>
+<p>A good imbalance investigation compares request count, weighted request cost, CPU, memory, dependency time, active work, and load-balancer decisions <em>at the same time</em>. Unequal raw request counts may be deliberate when target weights differ. Equal raw counts may hide one target doing much harder work. Metrics must answer whether selection is unfair, a target is unhealthy, a shared dependency is saturated, or the measurement unit is wrong.</p>
+
+</section>
+<section id="slo-reliability" aria-labelledby="heading-slo-reliability">
+<h2 id="heading-slo-reliability">User-Facing SLOs, Tail Latency, and Error Budgets</h2>
+<p>A service-level objective (SLO) states an observable user outcome such as &quot;99.9 percent of authorized catalog reads complete successfully within 800 milliseconds over a defined window.&quot; A load-balancer health dashboard cannot substitute for that outcome: every target may show &quot;up&quot; while users receive timeouts due to application dependencies. Measure failures at the full request path and break down causes by edge, routing, target, and downstream system.</p>
+<p>Tail latency matters because users often trigger several service calls to load one page. A small fraction of slow requests can disproportionately affect the end-to-end experience. Averages can improve while the slowest users worsen. When evaluating an algorithm change, compare controlled traffic samples with similar request mixes and report both p95/p99 latency and business operation completion, not simply how evenly requests were spread.</p>
+<p>Error budgets provide a decision framework for balancing reliability and change velocity. During an incident, prioritize restoring successful service within the defined SLO instead of maximizing target utilization. A chosen algorithm is good only relative to workload, cost, failure profile, and user objectives; there is no universally best load-balancing method.</p>
+
+</section>
+<section id="common-failures" aria-labelledby="heading-common-failures">
+<h2 id="heading-common-failures">Common-Mode Failures and Cascading Outages</h2>
+<p>Balancing protects against some individual target failures, but cannot prevent failure when all targets share the same bad release, invalid secret, corrupted schema migration, DNS misconfiguration, or exhausted data store. Failing over from one unhealthy region to another without spare capacity can simply move and amplify overload. Frequent health-based ejections can leave too few targets to serve the load, creating a cycle of cascading failures and apparent health flapping.</p>
+<p>Protect against common modes through staged rollouts, zone diversity, independent health checks, well-tested fallbacks, dependency isolation, and explicit overload controls. A fleet with 50 identical replicas is not automatically &quot;50-way resilient&quot; if they all use one nonredundant database connection endpoint. Likewise, multiple proxies behind one global configuration distribution system remain exposed to common control-plane mistakes.</p>
+<p>Test negative cases deliberately. Simulate one-zone loss, unhealthy probes across the full pool, slow database responses, a badly deployed release, expiring TLS credentials, stale DNS targets, and an exhausted queue. Verify whether the system fails closed, fails open, bypasses protection, sheds load, or returns a transparent error. Document actual provider behavior where it matters; generic descriptions of &quot;automatic failover&quot; are insufficient.</p>
+
+</section>
+<section id="kubernetes" aria-labelledby="heading-kubernetes">
+<h2 id="heading-kubernetes">Kubernetes Services, EndpointSlices, and Readiness</h2>
+<p>Kubernetes Services give clients a stable service abstraction over changing pod endpoints. The Service controller and EndpointSlices represent endpoint membership, and a networking implementation forwards traffic according to Service rules and traffic policy. An ingress controller or Gateway API implementation may add L7 routing in front of Services. The exact packet path depends on the cluster's data plane; Kubernetes does not mandate that every Service uses an identical algorithm or that the implementation makes per-HTTP-request decisions.</p>
+<p>Readiness, termination, and locality policies influence the eligible endpoints. <code>internalTrafficPolicy</code> and <code>externalTrafficPolicy</code> can restrict routing behavior; <code>trafficDistribution</code> expresses certain locality preferences in supported versions. These features interact, and <code>Local</code> traffic policies can take precedence over other distribution preferences. The presence of a ready Pod in one node or zone does not guarantee a locally constrained Service can use it from every client location.</p>
+<p>For an operational check, compare Service configuration, EndpointSlice readiness and terminating conditions, actual pod readiness, proxy or CNI metrics, and the ingress/Gateway controller's backend view. A Pod can be running but not selected, or selected but unable to complete a request due to application errors. Graceful deployment should ensure the endpoint is removed from new allocations before the process ceases serving existing traffic.</p>
+
+</section>
+<section id="platforms" aria-labelledby="heading-platforms">
+<h2 id="heading-platforms">Implementation Families and Feature Verification</h2>
+<p><strong>NGINX</strong> documents round robin, least-connected, hashing, and other upstream policies, with feature availability and active health checks differing by product edition, version, and module. <strong>HAProxy</strong> exposes algorithms such as <code>roundrobin</code>, <code>leastconn</code>, and source hashing, plus backend health and stick-table mechanisms. <strong>Envoy</strong> documents least-request, ring-hash and Maglev variants, locality and priority handling, and active/passive health features. Those are illustrative families, not interchangeable configuration syntaxes.</p>
+<p>Managed services have separate constraints. <strong>AWS Application Load Balancer</strong> documents target-group selection choices of round robin, least outstanding requests, and weighted random; automatic target weight mitigation interacts with documented target-health behavior. Other cloud load balancers may operate at L4, L7, global, or regional scopes. Kubernetes Services and Gateway API represent orchestration abstractions whose algorithms depend on selected providers and implementations.</p>
+<p>When choosing a product, verify the deployed version's client and upstream protocol support, request versus connection selection, health semantics, affinity, drain behavior, zone behavior, certificate handling, telemetry, configuration rollback, and documented limits. Never copy a setting named similarly in one product and assume identical behavior in another. A feature checklist is not a substitute for a failure-injection test under the actual workload.</p>
+
+</section>
+<section id="nginx-example" aria-labelledby="heading-nginx-example">
+<h2 id="heading-nginx-example">Illustrative NGINX HTTP Upstream Configuration</h2>
+<p>This <strong>illustrative</strong> NGINX configuration demonstrates HTTP reverse proxying to a simple upstream group and shows how to use a connection-aware algorithm. It is not a complete or hardened production configuration. In particular, TLS, external routing policy, trusted forwarded addresses, limits, and active-health functionality are outside the fragment.</p>
+<pre><code class="language-nginx">upstream campus_app {
+    least_conn;
+    server 192.0.2.21:8080 max_fails=3 fail_timeout=30s;
+    server 192.0.2.22:8080 max_fails=3 fail_timeout=30s;
+    keepalive 16;
+}
+
+server {
+    listen 8080;
+    server_name portal.example.org;
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_http_version 1.1;
+        proxy_pass http://campus_app;
+    }
+}
+</code></pre>
+<p>The <code>192.0.2.0/24</code> range is reserved for documentation examples. <code>max_fails</code>/<code>fail_timeout</code> in this context illustrates <strong>passive</strong> failure behavior; do not claim that it provides application-level active health probing. Connection reuse complicates intuitive comparisons of &quot;least connections.&quot; Inspect the exact NGINX release and module documentation before deploying. For an internet-facing system, define TLS, trusted forwarding, upstream identity, log redaction, timeout budgets, and controlled rollout separately.</p>
+
+</section>
+<section id="haproxy-example" aria-labelledby="heading-haproxy-example">
+<h2 id="heading-haproxy-example">Illustrative HAProxy Backend Configuration</h2>
+<p>The following snippet demonstrates weighted least-connections selection with basic TCP health checks. It presumes the larger HAProxy configuration defines a properly secured frontend. It does not prove HTTP application readiness merely because the TCP ports accept connections.</p>
+<pre><code class="language-haproxy">backend campus_app
+    mode http
+    balance leastconn
+    option tcp-check
+    server app-a 192.0.2.21:8080 check weight 2
+    server app-b 192.0.2.22:8080 check weight 1
+</code></pre>
+<p>An HTTP health check might be preferable if the service offers a meaningful readiness endpoint; the specific syntax and response expectations must match the deployed HAProxy version. The relative weights express a desired share under the selected algorithm and eligibility constraints, not guaranteed completed requests. Session persistence, health thresholds, queue limits, observability, and error treatment require additional policy. Treat snippets as architectural illustrations rather than blindly executable production recipes.</p>
+
+</section>
+<section id="change-governance" aria-labelledby="heading-change-governance">
+<h2 id="heading-change-governance">Configuration, Rollout, and Change Governance</h2>
+<p>A load-balancer configuration change can affect every client before any application source file changes. Treat listener rules, target weights, health thresholds, retries, timeouts, TLS settings, and affinity as controlled configuration with version history, peer review, rollback instructions, and observable effect. Evaluate whether a change can accidentally route a private administrative endpoint to the public listener, leak identity headers, or send writes to an incompatible application version.</p>
+<p>Use progressive rollout where practical: deploy configuration to a small slice, compare real response outcomes, then expand only if measured evidence supports it. A weight change from 0 to 10 percent is not an assurance that the new target will handle exactly 10 percent of traffic in every minute; measure actual allocations and errors. Keep enough time between changes to observe long-lived sessions and delayed health effects.</p>
+<p>Emergency changes still need an operator, decision record, and recovery path. Avoid changes that alter algorithm, health policy, timeout, and retry rules simultaneously; multi-variable changes make attribution difficult. After a successful cutover, verify that old targets drain, published service endpoints and routing records converge, and monitoring no longer tracks obsolete members as if they were active.</p>
+
+</section>
+<section id="operations-runbook" aria-labelledby="heading-operations-runbook">
+<h2 id="heading-operations-runbook">Operational Runbook: Diagnosing Imbalance or Failure</h2>
+<p>Start by confirming the symptom from the user's perspective: which route, time window, client region, response status, and business operation failed? Next check the frontend listener, certificate, access policy, and overall request acceptance. Determine whether a target was selected, whether the upstream connection succeeded, and whether the error originated from the proxy or the application. Compare target-health state and membership changes with per-target request rate, active work, dependency latency, and deployed software version.</p>
+<p>If one target receives disproportionate traffic, examine weights, session affinity, consistent-hash hot keys, locality policies, connection persistence, and whether request distribution is measured per connection rather than per HTTP request. If all targets have high latency, investigate the shared database, queue and external dependencies before changing selection algorithms. If a new instance is unselected, inspect readiness and endpoint discovery; if selected but slow, inspect warmup and resource constraints.</p>
+<p>During recovery, make one bounded change at a time, preserve logs and trace IDs, and evaluate user-facing success rather than a green health dashboard alone. Note whether the architecture can fail open when every target is marked unhealthy. An incident record should capture the triggering change, affected routes, capacity and traffic conditions, observable decisions of the balancer, corrective action, and tests that establish recurrence controls.</p>
+
+</section>
+<section id="powershell" aria-labelledby="heading-powershell">
+<h2 id="heading-powershell">Windows PowerShell: Read-Only Diagnostic Workflow</h2>
+<p>The commands below are examples for an <strong>authorized</strong> endpoint using a placeholder domain. They identify naming, reachability, TLS-facing behavior, and response headers, but cannot prove which hidden backend served a request or whether a private target is healthy. Use approved monitoring tools and avoid aggressive request loops against production infrastructure.</p>
+<pre><code class="language-powershell"># Replace the example domain with an authorized service.
+Resolve-DnsName -Name portal.example.org -Type A
+Test-NetConnection -ComputerName portal.example.org -Port 443
+
+# Show the client-facing status and response metadata.
+try {
+    $response = Invoke-WebRequest -Uri 'https://portal.example.org/health' -Method Get -TimeoutSec 10
+    [pscustomobject]@{
+        StatusCode = [int]$response.StatusCode
+        Date       = $response.Headers['Date']
+        Server     = $response.Headers['Server']
+    }
+} catch {
+    Write-Warning $_.Exception.Message
+}
+</code></pre>
+<p>For repeated controlled measurements, write a small script that records timestamp, route, HTTP status, and elapsed time, with a documented request rate and no personal data in logs. Aggregate by minute and compare with the service's own dashboards. Do not infer that the <code>Server</code> header or externally visible IP identifies the actual application instance; proxies may rewrite headers and use private connections. <code>tracert</code> and <code>Test-NetConnection</code> can diagnose some routing and TCP symptoms, not L7 target-selection policy.</p>
+
+</section>
+<section id="selection-framework" aria-labelledby="heading-selection-framework">
+<h2 id="heading-selection-framework">Architecture Selection and Review Framework</h2>
+<p>A sound balancing design can be reviewed against seven questions: <strong>(1)</strong> what is the work-selection unit? <strong>(2)</strong> what makes a target eligible? <strong>(3)</strong> what resource limits each target? <strong>(4)</strong> which state must persist across target changes? <strong>(5)</strong> how is work distributed under healthy conditions? <strong>(6)</strong> what happens on overload, health loss, or regional failure? <strong>(7)</strong> how will user-visible results demonstrate success? These questions should be answered before naming a commercial product.</p>
+<p>Document a <em>normal path</em>, a <em>degraded path</em>, and a <em>recovery path</em>. For the normal path, specify listener, route, target pool, algorithm, weights, expected capacity, and tracing. For the degraded path, specify health thresholds, zone fallback, admission limits, error mapping, retry budgets, and treatment of incomplete writes. For recovery, specify warmup, reassignment, drain, rollback, and how to avoid a thundering herd. Use a decision table rather than relying on informal assumptions scattered across configuration files.</p>
+<p>A typical default for a homogeneous HTTP application is a simple request-aware balancing policy with meaningful readiness checks, bounded in-flight work, no unnecessary stickiness, and tested target draining. Depart from that baseline when evidence shows a specific requirement such as weighted heterogeneous capacity, stable cache locality, persistent streaming, or data-residency-constrained regional routing. A policy is correct only for the stated failure model and workload.</p>
+
+</section>
+<section id="failure-matrix" aria-labelledby="heading-failure-matrix">
+<h2 id="heading-failure-matrix">Failure Ownership and Control Matrix</h2>
+<p>The table identifies the layer that must normally participate in prevention or recovery. Multiple layers cooperate, but accountability should not disappear between them.</p>
+<table>
+<thead>
+<tr>
+  <th>Symptom</th>
+  <th>Balancer responsibility</th>
+  <th>Application / platform responsibility</th>
+  <th>Key evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>One dead replica still receives work</td>
+  <td>Health and membership convergence</td>
+  <td>Correct readiness, shutdown and lifecycle</td>
+  <td>Selection logs, health transitions</td>
+</tr>
+<tr>
+  <td>All healthy replicas are slow</td>
+  <td>Bounded admission and visibility</td>
+  <td>Dependency latency, query and worker capacity</td>
+  <td>Application spans, queue and DB metrics</td>
+</tr>
+<tr>
+  <td>Duplicate enrollment after timeout</td>
+  <td>Avoid unsafe automatic retry</td>
+  <td>Idempotency, transaction identifiers and durable state</td>
+  <td>Attempt ID versus business transaction ID</td>
+</tr>
+<tr>
+  <td>New replicas suffer latency spikes</td>
+  <td>Warmup and controlled weight ramp</td>
+  <td>Cache, pool and dependency initialization</td>
+  <td>Per-target cold-start latency</td>
+</tr>
+<tr>
+  <td>Sticky sessions overload one replica</td>
+  <td>Affinity policy and distribution monitoring</td>
+  <td>External state and hotspot limits</td>
+  <td>Per-key load and active sessions</td>
+</tr>
+<tr>
+  <td>Zone fails, other zone becomes saturated</td>
+  <td>Fallback routing and capacity-aware policy</td>
+  <td>Spare capacity and degraded mode</td>
+  <td>Zone throughput, error and admission</td>
+</tr>
+<tr>
+  <td>WebSocket sessions drop during rollout</td>
+  <td>Drain and connection lifetime policy</td>
+  <td>Reconnect/resume protocol</td>
+  <td>Connection age and disconnect reason</td>
+</tr>
+<tr>
+  <td>Proxy returns 504</td>
+  <td>Upstream deadline and attribution</td>
+  <td>Find slow target or dependency</td>
+  <td>Timing split and traces</td>
+</tr>
+<tr>
+  <td>Every target fails health checks</td>
+  <td>Documented all-unhealthy policy</td>
+  <td>Recovery path and dependency health</td>
+  <td>Health rule, fail-open behavior</td>
+</tr>
+<tr>
+  <td>Sensitive path accidentally public</td>
+  <td>Listener and route governance</td>
+  <td>Authorization at resource level</td>
+  <td>Configuration diff and negative tests</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="worked-1" aria-labelledby="heading-worked-1">
+<h2 id="heading-worked-1">Worked Scenario 1 — Campus Portal: Equal Requests but Unequal Work</h2>
+<p>A university portal has three application instances, and its load balancer reports almost exactly one third of requests to each. Administrators conclude that the system is evenly balanced. However, instance A handles a cluster of expensive student-record exports while B and C receive mostly course-search requests. A's CPU remains saturated, its queue grows, and its p99 response time worsens, although the headline distribution metric looks ideal.</p>
+<p><strong>Analysis:</strong> The allocation unit is the HTTP request, but the constrained resource is processing time and database activity. The two are not proportional. Investigate route-specific work cost, query plans, concurrency limits, and any source of affinity. A least-outstanding-request policy may help some mixed-duration traffic, but a better design might route exports to a bounded worker pool, limit expensive operations, or process exports asynchronously. Changing to least connections would not necessarily improve this situation because keepalive sockets do not reliably measure active work.</p>
+<p><strong>Decision evidence:</strong> Compare successful completions, queue wait, p95/p99 latency, and database use before and after a controlled intervention. Do not score success solely by whether raw request counts converge. A target can be unfairly overburdened while processing an apparently equal number of calls.</p>
+
+</section>
+<section id="worked-2" aria-labelledby="heading-worked-2">
+<h2 id="heading-worked-2">Worked Scenario 2 — A Server Fails but Its Readiness Endpoint Responds</h2>
+<p>An enrollment service returns <code>200</code> from <code>/health</code> after losing access to its database. The balancer's TCP and HTTP probes continue to pass, so the affected target remains eligible. Users whose requests reach that target receive application errors, while users routed to other targets sometimes succeed. A support engineer proposes switching from round robin to least request.</p>
+<p><strong>Analysis:</strong> The primary problem is a health contract mismatch, not the selection algorithm. First determine whether the database outage is instance-specific or a shared service failure. If one target has broken credentials, a readiness endpoint that validates required local dependency state can exclude it. If every target shares the same broken database, ejecting all of them may not restore service and could invoke an undocumented or dangerous all-unhealthy fallback. Passive outlier detection can supplement probes, but it must distinguish target defects from legitimate HTTP error responses.</p>
+<p><strong>Decision evidence:</strong> Verify health transitions, target selection before and after the defect, and business success rates. Fix the broken dependency or application configuration and improve the readiness model. A new algorithm that simply chooses a broken target less often does not constitute a durable repair.</p>
+
+</section>
+<section id="worked-3" aria-labelledby="heading-worked-3">
+<h2 id="heading-worked-3">Worked Scenario 3 — A Gray Failure and Passive Outlier Detection</h2>
+<p>Four replicas pass active readiness checks. One replica exhibits intermittent 20-second stalls under real workload due to a thread-pool defect, but its fast <code>/ready</code> endpoint responds normally. Traffic distribution remains nearly equal, and users experience sporadic <code>504</code> responses. The operator enables passive outlier ejection on upstream timeouts.</p>
+<p><strong>Analysis:</strong> Passive signals can expose defects missed by shallow probes, but the ejection threshold must account for sample size, request cost, and whether failures are isolated to one replica. If a shared dependency causes stalls across every replica, aggressive ejection can make availability worse by shrinking the pool. Once the misbehaving instance is removed from new selections, a bounded recovery probe and slow-start policy can return it gradually after remediation.</p>
+<p><strong>Decision evidence:</strong> Attribute timeouts to target instance and application span; verify that the other replicas can absorb displaced work; and test whether the restored instance remains healthy under representative load. Preserve the incident's target metadata and deployment revision so a temporary ejection does not conceal the underlying code defect.</p>
+
+</section>
+<section id="worked-4" aria-labelledby="heading-worked-4">
+<h2 id="heading-worked-4">Worked Scenario 4 — Sticky Sessions During Scale-Out</h2>
+<p>A legacy campus portal keeps user session objects in each application's local process memory and routes clients using an affinity cookie. At the beginning of registration week, autoscaling doubles the number of instances. The new instances report healthy but receive relatively few requests. Existing instances remain overloaded because established sessions are still bound to them.</p>
+<p><strong>Analysis:</strong> Affinity preserves continuity for the old design but suppresses the benefits of instantaneous horizontal scale-out. More replicas are not useful until users establish new sessions or the load balancer redistributes them. Forcing reassignment can log out students or lose unsaved state. A durable improvement externalizes critical session state, validates sessions consistently, and allows requests to be served by any eligible replica. During migration, manage session TTL, safe reauthentication, and a careful scale-in/drain strategy.</p>
+<p><strong>Decision evidence:</strong> Track per-instance session counts, age distribution, CPU and request throughput. Test a controlled target removal, including an authenticated user's ability to resume work. Do not present affinity as a substitute for session availability or authorization.</p>
+
+</section>
+<section id="worked-5" aria-labelledby="heading-worked-5">
+<h2 id="heading-worked-5">Worked Scenario 5 — Unequal Target Capacity and Weighted Routing</h2>
+<p>An academic research API runs on two large nodes and two small nodes. A naïve round-robin policy sends one quarter of requests to each. The small nodes have half the CPU and memory capacity of a large node, so they saturate earlier. An architect proposes weights of two for large nodes and one for small nodes, making six total weight units.</p>
+<p><strong>Analysis:</strong> Under an implementation that interprets weights proportionally, each large node receives a nominal two-sixths share and each small node one-sixth, among eligible members. That is an input selection ratio, not proof of equal CPU utilization: some requests may be much more expensive, and affinity or locality can perturb allocation. Initial weights should be based on measured sustainable throughput at the desired service-level objective, not on nominal processor core counts alone.</p>
+<p><strong>Decision evidence:</strong> Run representative route mixes; compare normalized CPU/worker demand, successful completions, and p99 latency per target. Repeat during loss of one large node. Include warmup and admission limits, because the two remaining small nodes might still need controlled shedding rather than a weight that implies unlimited capacity.</p>
+
+</section>
+<section id="worked-6" aria-labelledby="heading-worked-6">
+<h2 id="heading-worked-6">Worked Scenario 6 — A Non-Idempotent Enrollment Request Is Retried</h2>
+<p>A client sends <code>POST /api/enrollments</code> and the application commits the new registration. Before the response reaches the client, the target's network connection is reset. The load balancer automatically retries the POST on a second target. The second target performs the registration again, creating duplicate enrollment records and possibly charging the student twice.</p>
+<p><strong>Analysis:</strong> A failed response does not prove failed execution. HTTP's treatment of method idempotence and automatic retries is relevant, but application-specific semantics decide whether another attempt is safe. Disable generic automatic retry of unsafe operations unless the application provides a reliable idempotency or de-duplication contract. A trusted idempotency key should be durably associated with the completed effect, and concurrent attempts for the same key must be handled correctly.</p>
+<p><strong>Decision evidence:</strong> Correlate the client request ID, proxy attempt IDs, and durable enrollment transaction ID. Simulate a response drop <em>after</em> commit and confirm that the client can learn the original result without creating a second business effect. A healthy target pool does not make transactional duplication acceptable.</p>
+
+</section>
+<section id="worked-7" aria-labelledby="heading-worked-7">
+<h2 id="heading-worked-7">Worked Scenario 7 — One Availability Zone Fails During Registration</h2>
+<p>A three-zone service receives 900 requests per second in normal operation, with roughly 300 routed to each zone. Each zone can safely handle 400 requests per second at the desired latency. One zone fails. If traffic redistributes equally to the remaining two zones, each may receive approximately 450 requests per second—above its tested safe capacity.</p>
+<p><strong>Analysis:</strong> Cross-zone failover maintains reachability but not necessarily user-level availability. The surviving pair have aggregate tested capacity of 800 requests per second, less than the 900-request demand. Reduce lower-priority work, enable bounded admission, add preprovisioned headroom, or have spare capacity that can come online within the required recovery interval. Blind retries from clients make the gap worse. If the database lives in the failed zone, remaining application replicas may be healthy only in the narrow sense of process liveness.</p>
+<p><strong>Decision evidence:</strong> Document sustainable throughput under an N-1 zone assumption, measured ramp time, shedding policy, and end-to-end success rate during the simulation. This is a capacity-planning failure model, not merely an algorithm-selection exercise.</p>
+
+</section>
+<section id="worked-8" aria-labelledby="heading-worked-8">
+<h2 id="heading-worked-8">Worked Scenario 8 — A Long-Lived WebSocket Fleet Will Not Rebalance</h2>
+<p>A live campus discussion application establishes thousands of WebSocket sessions on three instances. Each user stays connected for a few hours. A fourth instance is added, but its connection count remains low while the original three are near their memory limits. An operator expects least-request balancing to move existing users to the new node automatically.</p>
+<p><strong>Analysis:</strong> A WebSocket session is typically associated with the target chosen when the connection is established. The balancer does not transfer a live application connection between instances simply because the algorithm changed. Solutions include capacity headroom, graceful reconnect procedures, application-level session resumption, and managed rotation of old connections when acceptable. In some systems a bounded maximum connection age can help gradual redistribution; it must be tested for user experience and reconnect storms.</p>
+<p><strong>Decision evidence:</strong> Observe connection age, per-target memory, session concurrency, reconnect rate, and message delivery continuity. Test drain behavior under a rolling deployment. Do not infer a healthy WebSocket deployment from short HTTP benchmark results.</p>
+
+</section>
+<section id="worked-9" aria-labelledby="heading-worked-9">
+<h2 id="heading-worked-9">Worked Scenario 9 — Least Connections Misreads HTTP/2 Work</h2>
+<p>A fleet receives traffic over persistent HTTP/2 connections. One backend has ten established connections, each carrying many simultaneous requests; another has twenty mostly idle connections. A transport-connection-based least-connections policy prefers the first backend and increases the hotspot, even though its HTTP concurrency is much higher.</p>
+<p><strong>Analysis:</strong> The measurement unit is wrong. An L4 policy only sees transport flows; an HTTP-aware intermediary may see in-flight request streams and could select an upstream target per request if the chosen product and configuration support it. Alternatives include request-aware balancing, application concurrency limits, and route-specific workload isolation. If the client-facing device is a pure L4 balancer, changing the algorithm name will not create visibility into HTTP/2 streams.</p>
+<p><strong>Decision evidence:</strong> Measure open connections, active streams, request rate, work duration, CPU, and latency at the same timestamps. Reproduce the workload with reused connections rather than a tool that opens one connection per request, which would mask the defect.</p>
+
+</section>
+<section id="worked-10" aria-labelledby="heading-worked-10">
+<h2 id="heading-worked-10">Worked Scenario 10 — Every Target Fails Health Checks</h2>
+<p>A managed application load balancer points at four targets. A bad release changes the readiness path and all four targets begin failing the configured health check. The operator assumes the load balancer must stop sending traffic, but user requests continue reaching unhealthy targets and fail. The on-call team suspects the cloud provider is ignoring configuration.</p>
+<p><strong>Analysis:</strong> Some products intentionally fail open in the all-unhealthy case. AWS Application Load Balancer documents that when a target group contains only unhealthy registered targets, traffic can be routed to them regardless of their health state. This is provider behavior, not a generic property of all balancers. Operators should consult the exact provider documentation and inspect target-health reason codes. The immediate recovery may be a safe rollback of the health path or release, not an untested redesign of the routing algorithm.</p>
+<p><strong>Decision evidence:</strong> Capture configured health check route, status expectations, target-group history, backend logs and actual selection behavior. Include the all-targets-unhealthy scenario in preproduction failure exercises. Write the documented fail-open or fail-closed behavior into the operational runbook explicitly.</p>
+
+</section>
+<section id="worked-11" aria-labelledby="heading-worked-11">
+<h2 id="heading-worked-11">Worked Scenario 11 — Cold Auto-Scaled Instances Overload the Database</h2>
+<p>A course registration traffic spike causes the autoscaler to add eight application replicas. Each new replica opens a large database connection pool and receives full traffic immediately. Database connections spike above the server limit. Both existing and new replicas start timing out, and the balancer moves traffic repeatedly among targets that appear intermittently healthy.</p>
+<p><strong>Analysis:</strong> Application server scaling has increased pressure on the shared dependency. Institute reasonable connection-pool ceilings, gradual warmup, and bounded in-flight work. In some systems a pool proxy or transaction-oriented connection broker is appropriate. Scale policies should consider database capacity and user-level throughput, not only app-CPU utilization. Aggressive outlier ejection can amplify this common-mode failure by concentrating traffic on fewer replicas.</p>
+<p><strong>Decision evidence:</strong> Compare connection counts before and after scale-out, database queue time, target warmup curves, and failed business operations. Test a surge with the maximum expected number of simultaneously starting replicas. Healthy pods are not proof that the entire application path has sufficient capacity.</p>
+
+</section>
+<section id="worked-12" aria-labelledby="heading-worked-12">
+<h2 id="heading-worked-12">Worked Scenario 12 — Canary Traffic and Backward-Compatible Releases</h2>
+<p>An API team deploys a revised enrollment application. It assigns 5 percent of traffic to the new version through weighted target pools. The canary appears healthy, but a subset of users with old session data receive errors, and a database schema migration makes rollback risky. Another team proposes raising the canary to 50 percent to accelerate learning.</p>
+<p><strong>Analysis:</strong> Weighted splitting is an exposure-control mechanism, not a substitute for compatibility design. Canary routing may operate per request, session, or target, and sticky sessions can alter the effective cohort. Protect transactional interfaces with expand-and-contract migrations, feature flags, and compatibility tests. Define a rollback path before increasing exposure. Canary success should be measured against baseline cohorts with comparable route mix, device type, and request cost; raw HTTP success across the entire pool can conceal errors in the exposed subgroup.</p>
+<p><strong>Decision evidence:</strong> Measure canary-specific error rates, p99 latency, business transaction outcomes, and database compatibility indicators; review trace samples with version tags. Increase traffic only when guardrails pass, and verify that rollback does not require manual repair of partially migrated records.</p>
+
+</section>
+<section id="practice" aria-labelledby="heading-practice">
+<h2 id="heading-practice">Applied Design and Investigation Exercises</h2>
+<ol>
+<li><strong>Build a target-selection diagram.</strong> For an institutional web application, draw a client-facing HTTPS listener, two backend pools, an external database, and three availability zones. Annotate which hop chooses each destination and which layer checks authentication versus resource authorization.</li>
+<li><strong>Compare selection algorithms.</strong> Construct a small synthetic workload with short reads, slow reports, and long-lived connections. Predict how round robin, least connections, and least outstanding requests will allocate new work. State what you must measure to judge the result without assuming equal request costs.</li>
+<li><strong>Write a health policy.</strong> Specify a low-cost readiness route, a separate liveness test, timeout and threshold reasoning, all-unhealthy behavior, and a recovery route. Test the policy against a slow database and one broken local credential.</li>
+<li><strong>Plan an N-1 zone failure.</strong> Use actual target capacity results to calculate the surviving fleet's safe throughput. Define which requests receive priority, when load shedding starts, and which metrics determine whether users are still meeting the SLO.</li>
+<li><strong>Design a safe rollout.</strong> Begin with a new canary target at zero weight. Write checks for warming, progressive exposure, retry eligibility, session continuity, graceful draining, and rollback after a failed schema migration.</li>
+<li><strong>Investigate a <code>504</code>.</strong> Describe the logs, timestamps, trace spans and target-health data necessary to distinguish proxy queueing, upstream connection failure, application computation, and database delay. Explain when a retry would duplicate work.</li>
+<li><strong>Assess a streaming system.</strong> Estimate how much of its load is persistent WebSocket or gRPC traffic. Develop a plan for scale-out and rolling deployment that avoids abrupt disconnections and uncontrolled reconnect storms.</li>
+<li><strong>Document a provider-specific exception.</strong> Read the selected product's current health-check documentation and identify whether all targets marked unhealthy cause rejection, traffic to unhealthy targets, or another behavior. Reconcile the finding with your incident response plan.</li>
+</ol>
+
+</section>
+<section id="review" aria-labelledby="heading-review">
+<h2 id="heading-review">Review Questions</h2>
+<ol>
+<li>What is the selection unit for an L4 load balancer, and how can it differ from an L7 HTTP load balancer?</li>
+<li>Why are equal per-target request counts insufficient evidence of fair resource consumption?</li>
+<li>Under what workload conditions is weighted round robin preferable to ordinary round robin?</li>
+<li>When can least connections select a busier target than a request-aware policy would select?</li>
+<li>What assumptions make least outstanding requests an imperfect proxy for actual resource demand?</li>
+<li>Why can power-of-two-choices selection reduce hotspots without globally scanning every target?</li>
+<li>How do consistent hashing and session affinity differ from durable state replication?</li>
+<li>What is the distinction between active health checking and passive outlier detection?</li>
+<li>Why must readiness, liveness, and startup checks be treated as different signals?</li>
+<li>What could happen if every target fails a health check in a system with fail-open behavior?</li>
+<li>Why should a new replica often receive a slow-start ramp rather than a full target share?</li>
+<li>What sequence protects in-flight requests during a rolling target removal?</li>
+<li>Why do long-lived WebSocket sessions complicate scale-out and load redistribution?</li>
+<li>How can a one-zone failure create overload in surviving zones even when routing recovers?</li>
+<li>Why can a DNS steering change fail to move established connections promptly?</li>
+<li>How does Little’s Law relate arrival or completion rate, average response time, and average concurrency?</li>
+<li>Why do bounded queues and load shedding protect system reliability under sustained overload?</li>
+<li>What risk does blindly retrying a POST after an upstream timeout create?</li>
+<li>Which telemetry separates proxy-generated errors from application-generated errors?</li>
+<li>How does HTTP/2 multiplexing undermine a simplistic per-connection balancing assumption?</li>
+<li>Why must forwarded client-address headers be restricted to trusted proxy hops?</li>
+<li>How can autoscaling inadvertently overload a shared database?</li>
+<li>What user-facing measures should determine whether a balancing algorithm improves service?</li>
+<li>What preproduction failures should an enterprise simulate before declaring its balancing design resilient?</li>
+</ol>
+
+</section>
+<section id="glossary" aria-labelledby="heading-glossary">
+<h2 id="heading-glossary">Specialist Glossary</h2>
+<p>The definitions below describe common architectural uses. Exact configuration, accounting, and health semantics can differ by implementation.</p><dl>
+<dt><strong>Active health check</strong></dt><dd>A probe initiated by a monitoring or balancing component to assess target reachability or application state.</dd>
+<dt><strong>Admission control</strong></dt><dd>A decision to accept or reject new work according to current capacity and policy.</dd>
+<dt><strong>Affinity</strong></dt><dd>A routing preference that tends to send related connections or requests to the same target.</dd>
+<dt><strong>ALPN</strong></dt><dd>TLS negotiation extension that selects an application protocol on a secured connection.</dd>
+<dt><strong>Anycast</strong></dt><dd>Network addressing approach in which multiple sites advertise a shared address and routing chooses reachability.</dd>
+<dt><strong>Application Load Balancer</strong></dt><dd>An HTTP-aware managed load-balancing service; feature and behavior depend on the provider.</dd>
+<dt><strong>Autoscaler</strong></dt><dd>Controller that changes the number or capacity of instances in response to configured signals.</dd>
+<dt><strong>Availability zone</strong></dt><dd>An infrastructure failure domain used to place separately survivable resources.</dd>
+<dt><strong>Backend pool</strong></dt><dd>Group of potential target instances for a particular route or service.</dd>
+<dt><strong>Backoff</strong></dt><dd>Increasing or otherwise regulated delay between successive attempts.</dd>
+<dt><strong>Backpressure</strong></dt><dd>Mechanism that limits or signals the rate at which downstream components can accept work.</dd>
+<dt><strong>Canary release</strong></dt><dd>Deployment of a change to a bounded traffic subset before wider promotion.</dd>
+<dt><strong>Circuit breaker</strong></dt><dd>Control that stops or reduces forwarding to a dependency when failure or capacity conditions warrant.</dd>
+<dt><strong>Cold start</strong></dt><dd>Initialization period in which a new target may be slower or less capable than a warmed target.</dd>
+<dt><strong>Common-mode failure</strong></dt><dd>Failure affecting multiple nominally redundant components through a shared dependency or cause.</dd>
+<dt><strong>Concurrency</strong></dt><dd>Amount of work or number of requests active at the same time in a specified scope.</dd>
+<dt><strong>Connection draining</strong></dt><dd>Removal of a target from new selections while permitting existing work to finish when feasible.</dd>
+<dt><strong>Consistent hashing</strong></dt><dd>Key-to-member mapping family designed to reduce remapping when membership changes.</dd>
+<dt><strong>Control plane</strong></dt><dd>Configuration and membership-management functions directing data-plane behavior.</dd>
+<dt><strong>Cross-zone balancing</strong></dt><dd>Forwarding traffic among eligible targets in multiple availability zones.</dd>
+<dt><strong>Data plane</strong></dt><dd>Component actually forwarding or processing network traffic under current routing policy.</dd>
+<dt><strong>Deadline</strong></dt><dd>Absolute or relative end time by which a request must complete or be abandoned.</dd>
+<dt><strong>Deregistration delay</strong></dt><dd>Configured time or mechanism allowing target removal to accommodate outstanding work.</dd>
+<dt><strong>Distributed trace</strong></dt><dd>Correlated spans following the execution of an operation through multiple components.</dd>
+<dt><strong>DNS traffic steering</strong></dt><dd>Using name-resolution policy to influence which public endpoint or region clients contact.</dd>
+<dt><strong>EndpointSlice</strong></dt><dd>Kubernetes API resource describing Service endpoint membership and conditions.</dd>
+<dt><strong>Error budget</strong></dt><dd>Permissible failure allowance derived from a specified service-level objective.</dd>
+<dt><strong>Fail-open</strong></dt><dd>Behavior that continues or permits traffic when a control or health condition would otherwise prevent it.</dd>
+<dt><strong>Failover</strong></dt><dd>Changing target, zone, or region after failure or policy-triggered unavailability.</dd>
+<dt><strong>Flow</strong></dt><dd>Transport-level communication association; its definition depends on protocol and implementation.</dd>
+<dt><strong>Forwarded header</strong></dt><dd>HTTP metadata that may describe a previous hop or original client address when trusted.</dd>
+<dt><strong>Gray failure</strong></dt><dd>Partial or intermittent target fault not always revealed by coarse health probes.</dd>
+<dt><strong>gRPC</strong></dt><dd>RPC framework commonly using HTTP/2 and strongly typed interface definitions.</dd>
+<dt><strong>Health check</strong></dt><dd>Assessment used to decide whether a target can participate in traffic.</dd>
+<dt><strong>Hedged request</strong></dt><dd>Additional parallel or delayed request attempt intended to reduce tail latency.</dd>
+<dt><strong>HTTP/2 stream</strong></dt><dd>A multiplexed request or response exchange within an HTTP/2 connection.</dd>
+<dt><strong>HTTP/3</strong></dt><dd>HTTP mapping over QUIC transport with stream multiplexing.</dd>
+<dt><strong>Idempotency</strong></dt><dd>Property that repeating an operation has the same intended effect as performing it once.</dd>
+<dt><strong>Jitter</strong></dt><dd>Randomized variation in retry delays that reduces synchronized request bursts.</dd>
+<dt><strong>Keepalive</strong></dt><dd>Mechanism that preserves connections for reuse or detects transport liveliness.</dd>
+<dt><strong>L4 balancing</strong></dt><dd>Balancing based largely on transport flows rather than application-level request semantics.</dd>
+<dt><strong>L7 balancing</strong></dt><dd>Balancing informed by application protocol fields such as HTTP paths or methods.</dd>
+<dt><strong>Least connections</strong></dt><dd>Selection that favors targets with relatively few active transport connections.</dd>
+<dt><strong>Least outstanding requests</strong></dt><dd>Selection favoring targets with relatively few in-flight requests.</dd>
+<dt><strong>Listener</strong></dt><dd>A configured frontend endpoint accepting traffic on an address, port, and protocol.</dd>
+<dt><strong>Little’s Law</strong></dt><dd>Stable-system relation between average concurrency, throughput, and time in the system.</dd>
+<dt><strong>Load shedding</strong></dt><dd>Deliberate rejection or deferment of some incoming work to protect surviving capacity.</dd>
+<dt><strong>Locality-aware routing</strong></dt><dd>Policy that prefers nearby, same-zone, or otherwise locality-aligned targets.</dd>
+<dt><strong>Maglev hashing</strong></dt><dd>A lookup-table-based hashing technique used for stable load distribution.</dd>
+<dt><strong>Multiplexing</strong></dt><dd>Carrying multiple logical exchanges over a single transport connection.</dd>
+<dt><strong>Outlier detection</strong></dt><dd>Use of observed failures or performance to identify and temporarily exclude problematic targets.</dd>
+<dt><strong>Power of two choices</strong></dt><dd>Selection that compares a small random sample, commonly two targets, using a load indicator.</dd>
+<dt><strong>Priority failover</strong></dt><dd>Routing that prefers one class of targets and uses alternatives under specified conditions.</dd>
+<dt><strong>QUIC</strong></dt><dd>Secure transport protocol over UDP with multiple streams and connection-ID support.</dd>
+<dt><strong>Readiness</strong></dt><dd>Statement or signal that an instance can presently accept new work.</dd>
+<dt><strong>Rendezvous hashing</strong></dt><dd>Ranking-based key-to-target mapping that can limit remapping when membership changes.</dd>
+<dt><strong>Request amplification</strong></dt><dd>Extra downstream attempts generated for each original caller request, often through retries.</dd>
+<dt><strong>Request queue</strong></dt><dd>Waiting work not yet actively handled by a target or worker.</dd>
+<dt><strong>Reverse proxy</strong></dt><dd>Intermediary that appears to the client as a service endpoint while forwarding work to upstream servers.</dd>
+<dt><strong>Round robin</strong></dt><dd>Selection among targets in a repeating cycle.</dd>
+<dt><strong>Service-level objective</strong></dt><dd>Quantitative target for user-visible availability, latency, or other service behavior.</dd>
+<dt><strong>Session persistence</strong></dt><dd>Mechanism for preserving assignment of related requests to a backend.</dd>
+<dt><strong>Slow start</strong></dt><dd>Progressive ramp in traffic sent to a newly eligible target.</dd>
+<dt><strong>Sticky session</strong></dt><dd>Session whose requests are preferentially directed to a particular target.</dd>
+<dt><strong>Tail latency</strong></dt><dd>Latency at higher percentiles such as p95 or p99, reflecting slow requests.</dd>
+<dt><strong>Target</strong></dt><dd>A backend instance eligible to receive workload.</dd>
+<dt><strong>Target group</strong></dt><dd>Provider term for an organized group of backend destinations.</dd>
+<dt><strong>Termination grace period</strong></dt><dd>Time allotted for an instance or process to finish work during shutdown.</dd>
+<dt><strong>TLS termination</strong></dt><dd>Endpoint at which incoming TLS protection is decrypted and authenticated.</dd>
+<dt><strong>Traffic weight</strong></dt><dd>Relative preference used by some algorithms to choose among eligible targets.</dd>
+<dt><strong>Upstream</strong></dt><dd>Service or target contacted by a proxy to fulfill a client&#x27;s request.</dd>
+<dt><strong>Virtual IP</strong></dt><dd>Client-facing logical address abstracting one or more real service instances.</dd>
+<dt><strong>WebSocket</strong></dt><dd>Protocol supporting long-lived bidirectional application communication after a handshake.</dd>
+<dt><strong>Weighted round robin</strong></dt><dd>Cycling policy that gives members relative shares according to configured weights.</dd>
+</dl>
+</section>
+<section id="references" aria-labelledby="heading-references">
+<h2 id="heading-references">Selected Technical References</h2>
+<p>Official standards and vendor documentation establish definitions and implementation-specific behavior. Product features can change across versions and editions; verify the deployed release before applying a configuration example. These references do not assert that MGU operates any particular infrastructure.</p><ol><li><a href="https://www.rfc-editor.org/rfc/rfc9110.html" target="_blank" rel="noopener noreferrer"><strong>RFC 9110 — HTTP Semantics</strong></a> — Idempotence, retry limits, gateway HTTP errors and request semantics.</li><li><a href="https://www.rfc-editor.org/rfc/rfc9112.html" target="_blank" rel="noopener noreferrer"><strong>RFC 9112 — HTTP/1.1</strong></a> — HTTP/1.1 connections, framing, and intermediary behavior.</li><li><a href="https://www.rfc-editor.org/rfc/rfc9113.html" target="_blank" rel="noopener noreferrer"><strong>RFC 9113 — HTTP/2</strong></a> — Streams, flow control and multiplexed request handling.</li><li><a href="https://www.rfc-editor.org/rfc/rfc9114.html" target="_blank" rel="noopener noreferrer"><strong>RFC 9114 — HTTP/3</strong></a> — HTTP semantics over QUIC streams.</li><li><a href="https://www.rfc-editor.org/rfc/rfc9000.html" target="_blank" rel="noopener noreferrer"><strong>RFC 9000 — QUIC Transport</strong></a> — QUIC connection IDs, transport management, and migration.</li><li><a href="https://www.rfc-editor.org/rfc/rfc7239.html" target="_blank" rel="noopener noreferrer"><strong>RFC 7239 — Forwarded HTTP Extension</strong></a> — Forwarded client and hop metadata with trust and privacy considerations.</li><li><a href="https://nginx.org/en/docs/http/load_balancing.html" target="_blank" rel="noopener noreferrer"><strong>NGINX — HTTP Load Balancing</strong></a> — Round robin, least-connected, IP hash and upstream distribution.</li><li><a href="https://nginx.org/en/docs/http/ngx_http_upstream_module.html" target="_blank" rel="noopener noreferrer"><strong>NGINX — HTTP Upstream Module</strong></a> — Weights, passive failures, keepalive behavior, and upstream options.</li><li><a href="https://docs.nginx.com/nginx/admin-guide/load-balancer/tcp-udp-load-balancer/" target="_blank" rel="noopener noreferrer"><strong>NGINX — TCP and UDP Load Balancing</strong></a> — Connection-level forwarding and transport load-balancing modes.</li><li><a href="https://www.haproxy.com/documentation/haproxy-configuration-tutorials/proxying-essentials/configuration-basics/backends/" target="_blank" rel="noopener noreferrer"><strong>HAProxy — Backends</strong></a> — Backend algorithms and endpoint-health configuration concepts.</li><li><a href="https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers.html" target="_blank" rel="noopener noreferrer"><strong>Envoy — Supported Load Balancers</strong></a> — Least request, hashing variants, and locality/priority policies.</li><li><a href="https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/health_checking.html" target="_blank" rel="noopener noreferrer"><strong>Envoy — Health Checking</strong></a> — Active checks and passive outlier handling.</li><li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html" target="_blank" rel="noopener noreferrer"><strong>AWS — Application Load Balancer Target Groups</strong></a> — Target-group algorithms, health, and sticky behavior.</li><li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html" target="_blank" rel="noopener noreferrer"><strong>AWS — Application Load Balancer Health Checks</strong></a> — Health check behavior and documented all-unhealthy fail-open behavior.</li><li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-target-group-attributes.html" target="_blank" rel="noopener noreferrer"><strong>AWS — Target Group Attributes</strong></a> — Deregistration delay, slow start, routing and weights.</li><li><a href="https://aws.github.io/aws-networking-best-practices/application-networking/load-balancing/" target="_blank" rel="noopener noreferrer"><strong>AWS — Networking Best Practices: Load Balancing</strong></a> — Provider-specific traffic management algorithms and operational constraints.</li><li><a href="https://kubernetes.io/docs/concepts/services-networking/service/" target="_blank" rel="noopener noreferrer"><strong>Kubernetes — Services</strong></a> — Service abstractions, EndpointSlices and traffic policy.</li><li><a href="https://kubernetes.io/docs/reference/networking/virtual-ips/" target="_blank" rel="noopener noreferrer"><strong>Kubernetes — Virtual IPs and Service Proxies</strong></a> — Implementation-dependent forwarding, locality and terminating endpoints.</li><li><a href="https://kubernetes.io/docs/concepts/workloads/pods/probes/" target="_blank" rel="noopener noreferrer"><strong>Kubernetes — Liveness, Readiness, and Startup Probes</strong></a> — Different probe roles and readiness implications for traffic.</li><li><a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-termination/" target="_blank" rel="noopener noreferrer"><strong>Kubernetes — Pod Termination</strong></a> — Shutdown grace, termination signals and drainage.</li><li><a href="https://sre.google/sre-book/handling-overload/" target="_blank" rel="noopener noreferrer"><strong>Google SRE — Handling Overload</strong></a> — Capacity-aware admission, overload control and bounded retries.</li><li><a href="https://sre.google/sre-book/addressing-cascading-failures/" target="_blank" rel="noopener noreferrer"><strong>Google SRE — Addressing Cascading Failures</strong></a> — Retry storms, load shedding, dependency failures and recovery.</li><li><a href="https://sre.google/sre-book/load-balancing-frontend/" target="_blank" rel="noopener noreferrer"><strong>Google SRE — Load Balancing at the Frontend</strong></a> — Frontend traffic balancing and global service considerations.</li><li><a href="https://sre.google/sre-book/load-balancing-datacenter/" target="_blank" rel="noopener noreferrer"><strong>Google SRE — Load Balancing in the Datacenter</strong></a> — Backend request distribution and utilization in large systems.</li><li><a href="https://www.w3.org/TR/trace-context/" target="_blank" rel="noopener noreferrer"><strong>W3C — Trace Context</strong></a> — Correlation of requests across proxies and services.</li><li><a href="https://opentelemetry.io/docs/specs/semconv/http/http-spans/" target="_blank" rel="noopener noreferrer"><strong>OpenTelemetry — HTTP Semantic Conventions</strong></a> — HTTP span attributes and cross-service timing analysis.</li></ol>
+</section>
+<section id="related" aria-labelledby="heading-related">
+<h2 id="heading-related">Related Encyclopedia Topics</h2>
+<p>These are neighboring subjects and the Unit parent, <strong>not children</strong> of Server Load Balancing. The following links use MGU's extensionless public URL convention.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client–Server Architecture</a> — Parent overview of request and response flow.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/domain-name-system">Domain Name System</a> — Resolver behavior and global endpoint selection.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/routing-and-switching">Routing and Switching</a> — Network-level forwarding and interconnect reliability.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/tcp-ip-protocol-suite">TCP/IP Protocol Suite</a> — Transport and Internet protocol layering.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/distributed-computing">Distributed Computing</a> — Partial failure, coordination, consistency and state.</li>
+<li><a href="/library/encyclopedia/computer-science/networking-systems/virtual-private-networks">Virtual Private Networks</a> — Private connectivity and tunnel boundaries.</li>
+<li><a href="/library/encyclopedia/computer-science/programming-and-development/system-design">System Design</a> — Capacity, reliability and decomposition decisions.</li>
+<li><a href="/library/encyclopedia/computer-science/programming-and-development/software-architecture">Software Architecture</a> — Component and deployment boundaries.</li>
+<li><a href="/library/encyclopedia/computer-science/programming-and-development/web-apis-and-http">Web APIs and HTTP</a> — Request semantics, methods and gateway statuses.</li>
+<li><a href="/library/encyclopedia/computer-science/programming-and-development/continuous-delivery-and-deployment">Continuous Delivery and Deployment</a> — Safe rollout and deployment recovery.</li>
+</ul>
+
+</section>
+<section id="study-pathways" aria-labelledby="heading-study-pathways">
+<h2 id="heading-study-pathways">Study Pathways and Planned Specialist Links</h2>
+<p><strong>Foundational pathway:</strong> Begin with <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client–Server Architecture</a>, <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-and-server-roles">Client and Server Roles</a>, <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-versions-and-transport">HTTP Versions and Transport</a>, and <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/dns-and-service-endpoints">DNS and Service Endpoints</a>. Their combined model establishes what a connection is, how service endpoints are located, and where a load-balancing decision occurs.</p>
+<p><strong>Ingress and delivery pathway:</strong> Continue from <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/reverse-proxies-and-api-gateways">Reverse Proxies and API Gateways</a> through this article to HTTP caching and content delivery. Distinguish routing to a service from selecting an instance and from serving a response out of a shared cache.</p>
+<p><strong>Operations pathway:</strong> Study session/state management, client-server reliability patterns, and performance/observability. Build an SLO, a target-health contract, a capacity model, and a deployment drain procedure. Evaluate them under target, zone, and dependency failures.</p>
+<p>By MGU editorial convention, <strong>all planned child destinations are active links even if the target file has not yet been published</strong>. Their presence reflects the intended hierarchy, not a claim about deployment status.</p>
+<ol class="course-links"><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-and-server-roles"><strong>Client and Server Roles</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-request-and-response-lifecycle"><strong>HTTP Request and Response Lifecycle</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/dns-and-service-endpoints"><strong>DNS and Service Endpoints</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-versions-and-transport"><strong>HTTP Versions and Transport</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/tls-and-secure-client-connections"><strong>TLS and Secure Client Connections</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/two-tier-and-three-tier-systems"><strong>Two-Tier and Three-Tier Systems</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/reverse-proxies-and-api-gateways"><strong>Reverse Proxies and API Gateways</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/server-load-balancing"><strong>Server Load Balancing</strong></a> — Current specialist article</li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/http-caching-and-content-delivery"><strong>HTTP Caching and Content Delivery</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/session-and-state-management"><strong>Session and State Management</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-authentication-and-authorization"><strong>Client-Server Authentication and Authorization</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/api-contracts-and-service-versioning"><strong>API Contracts and Service Versioning</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-reliability-patterns"><strong>Client-Server Reliability Patterns</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-performance-and-observability"><strong>Client-Server Performance and Observability</strong></a></li><li><a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/client-server-deployment-and-troubleshooting"><strong>Client-Server Deployment and Troubleshooting</strong></a></li></ol>
+</section>
+<section id="editorial" aria-labelledby="heading-editorial">
+<h2 id="heading-editorial">Editorial Scope and Publication Status</h2>
+<p><strong>Taxonomic position:</strong> Level 5 specialist article 8 in the Client–Server Architecture Unit, Networking Systems division, MGU Computer Science Encyclopedia. The Level 4 <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/">Unit index</a> is the authoritative directory of sibling specialists. The parent summary is <a href="/library/encyclopedia/computer-science/networking-systems/client-server-architecture">Client–Server Architecture</a>.</p>
+<p><strong>Scope boundary:</strong> This article treats distribution of eligible requests and connections, target health, algorithm choice, weights, session affinity, cold-start and draining behavior, locality, multi-zone failover, overload, capacity, tracing and controlled configuration. It deliberately does not duplicate the parent article, a comprehensive TLS guide, HTTP cache semantics, resource authorization, or the persistence guarantees of distributed data stores. Load balancing cannot make a fundamentally unsafe business operation safe to retry.</p>
+<p><strong>Local deliverable:</strong> <code>networking-systems/client-server-architecture-articles/server-load-balancing.html</code>. <strong>Public canonical URL:</strong> <code>/library/encyclopedia/computer-science/networking-systems/client-server-architecture-articles/server-load-balancing</code>. Prepared for MGU editorial production November 23, 2026. Local file creation does not assert live-site publication, deployed rewrite rules, or production validation. All sample addresses and domain names are for documentation, not real MGU endpoints.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interrupt Signaling over System Interconnects | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="MGU Computer Science Encyclopedia specialist article on interrupt signaling, legacy INTx, PCI MSI/MSI-X, Arm GIC LPIs, RISC-V IMSIC, interrupt routing, DMA completion ordering, moderation, affinity, security and diagnostics.">
+<meta name="keywords" content="interrupt,interrupt signaling,IRQ,MSI,MSI-X,PCIe,legacy INTx,GIC,ITS,LPI,RISC-V,IMSIC,interrupt routing,IRQ affinity,interrupt moderation,DMA,interrupt controller,device security">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Interrupt Signaling over System Interconnects | MGU Encyclopedia">
+<meta property="og:description" content="Hardware interrupt delivery, PCIe message-signaled notifications, interrupt routing, queue service, ordering and diagnostics.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Interrupt Signaling over System Interconnects</h1>
+<p class="subtitle">How peripheral events become processor notifications: signal lines, MSI and MSI-X transactions, platform interrupt controllers, completion ordering, routing, and reliable service.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#scope-and-fundamental-definition">Scope and Fundamental Definition</a></li>
+<li><a href="#interrupts-events-and-data-transfer-are-different-operations">Interrupts, Events, and Data Transfer Are Different Operations</a></li>
+<li><a href="#why-systems-use-interrupts-instead-of-continuous-polling">Why Systems Use Interrupts Instead of Continuous Polling</a></li>
+<li><a href="#end-to-end-interrupt-delivery-lifecycle">End-to-End Interrupt Delivery Lifecycle</a></li>
+<li><a href="#interrupt-sources-and-architectural-categories">Interrupt Sources and Architectural Categories</a></li>
+<li><a href="#edge-triggered-interrupt-lines">Edge-Triggered Interrupt Lines</a></li>
+<li><a href="#level-triggered-interrupt-lines">Level-Triggered Interrupt Lines</a></li>
+<li><a href="#shared-interrupt-lines-and-source-identification">Shared Interrupt Lines and Source Identification</a></li>
+<li><a href="#pending-enabled-active-and-masked-states">Pending, Enabled, Active, and Masked States</a></li>
+<li><a href="#interrupt-priority-and-nesting">Interrupt Priority and Nesting</a></li>
+<li><a href="#acknowledgment-end-of-interrupt-and-deactivation">Acknowledgment, End-of-Interrupt, and Deactivation</a></li>
+<li><a href="#pin-based-interrupts-and-legacy-pci-intx">Pin-Based Interrupts and Legacy PCI INTx</a></li>
+<li><a href="#message-signaled-interrupts-as-transactions">Message-Signaled Interrupts as Transactions</a></li>
+<li><a href="#pci-msi-versus-pci-msi-x">PCI MSI Versus PCI MSI-X</a></li>
+<li><a href="#msi-x-vector-table-masks-and-pending-bit-array">MSI-X Vector Table, Masks, and Pending Bit Array</a></li>
+<li><a href="#interrupt-routing-vector-identity-and-translation-domains">Interrupt Routing, Vector Identity, and Translation Domains</a></li>
+<li><a href="#x86-local-apic-and-i-o-apic-context">x86 Local APIC and I/O APIC Context</a></li>
+<li><a href="#arm-generic-interrupt-controller-spis-ppis-sgis-and-lpis">Arm Generic Interrupt Controller: SPIs, PPIs, SGIs, and LPIs</a></li>
+<li><a href="#arm-gic-interrupt-translation-service-and-lpi-delivery">Arm GIC Interrupt Translation Service and LPI Delivery</a></li>
+<li><a href="#risc-v-imsic-and-advanced-interrupt-architecture">RISC-V IMSIC and Advanced Interrupt Architecture</a></li>
+<li><a href="#interrupts-on-soc-fabrics-and-peripheral-bridges">Interrupts on SoC Fabrics and Peripheral Bridges</a></li>
+<li><a href="#dma-completion-and-interrupt-ordering">DMA Completion and Interrupt Ordering</a></li>
+<li><a href="#interrupts-doorbells-and-completion-rings">Interrupts, Doorbells, and Completion Rings</a></li>
+<li><a href="#multiple-vectors-and-per-queue-notification">Multiple Vectors and Per-Queue Notification</a></li>
+<li><a href="#cpu-affinity-numa-placement-and-target-selection">CPU Affinity, NUMA Placement, and Target Selection</a></li>
+<li><a href="#interrupt-coalescing-and-moderation">Interrupt Coalescing and Moderation</a></li>
+<li><a href="#hybrid-interrupt-driven-and-polling-service">Hybrid Interrupt-Driven and Polling Service</a></li>
+<li><a href="#hard-irq-context-deferred-work-and-threaded-handlers">Hard IRQ Context, Deferred Work, and Threaded Handlers</a></li>
+<li><a href="#notification-latency-service-latency-and-tail-delay">Notification Latency, Service Latency, and Tail Delay</a></li>
+<li><a href="#throughput-limits-and-interrupt-rate-budgets">Throughput Limits and Interrupt-Rate Budgets</a></li>
+<li><a href="#interrupt-storms-repeated-assertion-and-rate-limiting">Interrupt Storms, Repeated Assertion, and Rate Limiting</a></li>
+<li><a href="#lost-delayed-and-coalesced-notifications">Lost, Delayed, and Coalesced Notifications</a></li>
+<li><a href="#spurious-interrupts-and-defensive-service">Spurious Interrupts and Defensive Service</a></li>
+<li><a href="#posted-writes-memory-barriers-and-completion-visibility">Posted Writes, Memory Barriers, and Completion Visibility</a></li>
+<li><a href="#virtual-machines-and-virtual-interrupt-injection">Virtual Machines and Virtual Interrupt Injection</a></li>
+<li><a href="#interrupt-remapping-and-device-origin-trust">Interrupt Remapping and Device-Origin Trust</a></li>
+<li><a href="#interrupts-as-a-denial-of-service-surface">Interrupts as a Denial-of-Service Surface</a></li>
+<li><a href="#interrupt-driven-power-management-and-wakeup-events">Interrupt-Driven Power Management and Wakeup Events</a></li>
+<li><a href="#device-reset-removal-and-in-flight-interrupts">Device Reset, Removal, and In-Flight Interrupts</a></li>
+<li><a href="#real-time-service-and-worst-case-interrupt-delay">Real-Time Service and Worst-Case Interrupt Delay</a></li>
+<li><a href="#system-level-reliability-faults-and-error-interrupts">System-Level Reliability, Faults, and Error Interrupts</a></li>
+<li><a href="#hardware-verification-and-protocol-assertions">Hardware Verification and Protocol Assertions</a></li>
+<li><a href="#diagnosing-interrupt-delivery-failures">Diagnosing Interrupt Delivery Failures</a></li>
+<li><a href="#comparing-interrupt-delivery-mechanisms">Comparing Interrupt Delivery Mechanisms</a></li>
+<li><a href="#interrupt-delivery-engineering-checklist">Interrupt Delivery Engineering Checklist</a></li>
+<li><a href="#worked-example-1-level-triggered-interrupt-reassertion">Worked Example 1 — Level-Triggered Interrupt Reassertion</a></li>
+<li><a href="#worked-example-2-edge-notification-versus-persistent-queue-state">Worked Example 2 — Edge Notification Versus Persistent Queue State</a></li>
+<li><a href="#worked-example-3-dma-writeback-followed-by-pcie-msi">Worked Example 3 — DMA Writeback Followed by PCIe MSI</a></li>
+<li><a href="#worked-example-4-msi-x-masking-and-deferred-delivery">Worked Example 4 — MSI-X Masking and Deferred Delivery</a></li>
+<li><a href="#worked-example-5-interrupt-rate-and-cpu-service-budget">Worked Example 5 — Interrupt-Rate and CPU-Service Budget</a></li>
+<li><a href="#worked-example-6-moderation-timer-and-isolated-event-latency">Worked Example 6 — Moderation Timer and Isolated-Event Latency</a></li>
+<li><a href="#worked-example-7-per-queue-msi-x-affinity-on-four-cpus">Worked Example 7 — Per-Queue MSI-X Affinity on Four CPUs</a></li>
+<li><a href="#worked-example-8-requested-versus-allocated-msi-x-vectors">Worked Example 8 — Requested Versus Allocated MSI-X Vectors</a></li>
+<li><a href="#worked-example-9-the-empty-ring-rearm-race">Worked Example 9 — The Empty-Ring Rearm Race</a></li>
+<li><a href="#worked-example-10-separating-device-clear-from-controller-eoi">Worked Example 10 — Separating Device Clear from Controller EOI</a></li>
+<li><a href="#worked-example-11-end-to-end-interrupt-latency-budget">Worked Example 11 — End-to-End Interrupt Latency Budget</a></li>
+<li><a href="#worked-example-12-interrupt-storm-diagnostic-timeline">Worked Example 12 — Interrupt Storm Diagnostic Timeline</a></li>
+<li><a href="#worked-example-13-platform-message-routing-through-an-interrupt-domain">Worked Example 13 — Platform Message Routing Through an Interrupt Domain</a></li>
+<li><a href="#specialist-glossary">Specialist Glossary</a></li>
+<li><a href="#technical-references-and-further-reading">Technical References and Further Reading</a></li>
+<li><a href="#sub-articles-and-continued-study">Sub-Articles and Continued Study</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#editorial-scope-and-publication-status">Editorial Scope and Publication Status</a></li>
+</ol>
+</section>
+<section id="scope-and-fundamental-definition" aria-labelledby="heading-scope-and-fundamental-definition">
+<h2 id="heading-scope-and-fundamental-definition">Scope and Fundamental Definition</h2>
+<p>An <strong>interrupt</strong> is a request for a processor or execution environment to attend to an event. In a computer interconnect, the source may be a network controller that has finished filling a receive buffer, a storage device that has completed commands, a timer, an error-monitoring block, or another processor. The event may be conveyed by an electrical signal, a controller input, or a specially directed memory-write transaction. In each case, an interrupt tells the system that something deserves service; it does <strong>not</strong> itself transport the associated packet, sector, sample, or computation result. Those payloads ordinarily travel by separate memory or I/O transactions.</p>
+<p>This Level 5 specialist article treats <strong>interrupt signaling as an interconnect and delivery mechanism</strong>. It explains what initiates notifications, how they are represented and routed, when an interrupt becomes pending or active, and how software safely observes the event and returns the device to a serviceable state. Interrupt-handler programming, process scheduling, CPU exception architecture, and detailed PCIe transactions have their own disciplinary treatments. Examples below are illustrative models, not certified timing data for a named processor or board. An interrupting source, an interrupt controller, and an interrupt handler have different responsibilities and should not be used as interchangeable terms.</p>
+
+</section>
+<section id="interrupts-events-and-data-transfer-are-different-operations" aria-labelledby="heading-interrupts-events-and-data-transfer-are-different-operations">
+<h2 id="heading-interrupts-events-and-data-transfer-are-different-operations">Interrupts, Events, and Data Transfer Are Different Operations</h2>
+<p>A device may move a thousand data bytes by DMA, place one completion descriptor into a host-memory ring, and then send one interrupt. The data movement, completion-record publication, and interrupt signaling are three logically distinct actions. A software handler typically uses the notification to discover which queues need service; it must inspect the actual device or ring state, rather than assuming that one interrupt corresponds to exactly one payload, packet, or completion record. Coalescing can cause one signal to represent many events, while shared interrupt mechanisms can require a handler to determine which device caused the signal.</p>
+<p>An <strong>event</strong> is an underlying condition such as a buffer reaching a threshold or a DMA write finishing. <strong>Interrupt status</strong> is the hardware-recorded representation of that condition, possibly in registers, pending-bit arrays, or controller state. <strong>Interrupt delivery</strong> is the path that informs a processing element. <strong>Service</strong> is the software or firmware action that resolves the condition. Conflating these layers causes common bugs: acknowledging the controller does not necessarily clear a device's pending reason; clearing a device status register does not necessarily mean all submitted work is consumed; and receiving a message-signaled interrupt is not equivalent to a complete software memory-ordering contract.</p>
+
+</section>
+<section id="why-systems-use-interrupts-instead-of-continuous-polling" aria-labelledby="heading-why-systems-use-interrupts-instead-of-continuous-polling">
+<h2 id="heading-why-systems-use-interrupts-instead-of-continuous-polling">Why Systems Use Interrupts Instead of Continuous Polling</h2>
+<p>Polling repeatedly reads a device's completion status or memory ring. It can give low latency when the polling loop is scheduled continuously and the data is cache-resident, but it consumes execution resources and may generate interconnect traffic. Interrupts permit the processor to do other work or enter a low-power state until hardware requests service. The economic trade-off concerns the event rate, cost of checking for work, wakeup and context overhead, required tail latency, and how long a burst of events lasts.</p>
+<p>Many production systems mix strategies. For example, a network driver may begin processing after an interrupt, then temporarily suppress further interrupts while it drains a receive queue by polling. This avoids an interrupt per packet during a burst without committing a core to busy-waiting during idle periods. Neither mode is universally superior. The interrupt arrangement is a mechanism for directing attention, whereas the device completion contract defines what work is available and when its memory is valid. Design studies must measure both event-to-service latency and the CPU time used for notifications.</p>
+
+</section>
+<section id="end-to-end-interrupt-delivery-lifecycle" aria-labelledby="heading-end-to-end-interrupt-delivery-lifecycle">
+<h2 id="heading-end-to-end-interrupt-delivery-lifecycle">End-to-End Interrupt Delivery Lifecycle</h2>
+<p>A useful seven-stage model is <strong>(1)</strong> a device detects an event, <strong>(2)</strong> the source latches or qualifies its status, <strong>(3)</strong> it asserts an interrupt line or emits an MSI write, <strong>(4)</strong> the interrupt controller records and prioritizes the incoming request, <strong>(5)</strong> a CPU or virtual CPU accepts delivery, <strong>(6)</strong> software identifies and services the event, and <strong>(7)</strong> the source and controller are acknowledged or deactivated according to their respective protocols. Some stages overlap, and not every controller uses each state label. The model nevertheless provides a disciplined way to localize an interruption in service.</p>
+<p>A device may continue performing DMA while a notification is pending. Several events may accumulate into the same status bit or queue. Another interrupt may arrive before the handler has finished, subject to masking, priorities, processor context, and source signaling semantics. The controller's acceptance of an interrupt is only one step in a larger lifecycle: a driver may need to quiesce or clear the source, drain a completion ring, and make a release or acknowledgment visible to hardware. If a fault happens midway, checking which of the seven stages actually occurred is more reliable than assuming that a missing handler invocation proves a broken physical link.</p>
+
+</section>
+<section id="interrupt-sources-and-architectural-categories" aria-labelledby="heading-interrupt-sources-and-architectural-categories">
+<h2 id="heading-interrupt-sources-and-architectural-categories">Interrupt Sources and Architectural Categories</h2>
+<p>Sources include external peripherals, on-chip timers, interprocessor signaling, fault reporting, and software-generated notifications. External devices commonly ask a central interrupt controller to forward an event to one or more CPUs. On-chip peripherals may have dedicated interrupt lines into a SoC controller. PCI Express devices normally use MSI or MSI-X when supported and configured; legacy compatibility pathways can emulate pin-based INTx behavior. Interprocessor interrupts support activities such as translation-cache invalidation, work rescheduling, or coordination among cores, but they are not ordinary peripheral completion events.</p>
+<p>The distinction between <strong>external interrupts</strong> and <strong>exceptions</strong> matters. A synchronous page fault is caused by the currently executing instruction under processor-defined rules, while a storage completion interrupt is typically asynchronous to the instruction stream. The handler entry mechanism may look similar because both involve privileged control transfer, but source identity, timing, prioritization, and retry semantics differ. This article focuses on externally requested or interconnect-mediated interrupts and mentions exceptions only to clarify their separation. Interrupt delivery designs should be assessed for the event's urgency, quantity, targeting, masking, security domain, and whether a pending condition survives a temporary disable.</p>
+
+</section>
+<section id="edge-triggered-interrupt-lines" aria-labelledby="heading-edge-triggered-interrupt-lines">
+<h2 id="heading-edge-triggered-interrupt-lines">Edge-Triggered Interrupt Lines</h2>
+<p>An <strong>edge-triggered</strong> input requests service on a specified transition, for example low-to-high. The controller may latch a pending bit after observing the edge, but the source can subsequently return to its inactive voltage without continuously asserting the request. This lets a brief pulse cause an interrupt even if the processor is busy. Whether additional edges are counted, merged, or discarded while already pending is implementation-specific. Designers cannot assume that every electrical transition becomes a separate software callback.</p>
+<p>A device must keep sufficient information in its own completion registers or queues to avoid losing business events when notifications merge. A race occurs if a driver clears an event and then an edge arrives while the relevant mask or state is changing; the exact avoidance technique depends on the device and controller. Edge behavior is particularly sensitive to pulse-width requirements, synchronizers, and the semantics of unmasking. Document the source's polarity and trigger type before connecting it to a controller: configuring an edge source as level-sensitive, or vice versa, can produce a stuck interrupt or missing notifications.</p>
+
+</section>
+<section id="level-triggered-interrupt-lines" aria-labelledby="heading-level-triggered-interrupt-lines">
+<h2 id="heading-level-triggered-interrupt-lines">Level-Triggered Interrupt Lines</h2>
+<p>A <strong>level-triggered</strong> input remains asserted while an interrupt condition is present. The controller can keep or renew the pending indication until the device deasserts its request. Typical devices expose status bits that software clears only after handling the underlying event. This makes source clearing central to correctness: acknowledging the interrupt controller while the device still holds the line active can cause immediate redelivery and apparent interrupt storms.</p>
+<p>Level triggering can be useful for shared signals because several devices can hold the same line active, although sharing is not required. Handler ordering differs across hardware: some designs mask the source, read and clear status, and then end service at the controller; others allow a different sequence defined by the platform. A read-modify-write to a status register must respect write-one-to-clear, read-to-clear, and other device-specific semantics. Software should not treat a write to a controller's end-of-interrupt register as a substitute for clearing the peripheral's state. Both operations may be necessary, but they act at different ownership levels.</p>
+
+</section>
+<section id="shared-interrupt-lines-and-source-identification" aria-labelledby="heading-shared-interrupt-lines-and-source-identification">
+<h2 id="heading-shared-interrupt-lines-and-source-identification">Shared Interrupt Lines and Source Identification</h2>
+<p>A shared line means several devices can trigger one interrupt-controller input or share a host IRQ resource. When the handler runs, software cannot infer the precise source from the line number alone. It must test each participating device's status, or use a platform-specific demultiplexer, and service only a device that actually reports pending work. On a shared handler interface, the handler must be able to report that its device did not cause the interrupt rather than claiming all notifications.</p>
+<p>Shared lines introduce contention and diagnostic ambiguity. An aggressive device can repeatedly reactivate the line and reduce service to quieter devices; a misconfigured device can keep the level asserted. They also increase the cost of source discovery, particularly if reads traverse slow PCI bridges or serialized control interconnects. Per-queue MSI-X vectors often mitigate these problems by routing events more precisely, but multiple logical causes can still share a message vector. A vector identifies a configured notification stream, not necessarily one semantic application event.</p>
+
+</section>
+<section id="pending-enabled-active-and-masked-states" aria-labelledby="heading-pending-enabled-active-and-masked-states">
+<h2 id="heading-pending-enabled-active-and-masked-states">Pending, Enabled, Active, and Masked States</h2>
+<p>Interrupt controllers usually retain some combination of <strong>pending</strong> state, <strong>enable or mask</strong> state, priority, target configuration, and <strong>active or in-service</strong> state. A pending interrupt has been recognized as eligible for eventual handling. An enabled source is permitted to be delivered under current masking and priority conditions. An active interrupt is already being serviced in a controller model that distinguishes active from pending. These dimensions can coexist: for example, a second request may become pending while one instance remains active, subject to controller rules.</p>
+<p>A global CPU interrupt mask is not the same as a device-side enable bit. A controller mask may stop delivery to a CPU while the peripheral keeps accumulating completion records; a device mask may stop its outgoing notification generation; and an MSI-X table mask has specified pending behavior different from merely stopping software's handler. Masking is therefore not always cancellation. When software unmasks a line or vector, it must expect accumulated status or a newly pending event and should have a clear plan for draining the device. Reliable designs distinguish the condition that triggers the request from the controller mechanism that prioritizes it.</p>
+
+</section>
+<section id="interrupt-priority-and-nesting" aria-labelledby="heading-interrupt-priority-and-nesting">
+<h2 id="heading-interrupt-priority-and-nesting">Interrupt Priority and Nesting</h2>
+<p>Controllers commonly support priority classes, programmable thresholds, target routing, and preemption or nesting controls. A high-priority interrupt can be delivered while a lower-priority one is waiting, or even while one is in service, if the CPU and controller permit that behavior. A processor's local interrupt disable state, the controller's priority grouping, and the device's own masking may each limit nesting. A priority value is not necessarily comparable across different controller architectures.</p>
+<p>Priority is an allocation policy, not a guarantee of bounded completion time. A highest-priority event can still wait for a long non-preemptible handler, interconnect latency, or a disabled interrupt window. Mismanaged priorities permit starvation of less urgent work; excessive nesting raises stack demand and makes worst-case execution time difficult to bound. Real-time analysis should budget the delay from event assertion through controller routing, interrupt acceptance, interrupt-disabled regions, and handler execution. When multiple handlers contend for locks or memory bandwidth, the effective priority seen by a device may differ from its nominal vector priority.</p>
+
+</section>
+<section id="acknowledgment-end-of-interrupt-and-deactivation" aria-labelledby="heading-acknowledgment-end-of-interrupt-and-deactivation">
+<h2 id="heading-acknowledgment-end-of-interrupt-and-deactivation">Acknowledgment, End-of-Interrupt, and Deactivation</h2>
+<p>The phrase <strong>interrupt acknowledgment</strong> has several meanings. Some controllers require software to read an interrupt-acknowledge register that returns the highest-priority pending source. Others deliver an interrupt identifier through CPU architectural state. An <strong>end-of-interrupt (EOI)</strong> operation often tells the controller that a handler has finished its active service interval. Certain designs also separate priority drop from interrupt deactivation. The details must come from the relevant controller's programming model.</p>
+<p>Device-side acknowledgment is independent: a receive queue may require a status clear, completion-index update, or enable rearm before it stops requesting attention. A single EOI is not proof that the event has been serviced, nor is one status clear proof that the source cannot reassert immediately. Conversely, repeatedly writing an EOI without checking source status can hide a persistent device fault. A correct lifecycle states who owns each state transition: peripheral, bridge, controller, CPU, or driver. It then tests reentry, simultaneous events, masked events, and recovery during an in-flight handler.</p>
+
+</section>
+<section id="pin-based-interrupts-and-legacy-pci-intx" aria-labelledby="heading-pin-based-interrupts-and-legacy-pci-intx">
+<h2 id="heading-pin-based-interrupts-and-legacy-pci-intx">Pin-Based Interrupts and Legacy PCI INTx</h2>
+<p>Classic PCI used interrupt pins, often labeled INTA# through INTD#, with platform routing and sharing that could combine multiple devices at an interrupt-controller input. PCI Express preserves a compatibility model for legacy INTx signaling, but this is not identical to assigning a dedicated parallel wire from each PCIe endpoint to a CPU. In PCIe, legacy INTx signaling is represented through protocol mechanisms such as assert and deassert messages and is routed by the platform's PCIe hierarchy. The important invariant is still a logical interrupt condition with compatibility-oriented sharing and service behavior.</p>
+<p>A driver using a legacy line needs to test the device's status, clear the cause, and obey platform-specific ordering. It should not assume that an interrupt has occurred merely because a programmed transaction is late. Modern operating systems generally prefer MSI/MSI-X for capable devices because they can reduce shared-line ambiguity and offer better targeting. However, older devices, firmware settings, unsupported interrupt domains, and compatibility requirements can lead to INTx mode. Correct operation requires the actual configuration and platform contract, not an assumption based on the device's advertised maximum feature set.</p>
+
+</section>
+<section id="message-signaled-interrupts-as-transactions" aria-labelledby="heading-message-signaled-interrupts-as-transactions">
+<h2 id="heading-message-signaled-interrupts-as-transactions">Message-Signaled Interrupts as Transactions</h2>
+<p>A <strong>message-signaled interrupt (MSI)</strong> conveys notification by a special address-and-data write that the platform interprets as an interrupt request. For PCI/PCIe devices, operating-system and platform software configure the target address and data values through the device's MSI capability. When the device generates the message, its write traverses an interconnect toward the interrupt-delivery mechanism. The resulting interrupt may carry a vector identity and routing information without a dedicated legacy interrupt pin per event.</p>
+<p>MSIs remain logically different from ordinary writes to data buffers. A write to an interrupt-controller doorbell region has notification semantics, whereas a write of a completed disk block to RAM stores payload data. Both may be physical memory-write transactions, but they terminate at different architectural targets. Software must not improvise MSI target addresses or assume that ordinary RAM writes can generate interrupts. The host's interrupt-remapping and controller capabilities determine which MSI writes are recognized, routed, or rejected. For compliant PCIe ordering, prior DMA writes and MSI signaling have relevant ordering guarantees; those guarantees do not replace correct CPU-side synchronization or ownership rules.</p>
+
+</section>
+<section id="pci-msi-versus-pci-msi-x" aria-labelledby="heading-pci-msi-versus-pci-msi-x">
+<h2 id="heading-pci-msi-versus-pci-msi-x">PCI MSI Versus PCI MSI-X</h2>
+<p>PCI MSI and <strong>MSI-X</strong> both use message-signaled notification. Conventional MSI supports a constrained, power-of-two configuration of vectors, with an architectural maximum of 32 in the Linux PCI driver documentation. MSI-X supplies a per-vector configuration table and supports up to 2,048 entries in the PCI specification model, subject to the device's advertised table size and system allocation. An MSI-X table entry records a message address, message data, and vector-control information; its Pending Bit Array (PBA) records masked pending states as specified by the capability. The table and PBA are typically mapped through a device BAR, not copied as application data into arbitrary host RAM.</p>
+<p>MSI-X facilitates separate completion streams for receive, transmit, storage queue pairs, and administrative events; however, a device may expose fewer vectors than desired, and an operating system may allocate fewer than the hardware maximum. The driver must handle successful partial allocations where permitted and must not equate a table index, a Linux IRQ number, and the CPU's local vector number. Those belong to different namespaces. Likewise, MSI-X's ability to target different CPUs does not imply guaranteed load balancing: actual placement depends on the interrupt domain, affinity policy, and online processing elements. Linux's <code>pci_alloc_irq_vectors()</code> interface is the preferred general allocation route described in current kernel documentation.</p>
+
+</section>
+<section id="msi-x-vector-table-masks-and-pending-bit-array" aria-labelledby="heading-msi-x-vector-table-masks-and-pending-bit-array">
+<h2 id="heading-msi-x-vector-table-masks-and-pending-bit-array">MSI-X Vector Table, Masks, and Pending Bit Array</h2>
+<p>The MSI-X <strong>table</strong> is host-programmable device configuration holding one message address and data payload per vector, together with a mask bit. A function-wide mask can additionally suppress transmission of multiple MSI-X notifications. The <strong>Pending Bit Array</strong> represents interrupts that become pending under the relevant masking semantics. On unmasking, a device must follow PCI-defined behavior for a pending event. Software should not assume a masked notification vanishes, nor that the hardware records an unbounded counter of every event behind one pending bit.</p>
+<p>Per-vector control enables queue shutdown, affinity changes, and controlled reconfiguration, but programming the table is not safe at an arbitrary moment when a device can generate an interrupt. Drivers must obey the PCI configuration and ordering requirements around masking and updates; pending work should be serviced using the device's actual queue state. A PBA bit indicates an interrupt condition for the vector rather than the count or contents of associated DMA completions. This distinction becomes critical when masking during polling, suspending the device, or handing a queue to a different CPU. A silent PBA does not prove a queue is empty if generation is disabled or a status path is broken.</p>
+
+</section>
+<section id="interrupt-routing-vector-identity-and-translation-domains" aria-labelledby="heading-interrupt-routing-vector-identity-and-translation-domains">
+<h2 id="heading-interrupt-routing-vector-identity-and-translation-domains">Interrupt Routing, Vector Identity, and Translation Domains</h2>
+<p>Interrupt routing maps a device-origin event to a CPU-visible interrupt identifier. Routing can incorporate a PCI root complex, interrupt controller, message translator, host bridge, processor local interrupt unit, hypervisor, or I/O interrupt-remapping block. These elements may rewrite or validate addresses and identifiers. A practical diagram should label both the <strong>device-relative vector</strong> and the <strong>host-selected destination</strong>, because those values frequently differ and can change after driver reinitialization or CPU hotplug.</p>
+<p>The term <strong>interrupt domain</strong> describes an operating system or platform abstraction used to allocate and map interrupt identities. A domain may be hierarchical: a PCI MSI domain, an IOMMU remapping domain, and a CPU interrupt-controller domain can each participate. Neither the PCIe address of an MSI message nor the OS-visible IRQ number should be assumed to identify a physical CPU directly. Secure systems program routing through trusted platform facilities and restrict untrusted devices from writing arbitrary interrupt-controller locations. Exact details differ for x86 interrupt remapping, Arm GIC ITS translations, and RISC-V MSI controllers.</p>
+
+</section>
+<section id="x86-local-apic-and-i-o-apic-context" aria-labelledby="heading-x86-local-apic-and-i-o-apic-context">
+<h2 id="heading-x86-local-apic-and-i-o-apic-context">x86 Local APIC and I/O APIC Context</h2>
+<p>In common x86 systems, local APIC facilities participate in delivering interrupts to processors, while I/O APIC facilities historically distribute external pin-based interrupts. MSI and MSI-X messages can target the interrupt delivery system using configured address/data encodings, subject to platform translation and remapping. An operating system allocates vector numbers according to processor and interrupt-domain rules. An APIC vector is not a PCI MSI-X table index, and neither is automatically the same as a user-visible IRQ counter label.</p>
+<p>Real x86 platforms can include interrupt-remapping hardware, virtual APIC facilities, and firmware tables that alter the path. Some vector numbers are reserved for exceptions or platform functions; a driver cannot simply choose any 8-bit number because the hardware word is wide enough. The relationship between I/O APIC pins, local CPU vectors, remapped MSI writes, and CPU core affinity should be documented per host. For high-level Bus Systems study, the important design principle is that <strong>message destination and event identity are configured through a trusted routing plane</strong>, not dictated unilaterally by a peripheral.</p>
+
+</section>
+<section id="arm-generic-interrupt-controller-spis-ppis-sgis-and-lpis" aria-labelledby="heading-arm-generic-interrupt-controller-spis-ppis-sgis-and-lpis">
+<h2 id="heading-arm-generic-interrupt-controller-spis-ppis-sgis-and-lpis">Arm Generic Interrupt Controller: SPIs, PPIs, SGIs, and LPIs</h2>
+<p>The Arm Generic Interrupt Controller (GIC) architecture distinguishes several interrupt classes. <strong>Shared Peripheral Interrupts (SPIs)</strong> normally represent sources that can be targeted to processing elements; <strong>Private Peripheral Interrupts (PPIs)</strong> are associated with particular processing elements; <strong>Software-Generated Interrupts (SGIs)</strong> support software-directed signaling. <strong>Locality-specific Peripheral Interrupts (LPIs)</strong> are associated with message-based facilities introduced in GICv3, where implemented. The capabilities and routing of each class depend on the GIC architecture version and implementation.</p>
+<p>An Arm system may receive a peripheral line at a GIC distributor or consume an MSI through a message translation facility. The CPU interface and redistributors control presentation and local handling. GIC priority, pending, active, and enable rules are architectural subjects with more detail than the generic PCIe model. LPIs are not simply another name for SPI lines, and an LPI's table-based enable/pending organization differs from the older interrupt classes. A system diagram should therefore show where the message is translated, how the destination processing element is chosen, and which state is owned by the controller versus the peripheral.</p>
+
+</section>
+<section id="arm-gic-interrupt-translation-service-and-lpi-delivery" aria-labelledby="heading-arm-gic-interrupt-translation-service-and-lpi-delivery">
+<h2 id="heading-arm-gic-interrupt-translation-service-and-lpi-delivery">Arm GIC Interrupt Translation Service and LPI Delivery</h2>
+<p>Where implemented, the <strong>Interrupt Translation Service (ITS)</strong> accepts an event associated with a device and translates it into an LPI targeted to a processing element through GIC-maintained configuration. Its translation tables associate device and event identities with a selected interrupt and collection/target configuration. This allows many message-producing devices to share a structured interrupt routing infrastructure instead of requiring one physical line per event. The Arm architecture permits optional features and different generations, so a host description must not imply that every GICv3 system necessarily has an ITS.</p>
+<p>In a typical architectural trace, software allocates the LPI and programs the appropriate ITS and redistributor structures; a peripheral emits a message; the ITS resolves the configured translation; and the target redistributor and CPU interface make the interrupt eligible for software service. Routing is not equivalent to copying DMA payloads, and delivery success does not by itself prove that the software has processed the device queue. Arm's official GIC documentation should be used to verify exact identifiers, table formats, invalidation requirements, and virtualization behavior for a specific implementation.</p>
+
+</section>
+<section id="risc-v-imsic-and-advanced-interrupt-architecture" aria-labelledby="heading-risc-v-imsic-and-advanced-interrupt-architecture">
+<h2 id="heading-risc-v-imsic-and-advanced-interrupt-architecture">RISC-V IMSIC and Advanced Interrupt Architecture</h2>
+<p>The RISC-V Advanced Interrupt Architecture (AIA) defines message-interrupt mechanisms including the <strong>Incoming MSI Controller (IMSIC)</strong>. IMSIC interrupt files hold pending and enabled interrupt identities for a hart and, where supported, additional privilege or virtual-machine contexts. Software configures which interrupt identity a device can signal and which interrupt file is targeted; an MSI write to the designated memory-mapped address carries the notification identity. This is a different organization from a classic single shared external interrupt line.</p>
+<p>The AIA also describes an Advanced Platform-Level Interrupt Controller (APLIC), which can handle wired sources and, in appropriate modes, deliver MSIs toward IMSICs. Controllers and capabilities are optional or implementation-dependent; a basic RISC-V system should not be assumed to include IMSIC hardware. In virtualized systems, guest interrupt files can support directing events to guest contexts under controlled configuration. The architectural lesson is consistent with PCIe and GIC systems: a notification must be authorized, routed to a legal destination, and translated into processor-visible interrupt state by the platform, while the actual data remains in device registers or memory buffers.</p>
+
+</section>
+<section id="interrupts-on-soc-fabrics-and-peripheral-bridges" aria-labelledby="heading-interrupts-on-soc-fabrics-and-peripheral-bridges">
+<h2 id="heading-interrupts-on-soc-fabrics-and-peripheral-bridges">Interrupts on SoC Fabrics and Peripheral Bridges</h2>
+<p>A system-on-chip can contain dozens or hundreds of interrupt-generating blocks: UART controllers, SPI engines, timers, watchdogs, DMA engines, storage controllers, power monitors, and security units. A peripheral bus such as APB may expose each block's interrupt-status and enable registers, while separate signal lines or an MSI-capable subsystem carry notifications to the main controller. The presence of an AXI or APB data interface does not imply that an interrupt signal is carried on the same functional channel as register reads and writes.</p>
+<p>SoC designs may insert an interrupt aggregator that combines numerous local sources into a smaller set of outputs. That saves wires but increases the need for reliable source demultiplexing. Clock and power domains introduce more complexity: a peripheral may generate an event while its main data clock is gated, requiring always-on latches or wakeup logic. The design must specify polarity, synchronization, reset state, pending retention, isolation, and when status becomes readable after a domain wakes. Interface specifications should record those dependencies rather than presenting every peripheral interrupt as an instantaneous wire directly into the CPU.</p>
+
+</section>
+<section id="dma-completion-and-interrupt-ordering" aria-labelledby="heading-dma-completion-and-interrupt-ordering">
+<h2 id="heading-dma-completion-and-interrupt-ordering">DMA Completion and Interrupt Ordering</h2>
+<p>A DMA-driven device often writes data into host memory, updates a completion descriptor, and signals an interrupt. Software must distinguish the ordered publication of a completion from the later consumption of that completion. PCIe MSI transaction ordering generally ensures that a properly ordered interrupt-generating message does not overtake prior device DMA writes on the relevant path; Linux documentation emphasizes this advantage relative to traditional interrupt lines. However, this hardware property is not a blanket guarantee for all bridges, relaxed-ordering configurations, noncoherent fabrics, or driver mistakes.</p>
+<p>The correct service contract also includes the queue's ownership fields, memory barriers where required, coherency operations for noncoherent platforms, and a rule preventing descriptor reuse while hardware might still access it. An interrupt can be delayed or merged with later completions. A ring may contain several new entries when only one MSI arrives. For a line-based interrupt, drivers may need a device register read to ensure prior posted writes have reached the required visibility point before consuming status or data. Completion and synchronization must always follow the actual device and platform programming specifications.</p>
+
+</section>
+<section id="interrupts-doorbells-and-completion-rings" aria-labelledby="heading-interrupts-doorbells-and-completion-rings">
+<h2 id="heading-interrupts-doorbells-and-completion-rings">Interrupts, Doorbells, and Completion Rings</h2>
+<p>A <strong>doorbell</strong> usually points in the opposite direction from an interrupt. The CPU writes a memory-mapped doorbell register to tell a device that new commands are available; the device later raises an interrupt to tell the CPU that one or more commands have completed. Both can use memory-write transactions, but doorbell writes and MSI notifications have distinct initiators, destinations, meanings, and visibility requirements.</p>
+<p>The queue itself is the durable record of work. A typical design uses producer and consumer indices and phase or ownership bits to avoid mistaking wrapped entries for fresh work. The handler should read the queue using the required synchronization, process all available completed entries within its budget, update the consumer index, and rearm notifications if its strategy requires it. Some devices separate a completion queue from an event queue; others use a shared status register. An interrupt handler must not assume a one-to-one relationship between hardware messages and software work items because coalescing, rearming, and races can all change that mapping.</p>
+
+</section>
+<section id="multiple-vectors-and-per-queue-notification" aria-labelledby="heading-multiple-vectors-and-per-queue-notification">
+<h2 id="heading-multiple-vectors-and-per-queue-notification">Multiple Vectors and Per-Queue Notification</h2>
+<p>A multi-queue storage or network device can assign one MSI-X vector per queue, or one vector per group of queues, so notifications can be directed near the CPUs processing the corresponding data. This improves concurrency by reducing shared-status polling and lock contention. It also permits finer-grained masking and moderation. The vector count is bounded by device capability, host vector resources, driver policy, and processor topology. Allocating one vector per queue is an optional strategy, not an architectural necessity.</p>
+<p>More vectors create their own costs: interrupt-domain state, operating-system bookkeeping, affinity decisions, and reconfiguration during CPU hotplug or suspend. Too many independently firing queues may overload a core or cause excessive cache movement. Drivers should describe what happens when fewer vectors than queues are available, often grouping queue completion sources and using a per-vector service loop. Dedicated administrative and error vectors are common patterns but not required for every peripheral. A vector allocation scheme is successful when it aligns notifications with useful work distribution rather than merely maximizing the number of allocated numbers.</p>
+
+</section>
+<section id="cpu-affinity-numa-placement-and-target-selection" aria-labelledby="heading-cpu-affinity-numa-placement-and-target-selection">
+<h2 id="heading-cpu-affinity-numa-placement-and-target-selection">CPU Affinity, NUMA Placement, and Target Selection</h2>
+<p><strong>Interrupt affinity</strong> chooses which CPUs are eligible to service a given vector. It can reduce cross-core cache transfers by directing a queue's completion interrupts to a CPU near its application or networking work. In non-uniform memory access (NUMA) systems, the CPU that handles an interrupt, the memory node containing DMA buffers, and the device's PCIe root-complex location can all affect observed latency and bandwidth. Affinity should be considered alongside DMA placement and thread scheduling, not in isolation.</p>
+<p>A target may change when CPUs are offlined or when the OS rebalances interrupts. Linux provides generic IRQ affinity facilities, and managed affinity interrupts have special handling during CPU hotplug. A managed vector is not necessarily user-modifiable through the usual procfs mask files. Affinity also cannot fix an underlying bottleneck in the storage device, interconnect, or memory controller. A strong evaluation measures packets or completions per CPU, device queue occupancy, processor migration, remote-memory accesses, and latency percentiles before and after placement changes.</p>
+
+</section>
+<section id="interrupt-coalescing-and-moderation" aria-labelledby="heading-interrupt-coalescing-and-moderation">
+<h2 id="heading-interrupt-coalescing-and-moderation">Interrupt Coalescing and Moderation</h2>
+<p><strong>Interrupt coalescing</strong> combines several device events into fewer notifications. A completion queue might interrupt after a configurable event count or elapsed time, whichever occurs first. <strong>Moderation</strong> more broadly limits notification frequency or delays events under specified policies. These features lower per-event interrupt overhead when traffic is high, but they can add waiting time for a small, time-sensitive transaction. Device-specific timer units, reload semantics, and interactions with adaptive moderation must be consulted rather than guessed.</p>
+<p>The latency trade-off is often counterintuitive. For a light workload, a timer-based moderation delay can dominate service time even though the device completed immediately. For a heavy workload, batching 32 completions into one interrupt may improve total CPU efficiency and relieve lock contention enough to reduce queueing. Drivers may change moderation adaptively based on traffic characteristics; the control loop must avoid oscillation and should preserve performance guarantees for latency-sensitive operations. The best setting depends on the arrival process, service budget, wakeup cost, and acceptable tail latency—not a universal target of interrupts per second.</p>
+
+</section>
+<section id="hybrid-interrupt-driven-and-polling-service" aria-labelledby="heading-hybrid-interrupt-driven-and-polling-service">
+<h2 id="heading-hybrid-interrupt-driven-and-polling-service">Hybrid Interrupt-Driven and Polling Service</h2>
+<p>Hybrid service begins with a notification, then polls a work queue while it is productive to do so. Many network-stack designs use an interrupt to schedule packet processing and suppress additional notifications during the poll cycle. The poller drains a bounded budget, and the driver carefully rearms interrupts when it determines that the queue is idle or it has yielded. The essential race is between checking for empty work and enabling notifications: new work must not be stranded without either another poll or another interrupt.</p>
+<p>A correct rearm sequence depends on the hardware contract and usually requires a post-rearm check or a status mechanism designed to close the gap. Polling cannot be treated as automatically safer than interrupt-driven service: a busy poller can starve another task, spin on stale shared-memory state, or consume excessive power. Conversely, interrupt-only schemes can collapse under high event frequency because the CPU spends much of its time entering and exiting handlers. The design objective is to minimize total service cost while retaining correct handling of low-rate arrivals and bursty traffic.</p>
+
+</section>
+<section id="hard-irq-context-deferred-work-and-threaded-handlers" aria-labelledby="heading-hard-irq-context-deferred-work-and-threaded-handlers">
+<h2 id="heading-hard-irq-context-deferred-work-and-threaded-handlers">Hard IRQ Context, Deferred Work, and Threaded Handlers</h2>
+<p>Operating systems typically separate work that must run promptly in interrupt context from longer processing deferred to a softer or schedulable context. A minimal top-half handler can acknowledge or mask the source, record essential state, and schedule a bottom-half mechanism or a threaded handler. The exact rules depend on the OS: some operations are forbidden in hard-interrupt context because they can block, reschedule, or rely on sleeping locks. Heavy packet processing, filesystem operations, and long waits generally do not belong in the minimal urgent path.</p>
+<p>On Linux, the generic IRQ subsystem supports threaded handlers and affinity mechanisms. The handler must identify whether a shared line is actually its device's event, and the driver must correctly synchronize teardown against both hard and threaded components. Separating contexts does not reduce the importance of memory visibility: device status, completion queues, and driver-owned structures still require the platform's locking and DMA synchronization rules. For the Bus Systems scope, software contexts are included because they determine how rapidly hardware notifications can be consumed and which end-to-end latency is actually observable.</p>
+
+</section>
+<section id="notification-latency-service-latency-and-tail-delay" aria-labelledby="heading-notification-latency-service-latency-and-tail-delay">
+<h2 id="heading-notification-latency-service-latency-and-tail-delay">Notification Latency, Service Latency, and Tail Delay</h2>
+<p><strong>Notification latency</strong> can be measured from event assertion or MSI emission until the target CPU observes the interrupt. <strong>Service-entry latency</strong> extends through interrupt-controller and processor dispatch to the start of the handler. <strong>Completion-consumption latency</strong> includes memory visibility, queue scanning, deferred work, and driver completion processing. An application may experience still more delay before its waiting thread is awakened or scheduled. One single &quot;interrupt latency&quot; number without a precise start and endpoint is not comparable across hardware or operating systems.</p>
+<p>A useful model writes application notification delay as the sum of device moderation, signaling and routing, controller and CPU acceptance, handler dispatch, software processing, and task scheduling, while recognizing that some stages overlap. Under contention, tail latency can grow because of interrupt-disabled regions, memory stalls, priority interactions, or CPU scheduling. Measure p50, p95, p99, and maximum observed delays against the relevant arrival distribution rather than reporting only a mean. High interrupt throughput does not guarantee low delay for an isolated event, and low average latency does not rule out rare missed deadlines.</p>
+
+</section>
+<section id="throughput-limits-and-interrupt-rate-budgets" aria-labelledby="heading-throughput-limits-and-interrupt-rate-budgets">
+<h2 id="heading-throughput-limits-and-interrupt-rate-budgets">Throughput Limits and Interrupt-Rate Budgets</h2>
+<p>If a device produces <strong>R</strong> completion events per second and each interrupt represents <strong>B</strong> events on average, the expected interrupt frequency in a simple steady-state model is roughly <strong>R/B</strong>, before administrative or error interrupts. The CPU cost associated with notification processing is approximately interrupt rate multiplied by the average CPU time spent per interrupt, although cache behavior, context scheduling, and variable handler length can make the linear estimate optimistic. A device with high data bandwidth may generate few interrupts if it batches large transfers; a low-bandwidth peripheral can generate many interrupts if it signals every byte.</p>
+<p>An engineering budget should include minimum and maximum event rates, batching policies, handler CPU cycles, queue depth, and overflow behavior. It must also verify fairness across devices sharing a controller or CPU. Interrupt-rate counters cannot by themselves prove useful work: an interrupt storm may produce very large counts with no completed transfers. Conversely, a quiet interrupt counter is not proof that a device is idle if polling is enabled. Interpret IRQ counts alongside completion-ring movement, delivered bytes, error registers, and device state transitions.</p>
+
+</section>
+<section id="interrupt-storms-repeated-assertion-and-rate-limiting" aria-labelledby="heading-interrupt-storms-repeated-assertion-and-rate-limiting">
+<h2 id="heading-interrupt-storms-repeated-assertion-and-rate-limiting">Interrupt Storms, Repeated Assertion, and Rate Limiting</h2>
+<p>An <strong>interrupt storm</strong> is an excessive stream of notifications that consumes service capacity. A typical cause is a level-triggered source that remains asserted because software fails to clear the correct status bit or because the hardware condition persists. Other causes include a malfunctioning endpoint, incorrectly programmed moderation, repeated error interrupts, or a driver that rearms too aggressively without draining a queue. Simply increasing the CPU clock may hide symptoms while leaving the underlying correctness problem unchanged.</p>
+<p>Diagnosis begins by locating the earliest layer at which activity becomes excessive: source status, MSI generation, controller pending state, IRQ counters, handler invocation, or retrigger after EOI. Rate limiting can protect overall system availability, but it can also suppress valid device notifications and prolong recovery if the queue has no independent polling fallback. An appropriate storm response may mask one vector, collect status safely, service or reset the device, and restore generation only after the cause is understood. Global interrupt disabling is usually too blunt to be an operational remedy.</p>
+
+</section>
+<section id="lost-delayed-and-coalesced-notifications" aria-labelledby="heading-lost-delayed-and-coalesced-notifications">
+<h2 id="heading-lost-delayed-and-coalesced-notifications">Lost, Delayed, and Coalesced Notifications</h2>
+<p>A <strong>lost interrupt</strong> is a situation in which work requires service but no notification reaches the software path that is expected to discover it. A <strong>delayed interrupt</strong> eventually arrives but after an unacceptable interval. A <strong>coalesced notification</strong> intentionally represents multiple underlying events with one delivery. These outcomes can appear similar when the application observes a stalled queue, so troubleshooting must inspect hardware generation status, masking, pending bits, interrupt routing, and the queue's durable completion records.</p>
+<p>Race conditions near an empty-queue check are common. For example, software drains the ring, sees it empty, and is about to re-enable interrupts. If new work arrives between the last check and rearm, the hardware must either retain pending status, generate a new interrupt on rearm, or be caught by a subsequent software check. Designs without one of those properties can strand work indefinitely. Conversely, counters can underreport underlying events when edges or pending bits merge. Reliable interconnect contracts express delivery as a wakeup hint paired with persistent work state rather than an exact event counter.</p>
+
+</section>
+<section id="spurious-interrupts-and-defensive-service" aria-labelledby="heading-spurious-interrupts-and-defensive-service">
+<h2 id="heading-spurious-interrupts-and-defensive-service">Spurious Interrupts and Defensive Service</h2>
+<p>A <strong>spurious interrupt</strong> is a delivered or observed notification for which the software finds no relevant pending device work, or an interrupt-controller-specific spurious identifier. It can arise during shared-line races, masking transitions, status-clearing windows, device resets, or platform quirks. One isolated event is not necessarily proof of a hardware fault. A robust handler checks its source, declines ownership when appropriate, and does not clear unrelated devices' status simply to quiet an IRQ count.</p>
+<p>Repeated spurious notifications require investigation. Observe whether the controller reports a real vector, whether the device has a pending condition, and whether the hardware is generating MSI writes or continually asserting a line. On a shared IRQ, one device's status may have disappeared by the time another handler probes it. On an MSI-X queue, the driver may have drained work through a concurrent poller before the notification was serviced. A service path should tolerate such races without double-completing commands or treating an empty completion queue as a fatal protocol error.</p>
+
+</section>
+<section id="posted-writes-memory-barriers-and-completion-visibility" aria-labelledby="heading-posted-writes-memory-barriers-and-completion-visibility">
+<h2 id="heading-posted-writes-memory-barriers-and-completion-visibility">Posted Writes, Memory Barriers, and Completion Visibility</h2>
+<p>Memory-mapped control writes may be <strong>posted</strong>: the CPU instruction retires before the write has reached the device. This is important when enabling interrupts, clearing status, configuring a queue, or ringing a doorbell. Platform-specific reads, barriers, or driver API primitives can be necessary to ensure ordering or completion before subsequent operations. It is incorrect to assume that a compiler barrier, CPU fence, posted MMIO read, and DMA synchronization primitive all provide identical guarantees on every bus.</p>
+<p>PCIe MSI ordering provides a particularly useful case. Where the PCI transaction ordering rules apply, a device's MSI write does not overtake its prior DMA data writes; Linux documentation explains this advantage over legacy pin-based interrupts. That statement must not be extended to arbitrary relaxed ordering or different coherency domains. The handler also needs a safe strategy for publishing its own completion-index updates and rearming the device. Interrupt arrival is therefore one point in an ordered producer-consumer protocol, not a stand-alone proof that all relevant CPU cache lines and device registers have magically reached final state.</p>
+
+</section>
+<section id="virtual-machines-and-virtual-interrupt-injection" aria-labelledby="heading-virtual-machines-and-virtual-interrupt-injection">
+<h2 id="heading-virtual-machines-and-virtual-interrupt-injection">Virtual Machines and Virtual Interrupt Injection</h2>
+<p>Virtualization introduces another mapping layer between device events and a guest-visible interrupt. A hypervisor can emulate a legacy controller, provide virtual MSI domains, or use hardware-assisted interrupt remapping and posted delivery for assigned devices. A guest may receive a virtual vector unrelated to the physical host interrupt identifier. The hypervisor must manage delivery, masking, priority, and migration while ensuring that one guest cannot redirect another guest's notifications.</p>
+<p>Device assignment makes interrupt routing especially sensitive. A physical MSI generated by an assigned endpoint may require IOMMU interrupt remapping or another trusted translation so the destination is limited to an authorized guest or vCPU. A virtual machine's migration or CPU hotplug can change its target without the physical device changing its event semantics. Lost or duplicated virtual interrupts can stall virtual storage and networking even when the physical completion queue contains valid entries. Architecture studies must separately account for device-to-host delivery, host-to-guest injection, guest handler execution, and the durable work state.</p>
+
+</section>
+<section id="interrupt-remapping-and-device-origin-trust" aria-labelledby="heading-interrupt-remapping-and-device-origin-trust">
+<h2 id="heading-interrupt-remapping-and-device-origin-trust">Interrupt Remapping and Device-Origin Trust</h2>
+<p>An MSI source can be untrusted due to faulty firmware, hostile device logic, or incorrect device assignment. If a platform accepted arbitrary message addresses and interrupt IDs from any peripheral, the peripheral might be able to direct unwanted notifications to privileged or unrelated execution contexts. <strong>Interrupt remapping</strong> and domain-based authorization restrict which device-origin messages may map to which CPU interrupt destinations. The exact enforcement point depends on the host architecture and its interrupt controller or IOMMU facilities.</p>
+<p>Interrupt routing security complements, but does not replace, <strong>DMA isolation</strong>. Preventing an MSI from reaching an unauthorized vector does not prevent the same device from attempting unauthorized data-memory accesses. Likewise, an IOMMU data translation policy does not automatically validate every interrupt message in every architecture. Secure system design considers device identity, source requester IDs, allowed interrupt domains, virtual-machine ownership, rate abuse, reset behavior, and the lifecycle of programmed mappings. This article remains defensive and architectural: protection should be implemented through supported kernel and platform APIs, not by manually writing unverified interrupt-controller addresses.</p>
+
+</section>
+<section id="interrupts-as-a-denial-of-service-surface" aria-labelledby="heading-interrupts-as-a-denial-of-service-surface">
+<h2 id="heading-interrupts-as-a-denial-of-service-surface">Interrupts as a Denial-of-Service Surface</h2>
+<p>Even correctly routed notifications can impose substantial CPU work if a device or guest generates them at an excessive rate. This is a resource-exhaustion problem rather than a direct violation of interrupt-target isolation. Attackers or broken endpoints may create repeated error notifications, fill work queues, or force constant entry into expensive handlers. Multi-tenant hosts need policies that limit the impact of a noisy device on unrelated workloads while preserving essential security and fault-reporting events.</p>
+<p>Mitigations include per-vector moderation, fault containment, queue budgets, suitable interrupt affinity, rate-aware hypervisor policies, and controlled device reset. Suppressing an error interrupt without logging or handling the underlying fault may reduce the observed rate while allowing data corruption or loss of service. Systems should record the source and severity of each interrupt class, maintain telemetry across suppression episodes, and define an escalation path when a device cannot be safely quiesced. The design goal is controlled service, not merely a low IRQ counter.</p>
+
+</section>
+<section id="interrupt-driven-power-management-and-wakeup-events" aria-labelledby="heading-interrupt-driven-power-management-and-wakeup-events">
+<h2 id="heading-interrupt-driven-power-management-and-wakeup-events">Interrupt-Driven Power Management and Wakeup Events</h2>
+<p>Interrupts can wake a CPU or SoC from idle, but wakeup requires a path that remains capable of detecting and retaining events while other clocks or power domains are disabled. A controller may need always-on logic, wake-enable bits, special routing, or firmware cooperation. A conventional peripheral interrupt that is valid while the SoC is fully powered is not necessarily a permitted wake signal during deep sleep. Power state transitions must describe which queues or events remain armed and whether delivery is retained across suspend.</p>
+<p>Dynamic power management introduces races between stopping new work, masking interrupts, acknowledging pending events, and disabling device power. A reliable suspend sequence quiesces or drains work and preserves only the wake sources the platform is designed to support. On resume, firmware or the OS may restore MSI/MSI-X tables, controller routing, queue ownership, and device enable registers. It must then check for work that became pending during the transition. Power savings cannot be evaluated in isolation from wake latency, missed-event risk, and the time required to rebuild interrupted transactions after a low-power cycle.</p>
+
+</section>
+<section id="device-reset-removal-and-in-flight-interrupts" aria-labelledby="heading-device-reset-removal-and-in-flight-interrupts">
+<h2 id="heading-device-reset-removal-and-in-flight-interrupts">Device Reset, Removal, and In-Flight Interrupts</h2>
+<p>Resetting an endpoint does not guarantee that the CPU has already finished every handler or deferred job associated with it. A removal or reset protocol must prevent new notifications, stop or contain DMA, wait for in-flight handlers where required, and invalidate software references to deallocated queues. Some operating-system APIs synchronize an IRQ handler separately from threaded work, and some devices can still have posted transactions in flight after a control register changes. The exact shutdown sequence depends on the device and kernel lifecycle model.</p>
+<p>A common failure is freeing a completion ring immediately after masking a vector while a handler on another CPU still holds a pointer to that ring. Another is restoring interrupts before descriptors and target routing have been reinitialized. Robust teardown uses a well-defined state machine: reject new submissions, quiesce the device, disable event generation, synchronize software users, account for pending completions, and only then release data structures and interrupt resources. On reinitialization, the reverse ordering must ensure the handler and queues exist before the device can generate events.</p>
+
+</section>
+<section id="real-time-service-and-worst-case-interrupt-delay" aria-labelledby="heading-real-time-service-and-worst-case-interrupt-delay">
+<h2 id="heading-real-time-service-and-worst-case-interrupt-delay">Real-Time Service and Worst-Case Interrupt Delay</h2>
+<p>A real-time design needs an upper bound on the time between a hardware event and the relevant deadline. Bounding only the electrical or MSI transmission time is insufficient. The budget must include maximum interrupt-disabled intervals, higher-priority handlers, controller routing, processor interrupt entry, deferred service execution, memory contention, and operating-system scheduling when completion requires a task context. Interrupt moderation timers must be included when enabled.</p>
+<p>High priority reduces only some contributors. If a handler waits on a non-preemptible lock, or a service thread runs at an unsuitable scheduling priority, a numerically high IRQ priority cannot guarantee the deadline. Conversely, using extremely high priorities for every device undermines predictability. Real-time systems sometimes dedicate a core and queue to a particular event class, reserve resources, or use bounded polling at known schedule points. Such strategies should be justified through worst-case execution analysis and device-specific timing guarantees, not solely average benchmark results.</p>
+
+</section>
+<section id="system-level-reliability-faults-and-error-interrupts" aria-labelledby="heading-system-level-reliability-faults-and-error-interrupts">
+<h2 id="heading-system-level-reliability-faults-and-error-interrupts">System-Level Reliability, Faults, and Error Interrupts</h2>
+<p>Devices also interrupt for faults: parity or CRC errors, link failures, queue overruns, watchdog expirations, thermal warnings, controller timeouts, and internal fatal conditions. These interrupts may use the same notification mechanism as normal completions, but their service contract is different. A fault handler often records status, prevents further traffic, preserves diagnostic evidence, and initiates retry or recovery rather than completing ordinary work. Sending error notifications on a dedicated vector can help isolate diagnosis and prevent a flood of recoverable errors from masking command completions.</p>
+<p>Interrupt reliability is not just successful electrical delivery. The system must tolerate a notification that arrives during reset, a controller that loses state during power collapse, and a device that reports status but cannot safely resume. Health monitoring may need independent polling to discover silent device failures even if interrupts are configured. When failures are persistent, the software should avoid infinite retry-and-interrupt loops. Reliable architecture separates fault detection, fault reporting, fail-safe containment, and confirmed recovery, then tests the interaction among these stages under load.</p>
+
+</section>
+<section id="hardware-verification-and-protocol-assertions" aria-labelledby="heading-hardware-verification-and-protocol-assertions">
+<h2 id="heading-hardware-verification-and-protocol-assertions">Hardware Verification and Protocol Assertions</h2>
+<p>Verification should cover both the source and the path: event generation, pending-state retention, masking, controller routing, interrupt acceptance, status clear, and rearm. For edge-triggered designs, tests include pulses near clock boundaries, repeated edges while pending, and masking transitions. For level-triggered designs, tests include status remaining asserted across EOI and deasserting only when the documented condition is cleared. MSI paths require tests for address/data programming, vector masks, pending events, ordering with DMA writes, resets, and changes in target CPU.</p>
+<p>Useful assertions state properties such as: an enabled persistent event eventually becomes visible to the configured handler under fair service assumptions; a masked vector does not invoke a handler yet retains required pending state; and no completion is consumed before its ownership marker is visible. Some liveness properties require explicit assumptions about controller progress and software scheduling. Simulation should inject simultaneous events, malformed configurations, queue overflow, and hotplug. Hardware traces and software tests complement one another because a passing bus transaction trace may still conceal a handler race in completion-ring processing.</p>
+
+</section>
+<section id="diagnosing-interrupt-delivery-failures" aria-labelledby="heading-diagnosing-interrupt-delivery-failures">
+<h2 id="heading-diagnosing-interrupt-delivery-failures">Diagnosing Interrupt Delivery Failures</h2>
+<p>An incident should be traced from the <strong>earliest unproven state</strong>. Verify that the device actually completed the operation, that a persistent status bit or completion record reflects the event, that its interrupt generation is enabled, that the intended MSI/MSI-X table or line mapping is correct, and that the controller records or forwards the request. Then verify CPU acceptance, driver handler registration, correct status identification, and queue consumption. Skipping directly to OS IRQ counters can miss a device that never emitted a signal or a vector masked within the endpoint.</p>
+<p>Collect device register snapshots and errors before a reset erases them. Compare per-vector IRQ counters against queue producer indices, completion counts, DMA status, CPU affinity, and performance monitoring. A missing increment in a user-facing IRQ counter is not conclusive without knowing whether the driver polls instead of interrupting. A rising counter with no completed work suggests a different class of fault. Where a device uses MSI-X, inspect how many vectors were allocated versus requested and whether the test workload is mapped to the expected queue and CPU. Avoid relying on a single signal as a complete proof of delivery.</p>
+
+</section>
+<section id="comparing-interrupt-delivery-mechanisms" aria-labelledby="heading-comparing-interrupt-delivery-mechanisms">
+<h2 id="heading-comparing-interrupt-delivery-mechanisms">Comparing Interrupt Delivery Mechanisms</h2>
+<p>The table summarizes architectural distinctions. An entry is a general pattern, not a promise that all devices or platforms support the stated capability. Mixed systems often use several methods simultaneously—for example, pin-based power and watchdog sources alongside MSI-X storage completions and interprocessor interrupts.</p>
+<table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Initiating representation</th>
+<th>Typical routing</th>
+<th>Key advantage</th>
+<th>Primary caution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dedicated peripheral line</td>
+<td>Physical level or transition</td>
+<td>SoC or platform controller input</td>
+<td>Simple source-to-controller path</td>
+<td>Trigger polarity, status clear, signal synchronization</td>
+</tr>
+<tr>
+<td>Shared legacy INTx</td>
+<td>Shared or emulated line condition</td>
+<td>Platform routing and shared host IRQ</td>
+<td>Backward compatibility</td>
+<td>Source discovery, repeated level assertion</td>
+</tr>
+<tr>
+<td>PCI MSI</td>
+<td>Device writes configured message address/data</td>
+<td>MSI domain and CPU controller</td>
+<td>No shared INTx pin; ordered notification on compliant PCI path</td>
+<td>Limited vector configuration and correct mapping</td>
+</tr>
+<tr>
+<td>PCI MSI-X</td>
+<td>Per-vector programmed message and masks</td>
+<td>PCI/MSI translation and host interrupt domain</td>
+<td>Scalable per-queue routing and masking</td>
+<td>Table/PBA state, allocation limits, teardown</td>
+</tr>
+<tr>
+<td>Arm GIC LPI</td>
+<td>Message translated to LPI where supported</td>
+<td>Optional ITS, redistributor, CPU interface</td>
+<td>High-density message-based device events</td>
+<td>Implementation-dependent ITS and LPI configuration</td>
+</tr>
+<tr>
+<td>RISC-V IMSIC</td>
+<td>MSI written to hart interrupt-file target</td>
+<td>AIA interrupt domains</td>
+<td>Hart/privilege-context targeted identities</td>
+<td>Optional hardware, privilege and guest boundaries</td>
+</tr>
+<tr>
+<td>Polling</td>
+<td>Software periodically checks state</td>
+<td>No interrupt delivery required</td>
+<td>Avoids per-notification entry overhead</td>
+<td>CPU use, detection delay, power</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="interrupt-delivery-engineering-checklist" aria-labelledby="heading-interrupt-delivery-engineering-checklist">
+<h2 id="heading-interrupt-delivery-engineering-checklist">Interrupt Delivery Engineering Checklist</h2>
+<p>Before deploying an interrupt scheme, document the source event and where its durable status lives. Determine whether its signaling is edge-, level-, or message-based and which hardware component owns pending state. Confirm that the controller's identity mapping matches the operating-system IRQ and that routing and affinity are deliberate. Record what must be visible in memory before software can consume a completion, and which device operation clears or rearms the cause. Finally, define what happens under masked, saturated, reset, power-management, and fault conditions.</p>
+<p>For performance, specify the expected event rate, batching policy, latency budget, handler cost, queue placement, and number of available vectors. For correctness, test simultaneous events, repeated interrupts, hidden status under masks, late DMA writes, rearm races, and slow handlers. For security, make interrupt-remapping and DMA isolation part of device ownership, particularly under virtualization or hotplug. A useful acceptance test is not simply &quot;the handler was called&quot; but &quot;every completed work item is eventually processed exactly once under the system's intended recovery and retry semantics.&quot; The following constructed examples make these decisions measurable.</p>
+
+</section>
+<section id="worked-example-1-level-triggered-interrupt-reassertion" aria-labelledby="heading-worked-example-1-level-triggered-interrupt-reassertion">
+<h2 id="heading-worked-example-1-level-triggered-interrupt-reassertion">Worked Example 1 — Level-Triggered Interrupt Reassertion</h2>
+<p>Consider a fictional peripheral with an active-high interrupt line and a write-one-to-clear status bit <code>DONE</code>. The device finishes a transfer and sets <code>DONE=1</code>, causing the line to rise. The interrupt controller reports the input and the CPU enters its handler. Suppose software sends EOI immediately but neglects to clear the peripheral's <code>DONE</code> bit. The controller now considers the previous service finished, yet the line is still high; the controller can deliver another interrupt. The result is a storm even though only one transfer completed.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th style="text-align:right">Peripheral status</th>
+<th>Input level</th>
+<th>Controller or software action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:right"><code>DONE=0</code></td>
+<td>Low</td>
+<td>Device is idle</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:right"><code>DONE=1</code></td>
+<td>High</td>
+<td>Completion raises the request</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:right"><code>DONE=1</code></td>
+<td>High</td>
+<td>Handler enters and reads status</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:right"><code>DONE=1</code></td>
+<td>High</td>
+<td>Premature EOI permits renewed delivery</td>
+</tr>
+<tr>
+<td>5</td>
+<td style="text-align:right"><code>DONE=0</code></td>
+<td>Low</td>
+<td>Correct status clear deasserts source</td>
+</tr>
+<tr>
+<td>6</td>
+<td style="text-align:right"><code>DONE=0</code></td>
+<td>Low</td>
+<td>Controller EOI or deactivation completes service</td>
+</tr>
+</tbody>
+</table>
+<p>The ordering of device clear and controller EOI is platform-specific; this sequence merely demonstrates the relationship between the two ownership domains. A correct implementation must also handle a <strong>second completion arriving while status is being cleared</strong>. That may require reading a durable completion queue, masking and rechecking, or another device-specified technique. The numerical count of EOIs never substitutes for a count of consumed work items.</p>
+
+</section>
+<section id="worked-example-2-edge-notification-versus-persistent-queue-state" aria-labelledby="heading-worked-example-2-edge-notification-versus-persistent-queue-state">
+<h2 id="heading-worked-example-2-edge-notification-versus-persistent-queue-state">Worked Example 2 — Edge Notification Versus Persistent Queue State</h2>
+<p>A fictional device finishes four commands in close succession. It writes completion entries numbered 101 through 104 into a ring. The interrupt output is edge-triggered; during the burst, the controller observes one edge and records one pending interrupt. The handler later drains all four entries. This is correct if the device's queue preserves the work and the notification contract allows merging. It would be incorrect to increment a completion counter once merely because the CPU received one interrupt.</p>
+<table>
+<thead>
+<tr>
+<th>Observable</th>
+<th style="text-align:right">Count</th>
+<th>What the count means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Completed commands</td>
+<td style="text-align:right">4</td>
+<td>Four operations finished</td>
+</tr>
+<tr>
+<td>New ring entries</td>
+<td style="text-align:right">4</td>
+<td>Four durable completion records</td>
+</tr>
+<tr>
+<td>Interrupt edges recognized</td>
+<td style="text-align:right">1</td>
+<td>One notification opportunity</td>
+</tr>
+<tr>
+<td>Handler invocations</td>
+<td style="text-align:right">1</td>
+<td>One software service period</td>
+</tr>
+<tr>
+<td>Work items consumed</td>
+<td style="text-align:right">4</td>
+<td>All completed commands reclaimed</td>
+</tr>
+</tbody>
+</table>
+<p>Now consider a second edge arriving while delivery is masked. Whether it remains pending depends on the interrupt controller. A design that relies on four separate callback invocations can fail even when no data was lost. Treat the interrupt as a request to inspect a work source, and test that all four entries are consumed before the driver declares the queue empty.</p>
+
+</section>
+<section id="worked-example-3-dma-writeback-followed-by-pcie-msi" aria-labelledby="heading-worked-example-3-dma-writeback-followed-by-pcie-msi">
+<h2 id="heading-worked-example-3-dma-writeback-followed-by-pcie-msi">Worked Example 3 — DMA Writeback Followed by PCIe MSI</h2>
+<p>A PCIe storage endpoint writes a 4 KiB data block to host memory, updates a completion descriptor, and emits an MSI write. Assume that the device's transactions obey the applicable PCI ordering rules, that the host mapping and caches follow their documented coherence model, and that no relaxed-ordering exception changes the relevant guarantee. The MSI will not pass the earlier qualifying DMA writes, so by the time the CPU handles the interrupt, the device's prior writes have achieved the ordering required by that interconnect contract. The handler must still interpret descriptor ownership correctly.</p>
+<ol>
+<li>Device fetches a queued storage command.</li>
+<li>Device performs a 4,096-byte DMA write to the mapped destination.</li>
+<li>Device writes a completion entry that publishes the operation's status.</li>
+<li>Device sends the configured MSI message.</li>
+<li>CPU receives the routed interrupt, accesses the completion queue, and consumes the entry using the platform's required memory-ordering and coherency primitives.</li>
+</ol>
+<p>An important negative case is a device that sends an MSI <strong>before</strong> publishing its completion entry. The interconnect cannot repair an endpoint's incorrect logical sequencing. Likewise, a CPU cannot infer that all future DMA activity is stopped simply because a particular MSI was received. Ordering applies to specified prior transactions; liveness, exact-once completion, buffer lifetime, and reset quiescence remain separate design obligations.</p>
+
+</section>
+<section id="worked-example-4-msi-x-masking-and-deferred-delivery" aria-labelledby="heading-worked-example-4-msi-x-masking-and-deferred-delivery">
+<h2 id="heading-worked-example-4-msi-x-masking-and-deferred-delivery">Worked Example 4 — MSI-X Masking and Deferred Delivery</h2>
+<p>Suppose a network endpoint has MSI-X vector 5 associated with receive queue 2. Software masks the vector while it processes a large burst. The device places 12 new receive completions in the queue and records a pending interrupt state according to its MSI-X capability rules. The driver then drains the queue and prepares to unmask the vector. The <strong>PBA</strong> may indicate that vector 5 was requested while masked; it does not encode 12 separate queue entries. When software unmasks, the device and platform perform the prescribed pending-delivery behavior.</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th style="text-align:right">Queue pending entries</th>
+<th>Vector mask</th>
+<th>Notification interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Initial</td>
+<td style="text-align:right">0</td>
+<td>Unmasked</td>
+<td>No pending work</td>
+</tr>
+<tr>
+<td>Burst arrives</td>
+<td style="text-align:right">12</td>
+<td>Masked</td>
+<td>Device retains queue data; interrupt state may be pending</td>
+</tr>
+<tr>
+<td>Poller drains 10</td>
+<td style="text-align:right">2</td>
+<td>Masked</td>
+<td>Two work items still exist</td>
+</tr>
+<tr>
+<td>Poller drains remaining 2</td>
+<td style="text-align:right">0</td>
+<td>Masked</td>
+<td>Queue becomes empty after proper publication</td>
+</tr>
+<tr>
+<td>Software rearms</td>
+<td style="text-align:right">0</td>
+<td>Unmasked</td>
+<td>Any pending notification must be tolerated, even if work has already been consumed</td>
+</tr>
+</tbody>
+</table>
+<p>The correct handler must safely treat a late notification for an already-drained queue as benign, while continuing to detect fresh work arriving at the rearm boundary. No one should assume that a PBA bit is a monotonically increasing event counter.</p>
+
+</section>
+<section id="worked-example-5-interrupt-rate-and-cpu-service-budget" aria-labelledby="heading-worked-example-5-interrupt-rate-and-cpu-service-budget">
+<h2 id="heading-worked-example-5-interrupt-rate-and-cpu-service-budget">Worked Example 5 — Interrupt-Rate and CPU-Service Budget</h2>
+<p>A fictional device completes <strong>1,200,000 small requests each second</strong>. Without batching, one completion generates one interrupt. With an average of <strong>24 completions per interrupt</strong>, the expected frequency becomes <code>1,200,000 ÷ 24 = 50,000 interrupts/s</code>. Suppose the total CPU time directly attributable to each interrupt service is <strong>4 microseconds</strong> under this workload. The modeled CPU-time demand is <code>50,000 × 4 µs = 200,000 µs/s = 0.2 CPU-second per wall-clock second</code>, approximately <strong>20% of one logical CPU's time</strong>. If batching were absent at the same per-interrupt cost, the estimate would be <code>1,200,000 × 4 µs = 4.8 CPU-seconds per second</code>, requiring far more than one CPU's available capacity.</p>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th style="text-align:right">Completions per interrupt</th>
+<th style="text-align:right">IRQ/s</th>
+<th style="text-align:right">Estimated CPU seconds/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every completion</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">1,200,000</td>
+<td style="text-align:right">4.80</td>
+</tr>
+<tr>
+<td>Batch of 8</td>
+<td style="text-align:right">8</td>
+<td style="text-align:right">150,000</td>
+<td style="text-align:right">0.60</td>
+</tr>
+<tr>
+<td>Batch of 24</td>
+<td style="text-align:right">24</td>
+<td style="text-align:right">50,000</td>
+<td style="text-align:right">0.20</td>
+</tr>
+<tr>
+<td>Batch of 48</td>
+<td style="text-align:right">48</td>
+<td style="text-align:right">25,000</td>
+<td style="text-align:right">0.10</td>
+</tr>
+</tbody>
+</table>
+<p>This simple model ignores variability in handler cost, queue-drain work, scheduling, lock contention, and changes in the arrival rate. Batching still requires the CPU to process 1.2 million completion entries. It reduces <strong>notification overhead</strong>, not the underlying device workload. An actual benchmark should report p99 event latency and total useful throughput alongside IRQ counts.</p>
+
+</section>
+<section id="worked-example-6-moderation-timer-and-isolated-event-latency" aria-labelledby="heading-worked-example-6-moderation-timer-and-isolated-event-latency">
+<h2 id="heading-worked-example-6-moderation-timer-and-isolated-event-latency">Worked Example 6 — Moderation Timer and Isolated-Event Latency</h2>
+<p>Assume a device is configured to delay signaling for up to <strong>50 µs</strong> after the first completion in a batch, unless a count threshold is reached. A single transaction finishes when the device has no other work. With no additional arrivals, the interrupt might be delayed close to 50 µs under this hypothetical timer policy. If route and processor entry require 5 µs, and handler dispatch requires another 3 µs, the modeled notification-to-handler delay becomes <code>50 + 5 + 3 = 58 µs</code>. Without moderation it would be about <code>5 + 3 = 8 µs</code>, assuming all other conditions stay fixed.</p>
+<p>Under burst load, count-based early notification can reduce the average wait while still coalescing many completions. Therefore the policy can lower CPU utilization but raise idle-to-first-response latency. For a storage queue with latency-sensitive synchronous requests, a 50 µs artificial wait could be unacceptable; for a bulk network transfer, it may be a favorable trade. Report timer semantics explicitly, since some devices measure intervals from the first event, others since the last notification, and adaptive devices may override the setting.</p>
+
+</section>
+<section id="worked-example-7-per-queue-msi-x-affinity-on-four-cpus" aria-labelledby="heading-worked-example-7-per-queue-msi-x-affinity-on-four-cpus">
+<h2 id="heading-worked-example-7-per-queue-msi-x-affinity-on-four-cpus">Worked Example 7 — Per-Queue MSI-X Affinity on Four CPUs</h2>
+<p>Consider a server with <strong>eight receive queues</strong>, <strong>eight available MSI-X vectors</strong>, and four CPUs used for network processing. A simple policy allocates one vector per queue and assigns two queue vectors to each CPU. This can reduce the number of CPUs competing for the same queue lock, and it makes the IRQ counts easier to attribute. But it does not imply that each CPU receives equal traffic: one queue could get ten times as many packets as another. The system should balance actual workload, queue hashes, application placement, and memory locality.</p>
+<table>
+<thead>
+<tr>
+<th>CPU</th>
+<th>Vectors</th>
+<th>Receive queues</th>
+<th>Monitoring objective</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU 0</td>
+<td>0, 1</td>
+<td>RX 0, RX 1</td>
+<td>Compare packet rate and IRQ cost</td>
+</tr>
+<tr>
+<td>CPU 1</td>
+<td>2, 3</td>
+<td>RX 2, RX 3</td>
+<td>Check local cache and queue backlog</td>
+</tr>
+<tr>
+<td>CPU 2</td>
+<td>4, 5</td>
+<td>RX 4, RX 5</td>
+<td>Detect asymmetric service times</td>
+</tr>
+<tr>
+<td>CPU 3</td>
+<td>6, 7</td>
+<td>RX 6, RX 7</td>
+<td>Monitor CPU migration and overload</td>
+</tr>
+</tbody>
+</table>
+<p>If CPU 2 becomes unavailable, the OS may migrate or disable managed vectors depending on the affinity policy. A driver should not assume that the original four-way mapping persists forever. In a NUMA system, moving a queue's IRQ without moving the application thread or data buffers can increase remote accesses, even if the distribution of IRQ counts looks more balanced.</p>
+
+</section>
+<section id="worked-example-8-requested-versus-allocated-msi-x-vectors" aria-labelledby="heading-worked-example-8-requested-versus-allocated-msi-x-vectors">
+<h2 id="heading-worked-example-8-requested-versus-allocated-msi-x-vectors">Worked Example 8 — Requested Versus Allocated MSI-X Vectors</h2>
+<p>A storage driver requests <strong>nine vectors</strong>: eight for I/O completion queues and one for administrative events. The device advertises at least nine vectors, but the host grants only <strong>three</strong> because of resource or policy limits. If the driver allows a minimum allocation of three, it can place the administrative stream on one vector and map eight I/O queues across two vectors, for instance queues 0–3 and queues 4–7. Each I/O handler must then check all queues assigned to its vector.</p>
+<p>The crucial correctness property is <strong>complete work discovery</strong>, not one vector per queue. A driver that hard-codes <code>queue_number == IRQ_number</code> will lose work or service the wrong queue after allocation changes. Likewise, an operating-system IRQ number obtained from <code>pci_irq_vector()</code> is not the table-entry index itself. Queue-to-vector mapping belongs in maintained driver state and must survive reset and CPU reconfiguration. The three-vector organization is a constructed fallback, not a prescription for real storage hardware.</p>
+
+</section>
+<section id="worked-example-9-the-empty-ring-rearm-race" aria-labelledby="heading-worked-example-9-the-empty-ring-rearm-race">
+<h2 id="heading-worked-example-9-the-empty-ring-rearm-race">Worked Example 9 — The Empty-Ring Rearm Race</h2>
+<p>An interrupt-driven consumer drains a completion ring, then checks it empty and unmasks its vector. A device completion can arrive <strong>between</strong> the empty check and the unmask operation. In a poorly designed interrupt scheme, the device considers an event already notified while software assumes no event exists, leaving the completion stranded. A robust scheme either retains pending notification while masked, supplies a reliable new message on unmask, or requires software to recheck after rearming. Which rule applies is device- and protocol-specific.</p>
+<table>
+<thead>
+<tr>
+<th>Moment</th>
+<th>CPU action</th>
+<th>Device action</th>
+<th>Safe invariant</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>t0</td>
+<td>Drain ring</td>
+<td>No new completion</td>
+<td>Ring empty is provisional</td>
+</tr>
+<tr>
+<td>t1</td>
+<td>Read producer index</td>
+<td>Produces one entry immediately afterward</td>
+<td>Durable queue now contains work</td>
+</tr>
+<tr>
+<td>t2</td>
+<td>Unmask/rearm</td>
+<td>Device retains or emits required notification</td>
+<td>Work cannot become permanently hidden</td>
+</tr>
+<tr>
+<td>t3</td>
+<td>Recheck or receive interrupt</td>
+<td>Completion still in ring</td>
+<td>Consumer observes and processes it</td>
+</tr>
+</tbody>
+</table>
+<p>If no retained notification or post-rearm check exists, merely enabling interrupts later does not prove the completion will be found. This is a liveness error, even if the ring data itself is coherent and correct. Hardware validation should explicitly control the timing around t1 and t2 to exercise this race.</p>
+
+</section>
+<section id="worked-example-10-separating-device-clear-from-controller-eoi" aria-labelledby="heading-worked-example-10-separating-device-clear-from-controller-eoi">
+<h2 id="heading-worked-example-10-separating-device-clear-from-controller-eoi">Worked Example 10 — Separating Device Clear from Controller EOI</h2>
+<p>A hypothetical controller reports that interrupt input 12 is active. Its source is a device with two sticky status bits: <code>RX_READY</code> and <code>TX_DONE</code>. The handler reads both, consumes incoming buffers, reclaims transmitted descriptors, clears the device status using the specified write-one-to-clear values, and then completes service at the controller. The source may immediately reassert if more receive data arrives while the handler is running.</p>
+<p>The test should deliberately inject <code>RX_READY</code> a second time before the first clear. If a naive read-then-clear destroys the second event, the driver loses work. A durable receive queue can prevent that if the handler drains until an agreed idle condition and uses appropriate rearm semantics. End-of-interrupt at the controller may occur earlier or later depending on architecture and interrupt type. What matters is that <strong>controller active state</strong> and <strong>device cause state</strong> are reconciled under the implementation's rules, with no assumption that one register write clears both.</p>
+
+</section>
+<section id="worked-example-11-end-to-end-interrupt-latency-budget" aria-labelledby="heading-worked-example-11-end-to-end-interrupt-latency-budget">
+<h2 id="heading-worked-example-11-end-to-end-interrupt-latency-budget">Worked Example 11 — End-to-End Interrupt Latency Budget</h2>
+<p>A fictional device event experiences 12 µs of moderation, 3 µs of interconnect and controller routing, 4 µs waiting for the CPU to accept the interrupt, 2 µs for handler entry, and 9 µs for queue processing. If these terms are sequential and do not overlap, the modeled time until the device completion is consumed is <code>12 + 3 + 4 + 2 + 9 = 30 µs</code>. If an application thread then waits another 20 µs for scheduling, the end-user completion delay becomes <strong>50 µs</strong>. A measurement that stops on entry to the IRQ handler would incorrectly report only the earlier stages as the whole application latency.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th style="text-align:right">Assumed delay</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Device coalescing delay</td>
+<td style="text-align:right">12 µs</td>
+</tr>
+<tr>
+<td>Signal and controller route</td>
+<td style="text-align:right">3 µs</td>
+</tr>
+<tr>
+<td>CPU acceptance wait</td>
+<td style="text-align:right">4 µs</td>
+</tr>
+<tr>
+<td>Handler entry</td>
+<td style="text-align:right">2 µs</td>
+</tr>
+<tr>
+<td>Completion processing</td>
+<td style="text-align:right">9 µs</td>
+</tr>
+<tr>
+<td>Task scheduling after completion</td>
+<td style="text-align:right">20 µs</td>
+</tr>
+<tr>
+<td><strong>Total through application notification</strong></td>
+<td style="text-align:right"><strong>50 µs</strong></td>
+</tr>
+</tbody>
+</table>
+<p>This additive model is a simplified upper-level teaching aid. Real systems may overlap stages and have widely varying tails. Therefore a performance report must identify its timestamp source, timebase synchronization, and boundary of observation. Values here describe no particular hardware.</p>
+
+</section>
+<section id="worked-example-12-interrupt-storm-diagnostic-timeline" aria-labelledby="heading-worked-example-12-interrupt-storm-diagnostic-timeline">
+<h2 id="heading-worked-example-12-interrupt-storm-diagnostic-timeline">Worked Example 12 — Interrupt Storm Diagnostic Timeline</h2>
+<p>A test device produces one queue completion but the host observes 40,000 IRQ deliveries in one second. Suppose the completion-ring producer index advanced only once and the relevant device status bit remained asserted throughout the measurement. The discrepancy suggests repeated delivery of an uncleared level or a retrigger condition, not 40,000 useful completions. The investigator first records the status, trigger configuration, and controller active/pending state, then checks whether the driver is clearing the proper field.</p>
+<p>Next the investigator masks <strong>only the affected vector</strong> if the recovery policy permits it, confirms that the interrupt rate drops, drains the completion queue, and checks whether the device's status can be cleared safely. If software cannot deassert the source or the fault immediately returns, device reset may be required after protecting in-flight DMA buffers. A high IRQ count alone cannot identify a defective controller; the source's pending condition provides stronger causal evidence. A good post-recovery test verifies both that interrupts stop when idle and that a fresh valid completion still triggers service.</p>
+
+</section>
+<section id="worked-example-13-platform-message-routing-through-an-interrupt-domain" aria-labelledby="heading-worked-example-13-platform-message-routing-through-an-interrupt-domain">
+<h2 id="heading-worked-example-13-platform-message-routing-through-an-interrupt-domain">Worked Example 13 — Platform Message Routing Through an Interrupt Domain</h2>
+<p>Consider an abstract MSI-capable endpoint whose event identity is <strong>E=6</strong> and whose PCI requester identity is represented in the host's device configuration. The OS allocates a host IRQ and asks the platform to associate the endpoint's interrupt with processing element 2. The resulting message address and data are written to the endpoint's supported configuration registers. The device later issues the MSI transaction, which traverses the root complex and any enabled remapping or translation component before reaching the selected controller destination.</p>
+<p>The precise bit layout is intentionally omitted: it differs across x86, Arm ITS, and RISC-V IMSIC mechanisms. The engineering lesson is to <strong>separate source identity, programmed message, OS IRQ identity, and target CPU</strong>. Replacing a CPU or moving the interrupt to another virtual machine can change the translation while leaving the device's semantic event E unchanged. Software should request a mapping through supported APIs, not derive a destination from a guessed physical address or vector number.</p>
+
+</section>
+<section id="specialist-glossary" aria-labelledby="heading-specialist-glossary">
+<h2 id="heading-specialist-glossary">Specialist Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Active interrupt</td>
+<td>Controller state indicating an interrupt is in service under an architecture that tracks active state.</td>
+</tr>
+<tr>
+<td>Affinity</td>
+<td>Policy identifying CPUs eligible to receive or service an interrupt.</td>
+</tr>
+<tr>
+<td>APIC</td>
+<td>Advanced Programmable Interrupt Controller mechanisms used in x86 interrupt delivery.</td>
+</tr>
+<tr>
+<td>APLIC</td>
+<td>Advanced Platform-Level Interrupt Controller defined for RISC-V AIA systems.</td>
+</tr>
+<tr>
+<td>Asynchronous interrupt</td>
+<td>A notification not tied to the retirement of the current CPU instruction.</td>
+</tr>
+<tr>
+<td>Backpressure</td>
+<td>Limitation of downstream acceptance that can delay the events producing interrupt-relevant work.</td>
+</tr>
+<tr>
+<td>BAR</td>
+<td>PCI Base Address Register defining a region used for mapped device facilities.</td>
+</tr>
+<tr>
+<td>Bottom half</td>
+<td>Deferred processing that follows minimal urgent interrupt handling in some OS models.</td>
+</tr>
+<tr>
+<td>Bus mastering</td>
+<td>Capability for a device to initiate specified interconnect transactions, often DMA.</td>
+</tr>
+<tr>
+<td>Completion descriptor</td>
+<td>Device- or driver-defined record that reports finished work in a queue.</td>
+</tr>
+<tr>
+<td>Completion queue</td>
+<td>Ring or list containing records of completed operations.</td>
+</tr>
+<tr>
+<td>Coalescing</td>
+<td>Combining multiple events into fewer interrupt notifications.</td>
+</tr>
+<tr>
+<td>Controller acknowledgment</td>
+<td>Operation accepting or identifying an interrupt at its controller, distinct from device status clearing.</td>
+</tr>
+<tr>
+<td>Controller pending state</td>
+<td>Recorded interrupt request that has not yet been fully serviced.</td>
+</tr>
+<tr>
+<td>CPU vector</td>
+<td>Processor/controller-specific interrupt identity used for dispatch.</td>
+</tr>
+<tr>
+<td>Device status bit</td>
+<td>Peripheral register field reporting an event or condition requiring inspection.</td>
+</tr>
+<tr>
+<td>Doorbell</td>
+<td>Register or memory-mapped location used by software to notify hardware of submitted work.</td>
+</tr>
+<tr>
+<td>DMA</td>
+<td>Direct Memory Access, a transfer initiated by a DMA-capable hardware agent.</td>
+</tr>
+<tr>
+<td>EOI</td>
+<td>End-of-interrupt signal that changes a controller's in-service state under its specified rules.</td>
+</tr>
+<tr>
+<td>Edge-triggered</td>
+<td>Interrupt signaled by a transition rather than a continuously asserted level.</td>
+</tr>
+<tr>
+<td>Error vector</td>
+<td>Interrupt identifier designated for fault-reporting events in an implementation.</td>
+</tr>
+<tr>
+<td>Event</td>
+<td>Underlying hardware condition that may motivate a notification.</td>
+</tr>
+<tr>
+<td>Event count</td>
+<td>Number of underlying operations or conditions, not necessarily number of interrupts.</td>
+</tr>
+<tr>
+<td>Guest interrupt</td>
+<td>Virtual interrupt presented to a virtual machine by platform or hypervisor facilities.</td>
+</tr>
+<tr>
+<td>GIC</td>
+<td>Arm Generic Interrupt Controller architecture.</td>
+</tr>
+<tr>
+<td>Handler</td>
+<td>Software routine invoked for an interrupt identifier.</td>
+</tr>
+<tr>
+<td>Hard IRQ</td>
+<td>Context in which prompt interrupt handling is performed under an OS's nonblocking constraints.</td>
+</tr>
+<tr>
+<td>Host IRQ number</td>
+<td>Operating-system interrupt identifier, not necessarily a physical controller vector.</td>
+</tr>
+<tr>
+<td>IMSIC</td>
+<td>Incoming MSI Controller in the RISC-V Advanced Interrupt Architecture.</td>
+</tr>
+<tr>
+<td>Interrupt domain</td>
+<td>OS/platform mapping structure connecting source interrupts to controller identities.</td>
+</tr>
+<tr>
+<td>Interrupt injection</td>
+<td>Presentation of a virtual interrupt to a guest processing context.</td>
+</tr>
+<tr>
+<td>Interrupt line</td>
+<td>Hardware signal representing an interrupt request in a pin-based design.</td>
+</tr>
+<tr>
+<td>Interrupt remapping</td>
+<td>Hardware-supported validation/translation of device-origin interrupt destinations.</td>
+</tr>
+<tr>
+<td>Interrupt storm</td>
+<td>Excessive repeated notifications that consume service resources.</td>
+</tr>
+<tr>
+<td>Interprocessor interrupt</td>
+<td>Interrupt directed by one processor or core to another.</td>
+</tr>
+<tr>
+<td>IOMMU</td>
+<td>Input-output memory management unit that can translate and isolate device address accesses.</td>
+</tr>
+<tr>
+<td>IRQ</td>
+<td>Conventional abbreviation for interrupt request or OS interrupt identifier.</td>
+</tr>
+<tr>
+<td>ISR</td>
+<td>Interrupt service routine, the code invoked to service an interrupt.</td>
+</tr>
+<tr>
+<td>ITS</td>
+<td>Interrupt Translation Service for supported Arm GIC LPI delivery.</td>
+</tr>
+<tr>
+<td>LPI</td>
+<td>Locality-specific Peripheral Interrupt in Arm GIC architecture.</td>
+</tr>
+<tr>
+<td>Level-triggered</td>
+<td>Interrupt signal held active while the source condition remains true.</td>
+</tr>
+<tr>
+<td>Local APIC</td>
+<td>x86 interrupt controller facility associated with a CPU context.</td>
+</tr>
+<tr>
+<td>Masking</td>
+<td>Suppressing interrupt delivery at an identified control layer while work may remain pending.</td>
+</tr>
+<tr>
+<td>Message-signaled interrupt</td>
+<td>Interrupt conveyed by a specially directed write/message rather than an external pin alone.</td>
+</tr>
+<tr>
+<td>MSI</td>
+<td>PCI message-signaled interrupt capability with constrained vector configuration.</td>
+</tr>
+<tr>
+<td>MSI-X</td>
+<td>Extended PCI message-signaled interrupt capability using table-based per-vector configuration.</td>
+</tr>
+<tr>
+<td>Moderation</td>
+<td>Policy limiting interrupt frequency or delaying notifications to reduce overhead.</td>
+</tr>
+<tr>
+<td>NUMA</td>
+<td>Non-uniform memory access organization where placement changes access cost.</td>
+</tr>
+<tr>
+<td>Pending Bit Array</td>
+<td>MSI-X-defined structure representing pending masked vector notifications.</td>
+</tr>
+<tr>
+<td>Per-queue interrupt</td>
+<td>Notification stream allocated to a particular device queue or group of queues.</td>
+</tr>
+<tr>
+<td>PPI</td>
+<td>Private Peripheral Interrupt in Arm GIC terminology.</td>
+</tr>
+<tr>
+<td>Polling</td>
+<td>Software repeatedly inspects work state without depending entirely on interrupts.</td>
+</tr>
+<tr>
+<td>Posted MMIO write</td>
+<td>Device-directed write that may be buffered before reaching its target.</td>
+</tr>
+<tr>
+<td>Priority</td>
+<td>Controller or CPU policy determining which eligible interrupts are served first.</td>
+</tr>
+<tr>
+<td>Rearming</td>
+<td>Restoring notification generation or delivery after a masked/polling service period.</td>
+</tr>
+<tr>
+<td>Redistributor</td>
+<td>Arm GIC component managing interrupt state associated with a processing element.</td>
+</tr>
+<tr>
+<td>Remapping domain</td>
+<td>Trusted mapping boundary restricting interrupt or I/O destinations.</td>
+</tr>
+<tr>
+<td>Requester ID</td>
+<td>PCI identity used by the platform to identify certain device-origin transactions.</td>
+</tr>
+<tr>
+<td>Ring buffer</td>
+<td>Circular queue used for submission or completion records.</td>
+</tr>
+<tr>
+<td>SGI</td>
+<td>Software-Generated Interrupt in Arm GIC terminology.</td>
+</tr>
+<tr>
+<td>Shared interrupt</td>
+<td>Interrupt signaling resource used by more than one cause or device.</td>
+</tr>
+<tr>
+<td>SPI</td>
+<td>Shared Peripheral Interrupt in Arm GIC terminology.</td>
+</tr>
+<tr>
+<td>Spurious interrupt</td>
+<td>Interrupt indication without a corresponding currently serviceable cause at the inspected layer.</td>
+</tr>
+<tr>
+<td>Status acknowledgment</td>
+<td>Device-specific operation that clears or retires a source event indication.</td>
+</tr>
+<tr>
+<td>Threaded handler</td>
+<td>Interrupt-associated work running in a schedulable thread under OS-defined rules.</td>
+</tr>
+<tr>
+<td>Top half</td>
+<td>Minimal immediate interrupt handling before deferring longer work.</td>
+</tr>
+<tr>
+<td>Vector table</td>
+<td>Structure mapping identifiers to CPU handlers or PCI MSI-X message configurations, depending on context.</td>
+</tr>
+<tr>
+<td>Virtual interrupt</td>
+<td>Interrupt delivered to a virtual CPU rather than directly to host software.</td>
+</tr>
+<tr>
+<td>Wakeup interrupt</td>
+<td>Event enabled to bring a CPU or domain out of a supported low-power state.</td>
+</tr>
+<tr>
+<td>Write-one-to-clear</td>
+<td>Register behavior in which writing a one clears a designated status bit.</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="technical-references-and-further-reading" aria-labelledby="heading-technical-references-and-further-reading">
+<h2 id="heading-technical-references-and-further-reading">Technical References and Further Reading</h2>
+<p>The following official sources support the principal architecture and software-interface descriptions. They should be consulted for platform- and version-specific bit layouts, ordering rules, and errata. Their inclusion is educational; the current publication status or behavior of a specific board is not asserted.</p>
+<ol>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/PCI/msi-howto.html">The MSI Driver Guide HOWTO</a> — PCI MSI/MSI-X allocation, interrupt ordering, vector counts, affinity, and modern API behavior.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/PCI/pci.html">How to Write Linux PCI Drivers</a> — PCI interrupt handling, DMA ordering, and PCI driver lifecycle requirements.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/core-api/genericirq.html">Generic IRQ Handling</a> — generic IRQ subsystem and threaded handler interfaces.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/core-api/irq/managed_irq.html">Affinity Managed Interrupts</a> — queue-oriented vector placement and CPU hotplug semantics.</li>
+<li><strong>Arm</strong>, <a href="https://support.arm.com/documentation/198123/latest/Arm-GIC-fundamentals">GICv3/v4 Architecture Fundamentals</a> — GIC interrupt classes, CPU interfaces, and message-signaled delivery concepts.</li>
+<li><strong>Arm</strong>, <a href="https://documentation-service.arm.com/static/65ba2901c2052a35156cc629">Generic Interrupt Controller v3 and v4: LPIs</a> — LPIs and optional ITS translation concepts (PDF reference, not reproduced here).</li>
+<li><strong>RISC-V International</strong>, <a href="https://docs.riscv.org/reference/aia/v1.0/intro.html">Advanced Interrupt Architecture: Introduction</a> — RISC-V message-based interrupt architecture and interrupt-file organization.</li>
+<li><strong>RISC-V International</strong>, <a href="https://docs.riscv.org/reference/aia/v1.0/IMSIC.html">Incoming MSI Controller (IMSIC)</a> — hart-local MSI receive and interrupt file semantics.</li>
+<li><strong>PCI-SIG</strong>, <a href="https://pcisig.com/specifications">PCI Express Specifications</a> — controlling normative specifications for PCIe legacy interrupt, MSI, and MSI-X behavior; public availability and licensing vary.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/PCI/index.html">PCI Subsystem</a> — adjacent documentation for enumeration, MSI, devices, and driver operation.</li>
+</ol>
+
+</section>
+<section id="sub-articles-and-continued-study" aria-labelledby="heading-sub-articles-and-continued-study">
+<h2 id="heading-sub-articles-and-continued-study">Sub-Articles and Continued Study</h2>
+<p>This article is one planned Level 5 child of the <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/">Bus Systems unit index</a>. It does not commission a deeper Level 6 family of new pages. The following active links identify the adjacent specialist subarticles in the same established unit; some destinations may not yet be published.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-arbitration-and-access-priority">Bus Arbitration and Access Priority</a> — priority and fairness when hardware agents compete for transfer resources.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/synchronous-asynchronous-and-handshake-buses">Synchronous, Asynchronous, and Handshake Buses</a> — event and data timing across clock boundaries.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/direct-memory-access-and-bus-mastering">Direct Memory Access and Bus Mastering</a> — data transfers preceding device completion notifications.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence">Transaction Ordering and Memory Coherence</a> — visibility of DMA and MMIO operations.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow">PCI Express Architecture and Transaction Flow</a> — host/endpoint configuration and PCIe transaction classes.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/on-chip-buses-and-networks-on-chip">On-Chip Buses and Networks-on-Chip</a> — SoC fabrics and controller interfaces.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-isolation-and-device-security">Interconnect Isolation and Device Security</a> — device trust boundaries and remapping protections.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-error-detection-diagnostics-and-recovery">Bus Error Detection, Diagnostics, and Recovery</a> — fault signaling and recovery state.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-latency-throughput-and-contention">Interconnect Latency, Throughput, and Contention</a> — system-level costs of notification and data paths.</li>
+</ul>
+
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>These links point to neighboring <strong>Level 3 division or Level 4 overview subjects</strong>, not additional child pages of this specialist article.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems overview</a> — parent definition of hardware communication paths.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/computer-architecture-overview">Computer Architecture Overview</a> — processor, memory, and I/O organization.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a> — architectural interrupt and exception entry contracts.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — pipeline handling, event timing, and internal CPU mechanisms.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/parallel-architecture">Parallel Architecture</a> — multicore event targeting and resource coordination.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> — cache and memory visibility encountered in DMA completion.</li>
+<li><a href="/library/encyclopedia/computer-science/software-systems/device-and-io-management">Device and I/O Management</a> — operating-system driver life cycles and deferred servicing.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/motherboards-and-buses">Motherboards and Buses</a> — physical interfaces and platform integration.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> — processor-side interrupt acceptance and execution state.</li>
+</ul>
+
+</section>
+<section id="editorial-scope-and-publication-status" aria-labelledby="heading-editorial-scope-and-publication-status">
+<h2 id="heading-editorial-scope-and-publication-status">Editorial Scope and Publication Status</h2>
+<p><strong>Article:</strong> Bus Systems specialist <strong>9 of 20</strong>, <em>Interrupt Signaling over System Interconnects</em>. <strong>Deliverable:</strong> one standalone HTML encyclopedia article. <strong>Physical file:</strong> <code>computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects.html</code>. <strong>Canonical URL:</strong> <code>/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects</code>.</p>
+<p><strong>Scope:</strong> the topic owns event notification over hardware interconnects, platform interrupt routing, vector configuration, and source-to-service correctness. Detailed OS interrupt-handler APIs, chip-specific register fields, security exploit methodologies, and full PCIe or GIC compliance rules belong in the authoritative specifications and neighboring specialists. Numerical examples are constructed educational scenarios. Active sibling links are required by the MGU directory plan even when their destination articles are not yet deployed. This HTML file does not itself establish website publication or live routing.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

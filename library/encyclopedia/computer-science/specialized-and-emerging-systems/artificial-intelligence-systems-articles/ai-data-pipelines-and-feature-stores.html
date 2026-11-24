@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Data Pipelines and Feature Stores | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="A specialist MGU Encyclopedia article on AI data pipelines, feature stores, historical point-in-time joins, online and offline features, freshness, materialization, validation, lineage, MLOps, security, and worked examples.">
+<meta name="keywords" content="AI data pipelines, feature store, feature engineering, offline store, online store, feature registry, point-in-time join, event time, late data, CDC, materialization, Feast, MLOps, lineage, data quality, training-serving skew">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-data-pipelines-and-feature-stores">
+<meta property="og:type" content="article">
+<meta property="og:title" content="AI Data Pipelines and Feature Stores | MGU Encyclopedia">
+<meta property="og:description" content="An end-to-end reference for governing the data and features that power training, evaluation, and production AI inference.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-data-pipelines-and-feature-stores">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>AI Data Pipelines and Feature Stores</h1>
+<p class="subtitle">How source evidence becomes reliable, reproducible, temporally correct, and authorized features for AI training and production inference.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#scope-data-pipelines-are-part-of-the-ai-system">Scope: Data Pipelines Are Part of the AI System</a></li>
+<li><a href="#place-in-the-mgu-artificial-intelligence-systems-unit">Place in the MGU Artificial Intelligence Systems Unit</a></li>
+<li><a href="#the-end-to-end-architecture">The End-to-End Architecture</a></li>
+<li><a href="#the-components-and-their-contracts">The Components and Their Contracts</a></li>
+<li><a href="#what-is-a-feature">What Is a Feature?</a></li>
+<li><a href="#feature-store-versus-database-warehouse-and-model-registry">Feature Store Versus Database, Warehouse, and Model Registry</a></li>
+<li><a href="#grain-identity-and-join-keys">Grain, Identity, and Join Keys</a></li>
+<li><a href="#event-time-processing-time-and-availability-time">Event Time, Processing Time, and Availability Time</a></li>
+<li><a href="#the-temporal-feature-contract">The Temporal Feature Contract</a></li>
+<li><a href="#inventorying-sources-and-defining-data-ownership">Inventorying Sources and Defining Data Ownership</a></li>
+<li><a href="#batch-ingestion-and-snapshot-processing">Batch Ingestion and Snapshot Processing</a></li>
+<li><a href="#streaming-ingestion-and-continuous-updates">Streaming Ingestion and Continuous Updates</a></li>
+<li><a href="#change-data-capture-and-transactional-semantics">Change Data Capture and Transactional Semantics</a></li>
+<li><a href="#raw-standardized-and-feature-ready-layers">Raw, Standardized, and Feature-Ready Layers</a></li>
+<li><a href="#schema-validation-and-semantic-validation">Schema Validation and Semantic Validation</a></li>
+<li><a href="#core-data-quality-dimensions">Core Data Quality Dimensions</a></li>
+<li><a href="#deduplication-and-idempotent-reprocessing">Deduplication and Idempotent Reprocessing</a></li>
+<li><a href="#transformations-units-and-reusable-features">Transformations, Units, and Reusable Features</a></li>
+<li><a href="#windowed-aggregations-and-calendar-semantics">Windowed Aggregations and Calendar Semantics</a></li>
+<li><a href="#labels-outcomes-and-the-feature-boundary">Labels, Outcomes, and the Feature Boundary</a></li>
+<li><a href="#offline-feature-data-and-historical-retrieval">Offline Feature Data and Historical Retrieval</a></li>
+<li><a href="#online-feature-serving-and-low-latency-lookup">Online Feature Serving and Low-Latency Lookup</a></li>
+<li><a href="#feature-registries-definitions-and-ownership">Feature Registries, Definitions, and Ownership</a></li>
+<li><a href="#entities-feature-views-and-feature-services">Entities, Feature Views, and Feature Services</a></li>
+<li><a href="#materialization-moving-historical-features-into-serving-state">Materialization: Moving Historical Features Into Serving State</a></li>
+<li><a href="#point-in-time-correctness-the-central-historical-problem">Point-in-Time Correctness: The Central Historical Problem</a></li>
+<li><a href="#a-simplified-point-in-time-sql-pattern">A Simplified Point-in-Time SQL Pattern</a></li>
+<li><a href="#backfills-corrections-and-historical-restatements">Backfills, Corrections, and Historical Restatements</a></li>
+<li><a href="#late-events-watermarks-and-out-of-order-updates">Late Events, Watermarks, and Out-of-Order Updates</a></li>
+<li><a href="#retention-time-to-live-and-deletion">Retention, Time-to-Live, and Deletion</a></li>
+<li><a href="#trainingserving-consistency-and-skew">Training–Serving Consistency and Skew</a></li>
+<li><a href="#offline-to-online-consistency-and-version-pinning">Offline-to-Online Consistency and Version Pinning</a></li>
+<li><a href="#dataset-snapshots-and-reproducibility">Dataset Snapshots and Reproducibility</a></li>
+<li><a href="#orchestration-and-dependency-management">Orchestration and Dependency Management</a></li>
+<li><a href="#data-observability-and-service-level-objectives">Data Observability and Service-Level Objectives</a></li>
+<li><a href="#monitoring-distribution-changes-and-broken-definitions">Monitoring Distribution Changes and Broken Definitions</a></li>
+<li><a href="#access-control-tenant-separation-and-least-privilege">Access Control, Tenant Separation, and Least Privilege</a></li>
+<li><a href="#privacy-consent-and-data-minimization">Privacy, Consent, and Data Minimization</a></li>
+<li><a href="#security-threats-to-data-and-feature-pipelines">Security Threats to Data and Feature Pipelines</a></li>
+<li><a href="#feature-pipelines-for-images-audio-text-and-embeddings">Feature Pipelines for Images, Audio, Text, and Embeddings</a></li>
+<li><a href="#retrieval-augmented-generation-and-document-pipelines">Retrieval-Augmented Generation and Document Pipelines</a></li>
+<li><a href="#batch-scoring-versus-online-scoring">Batch Scoring Versus Online Scoring</a></li>
+<li><a href="#latency-freshness-throughput-and-cost">Latency, Freshness, Throughput, and Cost</a></li>
+<li><a href="#cost-governance-and-when-not-to-build-a-feature-store">Cost Governance and When Not to Build a Feature Store</a></li>
+<li><a href="#testing-and-ci-cd-for-feature-definitions">Testing and CI/CD for Feature Definitions</a></li>
+<li><a href="#deployment-rollback-and-incident-response">Deployment, Rollback, and Incident Response</a></li>
+<li><a href="#cross-region-edge-and-hybrid-deployment">Cross-Region, Edge, and Hybrid Deployment</a></li>
+<li><a href="#governance-roles-and-control-boundaries">Governance Roles and Control Boundaries</a></li>
+<li><a href="#worked-example-1-preventing-leakage-in-fraud-features">Worked Example 1: Preventing Leakage in Fraud Features</a></li>
+<li><a href="#worked-example-2-customer-identity-and-a-multiplying-join">Worked Example 2: Customer Identity and a Multiplying Join</a></li>
+<li><a href="#worked-example-3-a-streaming-device-risk-aggregate">Worked Example 3: A Streaming Device-Risk Aggregate</a></li>
+<li><a href="#worked-example-4-a-feature-definition-changes-its-meaning">Worked Example 4: A Feature Definition Changes Its Meaning</a></li>
+<li><a href="#worked-example-5-a-late-data-backfill-changes-evaluation">Worked Example 5: A Late Data Backfill Changes Evaluation</a></li>
+<li><a href="#worked-example-6-choosing-the-architecture-for-a-small-organization">Worked Example 6: Choosing the Architecture for a Small Organization</a></li>
+<li><a href="#worked-example-7-a-tenant-isolation-failure">Worked Example 7: A Tenant-Isolation Failure</a></li>
+<li><a href="#worked-example-8-embedding-index-refresh-for-a-document-assistant">Worked Example 8: Embedding Index Refresh for a Document Assistant</a></li>
+<li><a href="#worked-example-9-freshness-budget-and-a-safe-fallback">Worked Example 9: Freshness Budget and a Safe Fallback</a></li>
+<li><a href="#common-failure-modes-and-corrective-controls">Common Failure Modes and Corrective Controls</a></li>
+<li><a href="#selecting-a-feature-architecture">Selecting a Feature Architecture</a></li>
+<li><a href="#a-minimal-credible-implementation">A Minimal Credible Implementation</a></li>
+<li><a href="#an-enterprise-scale-operating-model">An Enterprise-Scale Operating Model</a></li>
+<li><a href="#study-questions-and-applied-exercises">Study Questions and Applied Exercises</a></li>
+<li><a href="#specialist-glossary">Specialist Glossary</a></li>
+<li><a href="#primary-technical-references-and-further-reading">Primary Technical References and Further Reading</a></li>
+<li><a href="#further-articles-in-the-artificial-intelligence-systems-unit">Further Articles in the Artificial Intelligence Systems Unit</a></li>
+<li><a href="#related-topics-and-study-pathways">Related Topics and Study Pathways</a></li>
+<li><a href="#editorial-scope-status-and-canonical-url">Editorial Scope, Status, and Canonical URL</a></li>
+</ol>
+</section>
+<section id="scope-data-pipelines-are-part-of-the-ai-system" aria-labelledby="heading-scope-data-pipelines-are-part-of-the-ai-system">
+<h2 id="heading-scope-data-pipelines-are-part-of-the-ai-system">Scope: Data Pipelines Are Part of the AI System</h2>
+<p>An artificial-intelligence system depends on more than a trained model. It depends on the evidence available when a prediction is made, the rules by which raw observations become features, the histories that reproduce those rules for training, and operational processes that keep data current without silently changing its meaning. <strong>AI data pipelines</strong> move and transform data under explicit contracts; a <strong>feature store</strong> is an architectural capability for defining, governing, retrieving, and reusing model inputs across development and serving. Neither automatically makes an underlying source accurate, a prediction fair, or a decision authorized.</p>
+<p>Consider a payment-risk model that uses a customer's previous transaction count, a device's recent activity, and a merchant's historical chargeback rate. If the historical dataset accidentally includes events occurring after each payment, evaluation becomes artificially favorable. If the real-time feature lookup returns an old device aggregate, a correct model may make a poor prediction. If a join substitutes one person's history for another's, the defect is both technical and potentially harmful. Data engineering, temporal semantics, model engineering, security, and accountable operations must therefore be analyzed as one system.</p>
+<p>This specialist article explains the complete path from source events to approved training datasets and low-latency feature retrieval. It distinguishes feature stores from data lakes, lakehouses, databases, catalogs, model registries, and vector indexes; describes point-in-time correctness; examines schema evolution, late events, reproducibility, privacy, and data lineage; and provides worked examples with implementation-oriented safeguards. Specific software capabilities vary by version and configuration. Architecture principles are presented independently of any single vendor.</p>
+
+</section>
+<section id="place-in-the-mgu-artificial-intelligence-systems-unit" aria-labelledby="heading-place-in-the-mgu-artificial-intelligence-systems-unit">
+<h2 id="heading-place-in-the-mgu-artificial-intelligence-systems-unit">Place in the MGU Artificial Intelligence Systems Unit</h2>
+<p>In the MGU Encyclopedia hierarchy, <strong>AI Data Pipelines and Feature Stores</strong> is a Level 5 specialist article beneath the <strong>Artificial Intelligence Systems</strong> unit within <strong>Specialized and Emerging Systems</strong>. The parent article, <a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems">Artificial Intelligence Systems</a>, surveys system-wide components and responsibilities. The sibling <a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-training-validation-and-inference">AI Training, Validation, and Inference</a> describes training and experimental evaluation; the present article focuses on the <em>upstream data-and-feature supply chain</em> that makes those experiments and deployments credible.</p>
+<p>The boundary matters. This article defines how a feature is produced, made available, served, documented, and retired. It does not teach every statistical-learning algorithm, serve as a full distributed-stream-processing manual, or prescribe a cloud product. A model may use raw text, images, graph data, embeddings, structured tabular features, or combinations. Feature stores are especially valuable where several models require the same time-dependent structured features, but they are not mandatory for every AI project.</p>
+
+</section>
+<section id="the-end-to-end-architecture" aria-labelledby="heading-the-end-to-end-architecture">
+<h2 id="heading-the-end-to-end-architecture">The End-to-End Architecture</h2>
+<p>A typical operational flow begins with authoritative applications and observation systems. An ingestion layer obtains records with explicit identifiers and clocks. Transformation jobs validate records, compute features, and preserve versions. Historical feature data remains queryable for training and backtests. A serving path supplies permitted current values to an approved model. A registry or catalog ties names and definitions to owners, contracts, and dependencies. Observability records whether the resulting predictions were based on complete and timely evidence.</p>
+<pre><code class="language-text">Authoritative sources: applications | events | files | databases | sensors
+              |               |              |
+              +-------- ingestion / validation --------+
+                                 |
+                    transform / deduplicate / join
+                                 |
+             +-------------------+-------------------+
+             |                                       |
+  historical feature data                     current feature state
+   (offline analytical path)                    (online serving path)
+             |                                       |
+    point-in-time training join                    feature lookup
+             |                                       |
+    experiment / model registry                  inference service
+             |                                       |
+             +----------- lineage and controls ------+
+                                 |
+                       monitoring / remediation
+</code></pre>
+<p>The drawing is a conceptual design, not a claim that all systems require two physically separate databases. Some implementations use an external warehouse for historical queries; some use a managed feature service with a built-in offline layer; and others compute all features inside a controlled training or inference pipeline. The indispensable requirements are defined source authority, temporal correctness, stable feature meaning, and evidence of operational fitness.</p>
+
+</section>
+<section id="the-components-and-their-contracts" aria-labelledby="heading-the-components-and-their-contracts">
+<h2 id="heading-the-components-and-their-contracts">The Components and Their Contracts</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Primary duty</th>
+<th>Critical contract</th>
+<th>Typical failure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Source system</td>
+<td>Record authoritative business or physical events</td>
+<td>Meaning, identity, retention, event timestamps</td>
+<td>Source values change without notice</td>
+</tr>
+<tr>
+<td>Ingestion connector</td>
+<td>Acquire and checkpoint source changes</td>
+<td>Offset, event identity, delivery semantics</td>
+<td>Lost or duplicate events</td>
+</tr>
+<tr>
+<td>Validation layer</td>
+<td>Reject, quarantine, or flag unsuitable records</td>
+<td>Schema and semantic constraints</td>
+<td>Bad data enters silently</td>
+</tr>
+<tr>
+<td>Transformation layer</td>
+<td>Derive model-ready features</td>
+<td>Code version, window, null treatment, units</td>
+<td>Training/serving mismatch</td>
+</tr>
+<tr>
+<td>Offline feature path</td>
+<td>Supply historical values for experiments</td>
+<td>Point-in-time query and reproducible snapshots</td>
+<td>Future leakage into training</td>
+</tr>
+<tr>
+<td>Online feature path</td>
+<td>Serve permitted recent values</td>
+<td>Key, latency, freshness, availability</td>
+<td>Stale or wrong-entity values</td>
+</tr>
+<tr>
+<td>Registry or catalog</td>
+<td>Make definitions and ownership discoverable</td>
+<td>Schema, owner, lineage, lifecycle</td>
+<td>Invisible changes and duplication</td>
+</tr>
+<tr>
+<td>Orchestration and monitoring</td>
+<td>Schedule work and detect problems</td>
+<td>Dependencies, SLOs, incident response</td>
+<td>Silent failure of updates</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Contract</strong> means more than a data type. A field called <code>active_30d</code> is ambiguous until its entity, time window, inclusion rules, counting method, timezone, null behavior, update schedule, and access policy are established. A shared feature is useful only when its semantics are stable and consumers can determine whether its value was valid at the required prediction time.</p>
+
+</section>
+<section id="what-is-a-feature" aria-labelledby="heading-what-is-a-feature">
+<h2 id="heading-what-is-a-feature">What Is a Feature?</h2>
+<p>A <strong>feature</strong> is an input variable supplied to an AI model under a defined interpretation. A feature can be observed directly, such as an account's age in days, or derived, such as the number of approved transactions in a trailing seven-day window. Features may be numeric, categorical, Boolean, textual, temporal, geospatial, image-derived, vector-valued, or structured. A <strong>feature vector</strong> is a collection of features assembled for one prediction unit.</p>
+<p>The same numeric field may have different meanings in different workflows. “Average balance” could mean end-of-day arithmetic mean, transaction-weighted mean, a mean over business days, or an estimate that excludes unavailable observations. A precise definition includes a source, aggregation rule, population, time reference, null representation, and governing transformation version. Feature values are not interchangeable merely because their names and types match.</p>
+<p>An <strong>entity</strong> is the subject to which a feature attaches: customer, device, property, vehicle, document, warehouse, merchant, or another identifiable unit. Different models may operate on a <em>request</em> or an <em>interaction</em> rather than a stable entity. Defining that prediction grain early avoids errors such as joining one customer's transaction-level events to all of the customer's unrelated orders.</p>
+
+</section>
+<section id="feature-store-versus-database-warehouse-and-model-registry" aria-labelledby="heading-feature-store-versus-database-warehouse-and-model-registry">
+<h2 id="heading-feature-store-versus-database-warehouse-and-model-registry">Feature Store Versus Database, Warehouse, and Model Registry</h2>
+<p>A database stores and retrieves information; a warehouse or lakehouse supports broad analytical processing; a feature store coordinates <strong>feature definitions and retrieval</strong> for machine-learning use, often using other storage and compute systems as its backing services. A data catalog records information about datasets and ownership. A model registry versions model artifacts and their release metadata. These capabilities overlap in implementation but represent different responsibilities.</p>
+<p>A feature store is not simply a table with columns named after features. It becomes valuable when a team can reliably reconstruct historical features, retrieve current values for inference, reuse definitions, and trace which version reached which model. Some feature platforms primarily provide registration and retrieval while leaving upstream transformations to outside tools. Others include ingestion, transformation, and monitoring functions. Procurement must verify actual product behavior, not infer capabilities from the phrase “feature store.”</p>
+<p>A <strong>vector database</strong> or approximate-nearest-neighbor index is a related but distinct service: it specializes in similarity retrieval over embeddings. It may be paired with a feature store but does not inherently provide historical event-time joins, source governance, or relational feature correctness. A document-retrieval system may need versioned document indexes more than conventional row-level features.</p>
+
+</section>
+<section id="grain-identity-and-join-keys" aria-labelledby="heading-grain-identity-and-join-keys">
+<h2 id="heading-grain-identity-and-join-keys">Grain, Identity, and Join Keys</h2>
+<p>A feature definition begins with the <strong>grain</strong> of the observation. If a feature table is one row per <code>customer_id</code> and timestamp, a prediction table with one row per <code>order_id</code> must join using the correct customer and an as-of time. Joining on <code>customer_id</code> alone can multiply rows when the feature table contains history. Joining a warehouse's current customer segment onto transactions from two years ago can insert present-day information into past examples.</p>
+<p>A robust key contract specifies uniqueness requirements, normalization, null-key policy, key rotation, merges, deletions, and valid joins across domains. Composite keys such as <code>(tenant_id, account_id)</code> may be necessary to prevent cross-tenant collisions. Entity resolution across systems is a separate problem: similar names, reused device identifiers, or missing IDs do not justify treating records as the same subject without an explicit rule and confidence policy.</p>
+<p>Join diagnostics should compare row counts before and after joins, measure unmatched keys and one-to-many multiplicity, and distinguish expected missingness from a broken relationship. For prediction labels, a duplicate-producing join can leak one outcome into repeated training rows and distort statistical independence.</p>
+
+</section>
+<section id="event-time-processing-time-and-availability-time" aria-labelledby="heading-event-time-processing-time-and-availability-time">
+<h2 id="heading-event-time-processing-time-and-availability-time">Event Time, Processing Time, and Availability Time</h2>
+<p>Time has several meanings in a data system. <strong>Event time</strong> records when an underlying event occurred. <strong>Processing time</strong> records when infrastructure handled it. <strong>Ingestion time</strong> describes arrival at a particular boundary. <strong>Availability time</strong> is when the information was actually usable by a prediction system. In many cases availability time is the decisive limit for leakage-safe training.</p>
+<p>Suppose a bank transfer occurs at 09:02, is recorded by an upstream ledger at 09:03, is posted to a warehouse at 09:10, and becomes accessible to a model feature lookup at 09:12. A prediction made at 09:06 could not legitimately use the transfer even if later historical tables show its event time as 09:02. Historical reconstruction must respect what was <em>knowable</em>, not merely what had already happened in the world. This is why event-time filtering alone is not always sufficient for an exact historical reproduction.</p>
+<p>Some systems preserve a separate <code>created_at</code>, <code>event_timestamp</code>, <code>ingested_at</code>, <code>available_at</code>, and <code>revision_id</code>. The labels matter less than the guaranteed semantics. All timestamps should declare timezone, parsing conventions, clock source, and resolution. When only one timestamp exists, the uncertainty in availability should be acknowledged rather than silently assuming perfect contemporaneous delivery.</p>
+
+</section>
+<section id="the-temporal-feature-contract" aria-labelledby="heading-the-temporal-feature-contract">
+<h2 id="heading-the-temporal-feature-contract">The Temporal Feature Contract</h2>
+<p>A useful temporal contract states which data can contribute to a feature for prediction time <code>t</code>. A simple trailing-window count is conceptually <code>count(events with event_time &gt;= t - 7 days and event_time &lt; t)</code>, but the production definition must also specify whether an event had arrived by <code>t</code>, which event statuses count, and whether time boundaries are inclusive. If the current request's own event should contribute, that is a separate, explicit rule.</p>
+<p><strong>Time-to-live (TTL)</strong> may mean the maximum age of a feature value permitted for serving, how long a stored record remains accessible, or the historical lookback permitted for an as-of join. These are related but not identical contracts. A feature can retain its last value for ninety days while becoming unacceptable for a real-time prediction after five minutes. Write separately: retention period, permitted source-to-serving delay, maximum serving age, and point-in-time join tolerance.</p>
+<p>Temporal interpretation is especially difficult for corrections, restatements, backdated entries, seasonally adjusted data, and event streams with significant latency. A defensible historical snapshot should state whether it seeks “what the organization knew then” or “the best later-reconstructed estimate of what happened then.” Those are different analytical tasks and can generate different answers.</p>
+
+</section>
+<section id="inventorying-sources-and-defining-data-ownership" aria-labelledby="heading-inventorying-sources-and-defining-data-ownership">
+<h2 id="heading-inventorying-sources-and-defining-data-ownership">Inventorying Sources and Defining Data Ownership</h2>
+<p>The pipeline begins with an inventory of source systems, feeds, and ownership. Sources may include operational SQL databases, enterprise events, file drops, object storage, APIs, public datasets, third-party enrichment services, and human annotations. A source card should identify business owner, technical steward, refresh cadence, expected volume, key fields, licensing, retention, lawful use, outage behavior, and any prohibited downstream purposes.</p>
+<p>An authoritative source should be selected for each important claim. A customer address from a verified identity system may be authoritative for mailing yet unsuitable for inferring a person's current location. A device telemetry stream may be timely yet prone to missing records when devices disconnect. Multiple sources can disagree without either being fraudulent; reconciliation rules should distinguish corrections, units, business definitions, and collection delays.</p>
+<p>The AI team should avoid treating source access as blanket authorization. Rights to read data for operational accounting do not necessarily imply permission to train a general-purpose model, share data with third parties, or retain sensitive information indefinitely. Data classification and permissible use belong in the source contract before ingestion.</p>
+
+</section>
+<section id="batch-ingestion-and-snapshot-processing" aria-labelledby="heading-batch-ingestion-and-snapshot-processing">
+<h2 id="heading-batch-ingestion-and-snapshot-processing">Batch Ingestion and Snapshot Processing</h2>
+<p><strong>Batch ingestion</strong> retrieves or receives datasets periodically. It is a practical default when source updates occur hourly or daily and the model's decisions do not require second-by-second freshness. A batch job should identify its input partition or extraction watermark, source schema, code revision, output location, row counts, acceptance criteria, and replay mechanism. A checkpoint is evidence of processed input, not necessarily evidence that all expected source events arrived.</p>
+<p>Full extracts are easy to reason about but may be expensive; incremental batch loads fetch changes since a known watermark. The watermark must account for late-arriving records and corrections, possibly through a lookback window and idempotent upsert. A system that queries <code>updated_at &gt; last_run</code> can miss events if clocks, transaction commits, and cursor updates are not carefully coordinated. Source-provided change sequences are usually safer than inferred wall-clock offsets when available.</p>
+<p>Snapshot processing should create immutable or version-addressable datasets. Replacing yesterday's dataset in place destroys the evidence needed to explain why last week's model training differs from today's. Record source versions and transformation parameters alongside feature partitions, and ensure a partially written batch cannot be mistaken for a committed dataset.</p>
+
+</section>
+<section id="streaming-ingestion-and-continuous-updates" aria-labelledby="heading-streaming-ingestion-and-continuous-updates">
+<h2 id="heading-streaming-ingestion-and-continuous-updates">Streaming Ingestion and Continuous Updates</h2>
+<p><strong>Streaming pipelines</strong> process events as they arrive and may update online features or analytical materializations continuously. They require deliberate handling of message identity, partition ordering, checkpoints, backpressure, delayed events, and replay. No distributed pipeline can guarantee instant delivery of information that a source has not emitted. A “real-time” label should therefore be translated into measurable end-to-end freshness and latency commitments.</p>
+<p>Stateful stream processors maintain counters, windows, aggregates, or keyed state. A seven-day purchase count cannot be computed from the latest event alone; it requires state about prior eligible events, and that state must be recoverable after a crash. Event-time watermarks help processors decide when windows can be considered sufficiently complete under a specified lateness policy. Late updates may reopen previously computed aggregates or be handled as corrections, depending on the system design.</p>
+<p>Streaming does not automatically mean greater quality. An incorrectly keyed continuous update can distribute a defect faster than a daily batch. When the use case tolerates minutes or hours of delay, micro-batches can offer a simpler, testable solution at lower operational complexity.</p>
+
+</section>
+<section id="change-data-capture-and-transactional-semantics" aria-labelledby="heading-change-data-capture-and-transactional-semantics">
+<h2 id="heading-change-data-capture-and-transactional-semantics">Change Data Capture and Transactional Semantics</h2>
+<p><strong>Change data capture (CDC)</strong> transmits inserts, updates, and deletes from an operational database, often using transaction logs. CDC can maintain derived tables with less source load than recurring full scans. However, a stream of row mutations is not necessarily a stream of business events. A <code>status = closed</code> update cannot independently reveal whether a customer canceled an order or the system closed it automatically unless the source records that meaning.</p>
+<p>CDC connectors need a consistent snapshot plus subsequent changes, an unambiguous source sequence position, schema-change handling, and deletion propagation. A restart must not repeat a destructive update unsafely or skip uncommitted source transactions. Where multiple tables participate in one business transaction, cross-table ordering and transactional visibility require explicit design. When a delete is privacy-related, downstream copies and derived features may require removal or regeneration, not merely a tombstone in one topic.</p>
+<p>Select CDC when the operational database is an appropriate source of record and its change semantics fit the feature task. Prefer explicit domain events when business intent, immutable history, and consumer-specific contracts matter more than reproducing row mutations.</p>
+
+</section>
+<section id="raw-standardized-and-feature-ready-layers" aria-labelledby="heading-raw-standardized-and-feature-ready-layers">
+<h2 id="heading-raw-standardized-and-feature-ready-layers">Raw, Standardized, and Feature-Ready Layers</h2>
+<p>A common architecture separates <strong>raw</strong>, <strong>standardized</strong>, and <strong>feature-ready</strong> layers. The raw layer preserves source evidence, subject to privacy and retention rules. The standardized layer applies validated schemas, identifiers, units, and documented corrections. The feature-ready layer transforms authorized records into model-specific or reusable attributes. The names of these layers are organizational conventions, not guarantees that the later layers are inherently more trustworthy.</p>
+<p>Preserving raw input is valuable for replay and forensic diagnosis, but unlimited retention can be unlawful, insecure, or prohibitively expensive. Sensitive columns may need redaction or encryption before durable storage; some raw fields should never be copied into the AI environment. Each layer requires explicit access controls, retention periods, and ownership.</p>
+<p>A <strong>data contract</strong> between layers specifies mandatory fields, partition keys, types, allowed ranges, timestamp rules, error quarantine, and version transitions. Breaking changes should require an intentional migration plan. A plausible-looking null filling strategy must never conceal a source outage merely because it keeps a model endpoint responsive.</p>
+
+</section>
+<section id="schema-validation-and-semantic-validation" aria-labelledby="heading-schema-validation-and-semantic-validation">
+<h2 id="heading-schema-validation-and-semantic-validation">Schema Validation and Semantic Validation</h2>
+<p><strong>Schema validation</strong> checks the format of a record: field names, types, required keys, parseability, and sometimes structural constraints. <strong>Semantic validation</strong> checks whether the values make sense for the business process. An integer price of <code>-500</code> may satisfy a type constraint while violating the product's domain. A transaction time far in the future can be parseable yet operationally implausible. A postal code may be syntactically valid but incompatible with a declared country.</p>
+<p>Checks should be assigned severity and disposition. Some failures justify rejecting the whole partition, some justify quarantining rows, and others justify a warning and monitored continuation. In all cases, the disposition must be deterministic and reviewable. Permissive casting, silent truncation, and automatically replacing failed numeric parses with zero are dangerous when zero has a substantive meaning.</p>
+<p>Validation thresholds must themselves be versioned. A pipeline that quietly loosens its acceptable-null-rate threshold to pass a daily job has altered the data contract. The teams downstream need to know which training sets and predictions were produced under the new standard.</p>
+
+</section>
+<section id="core-data-quality-dimensions" aria-labelledby="heading-core-data-quality-dimensions">
+<h2 id="heading-core-data-quality-dimensions">Core Data Quality Dimensions</h2>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Practical diagnostic</th>
+<th>Possible action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Completeness</td>
+<td>Required-field and expected-record coverage</td>
+<td>Quarantine, source investigation, or approved missingness policy</td>
+</tr>
+<tr>
+<td>Validity</td>
+<td>Type, domain, unit, and business-rule checks</td>
+<td>Reject or correct with evidence</td>
+</tr>
+<tr>
+<td>Uniqueness</td>
+<td>Entity-event duplicates and join multiplicity</td>
+<td>Idempotent deduplication and key redesign</td>
+</tr>
+<tr>
+<td>Consistency</td>
+<td>Contradictory values among source systems</td>
+<td>Define source precedence and reconciliation</td>
+</tr>
+<tr>
+<td>Timeliness</td>
+<td>Event-to-availability lag by cohort</td>
+<td>Adjust watermark, alert, or use safe fallback</td>
+</tr>
+<tr>
+<td>Accuracy</td>
+<td>Comparison with independently reliable observations</td>
+<td>Targeted audit and source remediation</td>
+</tr>
+<tr>
+<td>Integrity</td>
+<td>References, lineage, and record-level controls</td>
+<td>Repair broken relationships or suspend materialization</td>
+</tr>
+<tr>
+<td>Representativeness</td>
+<td>Coverage across intended populations and periods</td>
+<td>Collect evidence or limit deployment scope</td>
+</tr>
+</tbody>
+</table>
+<p>A quality score is not an intrinsic property of data. The same dataset may be fit for historical aggregate analysis but unsuitable for real-time credit decisions or individual safety interventions. Quality therefore must be evaluated relative to <strong>intended use</strong>, failure consequence, and temporal context. Distribution checks should be segmented where aggregate measurements obscure an outage in one region, tenant, device family, or language.</p>
+
+</section>
+<section id="deduplication-and-idempotent-reprocessing" aria-labelledby="heading-deduplication-and-idempotent-reprocessing">
+<h2 id="heading-deduplication-and-idempotent-reprocessing">Deduplication and Idempotent Reprocessing</h2>
+<p>At-least-once delivery is common in distributed systems: a source or intermediary may resend the same event after a timeout, crash, or ambiguous acknowledgment. An <strong>idempotent</strong> transformation produces the same logical result when the same event is replayed, rather than counting it again. Stable event IDs, deterministic deduplication windows, transactional sinks, and unique constraints are typical mechanisms.</p>
+<p>An event's business identity cannot always be inferred from identical payloads. Two purchases with the same amount and merchant may be distinct, while one corrected purchase may have a new payload but the same logical identity. Deduplication must use an explicit domain rule, not a universal “drop duplicate rows” command. For CDC, source sequence and operation type may be necessary to distinguish correction, reversal, and retransmission.</p>
+<p>The slogan “exactly once” often refers to a particular processor's state and sink transaction boundary. It does not promise a business operation will occur once across external APIs, side effects, and unrelated systems. Feature update paths should be evaluated end to end for retry behavior and auditability.</p>
+
+</section>
+<section id="transformations-units-and-reusable-features" aria-labelledby="heading-transformations-units-and-reusable-features">
+<h2 id="heading-transformations-units-and-reusable-features">Transformations, Units, and Reusable Features</h2>
+<p>A <strong>transformation</strong> converts validated observations into derived values. Examples include currency normalization, categorical mappings, one-hot or learned encodings, lag variables, ratio calculations, moving aggregates, document embeddings, and missingness indicators. Shared transformation logic reduces duplication, but generalized reuse can create misleading features if different use cases require different temporal windows or entity definitions.</p>
+<p>Every derivation should declare its inputs, output type, units, treatment of missing or censored data, and version. Distinguish <strong>stateless</strong> transformations (e.g., converting centimeters to meters) from <strong>stateful</strong> transformations (e.g., a customer's trailing spending total). Distinguish transformations derived exclusively from inference-time observations from those fitted using the training population, such as normalization means, imputers, or categorical vocabularies.</p>
+<p>Fitted preprocessing must be trained only on permitted training evidence and packaged with the corresponding model. Recomputing mean and variance from a later production population can silently change model behavior even if all feature names remain the same. For this reason, a feature store does not eliminate the need for a versioned model preprocessing pipeline.</p>
+
+</section>
+<section id="windowed-aggregations-and-calendar-semantics" aria-labelledby="heading-windowed-aggregations-and-calendar-semantics">
+<h2 id="heading-windowed-aggregations-and-calendar-semantics">Windowed Aggregations and Calendar Semantics</h2>
+<p>Windowed features include counts, averages, maxima, rates, and distinct-value estimates over specified horizons. The definition should state whether the window is sliding, tumbling, session-based, or calendar-aligned; how late observations alter it; which timezone governs boundaries; and whether the prediction event itself is included. A “past month” metric could mean the previous calendar month or the preceding thirty times twenty-four hours.</p>
+<p>For every feature, decide whether it summarizes completed windows or a partially accumulated current window. A completed-day count may be stable and easy to audit but less timely than a live trailing-hour count. Approximate distinct-count algorithms can reduce memory but introduce bounded estimation error that might be unacceptable for some legal or financial decisions. Document approximation schemes and precision expectations rather than presenting estimated values as exact.</p>
+<p>Window boundaries should be tested at daylight-saving transitions, leap days, end-of-month boundaries, and the moment of event ingestion. Temporal bugs often pass ordinary unit tests because most test records do not sit at those boundaries.</p>
+
+</section>
+<section id="labels-outcomes-and-the-feature-boundary" aria-labelledby="heading-labels-outcomes-and-the-feature-boundary">
+<h2 id="heading-labels-outcomes-and-the-feature-boundary">Labels, Outcomes, and the Feature Boundary</h2>
+<p>A <strong>label</strong> describes the target outcome the model learns to predict. A <strong>feature</strong> describes available evidence on which it may rely. The distinction is temporal as well as conceptual. A chargeback result arriving weeks after a purchase may be a valid training label for that purchase, but cannot be an input feature at the original transaction's prediction time.</p>
+<p>Labels can be delayed, disputed, corrected, and censored. Dataset builders should define observation windows, minimum outcome maturity, unresolved-case handling, and known reporting biases. For churn prediction, for instance, “no recent activity” may function simultaneously as a feature and part of the label definition. If the windows overlap improperly, the model can learn a trivial proxy for the outcome instead of a genuine predictor.</p>
+<p>Feature and label pipelines should preserve separate ownership and independent temporal tests. A clean feature store is not proof that a training set is leakage-free if labels, split logic, or sampling inadvertently reveal the future.</p>
+
+</section>
+<section id="offline-feature-data-and-historical-retrieval" aria-labelledby="heading-offline-feature-data-and-historical-retrieval">
+<h2 id="heading-offline-feature-data-and-historical-retrieval">Offline Feature Data and Historical Retrieval</h2>
+<p>An <strong>offline feature path</strong> supplies historical, often large-scale, feature data for training, evaluation, and backtesting. It may be implemented through a warehouse, object-backed tables, or another analytical system. Offline access typically prioritizes rich queries, reproducible time ranges, lineage, and reasonable batch throughput over millisecond response time.</p>
+<p>Historical retrieval must align each example with feature values that were valid and eligible at its prediction time. It should also preserve the exact feature-definition version, relevant source snapshots, correction policy, and permissions. If current code recomputes historical values from modified sources, the resulting dataset may be a legitimate new reconstruction, but it is not necessarily the dataset used by the original model.</p>
+<p>The <strong>offline store</strong> in a particular feature platform may be a logical adapter to external data rather than a second copy under the feature store's control. For example, Feast documents offline storage for historical feature extraction and online storage for low-latency serving, with point-in-time joins. Implementation details and support for transformations differ across configurations. See the primary documentation in the reference section.</p>
+
+</section>
+<section id="online-feature-serving-and-low-latency-lookup" aria-labelledby="heading-online-feature-serving-and-low-latency-lookup">
+<h2 id="heading-online-feature-serving-and-low-latency-lookup">Online Feature Serving and Low-Latency Lookup</h2>
+<p>An <strong>online feature path</strong> provides current or recent features for interactive inference, often using a low-latency key-value or specialized serving database. A lookup is typically keyed by entity identity and feature selection. Online paths should define behavior for missing keys, expired features, partial responses, stale values, read timeouts, and cross-region disruptions. A sub-10-millisecond database response is not useful if the returned value is days old when the business decision requires minutes.</p>
+<p>Some online stores retain only the most recently accepted value per entity, while offline systems retain history. That is a common design, not a universal invariant. Amazon SageMaker Feature Store, for example, documents online/latest and historical/offline behavior in its feature-store concepts. Differences in tier and configuration matter; do not assume that every vendor offers the same persistence or replication path.</p>
+<p>The inference service must not automatically accept all returned fields as trusted. It should check the approved feature schema, feature version, entity scope, freshness, and permitted source lineage. Failure behavior must be documented: abstain, use an approved bounded default, request human review, or reject the prediction request, depending on the application.</p>
+
+</section>
+<section id="feature-registries-definitions-and-ownership" aria-labelledby="heading-feature-registries-definitions-and-ownership">
+<h2 id="heading-feature-registries-definitions-and-ownership">Feature Registries, Definitions, and Ownership</h2>
+<p>A <strong>feature registry</strong> records definitions, metadata, and discoverable references to features. Common elements include feature name, version, entity key, schema, source, transformation, owner, privacy classification, expected update cadence, materialization behavior, and consumers. The registry is a <em>control plane</em>: a searchable description of what should exist and how it should be used. A physical feature store is one possible <em>data plane</em> for the actual values.</p>
+<p>A registry is trustworthy only when its declarations agree with deployed behavior. For example, if the catalog says <code>balance_usd</code> is converted at the rate available at transaction time but the production pipeline converts using today's exchange rate, the registry has become misleading documentation. Automated compatibility checks, deployment manifests, lineage capture, and change approvals should connect registry updates to code and storage changes.</p>
+<p>Ownership should be explicit. A central platform can operate the infrastructure, but a domain owner usually remains responsible for deciding whether a business concept such as “active customer” is defined correctly. A source steward can approve source changes; a model owner can decide whether a changed feature is acceptable for a particular model. Treating every registry write as an authorized production change blurs these responsibilities.</p>
+
+</section>
+<section id="entities-feature-views-and-feature-services" aria-labelledby="heading-entities-feature-views-and-feature-services">
+<h2 id="heading-entities-feature-views-and-feature-services">Entities, Feature Views, and Feature Services</h2>
+<p>In feature-store terminology, an <strong>entity</strong> describes the object to which features attach, often through join keys. A <strong>feature view</strong> commonly groups related features, data sources, schemas, and temporal metadata. A <strong>feature service</strong> can specify the collection of feature references required by one model or serving use case. These concepts are especially prominent in Feast, although names and exact semantics vary among platforms.</p>
+<p>For example, an entity <code>merchant_id</code> might have a feature view <code>merchant_activity_hourly</code> with <code>sales_24h</code>, <code>failed_payments_24h</code>, and <code>active_terminals</code>. A model-specific feature service could combine that view with features keyed by <code>device_id</code> and <code>customer_id</code>. The service contract must define how those multiple keys arrive with the prediction request; a feature-store abstraction does not automatically resolve ambiguous identity links.</p>
+<p>Feature-definition code should be reviewed like application code. A change from <code>count &gt;= 5</code> to <code>count &gt; 5</code> changes outcomes at the boundary even though the feature type is still integer. Versioning policies should distinguish backward-compatible additions from semantic breaks, and model teams should pin approved versions rather than silently adopting all latest definitions.</p>
+
+</section>
+<section id="materialization-moving-historical-features-into-serving-state" aria-labelledby="heading-materialization-moving-historical-features-into-serving-state">
+<h2 id="heading-materialization-moving-historical-features-into-serving-state">Materialization: Moving Historical Features Into Serving State</h2>
+<p><strong>Materialization</strong> commonly means copying or computing a subset of feature data for efficient online lookup. A batch process might materialize an account's last thirty days of activity each hour; a streaming processor might update the same count after every event. Both paths must agree on entity identity, inclusion rules, time boundaries, and feature version.</p>
+<p>The materialization job should expose a clearly identified source interval, watermark, transform revision, destination version, and completion status. It must not mark an interval successful before a partial failure is reconciled. Atomic swaps, versioned partitions, checkpointed upserts, or controlled dual writes can help prevent a mixed state in which different entity keys reflect incompatible update generations.</p>
+<p>A materialization schedule is not the same as a freshness guarantee. A job that runs every five minutes can still serve stale data if the source stopped publishing or the job processed a delayed backlog. Good monitoring records the age of the <strong>data represented by the value</strong>, not only the most recent time a job ran.</p>
+
+</section>
+<section id="point-in-time-correctness-the-central-historical-problem" aria-labelledby="heading-point-in-time-correctness-the-central-historical-problem">
+<h2 id="heading-point-in-time-correctness-the-central-historical-problem">Point-in-Time Correctness: The Central Historical Problem</h2>
+<p>A <strong>point-in-time join</strong> reconstructs the latest admissible feature value for each prediction entity at each prediction timestamp. In its simplest form, join a prediction row for entity <code>e</code> at time <code>t</code> to the most recent value where <code>feature_entity = e</code> and <code>feature_event_time &lt;= t</code>, subject to TTL and version rules. If the model could not have accessed a late-arriving value at <code>t</code>, use an additional availability cutoff. Different platforms express these details differently; a query advertised as point-in-time correct should be tested against the actual definition of admissibility.</p>
+<p>Consider historical records for one customer: a seven-day purchase count is 3 at 10:00 Monday, 4 at 10:00 Tuesday, and 5 at 10:00 Wednesday. An order scored Tuesday at 09:00 should use the Monday value unless a newer valid value was available then. Using Wednesday's value reveals the future, even if Wednesday's row appears as the “current” feature in a database today.</p>
+<p>The operation must handle ties, duplicate timestamps, null keys, deleted records, and changes in feature definition. Ordering solely by timestamp is ambiguous when two revisions share the same timestamp; an additional stable sequence or revision rule is needed. Train/test splitting cannot rescue a dataset that has already been assembled with future feature information.</p>
+
+</section>
+<section id="a-simplified-point-in-time-sql-pattern" aria-labelledby="heading-a-simplified-point-in-time-sql-pattern">
+<h2 id="heading-a-simplified-point-in-time-sql-pattern">A Simplified Point-in-Time SQL Pattern</h2>
+<p>The following SQL illustrates a general <strong>as-of join</strong>. It is conceptual and must be adapted to the actual warehouse dialect, ingestion metadata, and the requirements for ties or deletions. It treats an example's <code>prediction_at</code> as the maximum allowed event and availability time and chooses the latest eligible feature row. Production systems need additional source-version and retention controls.</p>
+<pre><code class="language-sql">WITH candidates AS (
+  SELECT
+    p.prediction_id,
+    p.customer_id,
+    p.prediction_at,
+    f.txn_count_7d,
+    f.event_at AS feature_event_at,
+    f.available_at AS feature_available_at,
+    ROW_NUMBER() OVER (
+      PARTITION BY p.prediction_id
+      ORDER BY f.event_at DESC,
+               f.available_at DESC,
+               f.revision_id DESC
+    ) AS feature_rank
+  FROM prediction_examples AS p
+  LEFT JOIN customer_features AS f
+    ON p.customer_id = f.customer_id
+   AND f.event_at &lt;= p.prediction_at
+   AND f.available_at &lt;= p.prediction_at
+   AND f.event_at &gt; p.prediction_at - INTERVAL '7 days'
+)
+SELECT prediction_id, customer_id, prediction_at,
+       txn_count_7d, feature_event_at, feature_available_at
+FROM candidates
+WHERE feature_rank = 1;
+</code></pre>
+<p>The seven-day bound here limits the <em>age of the stored feature value</em>, not the aggregation window used to calculate <code>txn_count_7d</code>; those must be defined separately. If no feature row meets the criteria, the left join preserves the prediction row with a missing feature. That is usually preferable to silently losing hard cases from the training set. Test the query on synthetic future-dated, late-arriving, duplicate, missing-entity, and boundary-timestamp cases before trusting it in an evaluation pipeline.</p>
+
+</section>
+<section id="backfills-corrections-and-historical-restatements" aria-labelledby="heading-backfills-corrections-and-historical-restatements">
+<h2 id="heading-backfills-corrections-and-historical-restatements">Backfills, Corrections, and Historical Restatements</h2>
+<p>A <strong>backfill</strong> reruns a transformation for past intervals, perhaps to add a new feature, correct a source defect, or rebuild a missing partition. Backfills are necessary maintenance operations but can invalidate a training dataset if a historical partition is overwritten without preserving the original version. A backfill plan should state the time range, input snapshots, new code version, expected row changes, impact on dependent features, reconciliation checks, and rollback path.</p>
+<p>There are at least two legitimate historical objectives. <strong>Reconstruction</strong> attempts to reproduce what the model could have known at the time. <strong>Restatement</strong> attempts to compute corrected historical truth using information discovered later. The two must not be confused. When an old monetary amount is revised after an accounting investigation, it may be correct to restate analytical totals while preserving the previous operational view for evaluation of decisions actually made.</p>
+<p>Backfills can overwhelm online serving resources if they write millions of historical updates through the same path that handles live requests. Isolate bulk operations, enforce rate limits, and ensure old event times cannot overwrite newer online values. Make lineage updates visible to affected model versions and audit logs.</p>
+
+</section>
+<section id="late-events-watermarks-and-out-of-order-updates" aria-labelledby="heading-late-events-watermarks-and-out-of-order-updates">
+<h2 id="heading-late-events-watermarks-and-out-of-order-updates">Late Events, Watermarks, and Out-of-Order Updates</h2>
+<p>Sources rarely deliver every event in perfect timestamp order. Devices go offline, networks retry, partner systems upload files late, and humans correct records days later. A pipeline must define which event order controls aggregation and whether late arrivals cause retrospective recomputation. A <strong>watermark</strong> is a processor's estimate or contract for event-time progress, used to manage how long it waits for late inputs. It is not a proof that no later event will appear.</p>
+<p>A merchant's <code>sales_1h</code> feature may change after a payment arrives ten minutes late. Updating the online feature to reflect the corrected past window may be appropriate; for a prediction already made, however, the corrected value should not be substituted retroactively when evaluating what information was available. Preserve the original served value or enough input/processing history to reconstruct it.</p>
+<p>When out-of-order records update a latest-value store, compare event times and stable revisions so an old value does not replace a new one. This protection should not suppress legitimate corrections to old records whose effects must propagate into aggregate features. A robust design makes the difference between “older snapshot” and “correction to historical evidence” explicit.</p>
+
+</section>
+<section id="retention-time-to-live-and-deletion" aria-labelledby="heading-retention-time-to-live-and-deletion">
+<h2 id="heading-retention-time-to-live-and-deletion">Retention, Time-to-Live, and Deletion</h2>
+<p>Retention specifies how long data remains in a system; a <strong>serving TTL</strong> specifies when a value becomes too old to use; a <strong>join lookback</strong> limits historical eligibility. Their different purposes deserve separate configuration and tests. Retention may be governed by law, contractual limits, privacy policy, or business necessity. Deleting a record from an online cache does not automatically erase its historical versions, backups, experiment datasets, monitoring logs, or derived model artifacts.</p>
+<p>Deletion workflows should distinguish soft deletes, tombstones, hard deletes, legal holds, and corrected identities. A feature value derived from several events might need recomputation when one contributing record is removed. Exactly how to respond to a training-data deletion request can depend on governing law, processing purpose, and technical feasibility; it is not sufficient to promise that removing a feature-store row automatically removes its influence from a trained model.</p>
+<p>When features are no longer justified, a documented <strong>feature retirement</strong> process should remove serving dependencies, update the registry, expire remaining values under policy, and retain only evidence necessary for permitted auditing. Minimize raw sensitive data in logs: a debugging trace that copies a customer's full feature vector can become a second uncontrolled data repository.</p>
+
+</section>
+<section id="trainingserving-consistency-and-skew" aria-labelledby="heading-trainingserving-consistency-and-skew">
+<h2 id="heading-trainingserving-consistency-and-skew">Training–Serving Consistency and Skew</h2>
+<p><strong>Training–serving skew</strong> occurs when a feature has a different meaning or distribution during training than during production inference, outside any expected population shift. Causes include distinct code paths, inconsistent time windows, null defaults, units, categorical mappings, selection filters, event arrival latency, and differences in key resolution. An online feature API can return a successfully typed response that is semantically inconsistent with the historical training pipeline.</p>
+<p>A powerful control is <strong>feature parity testing</strong>: select historical prediction requests for which serving-time features were logged or reconstructed, then compare each feature with the value obtained from the historical pipeline under the correct clock and version constraints. Compare exact values for deterministic features and defined tolerances for floating-point or approximate aggregates. Document expected discrepancies, such as late-data corrections, rather than dismissing every mismatch as noise.</p>
+<p>The strongest design shares transformation definitions where feasible while recognizing that batch and streaming engines may implement the same rule differently. Parity is an observed property supported by tests, not something automatically granted by adopting a single product vendor.</p>
+
+</section>
+<section id="offline-to-online-consistency-and-version-pinning" aria-labelledby="heading-offline-to-online-consistency-and-version-pinning">
+<h2 id="heading-offline-to-online-consistency-and-version-pinning">Offline-to-Online Consistency and Version Pinning</h2>
+<p>Consistency must be described per feature and use case. A slowly changing property type may be refreshed daily, while device-risk activity may need second-level updates. Some organizations choose <strong>eventual consistency</strong> between offline and online paths and measure an acceptable lag. Others require a synchronized snapshot for a particular critical operation. Requiring universal strong consistency can impose unjustified cost and latency; assuming universal eventual consistency can be unsafe.</p>
+<p>An inference request should be traceable to the feature service version, model version, and policy version that governed it. For high-stakes systems, preserving the <strong>served feature values or a privacy-preserving reproducible reference</strong> can help explain disputed outcomes. Traceability is particularly valuable when an online state is mutable and cannot otherwise be reconstructed exactly from today's data.</p>
+<p>A semantic feature change should not take effect for all models implicitly. Model A may have been trained on <code>avg_spend_30d</code> excluding refunds while Model B expects the net amount. A registry alias called “latest” cannot resolve this conflict; use explicit versions or independent features with precise names and contracts.</p>
+
+</section>
+<section id="dataset-snapshots-and-reproducibility" aria-labelledby="heading-dataset-snapshots-and-reproducibility">
+<h2 id="heading-dataset-snapshots-and-reproducibility">Dataset Snapshots and Reproducibility</h2>
+<p>A reproducible training dataset depends on more than a saved CSV. A defensible manifest records source snapshot identifiers, query/code revision, feature definitions, entity selection, prediction timestamps, label rules, join logic, timezone, source corrections, schema and preprocessing versions, and partition identifiers. It should include enough information to explain changes without unnecessarily preserving sensitive inputs forever.</p>
+<p><strong>Data lineage</strong> describes how one artifact or value depends on other sources and transformations. Field-level lineage can show that a model input comes from a particular ledger table and conversion rule. Row- or event-level provenance can show which observations contributed to one prediction, though it may be costly to retain. Choose lineage granularity based on use case, operational cost, and audit risk.</p>
+<p>A model registry and experiment tracker can link feature datasets to training runs and release artifacts. These records explain what was used; they do not establish that every source was correct or lawfully obtained. Reproducibility also has limits when external enrichment APIs, nondeterministic processing, or source deletions cannot be recreated. Explicitly record these limits.</p>
+
+</section>
+<section id="orchestration-and-dependency-management" aria-labelledby="heading-orchestration-and-dependency-management">
+<h2 id="heading-orchestration-and-dependency-management">Orchestration and Dependency Management</h2>
+<p>Orchestration coordinates extraction, validation, transformation, materialization, evaluation, and notification. Some workflows run at scheduled times; others respond to new data assets or explicit events. A job should start only when its required inputs meet freshness and completeness constraints, not merely because the wall clock reached an arbitrary hour.</p>
+<p>Dependency graphs should distinguish a successful task execution from a <strong>successful production of usable data</strong>. A task may exit with code zero while producing zero rows due to an upstream outage. Strong orchestration combines task status with data contracts and publication gates. Reprocessing should be bounded and idempotent; an automated retry of a non-idempotent external action can worsen an incident.</p>
+<p>Apache Airflow's current documentation describes <strong>assets</strong> and asset-aware scheduling (a concept previously called datasets), but using an orchestrator does not automatically supply semantic quality assurance or security authorization. A scheduler is a coordination component, not the ultimate owner of business truth.</p>
+
+</section>
+<section id="data-observability-and-service-level-objectives" aria-labelledby="heading-data-observability-and-service-level-objectives">
+<h2 id="heading-data-observability-and-service-level-objectives">Data Observability and Service-Level Objectives</h2>
+<p><strong>Observability</strong> is the ability to explain what a pipeline did and how its outputs are behaving. Useful dimensions include source arrival delay, job success, input/output row count, null and duplicate rates, schema changes, key coverage, feature freshness, transformation latency, online lookup latency, miss rate, materialization lag, access-policy denials, and model-level drift. Metrics should be sliced by critical source, tenant, geography, device class, and feature group when appropriate.</p>
+<p>A <strong>service-level objective (SLO)</strong> translates an expectation into a measurable threshold. “Fraud features must be fresh” is not actionable; “for 99% of scored payments, the device-event aggregate must represent events available no more than two minutes before scoring” is testable, although its threshold is hypothetical and must be justified for the use case. Distinguish SLOs for <em>data freshness</em>, <em>lookup latency</em>, <em>feature availability</em>, and <em>data accuracy</em>. A service can meet one and fail the others.</p>
+<p>Alerting should identify ownership and provide a response plan. A slow-moving nullable field may require a warning, while a missing identity feature in a high-risk decision may require immediate abstention. Monitoring should record not only detection but also remediation decision, incident duration, affected predictions, and validation of recovery.</p>
+
+</section>
+<section id="monitoring-distribution-changes-and-broken-definitions" aria-labelledby="heading-monitoring-distribution-changes-and-broken-definitions">
+<h2 id="heading-monitoring-distribution-changes-and-broken-definitions">Monitoring Distribution Changes and Broken Definitions</h2>
+<p>A distribution shift may result from legitimate behavior, changed source collection, altered transformation logic, or a real change in the relationship between inputs and outcomes. Monitoring should not label every statistical difference “model drift.” If a payment provider modifies a country code field and thousands of values become unknown, the root cause is probably a schema or mapping defect. If purchase frequency changes during a holiday, the source may be functioning correctly even as the model's assumptions become less reliable.</p>
+<p>Useful signals include distribution summaries, missingness, category frequency, numerical quantiles, correlation structure, categorical novelty, and training-to-serving parity. Interpretation needs a baseline with comparable time, population, and sampling. Simple threshold alarms can trigger on expected seasonal cycles, while a global average can hide serious failures within a rare but affected cohort.</p>
+<p>An observability program should link feature incidents to downstream predictions and models, enabling impact analysis. That dependency graph supports decisions about rollback, recalculation, customer notification, or human review when warranted. Automatic retraining is not a safe substitute for diagnosing a broken source.</p>
+
+</section>
+<section id="access-control-tenant-separation-and-least-privilege" aria-labelledby="heading-access-control-tenant-separation-and-least-privilege">
+<h2 id="heading-access-control-tenant-separation-and-least-privilege">Access Control, Tenant Separation, and Least Privilege</h2>
+<p>A shared feature platform can become a concentrated repository of sensitive business and personal information. Apply <strong>least privilege</strong> separately to raw sources, offline queries, online lookups, feature-definition changes, materialization jobs, and audit logs. A model that may access a customer's transaction count should not automatically inherit permission to read full transaction descriptions or unrelated account histories.</p>
+<p>Tenant separation must be enforced in key design, storage policy, authentication, authorization, query filtering, and testing. Prefixing a key with <code>tenant_id</code> helps prevent collision but does not replace policy enforcement. A compromised inference service should not be able to enumerate every customer's feature vector simply by guessing IDs; service identities should have restricted scopes, quotas, and auditable access patterns.</p>
+<p>Encrypt data in transit and at rest where appropriate, manage service secrets outside source code, and control exports from notebooks. Logs and tracing must redact sensitive values. Policy changes should propagate to cached/materialized data and avoid leaving historical data reachable through an older endpoint or replica.</p>
+
+</section>
+<section id="privacy-consent-and-data-minimization" aria-labelledby="heading-privacy-consent-and-data-minimization">
+<h2 id="heading-privacy-consent-and-data-minimization">Privacy, Consent, and Data Minimization</h2>
+<p>Data-minimization principles call for collecting and retaining only what is necessary for an authorized purpose. Derived features can still be sensitive: a probability that someone will develop a medical condition or an inferred location pattern can reveal private information even if the raw records are not present. Hashing an identifier is not an automatic guarantee of anonymity when the value remains linkable across datasets.</p>
+<p>Document the lawful or contractual basis for processing, consent requirements when applicable, geographical transfer restrictions, deletion obligations, and limits on secondary use. <strong>Purpose limitation</strong> means a feature collected for inventory replenishment is not automatically appropriate for employment decisions. Organizations should perform legal and domain-specific reviews where required; this technical article cannot decide what is lawful in each jurisdiction.</p>
+<p>Sensitive fields should be excluded from general-purpose reuse by default. Some use cases require protected attributes for fairness analysis even when those attributes are excluded from model inputs; access to them should be purpose-limited and carefully governed rather than assumed either universally prohibited or universally permissible.</p>
+
+</section>
+<section id="security-threats-to-data-and-feature-pipelines" aria-labelledby="heading-security-threats-to-data-and-feature-pipelines">
+<h2 id="heading-security-threats-to-data-and-feature-pipelines">Security Threats to Data and Feature Pipelines</h2>
+<p>The feature supply chain has attack surfaces: upstream API credentials, ingestion topics, schema registries, build systems, object storage, notebooks, transformation code, online retrieval services, and model inputs. An attacker who contaminates a source can influence a model without ever modifying its weights. <strong>Data poisoning</strong> might introduce falsified labels, artificial feature values, or a carefully constructed pattern that triggers harmful behavior after deployment.</p>
+<p>Mitigations include source authentication, signed or otherwise verifiable artifact provenance, restricted write access, anomaly detection, data review for high-risk feeds, reproducible transformations, registry authorization, and independent evaluation on trusted evidence. <strong>Prompt injection</strong> in retrieved text is a distinct issue from tabular feature manipulation but can enter through the same ingestion architecture when documents or embeddings supply AI context.</p>
+<p>Audit logs are useful only if they cannot be trivially altered by the same principal that performs sensitive writes. Apply separation of duties for material changes and maintain incident procedures for suspected poisoning, unauthorized feature queries, or schema takeover.</p>
+
+</section>
+<section id="feature-pipelines-for-images-audio-text-and-embeddings" aria-labelledby="heading-feature-pipelines-for-images-audio-text-and-embeddings">
+<h2 id="heading-feature-pipelines-for-images-audio-text-and-embeddings">Feature Pipelines for Images, Audio, Text, and Embeddings</h2>
+<p>Not all AI input pipelines fit a row-per-entity feature table. Image tasks need stable media identifiers, capture metadata, labeling versions, transforms, and rules preventing near-duplicate or same-subject leakage across splits. Audio workflows may need resampling, segment boundaries, transcription provenance, language labels, and retention limits. Text pipelines depend on tokenizer or chunker versions, source document revisions, deduplication, sensitive-data handling, and language coverage.</p>
+<p>An <strong>embedding</strong> is a learned vector representing text, images, users, products, or other objects. Its meaning depends on the encoder model, preprocessing, pooling, normalization, and version. Two embedding vectors of the same dimensionality are not necessarily comparable if generated by incompatible encoders. A new embedding model may require a rebuilt similarity index and coordinated version rollout rather than silent replacement of vectors.</p>
+<p>Feature stores can hold embedding features in some configurations, but low-latency similarity retrieval often uses a separate vector index. Keep metadata linking embeddings to source objects, encoder versions, permitted audiences, expiration rules, and index-generation epochs. When a source document is deleted or access changes, its embedded representation and retrieval entries may need corresponding updates.</p>
+
+</section>
+<section id="retrieval-augmented-generation-and-document-pipelines" aria-labelledby="heading-retrieval-augmented-generation-and-document-pipelines">
+<h2 id="heading-retrieval-augmented-generation-and-document-pipelines">Retrieval-Augmented Generation and Document Pipelines</h2>
+<p><strong>Retrieval-augmented generation (RAG)</strong> uses external materials at inference time to supply relevant context to a generative model. Its data pipeline includes document acquisition, parsing, segmentation, metadata enrichment, indexing, retrieval, authorization filtering, and sometimes reranking. A document index is not the same as a traditional feature store, but both require lineage, freshness, access control, versioning, and evaluation of retrieved evidence.</p>
+<p>A robust document pipeline preserves the source ID, version, permitted audience, timestamps, chunking rule, embedding model version, and indexing status. Retrieval must apply document-level permissions <em>before</em> content reaches the model. Removing a file from one interface does not guarantee that old chunks and embeddings have been removed from every retrieval copy. In regulated or confidential uses, retrieval traces may need careful retention and redaction.</p>
+<p>Generated answers can cite retrieved passages yet remain wrong; citations do not substitute for verifying that each passage supports the claim. Evaluation should measure retrieval coverage, source relevance, authorization correctness, groundedness, abstention when evidence is missing, and index freshness rather than relying only on answer fluency.</p>
+
+</section>
+<section id="batch-scoring-versus-online-scoring" aria-labelledby="heading-batch-scoring-versus-online-scoring">
+<h2 id="heading-batch-scoring-versus-online-scoring">Batch Scoring Versus Online Scoring</h2>
+<p><strong>Batch scoring</strong> obtains a dataset, applies an approved model, and publishes outputs on a schedule. It often suits forecasting, prioritization lists, weekly resource planning, and periodic risk screening. <strong>Online scoring</strong> obtains current features and produces an answer for an interactive request. It often suits checkout risk, route decisions, personalization, and live alerts. Streaming scoring processes a flow of events and may combine stream state with point lookups.</p>
+<p>Batch jobs generally benefit from reproducible snapshots, predictable resource allocation, and simpler retries. Online systems must additionally manage tight latency budgets, partial feature responses, concurrency, and safe fallback behavior. A hybrid design can precompute stable features in batches, update fast-moving features through events, and combine both when a request arrives.</p>
+<p>A model's inference frequency should be driven by the business need, not by the fastest available infrastructure. If a daily prediction is sufficient and operationally auditable, a low-latency feature store may introduce cost without corresponding value.</p>
+
+</section>
+<section id="latency-freshness-throughput-and-cost" aria-labelledby="heading-latency-freshness-throughput-and-cost">
+<h2 id="heading-latency-freshness-throughput-and-cost">Latency, Freshness, Throughput, and Cost</h2>
+<p>Performance has several dimensions. <strong>Lookup latency</strong> is the time to retrieve features for one request. <strong>Freshness</strong> is the age of underlying evidence. <strong>Throughput</strong> measures work completed per unit time. <strong>Availability</strong> measures whether the requested service can be used. <strong>Cost</strong> includes storage, compute, network transfer, streaming operations, data quality investigations, and engineering labor. Optimizing one dimension may make another worse.</p>
+<p>Precomputing everything lowers request-time computation but increases storage and update costs. Computing on demand reduces materialization but can increase latency and load the operational database. Replicating features across regions may improve locality while complicating consistency and deletion. High-cardinality, frequently updated features can be expensive to maintain online; query patterns and tenancy limits should influence the design.</p>
+<p>Capacity planning should use the expected number of entities, feature widths, event rates, update rates, read QPS, burst patterns, retention, and availability requirements. Benchmark under representative keys and request payloads rather than empty caches. A low median response time does not guarantee acceptable tail latency during an incident.</p>
+
+</section>
+<section id="cost-governance-and-when-not-to-build-a-feature-store" aria-labelledby="heading-cost-governance-and-when-not-to-build-a-feature-store">
+<h2 id="heading-cost-governance-and-when-not-to-build-a-feature-store">Cost Governance and When Not to Build a Feature Store</h2>
+<p>A shared feature service has fixed costs: orchestration, registry operations, access policy management, on-call support, migrations, documentation, and integration with model training. These costs may exceed the benefits for a team with one static dataset, one batch model, and no plans for reuse. In such cases, a well-versioned training pipeline plus a deterministic inference transformation may be the better architecture.</p>
+<p>A feature store is more compelling when multiple teams repeatedly compute the same time-sensitive aggregates, when historical leakage is a recurring problem, when models require online and offline parity, or when governance demands traceable ownership of reused features. Evaluate expected reduction in duplicated transformation code, training-data defects, and incident recovery time, not just a feature-store vendor's marketing claims.</p>
+<p>The appropriate decision is an incremental one: standardize feature definitions and manifests first; introduce a registry if discoverability and ownership become problematic; implement a managed or custom online serving path when justified by measured latency and reuse requirements. Avoid deploying the entire platform before proving the essential use case.</p>
+
+</section>
+<section id="testing-and-ci-cd-for-feature-definitions" aria-labelledby="heading-testing-and-ci-cd-for-feature-definitions">
+<h2 id="heading-testing-and-ci-cd-for-feature-definitions">Testing and CI/CD for Feature Definitions</h2>
+<p>Treat feature definitions and transformations as deployable code. Unit tests should check known input-output pairs, null behavior, edge dates, currency units, and type conversions. Integration tests should verify upstream schemas, keys, source permissions, and storage adapters. Historical regression tests should compare point-in-time values across selected prediction timestamps. Contract tests should ensure every model expects the version that will be served.</p>
+<p>A safe release path stages a new feature definition, validates historical reconstruction, checks live materialization against a controlled source interval, and compares shadow-serving results before promotion. Versioning strategies may include a new feature name for major semantic changes, multiple simultaneous service versions, and a clear deprecation window for old consumers. Fail a release when critical invariants are violated rather than relying on human operators to notice warnings in long logs.</p>
+<p>The test suite should include replay after interruption, duplicate input, late corrections, source deletion, schema evolution, permission denial, tenant collision, empty partitions, and partial-region outage. CI can test code, but only production observability can verify data freshness under real source behavior.</p>
+
+</section>
+<section id="deployment-rollback-and-incident-response" aria-labelledby="heading-deployment-rollback-and-incident-response">
+<h2 id="heading-deployment-rollback-and-incident-response">Deployment, Rollback, and Incident Response</h2>
+<p>An operational runbook should identify who owns the source, transformation, online materialization, serving policy, and model. The runbook should state how to locate affected partitions, suspend publication of faulty features, restore an approved version, notify downstream consumers, and reconcile results after recovery. Do not automatically roll back a model when the real defect is an upstream feature feed; the model may be functioning as built.</p>
+<p>Rollback can be complicated because feature values evolve over time. Restoring a previous transformation version may require recalculating online state, replaying prior events, or switching serving reads to a known-good snapshot. If both old and new feature definitions are valid, maintain distinct versions until consumers migrate. Avoid rewriting production history without a change record.</p>
+<p>Incident reviews should record the earliest incorrect input, transformation version, affected entity scope, time span, model predictions impacted, mitigation, and evidence used to confirm recovery. These records support durable improvements instead of repeated one-off repairs.</p>
+
+</section>
+<section id="cross-region-edge-and-hybrid-deployment" aria-labelledby="heading-cross-region-edge-and-hybrid-deployment">
+<h2 id="heading-cross-region-edge-and-hybrid-deployment">Cross-Region, Edge, and Hybrid Deployment</h2>
+<p>Some applications require features to be served near users or devices, including regional cloud installations, factories, vehicles, and intermittently connected edge nodes. The architecture must identify the authoritative source and the rule for reconciling local updates with central history. A device's offline state may be sufficient for immediate safety functions, but it may not reflect the current enterprise-wide risk context.</p>
+<p>Regional replication can raise questions of data residency, eventual consistency, and cross-border processing. Feature definitions may be global while the values remain regionally confined. A failure in one region should not silently cause a lookup to cross into an unauthorized region or tenant. Where offline operation is expected, define feature expiration and safe-mode behavior instead of assuming connectivity is continuous.</p>
+<p>Edge feature stores or local caches can be valuable when latency and bandwidth constraints are severe, but they create additional device security, software-update, and data-deletion obligations. The simplest robust architecture often retains high-value local features and delegates less time-critical enrichment to central systems.</p>
+
+</section>
+<section id="governance-roles-and-control-boundaries" aria-labelledby="heading-governance-roles-and-control-boundaries">
+<h2 id="heading-governance-roles-and-control-boundaries">Governance Roles and Control Boundaries</h2>
+<p>A mature pipeline program separates <strong>source owner</strong>, <strong>data steward</strong>, <strong>feature author</strong>, <strong>platform operator</strong>, <strong>model owner</strong>, <strong>security/privacy reviewer</strong>, and <strong>business decision owner</strong>. These roles may be combined in a small organization, but the review trail should preserve which decisions were made. A platform engineer can ensure a pipeline executes correctly without being qualified to decide the legal meaning of a risk label or the ethical suitability of a feature.</p>
+<p>Define change authority and notification rules. Who may register a new feature? Who can broaden an access policy? Who approves a semantic change used by deployed models? Who can suspend an unsafe feature? Who accepts the residual risk if data are late or unavailable? The answers should not depend on an informal conversation during an outage.</p>
+<p>Feature reuse must be approved by purpose, not merely by technical availability. A useful operational metric for a logistics model may be inappropriate for employee performance scoring. Governance therefore combines metadata, permissions, intended-use declarations, and human judgment.</p>
+
+</section>
+<section id="worked-example-1-preventing-leakage-in-fraud-features" aria-labelledby="heading-worked-example-1-preventing-leakage-in-fraud-features">
+<h2 id="heading-worked-example-1-preventing-leakage-in-fraud-features">Worked Example 1: Preventing Leakage in Fraud Features</h2>
+<p>A payment model scores an order at 14:00 on May 6. Its inputs include a customer's seven-day approved-payment count and a merchant's trailing-hour failed-payment ratio. The customer's ledger shows three earlier approvals available by 14:00. A fourth approval occurred at 13:58 but was not published to the feature pipeline until 14:06. A fifth occurred at 14:10. A retrospective query over today's complete event table would return four approvals for the earlier window and could mistakenly include five if it lacks the time filter.</p>
+<p>For strict historical reconstruction, the model's May 6 prediction should use the feature state actually available at 14:00: three approvals, subject to the approved freshness policy. An event-time-only count that includes the 13:58 event is a valid <em>later restatement of what happened</em>, but not evidence of what the online system knew at 14:00. The 14:10 approval is invalid under either past-time interpretation. The experiment manifest should specify which historical objective it follows.</p>
+<p><strong>Design lesson:</strong> Store enough event/availability metadata and feature versions to answer what was knowable. Test against delayed and future events; a common query using only <code>WHERE event_time &lt;= prediction_time</code> may still fail if source publication is delayed.</p>
+
+</section>
+<section id="worked-example-2-customer-identity-and-a-multiplying-join" aria-labelledby="heading-worked-example-2-customer-identity-and-a-multiplying-join">
+<h2 id="heading-worked-example-2-customer-identity-and-a-multiplying-join">Worked Example 2: Customer Identity and a Multiplying Join</h2>
+<p>An online retailer creates a model-training table with 20,000 orders and joins a customer history table containing several historical rows per customer. An unconstrained join on <code>customer_id</code> yields 76,000 rows. If labels are copied to each duplicated row, frequent customers gain disproportionate weight and the train/test split may place near-duplicates on both sides. The training job runs without errors and reports an unexpectedly strong metric, masking a serious grain defect.</p>
+<p>The team first declares one prediction example per <code>order_id</code>. It then joins customer features using both the customer key and the correct as-of timestamp and selects at most one admissible feature revision per order. It checks that 20,000 prediction IDs remain, records missing-feature coverage separately, and compares the join rate across relevant customer cohorts. If several legitimate features are needed, they are combined without changing the cardinality of prediction rows.</p>
+<p><strong>Design lesson:</strong> Row-count reconciliation and key uniqueness are part of model evaluation validity. A feature lookup should not silently redefine how many examples exist.</p>
+
+</section>
+<section id="worked-example-3-a-streaming-device-risk-aggregate" aria-labelledby="heading-worked-example-3-a-streaming-device-risk-aggregate">
+<h2 id="heading-worked-example-3-a-streaming-device-risk-aggregate">Worked Example 3: A Streaming Device-Risk Aggregate</h2>
+<p>A security service counts suspicious logins for each device over the trailing ten minutes. At 09:10 the count is four; at 09:11 a delayed event with timestamp 09:05 arrives. The stream processor must decide whether the live count becomes five and whether earlier predictions need post-incident analysis. A simple increment-only counter is inadequate if old events later expire from a sliding window or if one login is retracted as a false duplicate.</p>
+<p>A robust design uses stable event IDs, keyed time-window state, expiry handling, a lateness policy, and checkpoints. The online value carries <code>event_window_end</code>, <code>computed_at</code>, and feature-definition version. Live predictions use only the current valid state; historical prediction audits preserve the state visible at their decision times. If the producer stops sending events, the pipeline does not report a “fresh” count just because its serving cache remains reachable.</p>
+<p><strong>Design lesson:</strong> Correct real-time features need temporal state and recovery semantics. An online database alone is not a complete stream-processing system.</p>
+
+</section>
+<section id="worked-example-4-a-feature-definition-changes-its-meaning" aria-labelledby="heading-worked-example-4-a-feature-definition-changes-its-meaning">
+<h2 id="heading-worked-example-4-a-feature-definition-changes-its-meaning">Worked Example 4: A Feature Definition Changes Its Meaning</h2>
+<p>A financial model uses <code>customer_spend_30d</code>. The original transformation totals settled sales but excludes refunds. A new analyst interprets “spend” as net expenditure and subtracts refunds, replacing the computation without changing the name. The online feature changes immediately while the deployed model still reflects its original training definition. Some predictions improve, others worsen, and the difference is misdiagnosed as model drift.</p>
+<p>A safer process creates a separately versioned net-spend feature, generates historical values under the new definition, evaluates its effect on candidate models, and updates model-specific feature services only after approval. Both versions can coexist during migration. The old feature is retired once all authorized consumers are known to have moved and any retention requirements are fulfilled.</p>
+<p><strong>Design lesson:</strong> Version semantic changes, not merely data types. A column that remains numeric can still become incompatible with its models.</p>
+
+</section>
+<section id="worked-example-5-a-late-data-backfill-changes-evaluation" aria-labelledby="heading-worked-example-5-a-late-data-backfill-changes-evaluation">
+<h2 id="heading-worked-example-5-a-late-data-backfill-changes-evaluation">Worked Example 5: A Late Data Backfill Changes Evaluation</h2>
+<p>An electricity-forecasting team trained a demand model using 2025 sensor data. In 2026, the utility discovers that one substation was underreporting consumption for two months and repairs the historical source. The corrected dataset is valuable for estimating actual demand, but it differs from the observations operators had when the original forecasts were issued. Rerunning the old forecast evaluation against newly corrected input features could falsely imply that the original live system had access to better data.</p>
+<p>The team maintains two labeled versions: the original observational snapshot and the corrected historical reconstruction. It evaluates <strong>operational reproducibility</strong> against the original snapshot and may conduct a separate <strong>retrospective scientific analysis</strong> using corrected measurements. Both record the source corrections and processing rules. A new model can be trained on the restatement with an explicit evaluation protocol, rather than having the original model's results silently overwritten.</p>
+<p><strong>Design lesson:</strong> Data correction and historical reproducibility pursue different goals. Distinguish both in the lineage record.</p>
+
+</section>
+<section id="worked-example-6-choosing-the-architecture-for-a-small-organization" aria-labelledby="heading-worked-example-6-choosing-the-architecture-for-a-small-organization">
+<h2 id="heading-worked-example-6-choosing-the-architecture-for-a-small-organization">Worked Example 6: Choosing the Architecture for a Small Organization</h2>
+<p>A nonprofit wants a monthly model that predicts which outreach regions need more staff. It has one stable spreadsheet feed, roughly 10,000 regional-month observations, no interactive prediction API, and two analysts. Building a streaming data platform with an online feature store would impose connector maintenance, service hosting, on-call responsibility, and access-policy overhead without demonstrable benefit.</p>
+<p>The nonprofit instead creates a versioned batch import, validates its regional identifiers and temporal boundaries, records a fixed feature-transformation script, and saves the data snapshot and model artifact manifests. It publishes a monthly prediction table only after designated reviewers approve the data-completeness report. If a second team later reuses the same features or interactive workflows emerge, the organization can introduce a feature registry or online serving layer incrementally.</p>
+<p><strong>Design lesson:</strong> Data contracts, reproducibility, and governance are essential; a separately operated feature-store product is optional.</p>
+
+</section>
+<section id="worked-example-7-a-tenant-isolation-failure" aria-labelledby="heading-worked-example-7-a-tenant-isolation-failure">
+<h2 id="heading-worked-example-7-a-tenant-isolation-failure">Worked Example 7: A Tenant-Isolation Failure</h2>
+<p>A software-as-a-service company hosts prediction services for several customers. Its feature store uses integer <code>account_id</code> values, and two tenants happen to use <code>account_id = 1042</code>. The service authenticates the requesting tenant but its lookup query uses only <code>account_id</code>. The response occasionally returns data from the other tenant, contaminating predictions and exposing confidential information.</p>
+<p>The remedy requires more than renaming the feature: the platform must enforce tenant authorization at the data layer, use a tenant-scoped key such as <code>(tenant_id, account_id)</code>, prevent unscoped enumeration, and test identical account IDs across tenants. Dependent materializations must be rebuilt where mixed historical values exist. Incident investigation should determine which responses were affected, what data were exposed, and whether legal or contractual notification is required.</p>
+<p><strong>Design lesson:</strong> Feature correctness includes access control and identity scope. Plausible feature values can still belong to the wrong subject.</p>
+
+</section>
+<section id="worked-example-8-embedding-index-refresh-for-a-document-assistant" aria-labelledby="heading-worked-example-8-embedding-index-refresh-for-a-document-assistant">
+<h2 id="heading-worked-example-8-embedding-index-refresh-for-a-document-assistant">Worked Example 8: Embedding Index Refresh for a Document Assistant</h2>
+<p>An internal policy assistant indexes documents into a vector-search service and uses an approved language model to answer employees' questions. Its document pipeline changes the chunk size and switches to a new embedding encoder. Even if the new encoder outputs vectors of the same dimension, the old index may encode a different similarity geometry; mixing old and new vectors can degrade retrieval in ways that are hard to attribute.</p>
+<p>The team builds a new index generation, ties it to a fixed source-document snapshot, records the parser and chunker versions, and evaluates retrieval on representative queries. Document permissions are tested before serving. During controlled rollout, the retrieval service points to either the old or the new index as an atomic selection, and users' traces identify the version. If a confidential source is revoked, its indexed chunks are removed or access-blocked according to policy across every active generation.</p>
+<p><strong>Design lesson:</strong> Document and embedding pipelines need the same lineage, versioning, and authorization discipline as structured feature stores—even when a different retrieval technology is used.</p>
+
+</section>
+<section id="worked-example-9-freshness-budget-and-a-safe-fallback" aria-labelledby="heading-worked-example-9-freshness-budget-and-a-safe-fallback">
+<h2 id="heading-worked-example-9-freshness-budget-and-a-safe-fallback">Worked Example 9: Freshness Budget and a Safe Fallback</h2>
+<p>A vehicle-maintenance model requires three features: odometer readings refreshed daily, ambient temperature refreshed every fifteen minutes, and an engine vibration aggregate refreshed every thirty seconds. A single global TTL of one hour would incorrectly reject a valid daily odometer reading while permitting vibration data far too old for the immediate diagnosis. The inference service therefore defines per-feature maximum ages based on the intended decision.</p>
+<p>During a sensor outage, the vibration aggregate becomes sixty seconds old. The pipeline marks it stale, and the model endpoint follows an approved fallback policy: it may produce a limited informational result, but it does not issue an automated safety-critical “all clear.” The response includes a machine-readable data-quality status, and the incident is linked to affected prediction IDs. Operators repair the sensor feed before re-enabling normal automation.</p>
+<p><strong>Design lesson:</strong> Freshness is feature- and decision-dependent. Availability of the API does not establish sufficiency of its evidence.</p>
+
+</section>
+<section id="common-failure-modes-and-corrective-controls" aria-labelledby="heading-common-failure-modes-and-corrective-controls">
+<h2 id="heading-common-failure-modes-and-corrective-controls">Common Failure Modes and Corrective Controls</h2>
+<table>
+<thead>
+<tr>
+<th>Failure mode</th>
+<th>Why it fails</th>
+<th>Preferred control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Current-state join used for historical training</td>
+<td>Later observations enter earlier examples</td>
+<td>Point-in-time joins with availability-time limits</td>
+</tr>
+<tr>
+<td>Duplicate-producing feature join</td>
+<td>Data grain and statistical weights change</td>
+<td>Declared keys and cardinality assertions</td>
+</tr>
+<tr>
+<td>One timestamp used for all purposes</td>
+<td>Event, ingestion, and knowability are confused</td>
+<td>Explicit clock and publication semantics</td>
+</tr>
+<tr>
+<td>“Exactly once” assumed across external systems</td>
+<td>Retries may duplicate side effects</td>
+<td>Idempotent writes and end-to-end replay tests</td>
+</tr>
+<tr>
+<td>Latest feature version adopted implicitly</td>
+<td>Deployed model expectations become invalid</td>
+<td>Pinned feature and model contracts</td>
+</tr>
+<tr>
+<td>Scheduled job counted as proof of freshness</td>
+<td>Upstream sources may be late or empty</td>
+<td>Source-to-serving lag metrics and SLOs</td>
+</tr>
+<tr>
+<td>Old correction overwrites current online state</td>
+<td>Out-of-order updates cause regression</td>
+<td>Version-aware and timestamp-aware upserts</td>
+</tr>
+<tr>
+<td>Backfill overwrites only historical copy</td>
+<td>Old experiment cannot be reproduced</td>
+<td>Immutable/versioned snapshots and lineage</td>
+</tr>
+<tr>
+<td>Data catalog confused with runtime validation</td>
+<td>Documentation may be detached from execution</td>
+<td>Deployment-linked contracts and continuous checks</td>
+</tr>
+<tr>
+<td>Global online TTL for unlike features</td>
+<td>Critical inputs can be stale while benign ones expire</td>
+<td>Per-feature freshness policy</td>
+</tr>
+<tr>
+<td>Cross-tenant key collision</td>
+<td>Wrong-subject data disclosed or consumed</td>
+<td>Tenant-scoped keys plus enforced authorization</td>
+</tr>
+<tr>
+<td>Embedding encoder replaced without index rebuild</td>
+<td>Incompatible vector representations are mixed</td>
+<td>Coordinated index generations and versioning</td>
+</tr>
+<tr>
+<td>Bad data triggers automatic retraining</td>
+<td>New model inherits an upstream defect</td>
+<td>Source diagnosis before release proposals</td>
+</tr>
+<tr>
+<td>Cached feature deletion treated as total deletion</td>
+<td>Historical/derived copies remain</td>
+<td>End-to-end retention and deletion inventory</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="selecting-a-feature-architecture" aria-labelledby="heading-selecting-a-feature-architecture">
+<h2 id="heading-selecting-a-feature-architecture">Selecting a Feature Architecture</h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Recommended starting pattern</th>
+<th>Upgrade trigger</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One static dataset, batch model</td>
+<td>Reproducible scripts and versioned snapshots</td>
+<td>Multiple teams require shared feature definitions</td>
+</tr>
+<tr>
+<td>Several batch models with reusable transformations</td>
+<td>Warehouse or lakehouse plus catalog/registry</td>
+<td>Frequent semantic conflicts or repeated joins</td>
+</tr>
+<tr>
+<td>Real-time model with modest lookup needs</td>
+<td>Approved derived table or cache behind a typed API</td>
+<td>Greater scale, strict historical parity, or broad reuse</td>
+</tr>
+<tr>
+<td>Multiple models requiring historic and online parity</td>
+<td>Governed feature store with offline and online paths</td>
+<td>More demanding federation, geography, or tenancy</td>
+</tr>
+<tr>
+<td>High-rate streaming aggregates</td>
+<td>Stream processor plus keyed state and online serving</td>
+<td>Additional cross-team reuse and registry needs</td>
+</tr>
+<tr>
+<td>Document-grounded assistant</td>
+<td>Versioned corpus pipeline and permission-aware retrieval</td>
+<td>Multiple shared embeddings or indexed feature needs</td>
+</tr>
+<tr>
+<td>Edge model with intermittent connectivity</td>
+<td>Controlled local state and synchronization</td>
+<td>Multi-site coordination or stricter consistency needs</td>
+</tr>
+</tbody>
+</table>
+<p>A platform evaluation should test historical as-of retrieval, entity scoping, online lookup behavior, source replay, version pinning, transforms, access policies, monitoring hooks, deletion handling, and operational cost. Vendor names alone do not settle these design questions. Representative proof-of-concept data should include late events, duplicate keys, missing values, and a deliberate semantic schema change.</p>
+
+</section>
+<section id="a-minimal-credible-implementation" aria-labelledby="heading-a-minimal-credible-implementation">
+<h2 id="heading-a-minimal-credible-implementation">A Minimal Credible Implementation</h2>
+<p>A small team can adopt the following sequence without deploying a complex managed platform. First, define the prediction grain, source authority, temporal meaning, label policy, and feature contract. Next, build a tested import with stable snapshots and quality checks. Then implement deterministic transformations and a leakage-safe historical join. Freeze experiment manifests and link models to the datasets used. If online scoring becomes necessary, expose only approved features behind an authenticated service with typed outputs, per-feature TTLs, and traceable versions.</p>
+<p>Establish a weekly review of data delays, distribution changes, failed schema validations, and consumer needs. Store a written rollback plan with the same seriousness as model code. Do not build an additional service until there is a measurable problem it will solve. The quality of this implementation comes from explicit evidence and disciplined boundaries, not from the number of tools installed.</p>
+
+</section>
+<section id="an-enterprise-scale-operating-model" aria-labelledby="heading-an-enterprise-scale-operating-model">
+<h2 id="heading-an-enterprise-scale-operating-model">An Enterprise-Scale Operating Model</h2>
+<p>Large institutions often have many source owners, different legal jurisdictions, distributed model teams, and varied online latency needs. An enterprise architecture may separate a centrally operated registry/control plane from domain-owned transformation pipelines and regionally deployed serving paths. Shared identifiers and data contracts reduce inconsistent definitions, while purpose-specific permissions restrict inappropriate reuse. A central platform should provide visibility into consumers and lineage without falsely claiming that one policy fits every business domain.</p>
+<p>The operating model should support dependency discovery, automated compatibility checks, enterprise incident coordination, data stewardship, and a structured process for requesting new reusable features. Budgeting must cover the people who maintain connectors and investigate data quality—not just compute and storage. Approval should attach to a defined feature version, permitted purpose, model population, and decision boundary. Centralization improves governance only if it enables review and controlled enforcement.</p>
+
+</section>
+<section id="study-questions-and-applied-exercises" aria-labelledby="heading-study-questions-and-applied-exercises">
+<h2 id="heading-study-questions-and-applied-exercises">Study Questions and Applied Exercises</h2>
+<ol>
+<li>Define a feature store and distinguish its responsibilities from those of a data warehouse, catalog, model registry, and vector index.</li>
+<li>Explain why event-time filtering alone may not reproduce what an online model knew at the time of a prediction.</li>
+<li>Design the keys and temporal fields for a feature describing a merchant's failed-payment ratio over one hour.</li>
+<li>A join doubles the number of training rows. Identify three causes and three diagnostics before model training resumes.</li>
+<li>Compare batch ingestion, streaming ingestion, and CDC for an inventory forecasting service.</li>
+<li>Write a data contract for <code>average_daily_temperature_celsius</code>, including unit, timezone, null policy, freshness, owner, and version.</li>
+<li>Explain why a materialization job completing successfully does not establish that a feature is fresh.</li>
+<li>Propose a test set that would detect leakage from delayed transactions, backdated corrections, and future-dated records.</li>
+<li>Describe how to recover an online feature store after a replay of duplicate and out-of-order events.</li>
+<li>Design a deployment gate for changing <code>spend_30d</code> from gross to net expenditure.</li>
+<li>Explain how a correction to historical meter readings affects the choice between reconstructing past knowledge and restating past reality.</li>
+<li>Develop a tenant-isolation test for feature keys and an access-policy review for sharing features across departments.</li>
+<li>Identify three differences between a traditional tabular feature store and a retrieval-augmented document pipeline.</li>
+<li>Choose a deployment pattern for a monthly nonprofit forecast and justify what infrastructure should <em>not</em> be built initially.</li>
+<li>Propose data freshness, latency, quality, and availability SLOs for a safety-related sensor model; identify a safe fallback.</li>
+<li>Create a deletion inventory showing where a sensitive attribute could remain after removal from an online feature cache.</li>
+</ol>
+
+</section>
+<section id="specialist-glossary" aria-labelledby="heading-specialist-glossary">
+<h2 id="heading-specialist-glossary">Specialist Glossary</h2>
+<ul>
+<li><strong>Availability time:</strong> Earliest time a value was actually usable by the relevant decision system.</li>
+<li><strong>As-of join:</strong> Join selecting the appropriate historical value relative to each prediction timestamp.</li>
+<li><strong>Backfill:</strong> Reprocessing or repopulating historical intervals.</li>
+<li><strong>Batch processing:</strong> Processing bounded collections of records in scheduled or triggered jobs.</li>
+<li><strong>Cardinality:</strong> Number of distinct values or matches; important in join and storage design.</li>
+<li><strong>CDC (change data capture):</strong> Propagation of database mutations, often from transaction logs.</li>
+<li><strong>Data contract:</strong> Explicit agreement on schema, meaning, timing, ownership, and error behavior.</li>
+<li><strong>Data lineage:</strong> Trace of sources and transformations contributing to an artifact or value.</li>
+<li><strong>Data provenance:</strong> Evidence about the origin, revision, and processing history of data.</li>
+<li><strong>Dataset snapshot:</strong> Stable or addressable version of a dataset at a stated boundary.</li>
+<li><strong>Deduplication:</strong> Identification and treatment of multiple deliveries or representations of one logical event.</li>
+<li><strong>Embedding:</strong> Learned vector representation of an object used in a model or retrieval system.</li>
+<li><strong>Entity:</strong> Subject, such as an account or device, to which features attach.</li>
+<li><strong>Event time:</strong> Time an event occurred according to its defined source semantics.</li>
+<li><strong>Feature:</strong> Input variable used by a model under a declared interpretation.</li>
+<li><strong>Feature registry:</strong> Catalog/control plane containing feature definitions and their metadata.</li>
+<li><strong>Feature service:</strong> Model- or application-oriented contract grouping feature references in some platforms.</li>
+<li><strong>Feature store:</strong> Infrastructure and practices for managing and retrieving reusable model features.</li>
+<li><strong>Feature view:</strong> Logical grouping of feature schemas and sources in some feature-store systems.</li>
+<li><strong>Freshness:</strong> How current a feature's underlying evidence is for a specified use.</li>
+<li><strong>Grain:</strong> Unit represented by each record, such as one customer-day or one order.</li>
+<li><strong>Idempotency:</strong> Property that replaying an operation does not repeat its logical effect.</li>
+<li><strong>Ingestion time:</strong> Time data entered a specified processing or storage boundary.</li>
+<li><strong>Join key:</strong> Identifier used to associate records or features with their entities.</li>
+<li><strong>Label:</strong> Outcome or target supplied to a supervised-learning procedure.</li>
+<li><strong>Late-arriving data:</strong> Information delivered after its event-time position or an expected arrival deadline.</li>
+<li><strong>Materialization:</strong> Producing or copying derived values into a serving or analytical representation.</li>
+<li><strong>Offline store:</strong> Historical analytical feature-access path, often for training.</li>
+<li><strong>Online store:</strong> Low-latency path for current or recent feature values.</li>
+<li><strong>Point-in-time correctness:</strong> Construction of historical inputs respecting admissible evidence at each prediction time.</li>
+<li><strong>Processing time:</strong> Time infrastructure processes an event.</li>
+<li><strong>RAG (retrieval-augmented generation):</strong> Generation conditioned on retrieved external context.</li>
+<li><strong>Replay:</strong> Reprocessing retained input events or data partitions to rebuild state.</li>
+<li><strong>Schema evolution:</strong> Managed change to field structure, type, or compatibility rules.</li>
+<li><strong>Serving skew:</strong> Difference between training features and the corresponding values used during inference.</li>
+<li><strong>SLO (service-level objective):</strong> Explicit measurable target for operational performance or quality.</li>
+<li><strong>Stream processing:</strong> Incremental processing of continuously arriving events.</li>
+<li><strong>TTL (time to live):</strong> Configured lifetime or permissible age, whose exact meaning must be specified.</li>
+<li><strong>Watermark:</strong> Processing estimate or contract regarding progress through event time.</li>
+</ul>
+
+</section>
+<section id="primary-technical-references-and-further-reading" aria-labelledby="heading-primary-technical-references-and-further-reading">
+<h2 id="heading-primary-technical-references-and-further-reading">Primary Technical References and Further Reading</h2>
+<p>The references below are source material for the concepts and representative implementations discussed here. Cloud service behavior changes over time; teams should consult their installed version and service-region documentation before adopting detailed API assumptions.</p>
+<ol>
+<li><a href="https://docs.feast.dev/">Feast — Introduction and Feature Store Architecture</a>. Official open-source feature-store documentation on historical/offline and low-latency/online access.</li>
+<li><a href="https://docs.feast.dev/getting-started/concepts/feature-view">Feast — Feature Views</a>. Official explanation of feature grouping and schema definitions.</li>
+<li><a href="https://docs.feast.dev/getting-started/concepts/feature-retrieval">Feast — Feature Retrieval</a>. Official overview of online lookups and point-in-time historical feature retrieval.</li>
+<li><a href="https://docs.feast.dev/getting-started/components/overview">Feast — Components Overview</a>. Official description of registry, feature server, and materialization components.</li>
+<li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/feature-store-concepts.html">Amazon SageMaker AI — Feature Store Concepts</a>. Documentation of record identifiers, event times, and online/offline storage behavior.</li>
+<li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/feature-store.html">Amazon SageMaker AI — Create, Store, and Share Features</a>. Feature group and ingestion concepts.</li>
+<li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/feature-store-time-to-live.html">Amazon SageMaker AI — Time to Live</a>. A provider-specific example of record expiration semantics.</li>
+<li><a href="https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/featurestore/latest/overview">Google Cloud — Feature Store Overview</a>. Current managed feature-serving patterns tied to analytical sources.</li>
+<li><a href="https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/assets.html">Apache Airflow — Asset Definitions</a>. Official documentation of data-asset concepts and orchestration semantics.</li>
+<li><a href="https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/asset-scheduling.html">Apache Airflow — Asset-Aware Scheduling</a>. Scheduling from upstream data dependencies.</li>
+<li><a href="https://mlflow.org/docs/latest/ml/dataset/">MLflow — Dataset Tracking</a>. Dataset lineage and training-artifact metadata.</li>
+<li><a href="https://mlflow.org/docs/latest/registry/">MLflow — Model Registry</a>. Model versioning and lifecycle metadata, distinct from feature definition management.</li>
+<li>Sculley, D., et al. (2015). <a href="https://papers.nips.cc/paper/5656-hidden-technical-debt-in-machine-learning-systems">Hidden Technical Debt in Machine Learning Systems</a>. NeurIPS. Why data dependencies, changing inputs, and system coupling create persistent ML risk.</li>
+<li>Gebru, T., et al. (2021). <a href="https://doi.org/10.1145/3458723">Datasheets for Datasets</a>. <em>Communications of the ACM</em>. Structured dataset documentation and intended-use limits.</li>
+<li>Mitchell, M., et al. (2019). <a href="https://doi.org/10.1145/3287560.3287596">Model Cards for Model Reporting</a>. FAT* Proceedings. Model documentation and appropriate reporting of limitations.</li>
+</ol>
+
+</section>
+<section id="further-articles-in-the-artificial-intelligence-systems-unit" aria-labelledby="heading-further-articles-in-the-artificial-intelligence-systems-unit">
+<h2 id="heading-further-articles-in-the-artificial-intelligence-systems-unit">Further Articles in the Artificial Intelligence Systems Unit</h2>
+<p>These are <strong>sibling</strong> subarticles of the Artificial Intelligence Systems parent. Under the MGU forward-linking policy, intended destinations remain active hyperlinks even when a sibling has not yet been authored or deployed.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-system-architecture-and-components">AI System Architecture and Components</a> — how components, interfaces, and authority fit into a complete AI service.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/knowledge-representation-and-reasoning">Knowledge Representation and Reasoning</a> — formally represented knowledge and inferential methods.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/search-and-planning-in-ai">Search and Planning in AI</a> — goal-oriented search and plan construction.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/symbolic-and-neuro-symbolic-ai">Symbolic and Neuro-Symbolic AI</a> — integration of learned representations and formal knowledge.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/expert-systems-and-rule-engines">Expert Systems and Rule Engines</a> — rules, inference, and inspectable decision logic.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-training-validation-and-inference">AI Training, Validation, and Inference</a> — learning, leakage-safe evaluation, and controlled predictive use.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/model-serving-and-inference-infrastructure">Model Serving and Inference Infrastructure</a> — the runtime infrastructure consuming approved model inputs.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-agents-and-tool-use">AI Agents and Tool Use</a> — authorized action and tool coordination.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/multi-agent-ai-architectures">Multi-Agent AI Architectures</a> — coordination among distinct intelligent components.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-system-evaluation-and-benchmarking">AI System Evaluation and Benchmarking</a> — system-level effectiveness and independent assessment.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-reliability-monitoring-and-drift">AI Reliability, Monitoring, and Drift</a> — detection, diagnosis, and recovery after deployment.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/human-oversight-and-ai-system-controls">Human Oversight and AI System Controls</a> — intervention responsibilities and accountable decisions.</li>
+<li><a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-system-safety-and-security">AI System Safety and Security</a> — adversarial threats, safeguards, and safety assurance.</li>
+</ul>
+
+</section>
+<section id="related-topics-and-study-pathways" aria-labelledby="heading-related-topics-and-study-pathways">
+<h2 id="heading-related-topics-and-study-pathways">Related Topics and Study Pathways</h2>
+<p>For the broader source-to-warehouse lifecycle, see <a href="/library/encyclopedia/computer-science/data-systems/data-engineering">Data Engineering</a> and <a href="/library/encyclopedia/computer-science/data-systems/data-modeling">Data Modeling</a>. For distributed storage and analysis, consult <a href="/library/encyclopedia/computer-science/data-systems/data-lakes-and-lakehouse-architecture">Data Lakes and Lakehouse Architecture</a>, <a href="/library/encyclopedia/computer-science/data-systems/data-warehousing">Data Warehousing</a>, and <a href="/library/encyclopedia/computer-science/data-systems/databases">Databases</a>. For learned embeddings and vector retrieval, see <a href="/library/encyclopedia/computer-science/data-systems/information-retrieval">Information Retrieval</a>, <a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/large-language-models">Large Language Models</a>, and <a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/machine-learning">Machine Learning</a>.</p>
+<p>A disciplined study sequence is: identify the prediction unit; inventory sources; define feature semantics and clocks; design ingestion and quality checks; implement reproducible transforms; test point-in-time joins; validate offline/online parity; bind features to model versions; establish least-privilege serving; measure freshness and quality; and rehearse correction, rollback, and deletion procedures. The governing principle is that <strong>reusable features must remain interpretable, temporally defensible, and authorized wherever they are consumed</strong>.</p>
+
+</section>
+<section id="editorial-scope-status-and-canonical-url" aria-labelledby="heading-editorial-scope-status-and-canonical-url">
+<h2 id="heading-editorial-scope-status-and-canonical-url">Editorial Scope, Status, and Canonical URL</h2>
+<p><strong>Classification:</strong> MGU Encyclopedia → Computer Science → Specialized and Emerging Systems → Artificial Intelligence Systems → AI Data Pipelines and Feature Stores. This is a <strong>Level 5 specialist article</strong> intended to accompany the unit's broader systems-engineering coverage. It discusses architecture and operational controls, not a certification that any particular data pipeline is legally compliant or safe for a high-stakes use case. Examples are illustrative, not tested deployments.</p>
+<p><strong>Filename:</strong> <code>ai-data-pipelines-and-feature-stores.html</code>. <strong>Canonical public URL:</strong> <a href="/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-data-pipelines-and-feature-stores">/library/encyclopedia/computer-science/specialized-and-emerging-systems/artificial-intelligence-systems-articles/ai-data-pipelines-and-feature-stores</a>. Under the MGU directory-style convention, the on-disk page keeps <code>.html</code>, while public links and the canonical declaration omit the extension. This article's sibling links are intentional planned destinations; live publication of those siblings is managed separately.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

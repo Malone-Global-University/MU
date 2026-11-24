@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPU Pipelines and Hazards | MGU Computer Science Encyclopedia | Malone Global University</title>
+<meta name="description" content="Comprehensive CPU pipeline and hazard engineering: five-stage execution, data forwarding, load-use stalls, structural conflicts, branch recovery, backpressure, CPI, and verification.">
+<meta name="keywords" content="CPU pipelines, pipeline hazards, structural hazards, data hazards, control hazards, forwarding, load-use stalls, bubbles, flushes, branch misprediction, IPC, CPI, microarchitecture">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CPU Pipelines and Hazards | MGU Encyclopedia">
+<meta property="og:description" content="How CPUs overlap instruction stages while handling dependencies, limited resources, control flow, and precise instruction behavior.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>CPU Pipelines and Hazards</h1>
+<p class="subtitle">Stage overlap, operand dependencies, bypass networks, stalls, pipeline flushes, branch recovery, and processor performance.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-purpose-and-scope">Definition, Purpose, and Scope</a></li>
+<li><a href="#learning-objectives">Learning Objectives</a></li>
+<li><a href="#the-pipeline-versus-the-instruction-cycle">The Pipeline Versus the Instruction Cycle</a></li>
+<li><a href="#five-stage-reference-pipeline-diagram">Five-Stage Reference Pipeline Diagram</a></li>
+<li><a href="#baseline-timing-filling-and-draining-the-pipeline">Baseline Timing: Filling and Draining the Pipeline</a></li>
+<li><a href="#pipeline-latency-throughput-and-initiation-interval">Pipeline Latency, Throughput, and Initiation Interval</a></li>
+<li><a href="#stage-balancing-and-clock-period-constraints">Stage Balancing and Clock-Period Constraints</a></li>
+<li><a href="#worked-clock-and-throughput-model">Worked Clock and Throughput Model</a></li>
+<li><a href="#the-three-standard-hazard-classes">The Three Standard Hazard Classes</a></li>
+<li><a href="#dependencies-versus-hazards">Dependencies Versus Hazards</a></li>
+<li><a href="#read-after-write-the-central-in-order-data-hazard">Read After Write: The Central In-Order Data Hazard</a></li>
+<li><a href="#write-after-read-and-write-after-write">Write After Read and Write After Write</a></li>
+<li><a href="#forwarding-and-bypass-networks">Forwarding and Bypass Networks</a></li>
+<li><a href="#a-prioritized-forwarding-decision">A Prioritized Forwarding Decision</a></li>
+<li><a href="#forwarding-priority-when-multiple-writers-exist">Forwarding Priority When Multiple Writers Exist</a></li>
+<li><a href="#the-classic-load-use-hazard">The Classic Load–Use Hazard</a></li>
+<li><a href="#load-use-hazard-detector">Load–Use Hazard Detector</a></li>
+<li><a href="#the-load-use-stall-cycle-by-cycle">The Load–Use Stall Cycle by Cycle</a></li>
+<li><a href="#store-address-and-store-data-dependencies">Store Address and Store Data Dependencies</a></li>
+<li><a href="#branch-operands-and-data-dependencies">Branch Operands and Data Dependencies</a></li>
+<li><a href="#multi-cycle-execution-and-busy-unit-hazards">Multi-Cycle Execution and Busy-Unit Hazards</a></li>
+<li><a href="#memory-latency-cache-misses-and-blocking">Memory Latency, Cache Misses, and Blocking</a></li>
+<li><a href="#structural-hazards-shared-hardware-resources">Structural Hazards: Shared Hardware Resources</a></li>
+<li><a href="#single-port-memory-arbitration-example">Single-Port Memory Arbitration Example</a></li>
+<li><a href="#register-file-ports-banks-and-result-buses">Register-File Ports, Banks, and Result Buses</a></li>
+<li><a href="#resource-occupancy-and-pipeline-backpressure">Resource Occupancy and Pipeline Backpressure</a></li>
+<li><a href="#a-minimal-valid-ready-stage-model">A Minimal Valid/Ready Stage Model</a></li>
+<li><a href="#control-hazards-and-the-next-program-counter">Control Hazards and the Next Program Counter</a></li>
+<li><a href="#branch-prediction-and-recovery-boundaries">Branch Prediction and Recovery Boundaries</a></li>
+<li><a href="#flushing-is-not-the-same-as-stalling">Flushing Is Not the Same as Stalling</a></li>
+<li><a href="#a-simple-flush-and-hold-priority-model">A Simple Flush and Hold Priority Model</a></li>
+<li><a href="#branch-penalty-and-prediction-accuracy">Branch Penalty and Prediction Accuracy</a></li>
+<li><a href="#calculating-branch-cost-sensitivity">Calculating Branch-Cost Sensitivity</a></li>
+<li><a href="#exceptions-interrupts-and-redirects">Exceptions, Interrupts, and Redirects</a></li>
+<li><a href="#preventing-duplicate-or-wrong-path-side-effects">Preventing Duplicate or Wrong-Path Side Effects</a></li>
+<li><a href="#stall-bubble-flush-and-replay-operational-comparison">Stall, Bubble, Flush, and Replay: Operational Comparison</a></li>
+<li><a href="#pipeline-control-as-a-correctness-protocol">Pipeline Control as a Correctness Protocol</a></li>
+<li><a href="#scoreboarding-and-operand-readiness">Scoreboarding and Operand Readiness</a></li>
+<li><a href="#in-order-pipeline-versus-out-of-order-backend">In-Order Pipeline Versus Out-of-Order Backend</a></li>
+<li><a href="#superscalar-width-and-inter-instruction-hazards">Superscalar Width and Inter-Instruction Hazards</a></li>
+<li><a href="#compiler-scheduling-and-software-mitigation">Compiler Scheduling and Software Mitigation</a></li>
+<li><a href="#a-small-instruction-scheduling-comparison">A Small Instruction-Scheduling Comparison</a></li>
+<li><a href="#pipeline-depth-frequency-and-branch-penalty">Pipeline Depth, Frequency, and Branch Penalty</a></li>
+<li><a href="#cycle-counts-cpi-and-speedup">Cycle Counts, CPI, and Speedup</a></li>
+<li><a href="#an-illustrative-cpi-breakdown">An Illustrative CPI Breakdown</a></li>
+<li><a href="#cpi-accounting-example">CPI Accounting Example</a></li>
+<li><a href="#energy-area-and-thermal-trade-offs">Energy, Area, and Thermal Trade-Offs</a></li>
+<li><a href="#exceptions-and-precise-state-through-the-pipeline">Exceptions and Precise State Through the Pipeline</a></li>
+<li><a href="#hazard-verification-directed-test-cases">Hazard Verification: Directed Test Cases</a></li>
+<li><a href="#verification-invariants-and-assertions">Verification Invariants and Assertions</a></li>
+<li><a href="#property-testing-a-forwarding-rule">Property Testing a Forwarding Rule</a></li>
+<li><a href="#measuring-and-interpreting-pipeline-behavior">Measuring and Interpreting Pipeline Behavior</a></li>
+<li><a href="#common-misconceptions-and-corrections">Common Misconceptions and Corrections</a></li>
+<li><a href="#applied-scenario-1-embedded-controller-with-a-blocking-divider">Applied Scenario 1: Embedded Controller With a Blocking Divider</a></li>
+<li><a href="#applied-scenario-2-load-use-bubble-in-a-sensor-processing-loop">Applied Scenario 2: Load-Use Bubble in a Sensor-Processing Loop</a></li>
+<li><a href="#applied-scenario-3-shared-instruction-and-data-port">Applied Scenario 3: Shared Instruction and Data Port</a></li>
+<li><a href="#applied-scenario-4-branch-heavy-parsing-workload">Applied Scenario 4: Branch-Heavy Parsing Workload</a></li>
+<li><a href="#applied-scenario-5-two-multiply-units-one-writeback-port">Applied Scenario 5: Two Multiply Units, One Writeback Port</a></li>
+<li><a href="#applied-scenario-6-redirect-and-load-stall-in-the-same-cycle">Applied Scenario 6: Redirect and Load Stall in the Same Cycle</a></li>
+<li><a href="#engineering-selection-and-review-framework">Engineering Selection and Review Framework</a></li>
+<li><a href="#suggested-study-pathways">Suggested Study Pathways</a></li>
+<li><a href="#review-questions-and-exercises">Review Questions and Exercises</a></li>
+<li><a href="#compact-glossary">Compact Glossary</a></li>
+<li><a href="#complete-cpu-specialist-directory">Complete CPU Specialist Directory</a></li>
+<li><a href="#related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</a></li>
+<li><a href="#primary-documentation-and-further-reading">Primary Documentation and Further Reading</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="definition-purpose-and-scope" aria-labelledby="heading-definition-purpose-and-scope"><h2 id="heading-definition-purpose-and-scope">Definition, Purpose, and Scope</h2>
+<p>A <strong>CPU instruction pipeline</strong> divides instruction processing into stages separated by storage and timing boundaries, allowing different instructions to occupy different stages at the same time. The purpose is to improve <em>throughput</em>—the number of useful instructions completed per unit time—without requiring an individual instruction to traverse the entire datapath in one clock period. Pipelining does not inherently reduce a particular instruction's latency; pipeline-register overhead and hazards can actually increase latency in cycles or in absolute time.</p>
+<p>A <strong>pipeline hazard</strong> is a condition under which the next planned overlap would use an unavailable resource, consume an unavailable value, or follow an uncertain instruction path. Three standard categories are <strong>structural hazards</strong> (resource conflicts), <strong>data hazards</strong> (operand dependencies), and <strong>control hazards</strong> (uncertain next instruction address or control flow). Hardware addresses hazards by arranging the datapath and resources, forwarding available results, interlocking and stalling stages, introducing bubbles, predicting and later recovering from control flow, and—on more advanced cores—scheduling ready operations dynamically. Correctness requires that these techniques preserve the processor's instruction-set architecture (ISA) semantics.</p>
+<p>This Level 5 article belongs to the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">Central Processing Unit specialist directory</a>, under Hardware Systems. It owns <strong>stage overlap, hazard mechanisms, pipeline control, pipeline timing, performance effects, and verification</strong>. The companion <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a> article treats the front end in detail; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> treats commitment and precise state. The broader Computer Architecture <strong>Pipeline Processing</strong> unit studies discipline-wide pipeline theory rather than the specific organization of CPU cores.</p>
+
+</section>
+<section id="learning-objectives" aria-labelledby="heading-learning-objectives"><h2 id="heading-learning-objectives">Learning Objectives</h2>
+<p>By the end of this article, a reader should be able to:</p>
+<ol>
+<li>Distinguish instruction latency, pipeline initiation interval, throughput, clock period, and cycles per instruction.</li>
+<li>Construct a cycle-by-cycle occupancy table for a conventional five-stage pipeline and identify its ideal steady-state behavior.</li>
+<li>Diagnose read-after-write dependencies, structural conflicts, and branch/redirect hazards from an instruction trace.</li>
+<li>Explain why forwarding can remove some stalls but cannot deliver a value before the producing unit has generated it.</li>
+<li>Specify the state held, advanced, or invalidated when a pipeline stalls, inserts a bubble, or flushes younger work.</li>
+<li>Analyze pipeline depth, branch frequency, resource occupancy, and waiting time without claiming that more stages guarantee higher realized performance.</li>
+<li>Design directed and randomized tests that check architectural results and hazard-control signals.</li>
+</ol>
+
+</section>
+<section id="the-pipeline-versus-the-instruction-cycle" aria-labelledby="heading-the-pipeline-versus-the-instruction-cycle"><h2 id="heading-the-pipeline-versus-the-instruction-cycle">The Pipeline Versus the Instruction Cycle</h2>
+<p>The familiar sequence <strong>fetch → decode → execute → memory → writeback</strong> is a teaching partition, not a mandatory physical layout. In a five-stage, single-issue, in-order model, instruction fetch reads instruction bytes and predicts or chooses a next address; decode interprets bits, identifies operand registers and prepares control signals; execute computes arithmetic results, effective addresses or branch outcomes; memory accesses the data-memory interface when needed; and writeback updates the destination register. An instruction can do no work in some nominal stages yet still occupy their pipeline slots.</p>
+<p>Real CPUs can split fetch, alignment, decode, register read, issue, execution, cache access, translation, writeback, and retirement into more or fewer stages. A low-power core can combine decode and execution; an out-of-order core can issue from a scheduling window to multi-cycle units and retire separately; instruction caches and data caches can have variable latency. Consequently, every hazard trace must declare its <em>pipeline model and value-availability assumptions</em>. A diagram from one textbook is not an architectural specification for every processor.</p>
+<p>The important distinction is between <strong>within-instruction sequence</strong> and <strong>between-instruction overlap</strong>. Every instruction still needs a logically correct sequence of operations; stages from different instructions can operate simultaneously if data and resources permit. A hazard exists when that overlap would violate the requirements of one of those instructions.</p>
+
+</section>
+<section id="five-stage-reference-pipeline-diagram" aria-labelledby="heading-five-stage-reference-pipeline-diagram"><h2 id="heading-five-stage-reference-pipeline-diagram">Five-Stage Reference Pipeline Diagram</h2>
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 460" role="img" aria-labelledby="pipeline-svg-title pipeline-svg-desc" style="display:block;max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px" fill="none" stroke="currentColor" stroke-width="2">
+<title id="pipeline-svg-title">Five-stage CPU pipeline with hazard control paths</title>
+<desc id="pipeline-svg-desc">A horizontal row of five boxes labeled Fetch, Decode, Execute, Memory, and Writeback, with the four interstage pipeline registers between them. An upper forwarding path returns computed results to execute inputs; a hazard and redirect controller below the boxes sends hold, bubble, and kill control signals toward earlier stages. The five stages are a teaching example, not a universal CPU layout.</desc>
+<defs><marker id="p-arrow" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor" stroke="none"/></marker></defs>
+<g stroke-width="2">
+<rect x="24" y="95" width="182" height="100" rx="10"/><rect x="266" y="95" width="182" height="100" rx="10"/><rect x="508" y="95" width="182" height="100" rx="10"/><rect x="750" y="95" width="182" height="100" rx="10"/><rect x="992" y="95" width="220" height="100" rx="10"/>
+<path d="M206 144 H266 M448 144 H508 M690 144 H750 M932 144 H992" marker-end="url(#p-arrow)"/>
+<rect x="231" y="122" width="15" height="44" rx="2"/><rect x="473" y="122" width="15" height="44" rx="2"/><rect x="715" y="122" width="15" height="44" rx="2"/><rect x="957" y="122" width="15" height="44" rx="2"/>
+<path d="M1120 95 V52 H598 V95" marker-end="url(#p-arrow)" stroke-dasharray="7 5"/>
+<path d="M870 195 V255 H595 V195" marker-end="url(#p-arrow)" stroke-dasharray="7 5"/>
+<rect x="283" y="317" width="675" height="93" rx="9"/><path d="M453 317 V265 H358 V195 M785 317 V265 H827 V195 M600 317 V275 H598 V195" marker-end="url(#p-arrow)" stroke-dasharray="7 5"/>
+</g>
+<g fill="currentColor" stroke="none" text-anchor="middle" font-family="system-ui, sans-serif">
+<text x="115" y="128" font-size="18" font-weight="700">IF</text><text x="115" y="154" font-size="16">Fetch</text><text x="115" y="176" font-size="12">instruction + PC</text>
+<text x="357" y="128" font-size="18" font-weight="700">ID</text><text x="357" y="154" font-size="16">Decode</text><text x="357" y="176" font-size="12">read sources</text>
+<text x="599" y="128" font-size="18" font-weight="700">EX</text><text x="599" y="154" font-size="16">Execute</text><text x="599" y="176" font-size="12">ALU / branch</text>
+<text x="841" y="128" font-size="18" font-weight="700">MEM</text><text x="841" y="154" font-size="16">Memory</text><text x="841" y="176" font-size="12">load / store</text>
+<text x="1102" y="128" font-size="18" font-weight="700">WB</text><text x="1102" y="154" font-size="16">Writeback</text><text x="1102" y="176" font-size="12">register result</text>
+<text x="835" y="40" font-size="15">bypass / forwarding (illustrative)</text>
+<text x="620" y="307" font-size="16">hold / bubble / kill paths</text>
+<text x="620" y="350" font-size="19" font-weight="700">Hazard and redirect controller</text>
+<text x="620" y="380" font-size="15">dependency, validity, resource readiness, branch outcome</text>
+</g>
+</svg>
+<figcaption>Conceptual five-stage single-issue datapath. Pipeline registers, bypass paths, backpressure, and redirect logic are simplified; actual processors may combine stages, add queues, split execution, or retire separately.</figcaption>
+</figure>
+
+<p>In the conceptual model, registers between IF/ID, ID/EX, EX/MEM, and MEM/WB carry not just data but an <strong>instruction-valid bit</strong>, source/destination identifiers, control flags, an instruction address, and fault or speculation metadata as needed. A bubble is commonly represented by an invalid entry with side effects disabled. The forwarding network, hazard detector, and branch redirect controller are orthogonal control paths rather than ordinary pipeline stages. The drawing omits many real implementation details—memory hierarchy, translation, interrupts, physical-register renaming, and arbitrary execution-unit latency—to isolate the hazard problem.</p>
+
+</section>
+<section id="baseline-timing-filling-and-draining-the-pipeline" aria-labelledby="heading-baseline-timing-filling-and-draining-the-pipeline"><h2 id="heading-baseline-timing-filling-and-draining-the-pipeline">Baseline Timing: Filling and Draining the Pipeline</h2>
+<p>Consider four independent instructions, <code>I1</code> through <code>I4</code>, in the ideal five-stage model. Each stage processes at most one instruction per cycle, and every instruction advances one stage per cycle with no waits:</p>
+<table>
+<thead>
+<tr>
+  <th>Cycle</th>
+  <th>Fetch</th>
+  <th>Decode</th>
+  <th>Execute</th>
+  <th>Memory</th>
+  <th>Writeback</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>I1</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>I2</td>
+  <td>I1</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>I3</td>
+  <td>I2</td>
+  <td>I1</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>I4</td>
+  <td>I3</td>
+  <td>I2</td>
+  <td>I1</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>—</td>
+  <td>I4</td>
+  <td>I3</td>
+  <td>I2</td>
+  <td>I1</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>—</td>
+  <td>—</td>
+  <td>I4</td>
+  <td>I3</td>
+  <td>I2</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+  <td>I4</td>
+  <td>I3</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+  <td>I4</td>
+</tr>
+</tbody>
+</table>
+<p>The first result arrives after the pipeline has filled; the next result can then emerge each cycle. With <strong>k</strong> stages, <strong>n</strong> independent instructions, and one-cycle stages, an ideal single-issue, single-output machine takes <code>n + k − 1</code> cycles to complete the <strong>n</strong> instructions, using the convention that the first cycle is numbered one. For this table, <code>4 + 5 − 1 = 8</code> cycles. That is not the same as saying every instruction completes in one cycle: each has five nominal stage periods of latency. Flushes, long operations, cache misses, and resource conflicts invalidate the ideal formula unless explicitly accounted for.</p>
+
+</section>
+<section id="pipeline-latency-throughput-and-initiation-interval" aria-labelledby="heading-pipeline-latency-throughput-and-initiation-interval"><h2 id="heading-pipeline-latency-throughput-and-initiation-interval">Pipeline Latency, Throughput, and Initiation Interval</h2>
+<p><strong>Latency</strong> is the elapsed time from a particular instruction's entry to the point designated as its completion. <strong>Throughput</strong> is the rate of completed or retired instructions in a sustained workload. The <strong>initiation interval</strong> is the spacing between successive accepted instructions or operations in a given pipeline. A single-issue pipeline may accept one new instruction per cycle, while a vector or arithmetic pipeline can have a latency of several cycles yet accept a new operation each cycle.</p>
+<p>These measures cannot be interchanged. A multiply unit with latency four cycles and initiation interval one cycle can have four multiplies in flight; a nonpipelined divider with latency ten cycles and initiation interval ten cycles cannot accept another divide during its busy interval. The surrounding core may issue other independent instructions while the divider is busy if suitable queues and functional units exist. By contrast, a tightly coupled in-order core may stall a shared execution stage until the divide completes.</p>
+<p>Compare <strong>instruction throughput</strong> in instructions per cycle (IPC) with <strong>cycles per instruction</strong> (CPI): in a long, single-threaded steady-state measurement with consistent counting, average CPI is the reciprocal of average IPC. Retired IPC and fetched/issued IPC are different measurements when wrong-path or replayed work occurs. Simultaneous multithreading changes the accounting scope; a wide-issue CPU can have aggregate IPC greater than one without individual instructions having sub-cycle latency.</p>
+
+</section>
+<section id="stage-balancing-and-clock-period-constraints" aria-labelledby="heading-stage-balancing-and-clock-period-constraints"><h2 id="heading-stage-balancing-and-clock-period-constraints">Stage Balancing and Clock-Period Constraints</h2>
+<p>Pipeline registers do not create free speed. The clock period must accommodate the slowest relevant combinational stage, storage setup requirements, clock skew and uncertainty, and the overhead of the stage boundary. An approximate synchronous timing constraint is <code>Tclk ≥ max(stage logic delay) + register/clock overhead</code>. More equal stage delays can permit a shorter period, but breaking one stage into two may require additional registers, control logic, bypass wires, and branch recovery stages.</p>
+<p>Suppose a conceptual unpipelined combinational path has stage delays of 180, 260, 110, 220, and 130 picoseconds, with 40 ps of pipeline-register overhead per stage. The illustrative five-stage clock constraint is <code>260 + 40 = 300 ps</code>. The 900 ps sum of logic delays does not itself determine instruction completion time in a registered pipeline: an instruction takes five nominal cycles, or about 1.50 ns at 300 ps per cycle, ignoring other details. A design split into eight stages could increase frequency while losing more cycles to branches, stalls, or forwarding complexity. Physical implementation—not only arithmetic partitioning—decides whether a proposed split is worthwhile.</p>
+
+</section>
+<section id="worked-clock-and-throughput-model" aria-labelledby="heading-worked-clock-and-throughput-model"><h2 id="heading-worked-clock-and-throughput-model">Worked Clock and Throughput Model</h2>
+<p>The following isolated model calculates an ideal clock limit and the total cycles for a finite stream. It is a <strong>teaching arithmetic model</strong>, not a timing closure tool.</p>
+<pre><code class="language-python">stage_ps = [180, 260, 110, 220, 130]
+register_overhead_ps = 40
+clock_ps = max(stage_ps) + register_overhead_ps
+instructions = 100
+stages = len(stage_ps)
+cycles = instructions + stages - 1
+elapsed_ns = cycles * clock_ps / 1000
+print(clock_ps, cycles, round(elapsed_ns, 2))
+assert clock_ps == 300
+assert cycles == 104
+assert elapsed_ns == 31.2
+</code></pre>
+<p>The result is <strong>104 nominal cycles</strong> and <strong>31.2 ns</strong>, assuming no hazards or delays other than those already represented. It does not estimate cache hit rates, clock tree insertion delay, latch time borrowing, interconnect effects, or phase behavior. To compare two designs credibly, use the same workload and include each one's actual clock period and total retired cycles.</p>
+
+</section>
+<section id="the-three-standard-hazard-classes" aria-labelledby="heading-the-three-standard-hazard-classes"><h2 id="heading-the-three-standard-hazard-classes">The Three Standard Hazard Classes</h2>
+<table>
+<thead>
+<tr>
+  <th>Hazard class</th>
+  <th>Immediate constraint</th>
+  <th>Representative case</th>
+  <th>Common responses</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Structural</td>
+  <td>Two operations need the same unavailable hardware resource at the same time</td>
+  <td>IF wants a single-ported memory while MEM performs a load</td>
+  <td>Separate instruction/data paths, add ports/banks, arbitrate, or stall</td>
+</tr>
+<tr>
+  <td>Data</td>
+  <td>A consumer needs a value not yet ready, or name ordering could be violated</td>
+  <td><code>ADD x3,x1,x2</code> followed by <code>SUB x4,x3,x5</code></td>
+  <td>Forward, wait, rename, schedule, or reorder safely</td>
+</tr>
+<tr>
+  <td>Control</td>
+  <td>The identity or eligibility of later instructions is not yet known</td>
+  <td>Conditional branch resolves after younger instructions were fetched</td>
+  <td>Predict, delay, redirect, flush, and recover</td>
+</tr>
+</tbody>
+</table>
+<p>The classification is useful but not exhaustive. Cache misses and translation waits are <strong>latency events</strong> that can cause a stall and/or resource pressure; they are not always best described as structural hazards. An exception or interrupt redirect has control consequences but is not the same prediction problem as a conditional branch. A coherent hazard diagnosis names the blocked instruction, unavailable quantity or resource, affected stage, and control response rather than assigning a label and stopping there.</p>
+
+</section>
+<section id="dependencies-versus-hazards" aria-labelledby="heading-dependencies-versus-hazards"><h2 id="heading-dependencies-versus-hazards">Dependencies Versus Hazards</h2>
+<p>A <strong>dependency</strong> is a property of the instruction sequence and the meanings of its operands. A <strong>hazard</strong> arises when the proposed execution schedule and machine resources cannot honor that dependency without additional action. For example, <code>ADD x5,x1,x2</code> followed by <code>XOR x6,x5,x7</code> has a true data dependency, but a CPU can resolve it by forwarding the ADD result at exactly the time XOR needs it. In such a case the dependency remains while the stall has been eliminated.</p>
+<p>Not every repeated register number implies dependency. A source field that is unused for a particular instruction format must not participate in a false RAW match. In RISC-V, register <code>x0</code> always reads zero and writes to it do not create a new value; forwarding from an instruction whose destination is <code>x0</code> is incorrect. Other ISAs have their own special registers and instruction-specific operand semantics. The hazard detector therefore uses decoded <strong>operand-use and write-enable information</strong>, not only a superficial equality of encoded register fields.</p>
+
+</section>
+<section id="read-after-write-the-central-in-order-data-hazard" aria-labelledby="heading-read-after-write-the-central-in-order-data-hazard"><h2 id="heading-read-after-write-the-central-in-order-data-hazard">Read After Write: The Central In-Order Data Hazard</h2>
+<p>A <strong>read-after-write</strong> (RAW) dependency occurs when a consumer must read a value produced by an older instruction. Example:</p>
+<pre><code class="language-text">ADD  x5, x1, x2    # produces x5
+SUB  x6, x5, x3    # requires that new x5
+</code></pre>
+<p>In the five-stage model, ADD computes its result at the end of EX, while SUB reaches EX in the next cycle. If the implementation permits forwarding from the ADD's EX/MEM pipeline register to the SUB's EX operand input, SUB can use the new value without waiting for register-file writeback. Without that bypass path or adequate register-file timing, SUB would require a hold. Forwarding preserves the required producer-before-consumer value relationship while allowing the instructions to overlap.</p>
+<p>The hardware must also handle two operands independently: an ALU instruction may depend on one younger-ready producer for operand A and another for operand B. The control logic selects the newest in-flight producer that is older than the consumer, is allowed to write the destination, and already has its result available. This rule becomes especially important when multiple older instructions update the same architectural register.</p>
+
+</section>
+<section id="write-after-read-and-write-after-write" aria-labelledby="heading-write-after-read-and-write-after-write"><h2 id="heading-write-after-read-and-write-after-write">Write After Read and Write After Write</h2>
+<p><strong>Write-after-read</strong> (WAR, an anti-dependence) arises when an instruction must read an old register value before a younger instruction overwrites the same register name. <strong>Write-after-write</strong> (WAW, an output dependence) requires writes to the same architectural register to appear in program order. In a conventional single-issue, in-order five-stage design whose operand reads and register writes occur in fixed stages, these name dependencies generally do not become active pipeline hazards: reads and writes follow the required stage order.</p>
+<p>In machines allowing out-of-order reads or writes, or instructions with differing execution latencies, WAR and WAW can matter. Physical-register renaming breaks false name relationships while retaining true RAW dependencies; a reorder buffer and in-order retirement or equivalent mechanisms preserve architectural ordering. These mechanisms receive dedicated treatment in the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a> articles.</p>
+
+</section>
+<section id="forwarding-and-bypass-networks" aria-labelledby="heading-forwarding-and-bypass-networks"><h2 id="heading-forwarding-and-bypass-networks">Forwarding and Bypass Networks</h2>
+<p><strong>Forwarding</strong> sends a produced value directly to a consumer's input instead of waiting for it to be written to and read back from the architectural register file. A typical simple datapath may choose among (1) the value read from the register file, (2) an ALU result in EX/MEM, and (3) a result in MEM/WB. Multiplexers select the value and priority comparators examine the relevant destination and source register identifiers.</p>
+<p>Forwarding must respect <strong>availability</strong>. A load in EX/MEM may carry a destination register identifier but not yet the returned data; forwarding the address or stale bus bits as if they were loaded data is wrong. Some cores bypass a completed load directly from a cache-return or writeback path, but the exact consumer cycle depends on cache timing, stage structure, and clocking. The forwarding logic must also suppress matches for instructions that will not write an architectural destination, for <code>x0</code> in RISC-V, and for squashed or invalid pipeline slots.</p>
+<p>Large forwarding fabrics add area, wire length, fanout and dynamic power, especially in wide cores with several simultaneous execution units. Bypasses are engineering trade-offs, not an unconditional “faster is better” feature.</p>
+
+</section>
+<section id="a-prioritized-forwarding-decision" aria-labelledby="heading-a-prioritized-forwarding-decision"><h2 id="heading-a-prioritized-forwarding-decision">A Prioritized Forwarding Decision</h2>
+<p>The following function models forwarding priority in a simple in-order pipeline. It deliberately excludes a producer whose result is not yet ready.</p>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Producer:
+    destination: int
+    value: int
+    valid: bool = True
+    writes_register: bool = True
+    result_ready: bool = True
+
+def select_operand(source, register_value, ex_mem=None, mem_wb=None):
+    if source == 0:  # RISC-V x0 is always zero
+        return 0, &quot;zero&quot;
+    for label, producer in ((&quot;EX/MEM&quot;, ex_mem), (&quot;MEM/WB&quot;, mem_wb)):
+        if (producer is not None and producer.valid and producer.writes_register
+                and producer.destination == source
+                and producer.destination != 0):
+            if not producer.result_ready:
+                return None, &quot;stall&quot;
+            return producer.value, label
+    return register_value, &quot;register file&quot;
+
+older = Producer(destination=5, value=21)
+oldest = Producer(destination=5, value=9)
+assert select_operand(5, 2, older, oldest) == (21, &quot;EX/MEM&quot;)
+assert select_operand(0, 999, older, oldest) == (0, &quot;zero&quot;)
+assert select_operand(5, 2, Producer(5, 0, result_ready=False), oldest) == (None, &quot;stall&quot;)
+print(&quot;forwarding priority and availability checks passed&quot;)
+</code></pre>
+<p>This model assumes EX/MEM contains a <strong>younger but still older-than-consumer</strong> candidate than MEM/WB. A real machine also checks execution age and pipeline validity, handles many producers and destinations, and may need to <strong>stall</strong> rather than use an older available value when a newer matching producer is still pending. The last assertion demonstrates why a newer pending producer must block the consumer even if an older matching value is available in MEM/WB. A genuine hardware design must also handle transaction age, replay, source readiness and multi-cycle result timing. Consequently, this function is a narrowly scoped decision example, not a complete issue scheduler.</p>
+
+</section>
+<section id="forwarding-priority-when-multiple-writers-exist" aria-labelledby="heading-forwarding-priority-when-multiple-writers-exist"><h2 id="heading-forwarding-priority-when-multiple-writers-exist">Forwarding Priority When Multiple Writers Exist</h2>
+<p>Consider <code>ADD x5,x1,x2</code>; <code>XOR x5,x3,x4</code>; <code>SUB x6,x5,x7</code>. The SUB must read the value written by XOR, not ADD, even if ADD's writeback is easier to access. “Take whichever matching result is ready” violates semantics if a newer matching producer exists but has not produced its value. A correct design uses <strong>youngest matching older producer</strong> priority and waits if that producer's value is unavailable. This is one reason register age information or an invariant about the ordering of pipeline-register slots is essential.</p>
+<p>A basic five-stage forwarding network commonly places the nearest upstream stage ahead of the more distant one because its instruction is later in program order. The logic also checks that the nearest match is valid and writes the register. If the nearest match is a load with unavailable data, the correct outcome is a stall, not a fall-through to a stale value in a more distant stage. In a renaming design, source operands are associated with specific physical producer tags rather than ambiguously matching repeated architectural names.</p>
+
+</section>
+<section id="the-classic-load-use-hazard" aria-labelledby="heading-the-classic-load-use-hazard"><h2 id="heading-the-classic-load-use-hazard">The Classic Load–Use Hazard</h2>
+<p>A load is different from an ordinary ALU operation because it may generate an effective address during EX while the <strong>data value</strong> becomes available only after a memory response. In a conventional five-stage model with data produced at the end of MEM, an immediately following dependent instruction cannot use that loaded value at the beginning of its EX stage without delaying the consumer:</p>
+<pre><code class="language-text">LW   x5, 0(x1)     # load data; result after MEM in this model
+ADD  x6, x5, x7    # x5 needed at start of EX
+</code></pre>
+<p>An interlock typically holds the dependent instruction in decode and prevents a new fetch from overwriting it, while it inserts an invalid operation (bubble) into the next execute-stage slot. Once the load's data is ready, bypass or register-file access provides the correct value. The familiar “one-cycle load-use stall” applies to a particular timing model; it is <strong>not a universal ISA requirement</strong>. A faster cache-return path, a slower load, a different stage split, or dynamic scheduling changes the observed waiting time. Multi-cycle cache misses may extend the wait considerably.</p>
+
+</section>
+<section id="load-use-hazard-detector" aria-labelledby="heading-load-use-hazard-detector"><h2 id="heading-load-use-hazard-detector">Load–Use Hazard Detector</h2>
+<p>The following detector uses decoded source-use flags, so a coincidental bit pattern in an unused source field does not trigger a stall. It models a consumer in decode and an older load in execute.</p>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Decoded:
+    rs1: int = 0
+    rs2: int = 0
+    uses_rs1: bool = False
+    uses_rs2: bool = False
+
+@dataclass(frozen=True)
+class ExecuteStage:
+    valid: bool
+    is_load: bool
+    rd: int
+
+def needs_load_use_stall(decode, execute):
+    if not (execute.valid and execute.is_load and execute.rd != 0):
+        return False
+    return ((decode.uses_rs1 and decode.rs1 == execute.rd)
+            or (decode.uses_rs2 and decode.rs2 == execute.rd))
+
+load = ExecuteStage(True, True, 5)
+assert needs_load_use_stall(Decoded(rs1=5, uses_rs1=True), load)
+assert needs_load_use_stall(Decoded(rs2=5, uses_rs2=True), load)
+assert not needs_load_use_stall(Decoded(rs2=5, uses_rs2=False), load)
+assert not needs_load_use_stall(Decoded(rs1=0, uses_rs1=True), ExecuteStage(True, True, 0))
+print(&quot;load-use interlock checks passed&quot;)
+</code></pre>
+<p>This is a decoder-level teaching predicate, not a full clocked controller. The controller must coordinate <code>PC_enable</code>, <code>IF/ID_enable</code>, and <code>ID/EX_valid</code> so that the consumer is <strong>retained</strong>, not dropped or duplicated, when the bubble is inserted. On a redirect or fault, priority logic must decide whether a held instruction is still on the valid path.</p>
+
+</section>
+<section id="the-load-use-stall-cycle-by-cycle" aria-labelledby="heading-the-load-use-stall-cycle-by-cycle"><h2 id="heading-the-load-use-stall-cycle-by-cycle">The Load–Use Stall Cycle by Cycle</h2>
+<p>Assume a simple five-stage pipeline where the dependent load result can be forwarded to the consumer's EX input only in the cycle after the load reaches MEM. The table shows a one-cycle hold inserted between <code>LW</code> and <code>ADD</code>:</p>
+<table>
+<thead>
+<tr>
+  <th>Cycle</th>
+  <th>IF</th>
+  <th>ID</th>
+  <th>EX</th>
+  <th>MEM</th>
+  <th>WB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>LW</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>ADD</td>
+  <td>LW</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>next</td>
+  <td>ADD</td>
+  <td>LW</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>held next</td>
+  <td>held ADD</td>
+  <td>bubble</td>
+  <td>LW</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>following</td>
+  <td>next</td>
+  <td>ADD</td>
+  <td>bubble</td>
+  <td>LW</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>—</td>
+  <td>following</td>
+  <td>next</td>
+  <td>ADD</td>
+  <td>bubble</td>
+</tr>
+</tbody>
+</table>
+<p>The “held” fetch and decode instructions do not advance in cycle 4. An invalid operation enters EX while the older load continues. In cycle 5, the ADD reaches EX with the loaded value available from the load result path. This table uses one convention for when stage occupancy is sampled; hardware designs may display the bubble at a different boundary or use a register-file write/read timing policy that changes the presentation. The essential invariant is that <strong>ADD never executes using the old x5 value</strong> and neither instruction is lost or performed twice.</p>
+<p>A useful compiler transformation can sometimes place an independent operation between the load and consumer, converting an otherwise idle bubble into useful work. That transformation must be proved legal for program dependencies, memory effects, and exception semantics; a compiler cannot move arbitrary instructions across a load merely to fill a slot.</p>
+
+</section>
+<section id="store-address-and-store-data-dependencies" aria-labelledby="heading-store-address-and-store-data-dependencies"><h2 id="heading-store-address-and-store-data-dependencies">Store Address and Store Data Dependencies</h2>
+<p>A store ordinarily needs two conceptually distinct values: an <strong>effective address</strong>, often computed from a base register and displacement, and the <strong>data to write</strong>, usually read from another source register. The two operands can become available at different points. <code>ADD x5,x1,x2; SW x5,0(x3)</code> depends on ADD for store data. <code>ADD x3,x1,x2; SW x5,0(x3)</code> depends on ADD for the address. A store-data bypass might feed the memory stage, while the address dependency must be resolved before effective-address generation. Hardware that handles only the address path can still corrupt data if it overlooks the store-data dependency.</p>
+<p>Some implementations read or bypass store data later than the generic EX-stage operand time; in such a design, a particular load-to-store-data sequence may not require the same stall as a load-to-store-address sequence. Other designs impose identical interlocks on both. A competent hazard trace therefore records <strong>when each operand is actually consumed</strong>, not just the instruction's mnemonic. Once a store is accepted, precise exceptions and ordering rules can impose additional constraints on when its effect may become architecturally irrevocable.</p>
+
+</section>
+<section id="branch-operands-and-data-dependencies" aria-labelledby="heading-branch-operands-and-data-dependencies"><h2 id="heading-branch-operands-and-data-dependencies">Branch Operands and Data Dependencies</h2>
+<p>A conditional branch may depend on arithmetic results immediately preceding it. If the comparator operates in EX, an ADD result might be forwarded into the branch's EX operands like an ordinary ALU consumer. If a design moves branch comparison into ID to reduce redirection latency, the required input is needed <strong>earlier</strong>, potentially requiring additional bypass paths or stalls. Moving the branch unit “earlier” can therefore reduce one penalty while increasing another.</p>
+<p>For an illustrative <code>SUB x5,x1,x2; BEQ x5,x0,target</code>, the branch outcome may be unknowable until the subtraction produces x5. The pipeline may hold the branch, predict the direction, or resolve it using a dedicated early comparator and bypass. The instruction stream's meaning is unchanged: the branch compares the correct data and redirects to the architecturally required destination. Wrong-path instructions must not commit effects if a prediction or tentative next address proves incorrect.</p>
+
+</section>
+<section id="multi-cycle-execution-and-busy-unit-hazards" aria-labelledby="heading-multi-cycle-execution-and-busy-unit-hazards"><h2 id="heading-multi-cycle-execution-and-busy-unit-hazards">Multi-Cycle Execution and Busy-Unit Hazards</h2>
+<p>Not every execution unit returns a result after one EX cycle. Integer division, some multipliers, floating-point operations, cryptographic blocks and cache access can have multiple-cycle latencies or variable completion times. A simple in-order processor may hold EX while a shared divider is busy, preventing younger instructions from advancing, even if those younger instructions are independent. Another design may allow a multi-cycle divider to operate beside single-cycle ALUs and track its outstanding destination through a scoreboard.</p>
+<p>A distinct issue is <strong>result-port contention</strong>. Two units may finish simultaneously but share a single result bus or write port. The CPU must schedule their completions, buffer a result, or provide additional ports. This can be a structural hazard even though neither instruction needs the other's value. A correct implementation should never silently discard the later-arriving result or write results in an order that violates the ISA's required behavior. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a> article owns the functional-unit details.</p>
+
+</section>
+<section id="memory-latency-cache-misses-and-blocking" aria-labelledby="heading-memory-latency-cache-misses-and-blocking"><h2 id="heading-memory-latency-cache-misses-and-blocking">Memory Latency, Cache Misses, and Blocking</h2>
+<p>The five-stage diagram often depicts MEM as one clock period. Real memory access is variable: a cache hit may be fast, a TLB miss may trigger translation activity, a cache miss may require many additional cycles, and device memory may have stricter ordering or side-effect constraints. In a simple blocking pipeline, a waiting data access can hold much of the core. In a nonblocking cache and dynamically scheduled backend, independent loads or arithmetic work may continue while some accesses wait, subject to finite entries in miss-status tracking structures, load/store queues, and other resources.</p>
+<p>Do not equate <strong>load-use interlock</strong> with <strong>cache miss penalty</strong>. The former is a timing dependency in an assumed short pipeline; the latter is a memory-system service delay. A data hazard can remain after a cache hit and can last much longer under a miss. A front-end instruction-cache miss can also starve the pipeline even when no data dependence exists. Modern cores mitigate these conditions through caching, prefetching, memory-level parallelism, scheduling, and sometimes simultaneous multithreading, but every mechanism has limits.</p>
+
+</section>
+<section id="structural-hazards-shared-hardware-resources" aria-labelledby="heading-structural-hazards-shared-hardware-resources"><h2 id="heading-structural-hazards-shared-hardware-resources">Structural Hazards: Shared Hardware Resources</h2>
+<p>A structural hazard arises when two active stages or instructions require a resource whose available capacity cannot satisfy both requests. In a textbook machine with <strong>one single-ported shared memory</strong>, IF may need instruction bytes in the same cycle that MEM must access data. If the memory provides only one access, arbitration must select one requester and delay the other. Separating instruction and data caches at the first level can remove this particular conflict, although both may still contend for shared lower levels, interconnect bandwidth, or translation resources.</p>
+<p>Other examples include a single ALU needed for both branch-address calculation and integer execution; insufficient register-file read ports for a wide-issue group; several units sharing a result bus; writeback port collisions; a full pipeline queue; or multiple threads contending for a shared issue stage. A busy or insufficient resource is only a performance problem if the controller preserves outstanding requests and ordering. The architecture may demand that a particular operation wait rather than be denied or overwritten.</p>
+
+</section>
+<section id="single-port-memory-arbitration-example" aria-labelledby="heading-single-port-memory-arbitration-example"><h2 id="heading-single-port-memory-arbitration-example">Single-Port Memory Arbitration Example</h2>
+<p>A simple arbitration model gives a pending data access priority over the next instruction fetch. It is <strong>one possible policy</strong>, not a universal recommendation.</p>
+<pre><code class="language-python">def arbitrate_single_port(fetch_pending, data_pending):
+    if data_pending:
+        return &quot;data&quot;, bool(fetch_pending)
+    if fetch_pending:
+        return &quot;fetch&quot;, False
+    return &quot;idle&quot;, False
+
+assert arbitrate_single_port(True, False) == (&quot;fetch&quot;, False)
+assert arbitrate_single_port(True, True) == (&quot;data&quot;, True)
+assert arbitrate_single_port(False, True) == (&quot;data&quot;, False)
+assert arbitrate_single_port(False, False) == (&quot;idle&quot;, False)
+print(&quot;single-port arbitration checks passed&quot;)
+</code></pre>
+<p>The second returned value indicates whether fetch is blocked. A complete arbiter would include response timing, fairness, request persistence, error reporting, and possibly separate read/write channels. If a data request can hold the port indefinitely, strict data priority may starve instruction fetch; fairness or bounded service guarantees may be required. Merely making both requests “valid” without an acceptance protocol is not enough.</p>
+
+</section>
+<section id="register-file-ports-banks-and-result-buses" aria-labelledby="heading-register-file-ports-banks-and-result-buses"><h2 id="heading-register-file-ports-banks-and-result-buses">Register-File Ports, Banks, and Result Buses</h2>
+<p>A two-source integer operation can require two simultaneous register reads and one register write. A single-issue teaching core can be designed around a two-read, one-write register file, but a four-wide dispatch or issue design can require far greater effective operand bandwidth. Replication, banking, operand caching, physical-register files and staged operand delivery are ways to manage this. Their costs include power, bypass complexity, bank conflicts, and additional timing constraints.</p>
+<p>A <strong>bank conflict</strong> occurs when simultaneous accesses target a bank that cannot serve all requests that cycle, even if other banks are idle. A <strong>result-bus conflict</strong> occurs when multiple completed operations request insufficient writeback capacity. An instruction may be ready to compute but not ready to <strong>write its result</strong>. Scoreboards or reservation logic can track this condition. “Four ALUs” does not imply “four sustainable results per cycle” unless inputs, outputs, scheduling, register ports, and retirement collectively support that rate.</p>
+
+</section>
+<section id="resource-occupancy-and-pipeline-backpressure" aria-labelledby="heading-resource-occupancy-and-pipeline-backpressure"><h2 id="heading-resource-occupancy-and-pipeline-backpressure">Resource Occupancy and Pipeline Backpressure</h2>
+<p>Pipeline control must represent whether a stage contains valid work, whether it is ready to accept a new entry, and whether the next stage can accept an entry. A typical valid/ready interface transfers work only when <code>valid &amp;&amp; ready</code> is true at the clock boundary. A downstream stage that is not ready can backpressure upstream stages; the entry's payload and status must remain stable while it is waiting unless the protocol explicitly allows another form of update. A bubble or invalid entry carries no architectural side effect.</p>
+<p>In a pipeline with fixed one-cycle stage latencies, a single global stall signal can appear simple. Once memory responses, long-latency functional units, branch redirects, and independent buffers are present, more granular backpressure becomes useful. Such pipelines need careful treatment of simultaneous stall and flush controls: a kill of wrong-path work must not be indefinitely blocked behind a held younger entry, while a still-valid older entry must not disappear because a younger stage was cleared.</p>
+
+</section>
+<section id="a-minimal-valid-ready-stage-model" aria-labelledby="heading-a-minimal-valid-ready-stage-model"><h2 id="heading-a-minimal-valid-ready-stage-model">A Minimal Valid/Ready Stage Model</h2>
+<p>The following model illustrates a one-entry stage holding its payload until the downstream interface accepts it. The producer may send a new payload in the same cycle that the old one departs, but this teaching model advances one tick at a time for clarity.</p>
+<pre><code class="language-python">class SingleEntryStage:
+    def __init__(self):
+        self.valid = False
+        self.payload = None
+    def tick(self, incoming=None, downstream_ready=False):
+        sent = self.payload if (self.valid and downstream_ready) else None
+        if sent is not None:
+            self.valid, self.payload = False, None
+        if incoming is not None:
+            if self.valid:
+                raise RuntimeError(&quot;upstream sent without readiness&quot;)
+            self.valid, self.payload = True, incoming
+        return sent
+
+stage = SingleEntryStage()
+assert stage.tick(incoming=&quot;I1&quot;) is None
+assert stage.tick(downstream_ready=False) is None
+assert stage.valid and stage.payload == &quot;I1&quot;
+assert stage.tick(downstream_ready=True) == &quot;I1&quot;
+assert not stage.valid
+print(&quot;backpressure and one-time transfer checks passed&quot;)
+</code></pre>
+<p>A production ready/valid implementation must define input readiness <em>before</em> the edge, account for simultaneous transfers, and make handshake rules precise. The invariant remains: <strong>holding a valid instruction is not equivalent to reissuing it</strong>, and release must transfer it once. Adding kill/flush signals requires the same discipline for the cases where a held entry becomes invalid due to older control flow.</p>
+
+</section>
+<section id="control-hazards-and-the-next-program-counter" aria-labelledby="heading-control-hazards-and-the-next-program-counter"><h2 id="heading-control-hazards-and-the-next-program-counter">Control Hazards and the Next Program Counter</h2>
+<p>A control hazard exists when fetch cannot know, with architectural certainty, which instruction should come next. Conditional branches, unconditional jumps, indirect branches, exceptions and returns can redirect the program counter. In a basic design that resolves a conditional branch during EX, the front end may already have fetched and decoded younger sequential instructions. If the branch is taken or was predicted incorrectly, those younger operations are on the wrong path.</p>
+<p>Three broad strategies are: <strong>wait</strong> until a target is known; <strong>predict</strong> a likely next address and recover when wrong; or use an instruction-set-visible convention such as a historical branch-delay slot. Modern mainstream application processors commonly predict, although details vary enormously. Branch prediction improves performance when correct but does not change which path the program is allowed to take. Correctness requires that wrong-path instructions cannot become permanent architectural effects.</p>
+
+</section>
+<section id="branch-prediction-and-recovery-boundaries" aria-labelledby="heading-branch-prediction-and-recovery-boundaries"><h2 id="heading-branch-prediction-and-recovery-boundaries">Branch Prediction and Recovery Boundaries</h2>
+<p>A predictor may estimate direction (“taken” or “not taken”), target address, or both. A branch target buffer can provide candidate targets; a return-address stack can assist function returns; more elaborate predictors incorporate histories and tables. The fetch address can be changed speculatively before the branch executes. When actual branch conditions and targets become known, the core checks the prediction and redirects if necessary.</p>
+<p>Recovery may invalidate work in fetch/decode queues, execution stages, reservation stations, and speculative result structures. In a wide out-of-order core, checkpointed rename maps, reorder-buffer ages, and branch masks help identify the correct younger operations to discard. The <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a> specialist article examines these structures in depth. Here the focus is on the <strong>pipeline-level penalty and kill/redirect protocol</strong>.</p>
+
+</section>
+<section id="flushing-is-not-the-same-as-stalling" aria-labelledby="heading-flushing-is-not-the-same-as-stalling"><h2 id="heading-flushing-is-not-the-same-as-stalling">Flushing Is Not the Same as Stalling</h2>
+<p><strong>Stall:</strong> an existing valid instruction remains in its current stage or buffer because progression is not permitted. <strong>Bubble:</strong> a deliberately invalid slot enters the flow so downstream stages do not perform a real instruction. <strong>Flush/squash:</strong> one or more valid or in-flight entries are marked invalid because their work should not continue or commit, typically due to an older branch, fault, or redirect. A <strong>replay</strong> is different again: work is invalidated or restarted because a speculative assumption was not satisfied, and the correct execution may need to be retried.</p>
+<p>An interlock for a load-use RAW hazard often stalls PC and IF/ID while injecting a bubble into ID/EX. A branch misprediction typically redirects the fetch PC and invalidates younger entries; it does <strong>not</strong> require flushing all older operations still waiting on completion. A precise exception similarly separates older operations that may retire from the faulting instruction and younger work to discard. Implementations may reuse the word “flush” for different scope and signal behavior, so design documents should identify exactly <strong>which age range and pipeline structures are affected</strong>.</p>
+
+</section>
+<section id="a-simple-flush-and-hold-priority-model" aria-labelledby="heading-a-simple-flush-and-hold-priority-model"><h2 id="heading-a-simple-flush-and-hold-priority-model">A Simple Flush and Hold Priority Model</h2>
+<p>This classroom function prioritizes an older-path redirect above a load-use hold. It shows control intentions rather than synthesizable RTL.</p>
+<pre><code class="language-python">def pipeline_controls(redirect, load_use):
+    if redirect:
+        return {&quot;pc&quot;: &quot;redirect&quot;, &quot;if_id&quot;: &quot;kill&quot;, &quot;id_ex&quot;: &quot;kill&quot;}
+    if load_use:
+        return {&quot;pc&quot;: &quot;hold&quot;, &quot;if_id&quot;: &quot;hold&quot;, &quot;id_ex&quot;: &quot;bubble&quot;}
+    return {&quot;pc&quot;: &quot;advance&quot;, &quot;if_id&quot;: &quot;advance&quot;, &quot;id_ex&quot;: &quot;advance&quot;}
+
+assert pipeline_controls(False, False)[&quot;pc&quot;] == &quot;advance&quot;
+assert pipeline_controls(False, True) == {
+    &quot;pc&quot;: &quot;hold&quot;, &quot;if_id&quot;: &quot;hold&quot;, &quot;id_ex&quot;: &quot;bubble&quot;}
+assert pipeline_controls(True, True) == {
+    &quot;pc&quot;: &quot;redirect&quot;, &quot;if_id&quot;: &quot;kill&quot;, &quot;id_ex&quot;: &quot;kill&quot;}
+print(&quot;redirect and interlock priority checks passed&quot;)
+</code></pre>
+<p>The model presumes the redirect originates from an instruction older than the entries being killed. A real core must establish that ordering, preserve older pipeline state, propagate fault reports correctly, and ensure that a redirect cannot be lost to a held stage. Some branch resolution points allow an entry in ID/EX to be the <strong>branch itself</strong> and must keep it while killing only younger entries; this illustrative model deliberately omits those distinctions and must not be copied verbatim into a hardware control unit.</p>
+
+</section>
+<section id="branch-penalty-and-prediction-accuracy" aria-labelledby="heading-branch-penalty-and-prediction-accuracy"><h2 id="heading-branch-penalty-and-prediction-accuracy">Branch Penalty and Prediction Accuracy</h2>
+<p>Branch hazards are a performance problem even when all predictions eventually recover correctly. If the executed instruction stream contains <strong>f</strong> branches per retired instruction, a fraction <strong>m</strong> of those branches are mispredicted, and each misprediction costs an average <strong>P</strong> additional cycles, a simple approximation is <code>CPI ≈ CPI_base + f × m × P</code>. For example, <code>f = 0.20</code>, <code>m = 0.05</code>, and <code>P = 8</code> add approximately <code>0.08 CPI</code>. This arithmetic assumes that the penalty is measured in incremental, nonoverlapping lost cycles and ignores memory stalls, multiple concurrent branches, and other interactions.</p>
+<p>A more ambitious predictor may require more state and energy; deeper or wider front ends can increase the amount of wrong-path work discarded after a failed prediction. A wide out-of-order machine can also overlap some latency and resource use, so measured branch cost is workload-dependent. An apparently accurate predictor can still have expensive rare misses in a latency-sensitive application. Metrics should separate branch instruction frequency, mispredictions per thousand instructions, conditional-branch accuracy, recovery latency, and the observed fraction of cycles lost.</p>
+
+</section>
+<section id="calculating-branch-cost-sensitivity" aria-labelledby="heading-calculating-branch-cost-sensitivity"><h2 id="heading-calculating-branch-cost-sensitivity">Calculating Branch-Cost Sensitivity</h2>
+<pre><code class="language-python">def cpi_with_branch_misses(base_cpi, branch_fraction, mispredict_rate, penalty):
+    return base_cpi + branch_fraction * mispredict_rate * penalty
+
+baseline = cpi_with_branch_misses(1.0, 0.20, 0.05, 8)
+improved = cpi_with_branch_misses(1.0, 0.20, 0.02, 8)
+assert abs(baseline - 1.08) &lt; 1e-12
+assert abs(improved - 1.032) &lt; 1e-12
+assert improved &lt; baseline
+print(&quot;baseline CPI&quot;, round(baseline, 3), &quot;improved CPI&quot;, round(improved, 3))
+</code></pre>
+<p>The model illustrates sensitivity, not a forecast for a specific CPU. If a branch penalty is measured as <strong>wasted slots</strong> in a wider issue design, directly adding it to CPI without converting the unit is wrong. A clean experimental report defines whether each quantity is in cycles, issue slots, instructions, or events.</p>
+
+</section>
+<section id="exceptions-interrupts-and-redirects" aria-labelledby="heading-exceptions-interrupts-and-redirects"><h2 id="heading-exceptions-interrupts-and-redirects">Exceptions, Interrupts, and Redirects</h2>
+<p>A page fault, illegal instruction, breakpoint, instruction-access fault or asynchronous interrupt may require a control-flow redirect, but its correctness rules are stricter than simply choosing a new PC. In a precise-trap design, architecturally older instructions must have their defined effects, the faulting instruction must not leave impermissible partial effects, and younger work must not commit. A branch misprediction commonly squashes younger speculative work without taking a software-visible exception. A trap commonly captures architected cause and return-address information, enters an appropriate privilege level, and transfers control to a handler.</p>
+<p>Backpressure complicates these events. The trap control must avoid losing the recorded fault while a memory access remains busy, and cancellation cannot assume every outstanding external request can be physically withdrawn. Instead, buffers may track whether a response belongs to a killed instruction and prevent it from changing architectural state. The CPU's memory-ordering and exception mechanisms determine which older side effects are allowed to complete. The separate <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> article develops trap-state sequencing in detail.</p>
+
+</section>
+<section id="preventing-duplicate-or-wrong-path-side-effects" aria-labelledby="heading-preventing-duplicate-or-wrong-path-side-effects"><h2 id="heading-preventing-duplicate-or-wrong-path-side-effects">Preventing Duplicate or Wrong-Path Side Effects</h2>
+<p>Holding an instruction in a stage for three cycles must <strong>not</strong> cause a memory-mapped I/O write, store commit, CSR update, or other external side effect to happen three times. A stage often separates the existence of a valid instruction from the <strong>one-time acceptance</strong> of a side-effecting request. Once accepted, a request can be tracked by a transaction identifier or completion state so that a stalled instruction does not issue it again. The exact rule depends on the request/response protocol and whether retries can duplicate effects.</p>
+<p>Wrong-path speculative loads are more complicated: they may affect caches or timing even when their architectural results are discarded. Speculative stores must not become irrevocably visible before the machine knows they belong to a valid architectural path. Exceptions and permission checks must be handled according to ISA and memory-system rules. Correct architectural output alone does not prove that speculation has no security or side-channel consequences; those receive independent treatment in the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security, Isolation, and Speculative Side Channels</a> article.</p>
+
+</section>
+<section id="stall-bubble-flush-and-replay-operational-comparison" aria-labelledby="heading-stall-bubble-flush-and-replay-operational-comparison"><h2 id="heading-stall-bubble-flush-and-replay-operational-comparison">Stall, Bubble, Flush, and Replay: Operational Comparison</h2>
+<table>
+<thead>
+<tr>
+  <th>Control action</th>
+  <th>Existing instruction</th>
+  <th>Younger instructions</th>
+  <th>Architectural side effects</th>
+  <th>Typical trigger</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Stall / hold</td>
+  <td>Retained; no advancement in blocked stage</td>
+  <td>Usually held upstream</td>
+  <td>No duplicate issue while held</td>
+  <td>Dependency, busy resource, full buffer</td>
+</tr>
+<tr>
+  <td>Bubble insertion</td>
+  <td>Original work held or proceeds as specified; invalid slot introduced</td>
+  <td>May be held or advance elsewhere</td>
+  <td>Bubble must write nothing</td>
+  <td>Load-use interlock</td>
+</tr>
+<tr>
+  <td>Flush / squash</td>
+  <td>Entries in selected wrong-path age range invalidated</td>
+  <td>Restart from correct path</td>
+  <td>Killed work cannot commit</td>
+  <td>Mispredicted branch, fault recovery</td>
+</tr>
+<tr>
+  <td>Replay</td>
+  <td>Some work invalidated and later re-executed</td>
+  <td>Depends on replay scope</td>
+  <td>Old speculative result cannot commit twice</td>
+  <td>Memory-order violation, transient resource conflict</td>
+</tr>
+<tr>
+  <td>Forward</td>
+  <td>Consumer receives newer correct value directly</td>
+  <td>Usually proceeds</td>
+  <td>Normal one-time instruction completion</td>
+  <td>Available RAW producer result</td>
+</tr>
+</tbody>
+</table>
+<p>A flush can coexist with a stall in different parts of a machine. For example, an older load miss might still be outstanding when a younger branch mispredicts. The hardware must track <strong>age and ownership</strong>, not assume every pending response is wrong-path or every pipeline stage has a single global status. Good control interfaces make these boundaries explicit.</p>
+
+</section>
+<section id="pipeline-control-as-a-correctness-protocol" aria-labelledby="heading-pipeline-control-as-a-correctness-protocol"><h2 id="heading-pipeline-control-as-a-correctness-protocol">Pipeline Control as a Correctness Protocol</h2>
+<p>A pipeline controller needs more than a collection of combinational stall equations. Its <strong>protocol</strong> must specify, for every clock boundary, which entry is valid, whether it advances, whether it is killed, whether a request is accepted, whether a result is ready, and which instruction identity owns that result. A well-designed interface prevents accidental loss, duplication and misassociation of instructions even when multiple conditions occur simultaneously. One common design uses valid bits in every stage and explicit control for enabling, clearing, and redirecting registers.</p>
+<p>A fundamental invariant is <strong>conservation of live instructions</strong>: barring deliberate kill and explicitly modeled replay, an accepted instruction remains represented exactly once until it retires or reports an event that terminates it. A second invariant is <strong>age-correctness</strong>: a younger instruction cannot overwrite an older instruction's required value or produce irrevocable effects when older recovery might invalidate it. A third is <strong>operand correctness</strong>: each consumer receives the value from its most recent valid architectural producer. Signal-level tests can verify these invariants over stalls, branch redirects, cache misses and reset sequences.</p>
+
+</section>
+<section id="scoreboarding-and-operand-readiness" aria-labelledby="heading-scoreboarding-and-operand-readiness"><h2 id="heading-scoreboarding-and-operand-readiness">Scoreboarding and Operand Readiness</h2>
+<p>A <strong>scoreboard</strong> tracks whether destinations, functional units and sometimes other resources are busy or ready. In a simple in-order pipeline, a busy bit for each architectural register can cause a new consumer to wait until the producer completes. More sophisticated scoreboards track age, writeback resource availability, and hazard types. A scoreboard does not automatically implement register renaming or precise retirement; those are separate concerns.</p>
+<p>The following dependency checker represents an ordered sequence of older writers. It chooses the <strong>youngest matching older writer</strong>, and stalls if that writer has not produced a value. This deliberately fixes the ambiguity that a naive “first ready match” algorithm creates when multiple pending instructions target the same architectural name.</p>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class PendingWrite:
+    seq: int
+    rd: int
+    value: int
+    ready: bool
+    valid: bool = True
+
+def resolve_register(rs, register_file_value, pending):
+    if rs == 0:
+        return (0, &quot;x0&quot;)
+    candidates = [w for w in pending if w.valid and w.rd == rs and w.rd != 0]
+    if not candidates:
+        return (register_file_value, &quot;register file&quot;)
+    producer = max(candidates, key=lambda w: w.seq)
+    if not producer.ready:
+        return (None, &quot;stall&quot;)
+    return (producer.value, f&quot;forward from {producer.seq}&quot;)
+
+writers = [PendingWrite(10, 5, 8, True), PendingWrite(11, 5, 20, False)]
+assert resolve_register(5, 1, writers) == (None, &quot;stall&quot;)
+writers[1] = PendingWrite(11, 5, 20, True)
+assert resolve_register(5, 1, writers) == (20, &quot;forward from 11&quot;)
+assert resolve_register(7, 3, writers) == (3, &quot;register file&quot;)
+print(&quot;youngest-producer RAW checks passed&quot;)
+</code></pre>
+<p>In a hardware pipeline, <code>seq</code> need not be a literal integer carried by every instruction; pipeline ordering, tags or reorder-buffer positions can supply the necessary age relation. The illustrative model does not address wraparound of sequence numbers, physical register lifetime, speculative kills or atomic update timing. Its purpose is to expose the <strong>semantic rule</strong> a valid scheduler must implement.</p>
+
+</section>
+<section id="in-order-pipeline-versus-out-of-order-backend" aria-labelledby="heading-in-order-pipeline-versus-out-of-order-backend"><h2 id="heading-in-order-pipeline-versus-out-of-order-backend">In-Order Pipeline Versus Out-of-Order Backend</h2>
+<p>In a simple in-order core, decode and execution normally honor program order, and a blocked instruction can stop younger work behind it. An <strong>out-of-order</strong> core maintains an instruction window and can issue independent younger operations while an older instruction is waiting, provided the machine eventually presents correct architectural effects. Register renaming helps remove false name dependencies, while operand tags, reservation stations, wakeup/select logic, and load/store queues control true data and resource dependencies. Such a core still has hazards: they are handled by more elaborate availability and scheduling mechanisms rather than disappearing.</p>
+<p>Pipelining and out-of-order execution are distinct dimensions. An in-order core can have many stages, a branch predictor and bypass networks. An out-of-order processor is pipelined but adds scheduling, speculative state and retirement machinery. Likewise, superscalar width—multiple operations initiated per cycle—is not the same thing as pipeline depth. A designer must consider all three: <strong>how work is staged, how many operations can begin, and how readiness determines order</strong>.</p>
+
+</section>
+<section id="superscalar-width-and-inter-instruction-hazards" aria-labelledby="heading-superscalar-width-and-inter-instruction-hazards"><h2 id="heading-superscalar-width-and-inter-instruction-hazards">Superscalar Width and Inter-Instruction Hazards</h2>
+<p>A two-wide in-order issue group can contain dependencies <em>within the same cycle</em>. If the second instruction consumes the first instruction's result, the first result may not exist early enough to forward within that cycle. The pair may need to split across cycles, or a specialized same-cycle bypass could support only some operations at timing cost. Multiple memory instructions may also exceed available load/store execution ports. Therefore, a machine with two decode slots does not necessarily sustain two IPC on every workload.</p>
+<p>For an out-of-order design, widening decode, issue and retirement helps only if the dependency graph exposes enough independent work and queues can supply ready operands. More slots can increase speculation, result-bus contention, register-file bandwidth demand and power consumption. A benchmark's <strong>instructions-per-cycle</strong> must be associated with the correct machine width and the number of active hardware threads. The companion <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a> article covers these details.</p>
+
+</section>
+<section id="compiler-scheduling-and-software-mitigation" aria-labelledby="heading-compiler-scheduling-and-software-mitigation"><h2 id="heading-compiler-scheduling-and-software-mitigation">Compiler Scheduling and Software Mitigation</h2>
+<p>Compilers and assembly programmers can sometimes reduce hazards by moving independent operations into the gaps between a producer and consumer, reorganizing loops to expose independent work, or using different instruction sequences. Such <strong>instruction scheduling</strong> respects value, memory, control-flow and exception dependencies. If a load is immediately followed by a dependent ADD, an independent address calculation or loop-counter operation may occupy a slot while the load completes. On an interlocked ISA, the program remains correct even without the scheduling transformation; the performance benefit depends on the implementation.</p>
+<p>Programmers should not assume a particular compiler always fills every bubble. Scheduling possibilities are limited by the program's dependency graph, register pressure, branch behavior and memory aliasing. Some historical ISAs exposed pipeline delay slots in the architectural contract, while mainstream modern designs generally hide ordinary pipeline interlocks from software. A software optimization targeting one microarchitecture may make another slower, especially if it increases code size, instruction-cache pressure, or data movement.</p>
+
+</section>
+<section id="a-small-instruction-scheduling-comparison" aria-labelledby="heading-a-small-instruction-scheduling-comparison"><h2 id="heading-a-small-instruction-scheduling-comparison">A Small Instruction-Scheduling Comparison</h2>
+<p>Assume, only for illustration, that a load's result is ready after one otherwise unavoidable dependent-use gap:</p>
+<pre><code class="language-text"># Original order: dependent operation immediately after the load
+LW   x5, 0(x1)
+ADD  x6, x5, x7
+ADDI x9, x9, 1
+
+# Candidate schedule: independent operation in the gap
+LW   x5, 0(x1)
+ADDI x9, x9, 1
+ADD  x6, x5, x7
+</code></pre>
+<p>The reordering is legal only if <code>ADDI x9,x9,1</code> does not affect the load address, the ADD operands, control-flow behavior or any relevant observable outcome (including the required treatment of exceptions and concurrency). In this example the independent update is assumed safe; a real optimizer needs dependency and side-effect information. In a different pipeline, both schedules may run equally fast or the reordered version may be worse for fetch/decode alignment. A performance claim must specify the machine model and a measurement or a validated simulator.</p>
+
+</section>
+<section id="pipeline-depth-frequency-and-branch-penalty" aria-labelledby="heading-pipeline-depth-frequency-and-branch-penalty"><h2 id="heading-pipeline-depth-frequency-and-branch-penalty">Pipeline Depth, Frequency, and Branch Penalty</h2>
+<p>Deeper pipelines can reduce the amount of combinational logic per stage and raise attainable clock frequency, but they increase pipeline register counts, clock distribution power, communication distance, and often branch recovery latency. A deeper pipeline may also demand more forwarding stages and complicate exception bookkeeping. Once a stage becomes very small, storage and skew overhead can dominate and adding another boundary produces little or no frequency benefit.</p>
+<p>A useful comparison examines <strong>execution time = retired cycles × clock period</strong>, not frequency alone. Consider design A with 1.0 billion retired cycles at 1 ns per cycle and design B with 1.25 billion retired cycles at 0.7 ns per cycle: design B is faster overall (0.875 s rather than 1.0 s) despite using more cycles. But if B incurs 1.5 billion cycles, it takes 1.05 s and loses. The same pattern applies to branch-heavy, dependency-heavy, and memory-heavy workloads differently; no single pipeline depth is optimal for every workload or power target.</p>
+
+</section>
+<section id="cycle-counts-cpi-and-speedup" aria-labelledby="heading-cycle-counts-cpi-and-speedup"><h2 id="heading-cycle-counts-cpi-and-speedup">Cycle Counts, CPI, and Speedup</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Design:
+    clock_ns: float
+    cycles: int
+    def runtime_ms(self):
+        return self.clock_ns * self.cycles / 1_000_000
+
+shallow = Design(clock_ns=1.0, cycles=1_000_000_000)
+deep = Design(clock_ns=0.7, cycles=1_250_000_000)
+assert abs(shallow.runtime_ms() - 1000.0) &lt; 1e-9
+assert abs(deep.runtime_ms() - 875.0) &lt; 1e-9
+speedup = shallow.runtime_ms() / deep.runtime_ms()
+assert 1.14 &lt; speedup &lt; 1.15
+print(&quot;runtime speedup&quot;, round(speedup, 3))
+</code></pre>
+<p>This comparison assumes equal useful work and comparable retired-instruction counts; different compilers or ISA choices require normalization to a workload outcome. It does not account for heterogeneous clock domains, dynamic frequency scaling, thermal throttling or per-core parallel execution. The correct numerator for a “speedup” must be the baseline execution time for the same task, not merely the baseline clock frequency.</p>
+
+</section>
+<section id="an-illustrative-cpi-breakdown" aria-labelledby="heading-an-illustrative-cpi-breakdown"><h2 id="heading-an-illustrative-cpi-breakdown">An Illustrative CPI Breakdown</h2>
+<p>For a simple single-issue in-order model, a coarse CPI budget can be expressed as <strong>ideal CPI + extra data-hazard cycles + branch-loss cycles + extra memory-wait cycles + structural-wait cycles per retired instruction</strong>. Be careful: categories overlap if the processor waits for several causes simultaneously. In an out-of-order core, the sum of independently measured event latencies can far exceed elapsed cycles because multiple events overlap. Hardware performance counters frequently report events rather than exclusive causes.</p>
+<p>Illustrative calculation: 10,000 retired instructions, 600 nonoverlapping data stalls, 450 branch-recovery cycles and 1,250 memory waits yield <code>cycles = 10,000 + 600 + 450 + 1,250 = 12,300</code>, giving <code>CPI = 1.23</code>. This is valid only under the artificial assumptions of a filled single-issue pipeline, an ideal one instruction per cycle, and nonoverlapping stalls. For real performance analysis, use retired instruction counts, elapsed core cycles, front-end and back-end limitations, and microarchitecture-specific counter definitions. Separately report <strong>pipeline fill/drain</strong> costs for short traces.</p>
+
+</section>
+<section id="cpi-accounting-example" aria-labelledby="heading-cpi-accounting-example"><h2 id="heading-cpi-accounting-example">CPI Accounting Example</h2>
+<pre><code class="language-python">def simple_cpi(retired, extra_cycles):
+    if retired &lt;= 0:
+        raise ValueError(&quot;retired must be positive&quot;)
+    return (retired + sum(extra_cycles.values())) / retired
+
+breakdown = {&quot;data&quot;: 600, &quot;branch&quot;: 450, &quot;memory&quot;: 1250, &quot;structural&quot;: 0}
+assert abs(simple_cpi(10000, breakdown) - 1.23) &lt; 1e-12
+assert simple_cpi(100, {&quot;branch&quot;: 0}) == 1.0
+print(&quot;illustrative CPI&quot;, simple_cpi(10000, breakdown))
+</code></pre>
+<p>A more faithful multicore or superscalar model requires normalized issue/retirement widths, overlap accounting, and careful counter semantics. An aggregate CPI model that adds stalls from multiple threads as if they occurred in series can be especially misleading.</p>
+
+</section>
+<section id="energy-area-and-thermal-trade-offs" aria-labelledby="heading-energy-area-and-thermal-trade-offs"><h2 id="heading-energy-area-and-thermal-trade-offs">Energy, Area, and Thermal Trade-Offs</h2>
+<p>A pipeline stage boundary introduces registers and clock activity. More stages typically add storage, clock-tree load, reset/enable gating, metadata propagation, and complex control. Forwarding networks add multiplexers and high-activity data wires; branch predictors and speculative buffers consume area and energy; multiported register files can be costly. Techniques that reduce CPI may increase energy per instruction, particularly when they repeatedly fetch and execute wrong-path operations.</p>
+<p>A low-power embedded CPU may favor fewer stages, small predictor structures and simpler interlocks, accepting more cycles for difficult operations. A high-performance server core may favor more execution overlap, prediction, buffering and wider issue, accepting significant dynamic and leakage power to improve throughput. Thermal limits can reduce attainable sustained frequency, so a nominally faster deeper pipeline may lose performance under long-duration load. Design review should consider <em>joules per useful workload</em>, not only peak clock rate.</p>
+
+</section>
+<section id="exceptions-and-precise-state-through-the-pipeline" aria-labelledby="heading-exceptions-and-precise-state-through-the-pipeline"><h2 id="heading-exceptions-and-precise-state-through-the-pipeline">Exceptions and Precise State Through the Pipeline</h2>
+<p>A correct pipeline tracks the association between an instruction and any faults it encounters. An instruction-fetch access fault belongs to a particular program counter; a load fault belongs to the corresponding memory operation; an illegal instruction must not be reported as if a younger valid instruction triggered it. In a simple in-order core, faults can be carried through stage registers or trigger carefully prioritized control redirects. In an out-of-order core, faults may be recorded with an in-flight instruction and made precise at retirement.</p>
+<p>Stalls and flushes create tricky cases: a faulted instruction may be held while downstream resources are busy; a younger wrong-path instruction may itself encounter a fault that must be suppressed after an older branch redirects; an interrupt may be taken at a permitted boundary while outstanding operations are in flight. Precise semantics depend on the ISA, privilege system and the hardware implementation. The essential boundary is that <strong>a speculative pipeline event is not automatically an architectural exception</strong>.</p>
+
+</section>
+<section id="hazard-verification-directed-test-cases" aria-labelledby="heading-hazard-verification-directed-test-cases"><h2 id="heading-hazard-verification-directed-test-cases">Hazard Verification: Directed Test Cases</h2>
+<p>The most valuable tests target each dependency and conflict mechanism directly. An implementation test plan should include independent instructions; RAW on source 1 and source 2; repeated writers to the same register; <code>x0</code> writes; an ALU producer followed by a dependent ALU, branch or store; load-to-ALU, load-to-store-address and load-to-store-data; a load after a cache miss; long-latency execution-unit completion; a resource conflict; taken/not-taken and mispredicted branches; and simultaneous redirect plus stall.</p>
+<p>Every test should compare the <strong>architectural state and retired instruction trace</strong> with a trusted ISA reference model, while separately checking control-signal behavior. A test that only observes the final value of one register can overlook a duplicated store, a lost exception, a wrong-path write, a corrupted source operand or a deadlock. Use bounded timeouts for forward progress, coverage to identify unexercised cross-products of conditions, and fault/interrupt injection where applicable. A machine that passes single-hazard cases can still fail when two hazard types coincide.</p>
+
+</section>
+<section id="verification-invariants-and-assertions" aria-labelledby="heading-verification-invariants-and-assertions"><h2 id="heading-verification-invariants-and-assertions">Verification Invariants and Assertions</h2>
+<p>Useful correctness assertions include: (1) a valid held payload remains unchanged unless killed; (2) a killed or bubble entry never issues a permanent side effect; (3) every committed instruction has a unique identity and correctly ordered architectural predecessor; (4) forwarding chooses the newest valid older producer; (5) no dependent instruction executes before its operand is ready; (6) a redirect invalidates only the intended younger age range; (7) no instruction waits forever when its dependencies and resources become available under stated fairness assumptions.</p>
+<p>Some are <strong>safety</strong> properties (“bad behavior never occurs”); others are <strong>liveness</strong> properties (“work eventually progresses” given service and fairness). Formal assertions or temporal properties can capture both, but liveness claims require explicit environmental assumptions: an arbitrarily unresponsive memory cannot be forced to return by the CPU's hazard unit. In RTL simulation, assertions should be accompanied by a scoreboard that checks the end-to-end retire stream rather than testing internal control signals alone.</p>
+
+</section>
+<section id="property-testing-a-forwarding-rule" aria-labelledby="heading-property-testing-a-forwarding-rule"><h2 id="heading-property-testing-a-forwarding-rule">Property Testing a Forwarding Rule</h2>
+<p>The following deterministic enumeration checks several combinations of pending writes for the youngest-producer rule, including the condition that a newer unavailable write must force a stall rather than expose an older value.</p>
+<pre><code class="language-python">from itertools import product
+
+def choose(rs, old_value, writes):
+    if rs == 0:
+        return (0, &quot;x0&quot;)
+    matches = [w for w in writes if w[&quot;valid&quot;] and w[&quot;rd&quot;] == rs]
+    if not matches:
+        return (old_value, &quot;register&quot;)
+    newest = max(matches, key=lambda w: w[&quot;age&quot;])
+    return (newest[&quot;value&quot;], &quot;forward&quot;) if newest[&quot;ready&quot;] else (None, &quot;stall&quot;)
+
+for ready_a, ready_b in product((False, True), repeat=2):
+    candidates = [
+        {&quot;age&quot;: 1, &quot;rd&quot;: 5, &quot;value&quot;: 11, &quot;ready&quot;: ready_a, &quot;valid&quot;: True},
+        {&quot;age&quot;: 2, &quot;rd&quot;: 5, &quot;value&quot;: 22, &quot;ready&quot;: ready_b, &quot;valid&quot;: True},
+    ]
+    result, source = choose(5, 99, candidates)
+    assert (result, source) == ((22, &quot;forward&quot;) if ready_b else (None, &quot;stall&quot;))
+assert choose(0, 17, candidates) == (0, &quot;x0&quot;)
+print(&quot;enumerated forwarding properties passed&quot;)
+</code></pre>
+<p>This small exhaustive set is not a substitute for formal verification of stage timing or RTL, but it demonstrates the value of testing <em>relations</em> over all relevant cases rather than providing just one expected trace. Similar state-space tests can systematically vary the age and completion of loads, branch outcomes, and resource availability.</p>
+
+</section>
+<section id="measuring-and-interpreting-pipeline-behavior" aria-labelledby="heading-measuring-and-interpreting-pipeline-behavior"><h2 id="heading-measuring-and-interpreting-pipeline-behavior">Measuring and Interpreting Pipeline Behavior</h2>
+<p>CPU performance tools may report retired instructions, cycles, branch misses, cache misses, issue-slot utilization, stalls, backend bound time, or functional-unit contention. Definitions vary by vendor, processor generation, core mode and counter configuration. The high-level method is to (1) establish a repeatable workload, (2) measure elapsed time and retired work, (3) identify a likely bottleneck, (4) corroborate it with multiple counters or controlled microbenchmarks, and (5) compare changes on the same hardware with the same measurement rules.</p>
+<p>A reported “stall cycle” is not always a cycle in which the entire processor was idle. Some stages may stall while others make progress; simultaneous multithreading can keep a shared core productive; out-of-order execution can overlap a cache miss with useful arithmetic work. Retired IPC can fall because of branch flushes, a dependency chain, a lower effective clock, or backend contention. Never infer a single root cause from a single counter. Use the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a> article for workload measurement beyond the pipeline itself.</p>
+
+</section>
+<section id="common-misconceptions-and-corrections" aria-labelledby="heading-common-misconceptions-and-corrections"><h2 id="heading-common-misconceptions-and-corrections">Common Misconceptions and Corrections</h2>
+<table>
+<thead>
+<tr>
+  <th>Misconception</th>
+  <th>Correct interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>“Five stages mean five times faster.”</td>
+  <td>Ideal throughput may improve, but actual clock, fill/drain cost, hazards and power determine speedup.</td>
+</tr>
+<tr>
+  <td>“Forwarding removes all RAW hazards.”</td>
+  <td>A value that has not been produced cannot be forwarded; memory and multi-cycle operations can require waiting.</td>
+</tr>
+<tr>
+  <td>“Every load-use dependence stalls exactly one cycle.”</td>
+  <td>One cycle is tied to a particular stage/latency model; different designs and misses differ.</td>
+</tr>
+<tr>
+  <td>“WAR and WAW always stall an in-order five-stage pipeline.”</td>
+  <td>Fixed stage ordering normally prevents name hazards in that model; OoO designs need additional techniques.</td>
+</tr>
+<tr>
+  <td>“A bubble is a NOP instruction from the binary.”</td>
+  <td>It is generally an invalid internal slot; it need not correspond to an architected NOP.</td>
+</tr>
+<tr>
+  <td>“A flush clears the whole processor.”</td>
+  <td>Correct recovery targets a defined age range, preserving older valid state.</td>
+</tr>
+<tr>
+  <td>“Higher clock frequency means faster programs.”</td>
+  <td>Runtime also depends on total cycles, retired work and sustained operating conditions.</td>
+</tr>
+<tr>
+  <td>“If final registers match, hazard logic is correct.”</td>
+  <td>Duplicate stores, exception order, timing, deadlock and wrong-path side effects may still be wrong.</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="applied-scenario-1-embedded-controller-with-a-blocking-divider" aria-labelledby="heading-applied-scenario-1-embedded-controller-with-a-blocking-divider"><h2 id="heading-applied-scenario-1-embedded-controller-with-a-blocking-divider">Applied Scenario 1: Embedded Controller With a Blocking Divider</h2>
+<p>A microcontroller uses a two- or three-stage in-order pipeline with a shared arithmetic execution path. Most integer instructions complete quickly, but division requires many cycles. When the divider occupies the stage, instruction decode and fetch may be held. A developer notices long latency spikes in a control loop with occasional divisions, even though the main arithmetic path has good frequency.</p>
+<p>The correct analysis distinguishes a <strong>busy execution resource</strong> from a RAW dependency. Independent younger instructions can be delayed because the execution stage has no separate path or queue, not because they consume the quotient. Possible solutions include a dedicated divider with independent completion tracking, code restructuring, fixed-point approximation when semantically justified, or simply accepting rare bounded stalls. The engineering choice should use worst-case loop timing, area and energy requirements, not peak IPC alone. The hazard unit must keep the blocked instruction valid and ensure the divide does not write its result twice on completion.</p>
+
+</section>
+<section id="applied-scenario-2-load-use-bubble-in-a-sensor-processing-loop" aria-labelledby="heading-applied-scenario-2-load-use-bubble-in-a-sensor-processing-loop"><h2 id="heading-applied-scenario-2-load-use-bubble-in-a-sensor-processing-loop">Applied Scenario 2: Load-Use Bubble in a Sensor-Processing Loop</h2>
+<p>A small processor repeatedly loads sensor samples, scales the values, and accumulates a result. An assembly trace contains a load immediately followed by its dependent arithmetic operation. A five-stage implementation with single-cycle data-cache hits incurs a load-use bubble in the specified timing model. The stall accounts for a measurable percentage of cycles, but changing the data cache would not necessarily eliminate it.</p>
+<p>An optimization places an independent loop-counter update between the load and consumer, preserving register and memory semantics. In a simulated trace the bubble disappears. Before production adoption, the designer verifies that the moved operation does not alter loop termination, interrupt observability or fault ordering. A separate test forces an occasional cache miss and confirms that the hazard controller holds the dependent operand until the real data—not an assumed one-cycle response—arrives. The observed effect illustrates the difference between <strong>instruction scheduling</strong> and <strong>memory-latency handling</strong>.</p>
+
+</section>
+<section id="applied-scenario-3-shared-instruction-and-data-port" aria-labelledby="heading-applied-scenario-3-shared-instruction-and-data-port"><h2 id="heading-applied-scenario-3-shared-instruction-and-data-port">Applied Scenario 3: Shared Instruction and Data Port</h2>
+<p>An experimental core fetches code and accesses data through a single synchronous RAM port. Its pipeline shows alternating gaps during a memory-copy workload: load/store operations collide with instruction fetch. The absence of RAW dependencies does not help, because the limitation is a <strong>structural conflict</strong>. If fetch wins arbitrarily and data requests are dropped, the implementation is incorrect, not merely slow.</p>
+<p>A controlled arbiter holds losing requests and returns acceptance acknowledgments. A split instruction/data cache design could eliminate the local port collision, but the board-level SRAM or lower shared path may still become a bottleneck. An engineering comparison includes RAM macro area, access timing, bypass requirements, fairness, cache consistency and measured workload runtime. Tests specifically combine fetch redirects with pending data operations so that an old request is not duplicated or silently lost.</p>
+
+</section>
+<section id="applied-scenario-4-branch-heavy-parsing-workload" aria-labelledby="heading-applied-scenario-4-branch-heavy-parsing-workload"><h2 id="heading-applied-scenario-4-branch-heavy-parsing-workload">Applied Scenario 4: Branch-Heavy Parsing Workload</h2>
+<p>A CPU processes a decision tree with many unpredictable conditions. The measured retired IPC is low despite short arithmetic dependency chains. Trace analysis shows frequent branch redirections and a long recovery interval between a discovered misprediction and useful fetch from the correct target. This is a <strong>control hazard</strong> primarily, not evidence that the ALU is insufficient.</p>
+<p>Possible responses include predictor improvements, reducing branch count, adjusting code layout, or using a more branchless algorithm when it is actually faster and maintains semantics. Each option has costs: larger predictors consume power; branchless code can execute unnecessary work or create new data dependencies; altered layout can change instruction-cache behavior. The appropriate success metric is time per completed parse at a specified energy budget. Tests verify that wrong-path parses cannot write persistent state before the branch's correct path has been established.</p>
+
+</section>
+<section id="applied-scenario-5-two-multiply-units-one-writeback-port" aria-labelledby="heading-applied-scenario-5-two-multiply-units-one-writeback-port"><h2 id="heading-applied-scenario-5-two-multiply-units-one-writeback-port">Applied Scenario 5: Two Multiply Units, One Writeback Port</h2>
+<p>A designer doubles the count of pipelined multipliers, hoping to double multiplication throughput. A benchmark shows little gain because both units frequently finish in the same cycle and compete for one writeback port. Even with independent operands, the single output resource forces delayed completion. The stall is structural and occurs at the <strong>result-delivery boundary</strong>, rather than within the multiplier arithmetic pipeline.</p>
+<p>Possible remedies include scheduling completions, buffering one result, adding a second port, or changing the issue policy to avoid simultaneous contention. These decisions affect physical-register file area, wire timing, and power. Verification must ensure every result is eventually delivered to the correct destination and that no younger instruction commits an invalid value. The case demonstrates why <strong>functional-unit counts alone</strong> are insufficient to predict sustained performance.</p>
+
+</section>
+<section id="applied-scenario-6-redirect-and-load-stall-in-the-same-cycle" aria-labelledby="heading-applied-scenario-6-redirect-and-load-stall-in-the-same-cycle"><h2 id="heading-applied-scenario-6-redirect-and-load-stall-in-the-same-cycle">Applied Scenario 6: Redirect and Load Stall in the Same Cycle</h2>
+<p>An older branch resolves as mispredicted just as a younger instruction is waiting for a load result. A simplistic controller generates both a “hold decode” signal and “flush decode” signal without defined priority. Depending on logic order, the wrong-path consumer may remain in decode, then resume execution after the redirect. Alternatively, the fault or branch instruction itself may be accidentally cleared.</p>
+<p>A correct controller attaches instruction-age and validity information to the event, redirects fetch to the correct address, kills the targeted younger entries, and preserves older eligible operations. The load response can be accepted or canceled according to its request protocol and whether the load remains valid. A directed test exercises simultaneous stall, redirect and response arrival, then compares the retire trace with a reference ISA execution. This is a high-value test because individual stall and flush tests may both pass while their combination fails.</p>
+
+</section>
+<section id="engineering-selection-and-review-framework" aria-labelledby="heading-engineering-selection-and-review-framework"><h2 id="heading-engineering-selection-and-review-framework">Engineering Selection and Review Framework</h2>
+<table>
+<thead>
+<tr>
+  <th>Gate</th>
+  <th>Question</th>
+  <th>Minimum evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1. Declare the machine model</td>
+  <td>How many stages; where are operands read, produced and consumed?</td>
+  <td>Stage diagram and cycle timing contract</td>
+</tr>
+<tr>
+  <td>2. Define resource capacity</td>
+  <td>Which memories, ports, queues and units are shared?</td>
+  <td>Capacity and arbitration map</td>
+</tr>
+<tr>
+  <td>3. Define valid/ready semantics</td>
+  <td>What does a hold, acceptance, or kill mean?</td>
+  <td>Clock-boundary protocol and payload stability rules</td>
+</tr>
+<tr>
+  <td>4. Map producer–consumer timing</td>
+  <td>Which values are available at each boundary?</td>
+  <td>Age-correct bypass and stall truth table</td>
+</tr>
+<tr>
+  <td>5. Define control redirects</td>
+  <td>Which younger instructions must be killed?</td>
+  <td>Branch, fault and return recovery sequence</td>
+</tr>
+<tr>
+  <td>6. Protect side effects</td>
+  <td>Can a stalled, killed or replayed operation write more than once?</td>
+  <td>Store, CSR, I/O and exception invariants</td>
+</tr>
+<tr>
+  <td>7. Quantify costs</td>
+  <td>How much do hazard fixes change time, area and energy?</td>
+  <td>Workload-based CPI, clock and power data</td>
+</tr>
+<tr>
+  <td>8. Test simultaneous conditions</td>
+  <td>What if a miss, stall, redirect and fault coincide?</td>
+  <td>Directed cross-product and randomized tests</td>
+</tr>
+<tr>
+  <td>9. Verify architectural behavior</td>
+  <td>Does the retire trace match the ISA model?</td>
+  <td>Reference-model comparison and assertions</td>
+</tr>
+<tr>
+  <td>10. Validate in context</td>
+  <td>Is the design suitable for its embedded/server/interactive workload?</td>
+  <td>Representative measured workloads and failure tests</td>
+</tr>
+</tbody>
+</table>
+<p>This framework discourages an isolated “stall count” optimization that fails to meet the actual system objective. A more aggressive forwarding network is a poor trade if its added delay lowers clock frequency enough to offset saved bubbles; conversely, a low-power embedded system may willingly tolerate a few hazards to reduce area and leakage.</p>
+
+</section>
+<section id="suggested-study-pathways" aria-labelledby="heading-suggested-study-pathways"><h2 id="heading-suggested-study-pathways">Suggested Study Pathways</h2>
+<p><strong>Introductory CPU engineering:</strong> Begin with <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a>, study <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a>, and then work through the five-stage tables and forwarding cases here. Follow with <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> to understand redirected instruction execution.</p>
+<p><strong>Performance and microarchitecture:</strong> Continue to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a>, and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a>. This sequence moves from fixed in-order interlocks to readiness-driven scheduling and workload analysis.</p>
+<p><strong>Verification and assurance:</strong> Revisit the held-instruction invariants here, study precise state in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>, and link to the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a> unit for hardware fault mechanisms. The associated instruction set and privilege documentation remains authoritative for architectural behavior.</p>
+
+</section>
+<section id="review-questions-and-exercises" aria-labelledby="heading-review-questions-and-exercises"><h2 id="heading-review-questions-and-exercises">Review Questions and Exercises</h2>
+<ol>
+<li>Why does pipelining improve steady-state throughput without guaranteeing lower latency for a single instruction?</li>
+<li>In the five-stage model, construct a timing table for five independent instructions and compute the total completion cycles using the stated timing convention.</li>
+<li>A dependent ADD follows an ALU producer. Explain which register identifier, valid, write-enable, and result-availability checks are needed to forward correctly.</li>
+<li>Why can an immediately dependent load require a bubble even when ALU-to-ALU forwarding avoids stalls? State the memory-stage assumption.</li>
+<li>Construct a three-instruction sequence containing two writes to the same register followed by a read. Explain why choosing an older ready value is wrong when a newer producer is pending.</li>
+<li>Distinguish a single-port memory structural conflict from a memory-cache miss and a load-use RAW hazard.</li>
+<li>For <code>branch_fraction = 0.15</code>, <code>mispredict_rate = 0.08</code>, and <code>penalty = 6</code>, calculate the idealized additional CPI and state two assumptions that limit the model.</li>
+<li>Design a test where a load-use stall and branch redirect occur in the same cycle. Which entries should be retained or killed, and what determines their ages?</li>
+<li>A processor adds two execution units but only one result bus. What new resource constraint may appear, and how can it be tested?</li>
+<li>Explain why performance counters identifying many cache misses do not directly prove that each miss added its full latency to total execution time.</li>
+<li>Write an assertion ensuring a stalled, valid pipeline entry retains a stable payload until accepted or explicitly killed.</li>
+<li>Compare a shorter and deeper pipeline using measured clock period, retired cycles and energy per workload; why is frequency alone insufficient?</li>
+</ol>
+
+</section>
+<section id="compact-glossary" aria-labelledby="heading-compact-glossary"><h2 id="heading-compact-glossary">Compact Glossary</h2>
+<table>
+<thead>
+<tr>
+  <th>Term</th>
+  <th>Meaning in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Pipeline stage</td>
+  <td>Portion of instruction processing separated from neighboring portions by a timing/storage boundary</td>
+</tr>
+<tr>
+  <td>Pipeline register</td>
+  <td>Storage carrying data, control, identity and validity between stages</td>
+</tr>
+<tr>
+  <td>Initiation interval</td>
+  <td>Minimum or observed spacing between accepted new operations in a pipeline</td>
+</tr>
+<tr>
+  <td>IPC / CPI</td>
+  <td>Retired instructions per cycle / average cycles per retired instruction, under a consistent accounting scope</td>
+</tr>
+<tr>
+  <td>RAW</td>
+  <td>True data dependence: later read needs value from an earlier write</td>
+</tr>
+<tr>
+  <td>WAR / WAW</td>
+  <td>Name-dependence ordering among reads and writes / multiple writes to the same name</td>
+</tr>
+<tr>
+  <td>Forwarding / bypass</td>
+  <td>Direct transfer of produced values to consumers before ordinary register-file readback</td>
+</tr>
+<tr>
+  <td>Load-use hazard</td>
+  <td>Consumer requires loaded data before that data is available in the modeled timing schedule</td>
+</tr>
+<tr>
+  <td>Structural hazard</td>
+  <td>Competition for a finite hardware resource</td>
+</tr>
+<tr>
+  <td>Control hazard</td>
+  <td>Uncertainty or correction in the next valid instruction path</td>
+</tr>
+<tr>
+  <td>Bubble</td>
+  <td>Invalid internal pipeline slot carrying no instruction side effects</td>
+</tr>
+<tr>
+  <td>Stall / hold</td>
+  <td>Temporary prevention of advancement of a valid entry</td>
+</tr>
+<tr>
+  <td>Flush / squash</td>
+  <td>Invalidation of a selected set of in-flight instructions</td>
+</tr>
+<tr>
+  <td>Replay</td>
+  <td>Retrying work after invalidating a prior speculative or incomplete attempt</td>
+</tr>
+<tr>
+  <td>Backpressure</td>
+  <td>Downstream inability to accept work propagated upstream</td>
+</tr>
+<tr>
+  <td>Scoreboard</td>
+  <td>Hardware data structure tracking readiness and resource occupancy</td>
+</tr>
+<tr>
+  <td>Hazard interlock</td>
+  <td>Hardware logic that enforces waiting until dependent operands or resources are available</td>
+</tr>
+<tr>
+  <td>Reservation station</td>
+  <td>Queue-like structure that holds operations awaiting eligible issue in certain execution engines</td>
+</tr>
+<tr>
+  <td>Branch penalty</td>
+  <td>Extra time or slots lost because next-path selection was unavailable or wrong</td>
+</tr>
+<tr>
+  <td>Precise exception</td>
+  <td>Architecturally defined fault boundary preserving effects of older instructions and suppressing younger effects</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="complete-cpu-specialist-directory" aria-labelledby="heading-complete-cpu-specialist-directory"><h2 id="heading-complete-cpu-specialist-directory">Complete CPU Specialist Directory</h2>
+<p>The directory below reproduces the <strong>24 prescribed Level 5 destinations</strong> from the established Central Processing Unit specialist index. Planned links are intentionally active; this is not a claim that every sibling page has already been deployed.</p><ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards" aria-current="page">CPU Pipelines and Hazards</a> — Current article.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a>.</li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a>.</li></ol><p>Return to the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">Central Processing Unit specialist index</a> for topic boundaries and production planning, or to the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">parent CPU overview</a> for a general introduction.</p>
+</section>
+<section id="related-encyclopedia-topics-and-taxonomy-boundaries" aria-labelledby="heading-related-encyclopedia-topics-and-taxonomy-boundaries"><h2 id="heading-related-encyclopedia-topics-and-taxonomy-boundaries">Related Encyclopedia Topics and Taxonomy Boundaries</h2>
+<p>The <a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems division</a> covers physical CPU components and platform constraints. For an abstract account of computer pipelines, study <a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing">Pipeline Processing</a> and its specialist unit in Computer Architecture. <a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> addresses processor design in broader architectural terms, and <a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a> supplies the architectural contract independent of a particular pipeline.</p>
+<p>For data availability and latency, use <a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a>. For memory-mapped interfaces and contention, see <a href="/library/encyclopedia/computer-science/hardware-systems/motherboards-and-buses">Motherboards and Buses</a>. The <a href="/library/encyclopedia/computer-science/programming-and-development/">Programming and Development</a> division covers compiler transformations and software optimization methodology, while <a href="/library/encyclopedia/computer-science/security-systems/">Security Systems</a> covers general protection and verification. This article stays focused on <strong>concrete CPU pipeline timing, operand availability, hazard control, and performance</strong>.</p>
+
+</section>
+<section id="primary-documentation-and-further-reading" aria-labelledby="heading-primary-documentation-and-further-reading"><h2 id="heading-primary-documentation-and-further-reading">Primary Documentation and Further Reading</h2>
+<ol>
+<li><a href="https://ibex-core.readthedocs.io/en/latest/03_reference/pipeline_details.html">lowRISC, <em>Ibex Pipeline Details</em></a> — An open RISC-V implementation with a short pipeline and configuration-dependent execution timing. Consult the documentation version matching the selected Ibex configuration.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/intro-overview/boom-pipeline.html">RISCV-BOOM, <em>The BOOM Pipeline</em></a> — Stages and speculative flow of a parameterizable out-of-order RISC-V processor.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/execution-stages.html">RISCV-BOOM, <em>The Execute Pipeline</em></a> — Execution units, result routing, and speculation-support structures.</li>
+<li><a href="https://docs.boom-core.org/en/latest/sections/physical-realization.html">RISCV-BOOM, <em>Physical Realization</em></a> — Implementation trade-offs involving pipeline timing and branch recovery.</li>
+<li><a href="https://www.gem5.org/documentation/general_docs/cpu_models/O3CPU">gem5, <em>Out-of-order CPU Model</em></a> — Pipeline stages and the distinction between issue, execution/writeback and commit in a detailed simulator.</li>
+<li><a href="https://notes.cs61c.org/content/pipeline-hazards/data-hazards/">University of California, Berkeley CS 61C, <em>Data Hazards</em></a> — Teaching material on bypassing, interlocks and load-use dependencies.</li>
+<li><a href="https://www.cs.cornell.edu/courses/cs3410/2019sp/projects/mini-risc/">Cornell CS3410, <em>Project 2: Pipelined CPU</em></a> — A pedagogical description of EX/MEM and MEM/WB forwarding and priority checks.</li>
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/rv32.html">RISC-V International, <em>RV32I Base Integer Instruction Set</em></a> — Architectural instruction behavior; pipeline structures are implementation choices.</li>
+<li>David A. Patterson and John L. Hennessy, <em>Computer Organization and Design: The Hardware/Software Interface</em> (RISC-V edition) — Pipeline datapaths, dependencies, forwarding, stalls and control hazards.</li>
+<li>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em> — Pipeline trade-offs, speculation, multiple issue and quantitative performance analysis.</li>
+</ol>
+<p><strong>Source distinction:</strong> Ibex, BOOM and gem5 illustrate particular implementation choices and do not define universal CPU behavior. RISC-V specifications establish architectural effects rather than requiring a specific number of pipeline stages. The five-stage timing examples and Python models are explicit educational assumptions, not synthesized or cycle-accurate models of a named commercial CPU.</p>
+
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope"><h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Prepared November 23, 2026:</strong> This article fulfills the prescribed <code>cpu-pipelines-and-hazards.html</code> Level 5 destination from the CPU specialist index. Its ZIP is organized relative to <code>C:\MGU\</code>, beginning at <code>library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/</code>, so extracting into <code>C:\MGU\</code> places the HTML at the intended location without manual sorting.</p>
+<p>The article provides a complete explanatory treatment of stage overlap, pipeline timing, structural/data/control hazards, forward/stall/flush behavior, resource conflicts, branch cost, architectural side effects, verification and decision-making. The example models are pedagogical; no specific core has undergone cycle-accurate RTL simulation, physical implementation or formal proof as part of this article production. The CPU unit index and other specialist articles are not modified by this delivery, and the presence of active planned-child links is not a claim of completed live deployment.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transaction Ordering and Memory Coherence | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="MGU Computer Science Encyclopedia article on transaction IDs and ordering, memory visibility, cache coherence, AXI and PCIe, DMA synchronization, barriers, coherent interconnects, and worked examples.">
+<meta name="keywords" content="transaction ordering,memory coherence,cache coherence,AXI ID,PCI Express,PCIe ordering,ACE,CHI,MESI,MOESI,directory coherence,snoop,DMA,MMIO,memory barrier,visibility,release acquire,posted writes,interconnect">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Transaction Ordering and Memory Coherence | MGU Encyclopedia">
+<meta property="og:description" content="How interconnects preserve ordering, coordinate coherent caches, and make shared-memory data visible to CPUs and devices.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Transaction Ordering and Memory Coherence</h1>
+<p class="subtitle">Ordering requests, delivering responses, establishing visibility, and coordinating cached copies across processors, memory systems, and peripheral interconnects.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page">
+<h3>On This Page</h3>
+<ol>
+<li><a href="#scope-and-fundamental-definition">Scope and Fundamental Definition</a></li>
+<li><a href="#four-separate-concepts-ordering-completion-visibility-and-coherence">Four Separate Concepts: Ordering, Completion, Visibility, and Coherence</a></li>
+<li><a href="#agents-addresses-and-ordering-domains">Agents, Addresses, and Ordering Domains</a></li>
+<li><a href="#requests-data-transfers-responses-and-commit-points">Requests, Data Transfers, Responses, and Commit Points</a></li>
+<li><a href="#program-order-and-microarchitectural-reordering">Program Order and Microarchitectural Reordering</a></li>
+<li><a href="#why-hardware-allows-reordering">Why Hardware Allows Reordering</a></li>
+<li><a href="#read-ordering-and-write-ordering-are-different">Read Ordering and Write Ordering Are Different</a></li>
+<li><a href="#same-address-dependence-and-cross-address-ordering">Same-Address Dependence and Cross-Address Ordering</a></li>
+<li><a href="#outstanding-requests-tags-and-reorder-tracking">Outstanding Requests, Tags, and Reorder Tracking</a></li>
+<li><a href="#amba-axi-transaction-ids-and-ordering">AMBA AXI Transaction IDs and Ordering</a></li>
+<li><a href="#axi-channels-and-the-independence-of-read-and-write-traffic">AXI Channels and the Independence of Read and Write Traffic</a></li>
+<li><a href="#ordered-and-unordered-bridges">Ordered and Unordered Bridges</a></li>
+<li><a href="#posted-writes-and-completion-boundaries">Posted Writes and Completion Boundaries</a></li>
+<li><a href="#pci-express-ordering-and-relaxed-ordering-attributes">PCI Express Ordering and Relaxed-Ordering Attributes</a></li>
+<li><a href="#memory-types-attributes-and-shareability">Memory Types, Attributes, and Shareability</a></li>
+<li><a href="#device-registers-and-mmio-ordering">Device Registers and MMIO Ordering</a></li>
+<li><a href="#memory-barriers-and-ordering-instructions">Memory Barriers and Ordering Instructions</a></li>
+<li><a href="#cache-coherence-the-problem-of-multiple-copies">Cache Coherence: The Problem of Multiple Copies</a></li>
+<li><a href="#coherence-invariants-and-per-location-serialization">Coherence Invariants and Per-Location Serialization</a></li>
+<li><a href="#mesi-moesi-and-coherence-state-machines">MESI, MOESI, and Coherence State Machines</a></li>
+<li><a href="#snoop-based-coherence">Snoop-Based Coherence</a></li>
+<li><a href="#directory-based-coherence-and-home-nodes">Directory-Based Coherence and Home Nodes</a></li>
+<li><a href="#ownership-transfers-false-sharing-and-line-granularity">Ownership Transfers, False Sharing, and Line Granularity</a></li>
+<li><a href="#amba-ace-and-chi-coherent-fabrics">AMBA ACE and CHI Coherent Fabrics</a></li>
+<li><a href="#noncoherent-devices-and-software-managed-cache-maintenance">Noncoherent Devices and Software-Managed Cache Maintenance</a></li>
+<li><a href="#coherent-dma-does-not-eliminate-synchronization">Coherent DMA Does Not Eliminate Synchronization</a></li>
+<li><a href="#descriptor-rings-doorbells-and-ownership-flags">Descriptor Rings, Doorbells, and Ownership Flags</a></li>
+<li><a href="#release-acquire-and-publication-protocols">Release, Acquire, and Publication Protocols</a></li>
+<li><a href="#memory-consistency-models-across-processor-isas">Memory Consistency Models Across Processor ISAs</a></li>
+<li><a href="#multi-copy-atomicity-and-observation-differences">Multi-Copy Atomicity and Observation Differences</a></li>
+<li><a href="#atomic-operations-and-interconnect-support">Atomic Operations and Interconnect Support</a></li>
+<li><a href="#iommus-address-translation-and-ordering">IOMMUs, Address Translation, and Ordering</a></li>
+<li><a href="#interrupt-delivery-dma-completion-and-data-visibility">Interrupt Delivery, DMA Completion, and Data Visibility</a></li>
+<li><a href="#cross-core-producers-and-multi-agent-consumer-races">Cross-Core Producers and Multi-Agent Consumer Races</a></li>
+<li><a href="#virtualization-and-coherence-domains">Virtualization and Coherence Domains</a></li>
+<li><a href="#failure-cases-lost-updates-stale-reads-and-premature-reuse">Failure Cases: Lost Updates, Stale Reads, and Premature Reuse</a></li>
+<li><a href="#ordering-and-coherence-security-boundaries">Ordering and Coherence Security Boundaries</a></li>
+<li><a href="#fault-handling-retries-and-partial-completion">Fault Handling, Retries, and Partial Completion</a></li>
+<li><a href="#latency-throughput-and-ordering-costs">Latency, Throughput, and Ordering Costs</a></li>
+<li><a href="#protocol-comparison-what-is-ordered-and-what-is-not">Protocol Comparison: What Is Ordered and What Is Not</a></li>
+<li><a href="#design-review-and-investigation-framework">Design Review and Investigation Framework</a></li>
+<li><a href="#verification-methods-and-litmus-tests">Verification Methods and Litmus Tests</a></li>
+<li><a href="#diagnostic-checklist-for-field-failures">Diagnostic Checklist for Field Failures</a></li>
+<li><a href="#worked-example-1-same-id-axi-responses">Worked Example 1 — Same-ID AXI Responses</a></li>
+<li><a href="#worked-example-2-different-ids-allow-more-overlap">Worked Example 2 — Different IDs Allow More Overlap</a></li>
+<li><a href="#worked-example-3-a-bridge-restores-ordered-service">Worked Example 3 — A Bridge Restores Ordered Service</a></li>
+<li><a href="#worked-example-4-descriptor-publication-before-a-doorbell">Worked Example 4 — Descriptor Publication Before a Doorbell</a></li>
+<li><a href="#worked-example-5-coherent-cache-line-ownership">Worked Example 5 — Coherent Cache-Line Ownership</a></li>
+<li><a href="#worked-example-6-false-sharing-and-ownership-traffic">Worked Example 6 — False Sharing and Ownership Traffic</a></li>
+<li><a href="#worked-example-7-noncoherent-receive-buffer">Worked Example 7 — Noncoherent Receive Buffer</a></li>
+<li><a href="#worked-example-8-outstanding-requests-and-the-bandwidth-bound">Worked Example 8 — Outstanding Requests and the Bandwidth Bound</a></li>
+<li><a href="#worked-example-9-two-core-store-buffering-litmus-test">Worked Example 9 — Two-Core Store Buffering Litmus Test</a></li>
+<li><a href="#worked-example-10-release-acquire-message-publication">Worked Example 10 — Release/Acquire Message Publication</a></li>
+<li><a href="#worked-example-11-posted-mmio-write-versus-device-completion">Worked Example 11 — Posted MMIO Write Versus Device Completion</a></li>
+<li><a href="#worked-example-12-reset-during-in-flight-dma">Worked Example 12 — Reset During In-Flight DMA</a></li>
+<li><a href="#worked-example-13-measuring-coherence-versus-transport-bottlenecks">Worked Example 13 — Measuring Coherence Versus Transport Bottlenecks</a></li>
+<li><a href="#specialist-glossary">Specialist Glossary</a></li>
+<li><a href="#technical-references-and-further-reading">Technical References and Further Reading</a></li>
+<li><a href="#sub-articles-and-continued-study">Sub-Articles and Continued Study</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#editorial-scope-and-publication-status">Editorial Scope and Publication Status</a></li>
+</ol>
+</section>
+<section id="scope-and-fundamental-definition" aria-labelledby="heading-scope-and-fundamental-definition">
+<h2 id="heading-scope-and-fundamental-definition">Scope and Fundamental Definition</h2>
+<p><strong>Transaction ordering and memory coherence</strong> are distinct but interacting aspects of hardware communication. Ordering specifies which operations are allowed to overtake others, which responses are returned in sequence, and when other observers may see effects. Coherence keeps participating caches and agents from indefinitely using conflicting versions of the same coherent memory location. A correctly ordered bus can be noncoherent; a coherent memory system can permit substantial reordering. Neither property by itself ensures a complete software synchronization protocol.</p>
+<p>This Level 5 article examines those ideas at the <strong>system interconnect boundary</strong>: CPU-to-memory traffic, DMA-capable devices, peripheral register accesses, shared multicore fabrics, bridges, and coherent agents. It expands the <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems overview</a> without replacing the deeper ISA memory-model treatment, cache-coherence algorithms in the Memory Hierarchy unit, or driver-level details of the Operating Systems unit. It emphasizes observable guarantees rather than presenting a universal ordering rule for every product called a bus.</p>
+<p>An engineer must ask four different questions. <strong>What order were requests issued?</strong> <strong>What order may they be serviced or returned?</strong> <strong>When does another agent observe their effects?</strong> <strong>Must a cache holding an old line be updated, invalidated, or consulted?</strong> Answers depend on transaction attributes, addresses, initiator identities, protocol rules, memory types, fabric implementation, and software barriers. Protocol compliance cannot be inferred from an example waveform alone; the governing specification and platform integration rules decide the required behavior.</p>
+
+</section>
+<section id="four-separate-concepts-ordering-completion-visibility-and-coherence" aria-labelledby="heading-four-separate-concepts-ordering-completion-visibility-and-coherence">
+<h2 id="heading-four-separate-concepts-ordering-completion-visibility-and-coherence">Four Separate Concepts: Ordering, Completion, Visibility, and Coherence</h2>
+<p><strong>Request order</strong> describes the sequence in which an initiator presents operations. <strong>Response order</strong> describes acknowledgments and data returns. <strong>Completion</strong> denotes a defined protocol milestone—often the receipt of an appropriate response—but its meaning depends on the protocol and transaction type. <strong>Visibility</strong> means an effect can be observed by a specified class of other agents. <strong>Coherence</strong> governs coordinated cached copies of coherent memory locations. These terms are not synonyms, and the phrase “the write is done” is too ambiguous for a hardware specification.</p>
+<p>For example, a CPU might store a descriptor in cacheable memory, then write a doorbell register over an I/O interconnect. A posted doorbell write can be accepted by an intermediate component before the peripheral acts on it. The descriptor store can remain buffered or in a cache unless the CPU’s memory and I/O access rules ensure that the device can observe it. Cache coherency may provide the up-to-date descriptor bytes but does not, by itself, impose the required <em>descriptor-before-doorbell</em> ordering. Software and hardware must establish both conditions.</p>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Fundamental question</th>
+<th>Representative mechanism</th>
+<th>What it does <strong>not</strong> automatically establish</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Initiation order</td>
+<td>Which request was issued first?</td>
+<td>Program order, issue queue, source sequencer</td>
+<td>Visibility order at a remote observer</td>
+</tr>
+<tr>
+<td>Response/completion order</td>
+<td>Which operation receives a response first?</td>
+<td>Transaction IDs, completion queues, response rules</td>
+<td>Durable storage or peripheral side-effect completion</td>
+</tr>
+<tr>
+<td>Memory visibility</td>
+<td>When can a permitted observer see data?</td>
+<td>Store buffers, barriers, ordering domains</td>
+<td>Coherent copies in every nonparticipant device</td>
+</tr>
+<tr>
+<td>Coherence</td>
+<td>Which cached line version can be read?</td>
+<td>Snoop, directory, ownership and invalidation</td>
+<td>Global sequential consistency across all addresses</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>Has modified state reached nonvolatile media?</td>
+<td>Persistence-domain flush and drain mechanisms</td>
+<td>Guaranteed by ordinary bus write acknowledgment</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="agents-addresses-and-ordering-domains" aria-labelledby="heading-agents-addresses-and-ordering-domains">
+<h2 id="heading-agents-addresses-and-ordering-domains">Agents, Addresses, and Ordering Domains</h2>
+<p>A <strong>requester/initiator</strong> creates transactions; a <strong>target/responder</strong> services them. Bridges, interconnect ports, and home nodes may be both requesters and responders at different boundaries. An ordering domain is a set of operations for which specific relative-order rules apply. Domains may be distinguished by transaction ID, destination, address region, shareability, memory type, traffic class, or another protocol-defined attribute. One machine can contain several domains with different guarantees.</p>
+<p>The same physical address may be accessed through a CPU load/store path, a cache-coherent device interface, or a noncoherent peripheral channel. Conversely, a virtual address used by the CPU and a device-visible I/O address may ultimately identify the same storage only after address translation. Naming an address is not enough: the engineer must establish which agents target the same physical backing memory and which translation and coherency rules apply to their accesses.</p>
+<p><strong>Ordering scope must always be named.</strong> “Writes are ordered” could mean writes from one producer to one target, writes to Device memory, responses sharing an AXI ID, or observations made by all processors. These are materially different contracts. A global claim should be made only where the platform documentation explicitly provides it.</p>
+
+</section>
+<section id="requests-data-transfers-responses-and-commit-points" aria-labelledby="heading-requests-data-transfers-responses-and-commit-points">
+<h2 id="heading-requests-data-transfers-responses-and-commit-points">Requests, Data Transfers, Responses, and Commit Points</h2>
+<p>A transaction may involve a request header, several payload beats, an acceptance handshake, an eventual response, and downstream side effects. Different protocols provide different points at which a transfer is <strong>accepted</strong>, <strong>completed</strong>, or <strong>globally observable</strong>. A response may certify only that a subordinate accepted responsibility for the operation. A storage controller may subsequently buffer, reorder, or schedule work internally. Applications that require stable persistence need an additional, device-specific durability contract.</p>
+<p>The distinction also applies to reads. A read can receive data after passing through caches, snoop logic, bridges, and memory controllers. The returned bytes have a meaning defined by the memory consistency model and coherence state. A read that completes quickly is not proof that every earlier write to every address has reached every device. Cross-address and cross-initiator dependencies often require explicitly defined barriers or handshakes.</p>
+<p>For practical analysis, annotate each operation with <strong>issue</strong>, <strong>handshake acceptance</strong>, <strong>target-side processing</strong>, <strong>response</strong>, <strong>visibility</strong>, and—if applicable—<strong>durability</strong>. It is not always possible to observe all these moments with hardware counters, but distinguishing them prevents false inferences from traces.</p>
+
+</section>
+<section id="program-order-and-microarchitectural-reordering" aria-labelledby="heading-program-order-and-microarchitectural-reordering">
+<h2 id="heading-program-order-and-microarchitectural-reordering">Program Order and Microarchitectural Reordering</h2>
+<p><strong>Program order</strong> is the instruction sequence written or defined by the executing program. A modern CPU can dispatch independent loads and stores speculatively, hold stores in buffers, satisfy reads from local caches, or defer interconnect transactions. An architectural memory model specifies the externally permitted results, not necessarily the literal order in which every micro-operation traverses the core. Such freedom makes out-of-order execution and deep memory pipelines practical without abandoning a stable programmer-visible contract.</p>
+<p>Hardware requesters other than CPUs also reorder. A network adapter may issue multiple reads concurrently, arbitrate among queues, or accumulate writes for efficient bursts. An interconnect can route requests through separate buffers and paths; a memory controller may schedule banks to reduce row conflicts. These optimizations are legitimate only when they preserve the protocol’s ordering constraints and all applicable dependencies.</p>
+<p>A useful distinction is <strong>program order versus observed order</strong>. If a producer writes <code>payload</code> and then writes <code>ready</code>, the consumer must not be permitted to treat <code>ready</code> as proof of a fresh payload unless the two agents share a synchronization contract. A store-release and load-acquire pair can establish that contract for supported shared memory; for noncoherent device buffers, cache maintenance and DMA synchronization may also be required.</p>
+
+</section>
+<section id="why-hardware-allows-reordering" aria-labelledby="heading-why-hardware-allows-reordering">
+<h2 id="heading-why-hardware-allows-reordering">Why Hardware Allows Reordering</h2>
+<p>Rigid serialization wastes overlap. If a 100-nanosecond memory access must finish before an independent request can begin, a single requester may obtain very poor throughput. With multiple outstanding requests, the fabric can service independent targets or memory banks concurrently and recover much of the waiting time. Relaxing order also allows switches to distribute traffic across queues, enables efficient prefetching, and reduces head-of-line blocking.</p>
+<p>These benefits carry bookkeeping costs. A requester must associate responses with the correct command, maintain dependency information, and refrain from exposing results in an architecturally forbidden order. Ordering fences may drain or constrain queues; strong ordering can reduce bandwidth even when link capacity is unchanged. A coherent fabric adds snoop traffic, directory lookups, ownership transfers, and occasionally retries. Performance analysis therefore needs <strong>both</strong> the raw transport rate and the ordering policy.</p>
+<p>Reordering is neither categorically safe nor categorically erroneous. It is a resource-management technique bounded by the architecture. The purpose of the ordering rules is to permit useful concurrency while ensuring that a consumer can distinguish completed, valid, and authorized data.</p>
+
+</section>
+<section id="read-ordering-and-write-ordering-are-different" aria-labelledby="heading-read-ordering-and-write-ordering-are-different">
+<h2 id="heading-read-ordering-and-write-ordering-are-different">Read Ordering and Write Ordering Are Different</h2>
+<p>Reads and writes can have separate request channels and may be independently buffered. A write’s response need not share the path or timing of a subsequent read’s response. Some devices demand that register accesses remain sequential; others support independent outstanding reads across addresses and accept writes before earlier responses return. The appropriate contract is a property of the interface and addressed region, not merely the initiator’s software source order.</p>
+<p>For example, consider a status-register read that follows a command-register write. Depending on bus and device rules, the status read may act as a required synchronization or flush point, or it may not. Treating a raw memory fence as a substitute for a posted-write completion read is unsafe unless the platform explicitly equates them. Conversely, imposing a readback after every MMIO write may be correct but unnecessarily expensive; the ordering need should be identified before choosing the operation.</p>
+<p>The designer should also distinguish <strong>response ordering</strong> from <strong>read-value correctness</strong>. Two reads may return in a particular order even though the memory model permits different values due to intervening writers. A transaction-ID constraint is not a complete multicore consistency model.</p>
+
+</section>
+<section id="same-address-dependence-and-cross-address-ordering" aria-labelledby="heading-same-address-dependence-and-cross-address-ordering">
+<h2 id="heading-same-address-dependence-and-cross-address-ordering">Same-Address Dependence and Cross-Address Ordering</h2>
+<p>Multiple operations to one address can impose stronger requirements than operations to unrelated addresses. A write followed by a read of the same register could be a read-modify-check sequence; if the interface allows the read to overtake the write, the software may see stale status. By contrast, writes to two unrelated, ordinary-memory cache lines may be independently propagated under a weakly ordered architecture unless a synchronization event constrains them.</p>
+<p>Some protocols distinguish conflicts or same-location operations from nonconflicting traffic. Coherent caches preserve defined same-location results within the coherence rules, but the programmer must not extrapolate a global order among several locations. In particular, coherence for <code>X</code> and coherence for <code>Y</code> do not inherently prescribe a single cross-address sequence observed by all agents.</p>
+<p>The safest teaching method is to construct a dependency graph: draw an edge where the architecture, protocol, or synchronization scheme requires operation A before B. Unconnected operations may be parallelized or returned in different orders. Correctness rests on preserving required edges, not on preventing all possible overtaking.</p>
+
+</section>
+<section id="outstanding-requests-tags-and-reorder-tracking" aria-labelledby="heading-outstanding-requests-tags-and-reorder-tracking">
+<h2 id="heading-outstanding-requests-tags-and-reorder-tracking">Outstanding Requests, Tags, and Reorder Tracking</h2>
+<p>When a requester sends several operations before receiving their responses, those transactions are <strong>outstanding</strong>. Tags, IDs, or sequence numbers allow each completion to be matched with its request. The requester may maintain a small reorder table, transaction scoreboard, or separate per-ID completion queue. A protocol can allow responses for different IDs to interleave while preserving order within an ID-defined class.</p>
+<p>A bridge must maintain enough information to translate upstream IDs into downstream identities without merging unrelated transactions incorrectly. When the downstream interface lacks matching concurrency, the bridge can serialize operations or buffer responses and restore the upstream-mandated order. Its capacity often determines effective concurrency: a link capable of many transfers per second still stalls if the requester exhausts its response-tracking slots.</p>
+<p><strong>Outstanding does not mean unordered.</strong> Two operations can be outstanding simultaneously yet constrained to respond in order. Conversely, having a single outstanding request often simplifies ordering at the price of added latency between operations. These are distinct design choices.</p>
+
+</section>
+<section id="amba-axi-transaction-ids-and-ordering" aria-labelledby="heading-amba-axi-transaction-ids-and-ordering">
+<h2 id="heading-amba-axi-transaction-ids-and-ordering">AMBA AXI Transaction IDs and Ordering</h2>
+<p>AMBA AXI identifies transactions using read and write IDs, including <code>ARID</code> and <code>AWID</code>, with corresponding response IDs. The protocol permits overlap and certain out-of-order responses. Its ordering rules depend on the relevant version, channel, <strong>transaction ID, destination, and memory-region attributes</strong>. For the common AXI4 model, requests on the same channel with the same ID and destination preserve required request order, and responses obey associated same-ID restrictions. Different IDs generally offer additional reorder freedom, subject to the applicable rules.</p>
+<p>A key subtlety: an AXI transaction ID is not simply an optional label assigned after completion. It defines part of the request ordering relationship, and bridges that change IDs must preserve upstream obligations. The read and write channels are independent. Software or hardware needing an ordering dependency between a write and a subsequent read cannot presume it exists just because the commands were generated in sequence; a required write response, barrier, or implementation-specific synchronization may be necessary.</p>
+<p>AXI also distinguishes <strong>Memory</strong> and <strong>Peripheral</strong> regions and supports transaction attributes that affect permitted behavior. Modern AXI releases revise or clarify aspects of ordering. Readers implementing a particular IP block must consult that exact Arm specification issue rather than treating an educational same-ID summary as a complete normative rule. See the official <a href="https://documentation-service.arm.com/static/68b03beb01ae952d9559f9eb">AMBA AXI specification</a>.</p>
+
+</section>
+<section id="axi-channels-and-the-independence-of-read-and-write-traffic" aria-labelledby="heading-axi-channels-and-the-independence-of-read-and-write-traffic">
+<h2 id="heading-axi-channels-and-the-independence-of-read-and-write-traffic">AXI Channels and the Independence of Read and Write Traffic</h2>
+<p>AXI provides separate read-address (<code>AR</code>), read-data (<code>R</code>), write-address (<code>AW</code>), write-data (<code>W</code>), and write-response (<code>B</code>) channels. Each channel has its own flow-control handshake. A write address can be accepted before its payload is fully delivered; a response signals the write transaction’s defined completion. Read data may arrive later and can span several beats. Consequently, a single physical clock does not imply one serialized interconnect transaction stream.</p>
+<p>The write-address and write-data channels must be associated according to protocol rules; for AXI4, write-data interleaving between transactions is not supported in the way it was in older AXI variants. A designer cannot arbitrarily reorder the data beats of one burst. At the same time, multiple IDs and independent read traffic may support concurrency. Mapping all of this onto a simple diagram labeled “address, data, acknowledgment” hides the essential ordering decisions.</p>
+<p>AXI-based I/O controllers must be evaluated end to end: an upstream core, crossbar, bridge, and peripheral can each buffer operations. A B-channel response at an intermediate boundary may not be equivalent to a physical actuator having completed its commanded action.</p>
+
+</section>
+<section id="ordered-and-unordered-bridges" aria-labelledby="heading-ordered-and-unordered-bridges">
+<h2 id="heading-ordered-and-unordered-bridges">Ordered and Unordered Bridges</h2>
+<p>Bridges translate protocols, address windows, clock rates, widths, and response rules. They are also <strong>ordering authorities</strong> at their boundaries. A bridge that receives multiple tagged AXI requests and forwards them to a single-target APB bus must generally serialize the APB accesses, preserve the required upstream association, and return responses in a compliant order. It may permit unrelated upstream requests to remain buffered while one peripheral access waits.</p>
+<p>Other bridges combine or split operations. A wide read may become two narrow reads; one aligned transaction may cross a downstream width boundary. If the downstream pieces finish separately, the bridge has to assemble a compliant upstream result. A posted-write bridge can acknowledge acceptance before the target’s final side effect, so its specification must explain what upstream completion guarantees.</p>
+<p>Tests should include mixed read/write traffic, two different IDs, multiple targets, backpressure, partial failures, width conversion, and reset during outstanding transfers. Showing that a bridge transfers correct bytes in the easy case is insufficient evidence that it preserves ordering under contention.</p>
+
+</section>
+<section id="posted-writes-and-completion-boundaries" aria-labelledby="heading-posted-writes-and-completion-boundaries">
+<h2 id="heading-posted-writes-and-completion-boundaries">Posted Writes and Completion Boundaries</h2>
+<p>A <strong>posted write</strong> can advance without an end-to-end completion response of the kind expected from a non-posted operation. It may be absorbed by a bridge, controller, or target queue and become visible later. Posting improves throughput but complicates software assumptions about when a command takes effect. Common PCIe Memory Writes are posted transactions; PCIe Memory Reads are non-posted and have completions. The precise ordering between transaction types is governed by PCIe rules and attributes.</p>
+<p>Suppose a driver writes a device control register and immediately frees the device resources. If the register write is posted, the driver may need a safe readback or an architecture-defined flush method before teardown. A CPU memory barrier alone may constrain the CPU’s issue order but not necessarily prove that the downstream device has processed an already posted transaction. Linux’s <a href="https://docs.kernel.org/driver-api/io_ordering.html">I/O ordering guidance</a> describes platform-dependent patterns.</p>
+<p>Distinguish <strong>posted at the transport layer</strong> from <strong>committed at the device</strong>. Even a completed register readback is not a generic promise that storage data is persistent, a motor has reached a setpoint, or a remote endpoint has processed a packet. Those require higher-level completion semantics.</p>
+
+</section>
+<section id="pci-express-ordering-and-relaxed-ordering-attributes" aria-labelledby="heading-pci-express-ordering-and-relaxed-ordering-attributes">
+<h2 id="heading-pci-express-ordering-and-relaxed-ordering-attributes">PCI Express Ordering and Relaxed-Ordering Attributes</h2>
+<p>PCI Express transports Transaction Layer Packets (TLPs) over point-to-point links and switches. Posted Memory Writes, non-posted Memory Reads, and Completions follow transaction ordering rules designed to balance correctness with concurrency. TLP attributes such as <strong>Relaxed Ordering</strong> affect permitted passing relationships; rules also depend on transaction type and the relevant ordering domain. An implementer must consult the applicable PCI-SIG specification for the complete table, rather than assume either universal strict order or unrestricted passing.</p>
+<p>For example, a DMA engine sending a data-buffer write and then a completion notification must preserve the relationship required by its platform and protocol. The known PCI MSI mechanism provides particular ordering protections for prior DMA writes under its supported conditions, but those conditions should not be generalized to every arbitrary device event or strongly relaxed stream. Similarly, ordering within one PCIe fabric is not identical to ordering across a CPU store buffer or a software-managed cache-clean operation.</p>
+<p>The right diagnostic question is: <strong>Which observer and what guarantee?</strong> The host may observe a received completion, the device may regard the write as accepted, and the application may still need driver synchronization. For a concrete hardware block, refer to its PCIe integration guide and the controlling PCI-SIG rules.</p>
+
+</section>
+<section id="memory-types-attributes-and-shareability" aria-labelledby="heading-memory-types-attributes-and-shareability">
+<h2 id="heading-memory-types-attributes-and-shareability">Memory Types, Attributes, and Shareability</h2>
+<p>Memory attributes tell a processor and interconnect how accesses to an address region may behave. A <strong>Normal/cacheable memory</strong> region generally tolerates speculation, caching, and reordering within the architecture's rules. A <strong>Device</strong> or strongly ordered peripheral region typically imposes additional constraints on access combining, speculation, and ordering, although the exact guarantees differ by CPU architecture and attribute encoding. Confusing an MMIO register block with ordinary RAM can produce repeated, missing, or unexpectedly reordered register operations.</p>
+<p>Shareability attributes address which agents participate in a coherent domain. A region being cacheable does not automatically mean every attached peripheral accesses it coherently. Likewise, a region being marked shareable does not imply that a physically separate device lacking a coherent interface suddenly participates in snooping. Operating-system page tables, firmware, IOMMU configuration, device attributes, and platform wiring must all agree with the intended contract.</p>
+<p>The practical design task begins with a memory map that records <strong>address range, CPU memory type, security permissions, shareability domain, device DMA behavior, and permitted accessor API</strong>. Treat these as independently verified properties. A single label such as “system RAM” does not replace them.</p>
+
+</section>
+<section id="device-registers-and-mmio-ordering" aria-labelledby="heading-device-registers-and-mmio-ordering">
+<h2 id="heading-device-registers-and-mmio-ordering">Device Registers and MMIO Ordering</h2>
+<p>Device registers may be sensitive to <strong>access count</strong>, <strong>access order</strong>, or <strong>access width</strong>. Reading an interrupt-status register could clear a pending bit. Writing a control register may start a transfer. A write-one-to-clear register has different semantics from a normal memory location. A CPU must use designated I/O accessors and the correct memory type so the compiler and processor do not silently transform an interaction into an incorrect ordinary-memory sequence.</p>
+<p>A driver typically needs to order descriptor initialization before the device doorbell; acknowledge an interrupt source before re-enabling delivery; or ensure that a device observes disable commands before memory buffers are torn down. These are separate protocols, each with an explicit sequence and completion condition. Where a write is posted, a documented readback may be needed to ensure it has passed the posting point.</p>
+<p>Even when two MMIO writes are issued in source order, ordering can be affected by different devices, bridge paths, relaxed I/O accessors, and multicore producers. Use the <a href="https://docs.kernel.org/driver-api/device-io.html">Linux Device I/O documentation</a> as a platform-specific example, not as a rule automatically applicable to every operating system.</p>
+
+</section>
+<section id="memory-barriers-and-ordering-instructions" aria-labelledby="heading-memory-barriers-and-ordering-instructions">
+<h2 id="heading-memory-barriers-and-ordering-instructions">Memory Barriers and Ordering Instructions</h2>
+<p>A <strong>memory barrier</strong> limits which operations may be observed on different sides of the barrier, according to its scope and instruction semantics. A load-acquire orders certain subsequent memory operations after a successful acquire, while a store-release orders certain earlier operations before a corresponding publication. Full memory barriers can impose stronger constraints, but do not necessarily wait for every physical device to finish all possible side effects. An ordering rule must identify its observers and the kinds of accesses being ordered.</p>
+<p>Barriers also operate at different abstraction layers. A compiler barrier constrains compiler transformations; a CPU barrier constrains the execution and propagation model; an I/O barrier handles device-facing accesses; a DMA barrier can order coherent descriptor fields as seen by a device. A cache flush or clean/invalidate operation addresses <strong>data residency and visibility</strong> rather than merely arranging instruction order. Hardware platforms differ in whether a particular primitive combines several of these responsibilities.</p>
+<p>For instance, the Linux kernel exposes <code>dma_wmb()</code> and <code>dma_rmb()</code> for ordering suitable coherent-memory interactions with devices, alongside SMP barriers, MMIO accessors, and DMA mapping/synchronization APIs. These are illustrative interface names, not executable driver code supplied without a device-specific contract. Read the <a href="https://docs.kernel.org/core-api/wrappers/memory-barriers.html">Linux memory-barrier documentation</a> for current requirements.</p>
+
+</section>
+<section id="cache-coherence-the-problem-of-multiple-copies" aria-labelledby="heading-cache-coherence-the-problem-of-multiple-copies">
+<h2 id="heading-cache-coherence-the-problem-of-multiple-copies">Cache Coherence: The Problem of Multiple Copies</h2>
+<p>A cache-coherent system must prevent participating agents from independently treating incompatible cached copies as current. Imagine two CPU cores sharing line L: Core A writes a word in L while Core B still holds an earlier cached value. A coherent protocol mediates ownership, invalidation, update, or forwarding so that accesses obey the defined per-location coherence rules. Without a coherent mechanism, software may have to clean, invalidate, and synchronize caches explicitly before transferring ownership.</p>
+<p>The term <strong>coherence</strong> applies to <em>participating agents and memory regions</em>. A GPU, DMA engine, or accelerator may be fully coherent, I/O coherent in certain directions, or entirely noncoherent. Some systems support coherent traffic only through designated ports. A device's ability to issue AXI transactions says nothing by itself about snooping CPU caches, because ordinary AXI transport does not mandate a coherent cache state protocol.</p>
+<p>Coherence solves a different problem from generic bus ordering. Two reads of the same cache line need an appropriate version, while accesses to two unrelated cache lines can often proceed independently. Additional memory-model requirements tell software how to establish causal order across those locations.</p>
+
+</section>
+<section id="coherence-invariants-and-per-location-serialization" aria-labelledby="heading-coherence-invariants-and-per-location-serialization">
+<h2 id="heading-coherence-invariants-and-per-location-serialization">Coherence Invariants and Per-Location Serialization</h2>
+<p>A simple coherence model enforces that a cache line has <strong>at most one agent with modification authority</strong> at a given moment, while some number of agents may hold compatible read-only copies. A modified line can be supplied by its owning cache rather than main memory. Specific protocols use more elaborate states and transient transitions, but the essential goal is to keep writes from creating permanently divergent values for participants in the coherence domain.</p>
+<p><strong>Coherence order</strong> is the consistent ordering of writes to a particular coherent location. A load may take its value from a cache, forwarding path, or memory, yet its outcome must remain compatible with the architecture's rules. This does not mean that simultaneous writes to different addresses are seen in one universal order across all cores. The distinction is central to understanding why synchronization still exists on machines with coherent L1, L2, and LLC structures.</p>
+<p>A physical implementation may use broadcast snoops, a directory, a distributed home agent, or combinations. The chosen topology controls latency and scalability, not the programmer-visible need to establish a valid happens-before relationship when publishing complex data structures.</p>
+
+</section>
+<section id="mesi-moesi-and-coherence-state-machines" aria-labelledby="heading-mesi-moesi-and-coherence-state-machines">
+<h2 id="heading-mesi-moesi-and-coherence-state-machines">MESI, MOESI, and Coherence State Machines</h2>
+<p><strong>MESI</strong> is a common teaching vocabulary for the states Modified, Exclusive, Shared, and Invalid. A line in Modified state contains data that may be newer than main memory; Exclusive permits a private clean copy; Shared permits compatible shared clean copies; Invalid means the local copy cannot be used as valid data. A write to a Shared line ordinarily requires ownership or invalidation actions before the write becomes coherent.</p>
+<p><strong>MOESI</strong> adds an Owned state, allowing certain dirty shared-copy relationships with an identified owner. Other real protocols use additional states for forwarding, partial-line conditions, or performance optimizations. These state names are helpful but not universal. A specific Arm CHI system, for example, must be understood through its documented transaction and cache-state semantics, not merely labeled “MESI over AXI.”</p>
+<table>
+<thead>
+<tr>
+<th>Generic state or relationship</th>
+<th>Simplified meaning</th>
+<th>Typical implication</th>
+<th>Important qualification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Invalid</td>
+<td>Local line not usable as current</td>
+<td>Fetch or obtain coherent copy before use</td>
+<td>Real implementations track transient substates</td>
+</tr>
+<tr>
+<td>Shared</td>
+<td>Compatible read-only copies exist</td>
+<td>Ownership needed before local write</td>
+<td>Other agents may share the line</td>
+</tr>
+<tr>
+<td>Exclusive</td>
+<td>Clean private copy</td>
+<td>Local transition to writable state may be cheap</td>
+<td>Exclusivity can be lost after another agent requests it</td>
+</tr>
+<tr>
+<td>Modified</td>
+<td>Private writable/dirty copy</td>
+<td>Snoop or writeback may be needed on transfer</td>
+<td>Main-memory copy might not be current</td>
+</tr>
+<tr>
+<td>Owned (MOESI-type)</td>
+<td>One agent owns dirty shared data</td>
+<td>Owner can supply data to readers</td>
+<td>Not every protocol provides this state</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="snoop-based-coherence" aria-labelledby="heading-snoop-based-coherence">
+<h2 id="heading-snoop-based-coherence">Snoop-Based Coherence</h2>
+<p>In a <strong>snoop-based</strong> scheme, relevant cache controllers observe or are queried about transactions that may change a line's shared or owned status. A read miss may cause another cache to supply data. A request for write ownership can trigger invalidations and acknowledgments from other holders. The protocol has to coordinate simultaneous requests so that two initiators do not independently believe they own the same writable line.</p>
+<p>Broadcast snooping can simplify some small-system designs but scales poorly when many caches and sockets observe every request. Snoop filters and hierarchical mechanisms reduce unnecessary traffic by tracking likely sharers. A negative snoop-filter result must be correct enough to avoid missing a real owner; a false-positive result may merely waste bandwidth. An interconnect must preserve the protocol ordering of snoop requests, data responses, and ownership acknowledgments.</p>
+<p>Snoop traffic is not the same as ordinary DRAM data traffic. A cache-to-cache transfer can avoid a trip to main memory but consume fabric resources and add latency. Diagnosing a coherency bottleneck therefore requires measuring ownership transitions and inter-core sharing, not just aggregate DRAM bandwidth.</p>
+
+</section>
+<section id="directory-based-coherence-and-home-nodes" aria-labelledby="heading-directory-based-coherence-and-home-nodes">
+<h2 id="heading-directory-based-coherence-and-home-nodes">Directory-Based Coherence and Home Nodes</h2>
+<p>Directory protocols record information about which agents may hold a line. A <strong>home node</strong> or directory controller can decide which sharers to invalidate or which owner to contact. This targets messages more efficiently than broadcast as system size grows. The directory's exact form may be centralized, distributed, inclusive, sparse, or managed by cache tags and home-agent metadata.</p>
+<p>For a write-ownership request, a directory may notify existing sharers, wait for acknowledgments, and then grant the requester the required permission. Correctness depends on serializing conflicting requests and tracking transient states while packets travel through the fabric. Buffering and routing can allow different messages to arrive at different times; the protocol must nonetheless prevent stale ownership grants or premature use of a modified line.</p>
+<p>Directory organization creates its own performance costs: metadata storage, extra messages, congestion at popular home nodes, and increased latency for heavily shared lines. A coherent implementation should be evaluated against expected sharing patterns, not selected solely because a directory sounds more advanced than broadcast snooping.</p>
+
+</section>
+<section id="ownership-transfers-false-sharing-and-line-granularity" aria-labelledby="heading-ownership-transfers-false-sharing-and-line-granularity">
+<h2 id="heading-ownership-transfers-false-sharing-and-line-granularity">Ownership Transfers, False Sharing, and Line Granularity</h2>
+<p>Coherence typically operates on a <strong>cache-line granularity</strong> rather than individual program variables. Two threads writing different words that happen to occupy one line may repeatedly transfer its ownership across cores. This is <strong>false sharing</strong>: the program variables are independent, yet hardware treats the containing cache line as a shared coherence unit. No data race is required for the resulting performance penalty.</p>
+<p>Consider a 64-byte line with counters at offsets 0 and 8. If Core A repeatedly updates the first counter and Core B repeatedly updates the second, each store may require the line to become writable locally. The line migrates between caches, producing invalidations and serialized ownership requests. Aligning or padding the counters into separate lines may reduce traffic, at the cost of additional memory footprint. The optimum depends on actual core topology and update frequency.</p>
+<p>An ordering barrier does not fix false sharing: it may even increase overhead. The remedy is usually data layout, work partitioning, batching, or contention management. This illustrates why a performance diagnosis must separate <strong>correctness-ordering problems</strong> from <strong>coherence-traffic problems</strong>.</p>
+
+</section>
+<section id="amba-ace-and-chi-coherent-fabrics" aria-labelledby="heading-amba-ace-and-chi-coherent-fabrics">
+<h2 id="heading-amba-ace-and-chi-coherent-fabrics">AMBA ACE and CHI Coherent Fabrics</h2>
+<p>Arm's <strong>AXI Coherency Extensions (ACE)</strong> add coherent-cache interactions to the familiar AXI transaction environment. <strong>AMBA Coherent Hub Interface (CHI)</strong> provides a more scalable, packet-oriented coherent interface with requester, home, and subordinate roles and distinct message classes. Neither should be described as merely a faster AXI bus: they provide coherence semantics, transaction types, and ordering mechanisms beyond generic address/data transport.</p>
+<p>A coherent request can entail a line-state query, data transfer, ownership transfer, snoop response, and final completion. Agents must honor the protocol's specified ordering and response requirements. A CHI implementation may use snoop filters, directory-like tracking, and multiple logical channels; the correct set of guarantees depends on its protocol version, cacheability/shareability attributes, and the participating endpoint roles. Arm's <a href="https://www.arm.com/en/architecture/system-architectures/amba/amba-5">AMBA family overview</a> and <a href="https://support.arm.com/documentation/102407/0102/CHI-protocol-fundamentals?lang=en">CHI introductory material</a> distinguish these classes.</p>
+<p>A peripheral using <strong>ordinary AXI</strong> may have full memory-map access without being cache coherent. It may require software-managed cache maintenance. A CPU connected to a <strong>CHI coherent fabric</strong> still needs memory-ordering operations for correct cross-address publication. Coherence and consistency remain distinct responsibilities in both cases.</p>
+
+</section>
+<section id="noncoherent-devices-and-software-managed-cache-maintenance" aria-labelledby="heading-noncoherent-devices-and-software-managed-cache-maintenance">
+<h2 id="heading-noncoherent-devices-and-software-managed-cache-maintenance">Noncoherent Devices and Software-Managed Cache Maintenance</h2>
+<p>In a noncoherent DMA arrangement, the device may read or write main memory without snooping CPU caches. A CPU's modified cache line may contain new descriptor bytes that have not reached the memory view available to the device. Conversely, the CPU may hold an old cached line after the device updates backing memory. Correct communication therefore includes <strong>cache maintenance, ownership changes, and API-defined synchronization</strong>.</p>
+<p>A typical outbound transfer prepares the buffer, synchronizes it for device access as needed, grants the device ownership, and avoids conflicting CPU modification until completion. An inbound transfer may require synchronization for CPU access before software inspects the device-produced bytes. The platform DMA API determines which operations are necessary; hand-coded cache flushes risk missing aliasing, coherence-domain, and architecture-specific effects.</p>
+<p>Cache maintenance is not automatically a total-order barrier for unrelated MMIO operations, and a CPU barrier does not necessarily replace maintenance on a noncoherent platform. Treat both as explicit steps in the device/CPU ownership protocol. See the <a href="https://docs.kernel.org/core-api/dma-api-howto.html">Linux Dynamic DMA mapping guide</a>.</p>
+
+</section>
+<section id="coherent-dma-does-not-eliminate-synchronization" aria-labelledby="heading-coherent-dma-does-not-eliminate-synchronization">
+<h2 id="heading-coherent-dma-does-not-eliminate-synchronization">Coherent DMA Does Not Eliminate Synchronization</h2>
+<p>A DMA allocation may be <strong>coherent</strong> in the sense that the CPU and device see compatible cached versions of its bytes without explicit clean/invalidate operations for ordinary accesses. Yet the sequence in which different descriptor fields become visible is a separate matter. If a device checks a <code>valid</code> bit and then reads an address and length, software must ensure the address and length are published before <code>valid</code> is made visible to the device.</p>
+<p>The classic structure is: write descriptor fields; apply the platform-defined device-facing write barrier; publish the valid bit or ownership flag; and, where required, signal the device through an MMIO doorbell. A returned acknowledgment or interrupt later marks the transition back to software ownership. The symmetric device-to-CPU sequence uses the appropriate acquire or DMA read barrier before reading a completed descriptor's data.</p>
+<p>An incorrect optimization is to remove barriers because both agents share coherent RAM. Coherency can make an individual line's latest data available, but it does not grant permission to infer a complete cross-field ordering relationship. Linux explicitly notes that coherent DMA memory can still require barriers.</p>
+
+</section>
+<section id="descriptor-rings-doorbells-and-ownership-flags" aria-labelledby="heading-descriptor-rings-doorbells-and-ownership-flags">
+<h2 id="heading-descriptor-rings-doorbells-and-ownership-flags">Descriptor Rings, Doorbells, and Ownership Flags</h2>
+<p>Descriptor rings are a practical test of ordering correctness. Producers populate an entry, publish its ownership or valid status, and notify a consumer. Consumers verify ownership, read metadata, process the buffer, then publish completion or return ownership. A ring also contains indices, wrap markers, and sometimes multiple hardware queues. All parties need an agreed scheme for when entries may be reused.</p>
+<p>If a producer updates a doorbell before its descriptor is visible, the device may fetch a partly initialized entry. If the consumer sees a completion flag before the payload DMA writes are visible, software may read stale data. If a ring entry is reused before both the CPU and device finish their prior accesses, the failure may appear intermittent and workload-dependent.</p>
+<p>The ordering contract should distinguish <strong>data publication</strong>, <strong>notification</strong>, <strong>completion publication</strong>, <strong>synchronization for reuse</strong>, and <strong>error recovery</strong>. These steps can use coherent shared memory, MMIO registers, interrupts, and IOMMU mappings simultaneously. Device manuals and driver APIs determine the exact barrier sequence.</p>
+
+</section>
+<section id="release-acquire-and-publication-protocols" aria-labelledby="heading-release-acquire-and-publication-protocols">
+<h2 id="heading-release-acquire-and-publication-protocols">Release, Acquire, and Publication Protocols</h2>
+<p>A common shared-memory handoff uses <strong>release</strong> on the publishing side and <strong>acquire</strong> on the consuming side. The producer writes payload fields and then publishes an atomic <code>ready</code> flag with release semantics. The consumer reads the same flag with acquire semantics and, upon observing the published value, is permitted to rely on the preceding payload writes according to the language and ISA memory model. The pair supplies a <em>happens-before</em> relationship; plain volatile accesses are not a portable substitute.</p>
+<p>This pattern assumes compatible, coherent shared memory and correctly implemented atomic operations. A DMA peripheral does not automatically implement a programming language's atomic acquire semantics merely because it polls a memory location. Its own interface and platform integration must provide an equivalent publication protocol. A CPU using a C/C++ atomic API also must not presume that the language model directly defines all MMIO or device-initiated transactions.</p>
+<p>Two important boundary questions are whether the acquire reads the release publication and whether the agents share the intended memory domain. Without those relationships, two syntactically similar barriers may do little to protect the consumer's observation.</p>
+
+</section>
+<section id="memory-consistency-models-across-processor-isas" aria-labelledby="heading-memory-consistency-models-across-processor-isas">
+<h2 id="heading-memory-consistency-models-across-processor-isas">Memory Consistency Models Across Processor ISAs</h2>
+<p><strong>Memory consistency</strong> defines which results are legal when multiple agents access shared memory, especially when synchronization is absent or incomplete. Stronger models preserve more ordering relationships by default; weaker models permit more reordering and rely on explicit synchronization where necessary. Common examples include x86's broadly TSO-oriented behavior and Arm or RISC-V models permitting additional forms of reordering, subject to their full architectural rules.</p>
+<p>The ratified RISC-V <strong>RVWMO</strong> model formalizes preserved program order and global memory-order constraints. RISC-V also defines optional stronger behavior through the <code>Ztso</code> extension. The ISA's <code>FENCE</code> instruction supplies ordering controls for memory and I/O access categories. Its exact predecessor/successor sets matter; a fence ordering normal memory accesses does not automatically cover an intended device operation if I/O categories were omitted. See the <a href="https://docs.riscv.org/reference/isa/unpriv/rvwmo.html">RISC-V RVWMO specification</a>.</p>
+<p>This Bus Systems article does not attempt a complete axiomatic model for each ISA. The architectural takeaway is that <strong>fabric order is only one layer</strong> in the end-to-end execution model. A coherent interconnect can respect every wire-level rule while a program still violates its language-level synchronization requirements.</p>
+
+</section>
+<section id="multi-copy-atomicity-and-observation-differences" aria-labelledby="heading-multi-copy-atomicity-and-observation-differences">
+<h2 id="heading-multi-copy-atomicity-and-observation-differences">Multi-Copy Atomicity and Observation Differences</h2>
+<p>A write may become visible to different observers at different times in some memory models or system designs. <strong>Multi-copy atomicity</strong> is a formal property concerning propagation and ordering of writes among observers; it is not synonymous with an atomic read-modify-write instruction. A platform's precise model specifies when a write can be considered visible to others and which write orders must be consistent.</p>
+<p>For a weak-memory litmus test, two processors can write to different addresses and then read the other processor's address. Without sufficient ordering, some architectures permit outcomes that sequential reasoning might consider surprising. The example does not prove that caches have incoherent copies: the outcome can be consistent with coherence on each location and a weaker ordering relationship across locations.</p>
+<p>When testing such behavior, use the ISA's formal memory model and carefully designed litmus tests, not just expectations based on a typical CPU run. The absence of an outcome in a million iterations is not proof it is architecturally forbidden.</p>
+
+</section>
+<section id="atomic-operations-and-interconnect-support" aria-labelledby="heading-atomic-operations-and-interconnect-support">
+<h2 id="heading-atomic-operations-and-interconnect-support">Atomic Operations and Interconnect Support</h2>
+<p>Atomic read-modify-write operations, such as compare-and-swap, fetch-add, and load-reserved/store-conditional, must preserve specific indivisibility and ordering properties. Hardware may implement them using cache-line ownership, a home node, exclusive monitors, remote atomic requests, or other defined mechanisms. The operation's <strong>atomicity</strong> and its <strong>memory-ordering strength</strong> are related but distinct; some ISAs allow relaxed atomic operations without acquire/release ordering across other memory accesses.</p>
+<p>An interconnect must also handle an atomic transaction that competes with a normal read or write to the same location. A bridge that decomposes the atomic into ordinary read and write steps without the required exclusion would violate the contract. Device registers may not support the same atomic operations as coherent RAM, so a generic CPU atomic primitive cannot simply be pointed at an arbitrary MMIO range.</p>
+<p>Interconnect-level atomics can be useful for shared accelerator queues and distributed counters, but they introduce contention and home-node serialization. Their value should be judged against alternative designs such as per-core aggregation, message passing, or explicit producer ownership.</p>
+
+</section>
+<section id="iommus-address-translation-and-ordering" aria-labelledby="heading-iommus-address-translation-and-ordering">
+<h2 id="heading-iommus-address-translation-and-ordering">IOMMUs, Address Translation, and Ordering</h2>
+<p>An <strong>IOMMU</strong> translates device-visible I/O virtual addresses and enforces permitted DMA access. These functions are chiefly about address mapping and isolation, not a universal guarantee of write ordering or cache coherence. A translated DMA request must still traverse the appropriate interconnect and cache domain, with its transaction attributes and the device's ordering rules. Some systems integrate translation, coherency, and ordering features closely, but they remain separately specified behaviors.</p>
+<p>Translation changes can require invalidation of translation caches and careful synchronization with in-flight requests. Revoking a mapping while a device retains old DMA descriptors can otherwise race with ongoing transactions. A secure teardown sequence typically stops or quiesces the requester, confirms completion or cancellation, invalidates stale translations as specified, and only then reuses the underlying memory. The exact procedure is device- and platform-specific.</p>
+<p>Page-table changes do not substitute for descriptor ownership and data-visibility barriers. Nor does installing a mapping establish that a cache-incoherent device sees recent CPU cache writes. Keeping the responsibilities separate simplifies debugging.</p>
+
+</section>
+<section id="interrupt-delivery-dma-completion-and-data-visibility" aria-labelledby="heading-interrupt-delivery-dma-completion-and-data-visibility">
+<h2 id="heading-interrupt-delivery-dma-completion-and-data-visibility">Interrupt Delivery, DMA Completion, and Data Visibility</h2>
+<p>A hardware interrupt tells software that an event is pending; it does not universally certify which preceding writes have become visible, what they contain, or whether the peripheral's internal operation succeeded. Devices often use an interrupt to report completion of DMA to host memory. The device-to-host ordering relationship must be established by the interconnect and interrupt-delivery mechanism, and software must observe the shared descriptor with the correct barriers or DMA synchronization actions.</p>
+<p>PCI MSI has useful ordering behavior for prior DMA writes under the PCI/platform contract, which is one reason MSI can be easier to use correctly than a separately asserted legacy interrupt wire. Still, system designers must consider relaxed ordering attributes, noncoherent caches, bridge configuration, status publication, and application-level completion requirements. The interrupt handler must not treat “interrupt arrived” as meaning every byte in every related memory region is necessarily durable or accessible without further protocol steps.</p>
+<p>The reverse direction—software writing shared descriptors and then notifying the device—requires its own publication ordering. Both edges of the handoff should be documented separately. The neighboring <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects">Interrupt Signaling over System Interconnects</a> article expands notification delivery mechanisms.</p>
+
+</section>
+<section id="cross-core-producers-and-multi-agent-consumer-races" aria-labelledby="heading-cross-core-producers-and-multi-agent-consumer-races">
+<h2 id="heading-cross-core-producers-and-multi-agent-consumer-races">Cross-Core Producers and Multi-Agent Consumer Races</h2>
+<p>Two CPU cores may both supply descriptors to one device queue. Even if each core independently uses release ordering, the queue needs a <strong>linearization and ownership rule</strong> to prevent both cores from claiming the same slot. Atomic head/tail updates, per-core queues, or a lock can provide the necessary producer coordination. Merely inserting memory barriers around two ordinary increments does not make a multi-producer algorithm atomic.</p>
+<p>A coherent fabric does not solve a logical race in queue metadata. The caches may faithfully deliver each writer's data according to the memory model while the program still loses an update, publishes a slot twice, or reuses a descriptor too early. For a multi-agent design, record three separate requirements: atomic allocation of queue positions, correct visibility of entry contents, and correct completion/reclamation of entries.</p>
+<p>The same distinction applies when the consumers are a CPU, accelerator, and network card. If all can write one buffer, the protocol must define exclusive ownership or supported atomics. Permissions alone do not prevent an authorized but unsynchronized writer from corrupting shared state.</p>
+
+</section>
+<section id="virtualization-and-coherence-domains" aria-labelledby="heading-virtualization-and-coherence-domains">
+<h2 id="heading-virtualization-and-coherence-domains">Virtualization and Coherence Domains</h2>
+<p>Virtual machines complicate identification of the effective observer. A guest CPU issues normal or device accesses that may be translated by a second-stage page table and routed through a virtualized device, emulated register, direct-assigned device, or host-managed DMA buffer. A hypervisor can preserve the guest's architectural ordering contract while translating its operations into different host transactions. A poorly integrated virtual device can instead return completions prematurely or fail to synchronize guest-visible data.</p>
+<p><strong>Coherent within the guest</strong> does not guarantee that every physical peripheral is a snooping participant. Direct device assignment requires appropriate DMA mapping, IOMMU isolation, cache coherency integration, and interrupt/queue semantics. A virtual I/O device may implement the required synchronization in software rather than through physical coherence messages.</p>
+<p>The design contract should identify exactly where guest-visible completion occurs and which entity owns the storage at each step. Migration, reset, and device hot-unplug must not silently discard in-flight writes or allow stale mappings to address repurposed memory.</p>
+
+</section>
+<section id="failure-cases-lost-updates-stale-reads-and-premature-reuse" aria-labelledby="heading-failure-cases-lost-updates-stale-reads-and-premature-reuse">
+<h2 id="heading-failure-cases-lost-updates-stale-reads-and-premature-reuse">Failure Cases: Lost Updates, Stale Reads, and Premature Reuse</h2>
+<p>Ordering and coherency faults often appear as nondeterministic data corruption. A <strong>stale read</strong> occurs when an observer fetches an older value despite the application's assumption that a newer value was published. A <strong>lost update</strong> can result from two uncoordinated read-modify-write operations. A <strong>premature reuse</strong> fault happens when a buffer is returned to the allocator or producer before an earlier DMA operation has stopped using it. A <strong>phantom completion</strong> can arise when a flag becomes visible before its payload or status fields.</p>
+<p>These failures differ in their remedies. More atomic operations may cure a lost-update race; a release/acquire handoff can order shared-memory publication; a DMA API synchronization step can cure an incoherent buffer; a posted-write flush can ensure the required register write reached its ordering point; and an IOMMU teardown sequence can stop stale accesses. Applying a generic full barrier to all symptoms is neither a complete correctness proof nor a good performance strategy.</p>
+<p>Useful diagnostic traces include <strong>which agent wrote the bytes, which cacheability attributes were in effect, what transaction IDs and ordering attributes were used, which acknowledgment arrived, and which buffer ownership transition happened</strong>. Record every assumption before interpreting an apparently contradictory log.</p>
+
+</section>
+<section id="ordering-and-coherence-security-boundaries" aria-labelledby="heading-ordering-and-coherence-security-boundaries">
+<h2 id="heading-ordering-and-coherence-security-boundaries">Ordering and Coherence Security Boundaries</h2>
+<p>Ordering controls can be part of enforcing security-sensitive state changes. For example, a system should not publish an “access permitted” flag before required page permissions and device mappings are valid, nor free a DMA buffer before a revoked requester has ceased accessing it. Hardware memory isolation, IOMMU mappings, and endpoint authentication are distinct from ordering, but the timing of their transitions affects safety.</p>
+<p>Coherence and ordering mechanisms can also become side channels. Cache ownership migration, snoop traffic, shared queues, and interconnect contention may disclose workload-dependent timing information to another permitted observer. Such risks do not mean coherent fabrics are inherently insecure; they mean designs need appropriate partitioning, resource controls, constant-time practices where warranted, and realistic threat models. A barrier alone is not a general-purpose side-channel mitigation.</p>
+<p>In high-assurance designs, specify which objects are trusted, which agents are untrusted, what operations can be observed, and how a device reset or fault changes the ordering and access contract. Security verification should include transitions and rollback, not only the steady state.</p>
+
+</section>
+<section id="fault-handling-retries-and-partial-completion" aria-labelledby="heading-fault-handling-retries-and-partial-completion">
+<h2 id="heading-fault-handling-retries-and-partial-completion">Fault Handling, Retries, and Partial Completion</h2>
+<p>Transactions can fail with decode errors, access denials, timeouts, link errors, or target-specific status codes. A failed read or write response has a protocol-defined meaning that may not tell software whether some partial side effect occurred. Some interfaces permit retry; others require upper layers to stop or reset. Reissuing a non-idempotent device-register write without knowing whether the first attempt took effect can duplicate work.</p>
+<p>A burst may cross a bridge or be split into narrower transfers, so a single high-level request can involve several downstream accesses. Implementations must define what happens if the third of four pieces fails. An architect should distinguish <strong>transport-level retry</strong>, <strong>application-level replay</strong>, and <strong>transaction rollback</strong>. Standard memory stores may be restartable under architectural guarantees, while MMIO commands with side effects may need explicit status reconciliation.</p>
+<p>Recovery must also settle the coherent ownership state of partially completed transactions. A device that has stopped issuing writes may still have previously issued requests outstanding in the fabric. Reset logic and software teardown should wait for the appropriate drain, flush, or cancellation guarantee before repurposing memory.</p>
+
+</section>
+<section id="latency-throughput-and-ordering-costs" aria-labelledby="heading-latency-throughput-and-ordering-costs">
+<h2 id="heading-latency-throughput-and-ordering-costs">Latency, Throughput, and Ordering Costs</h2>
+<p>Strict ordering reduces concurrency when operations otherwise could overlap. If an initiator sends a 128-byte request every 200 nanoseconds and waits for each completion, its ideal limit is <strong>640 MB/s</strong>: 128 bytes divided by 200 nanoseconds. With eight independent requests outstanding and no other bottleneck, the simple concurrency bound rises to 5.12 GB/s. Actual throughput remains limited by the link, target service capacity, backpressure, and protocol overhead.</p>
+<p>Coherence can likewise become the bottleneck. A cache line repeatedly transferred between cores consumes interconnect messages even if only a few payload bytes change. A heavily shared directory entry, lock word, or counter can serialize transactions independent of advertised data bandwidth. Conversely, allowing different requests to overtake one another can improve utilization if the requester correctly matches responses and the access semantics permit it.</p>
+<p>When measuring, separate <strong>request acceptance rate</strong>, <strong>completed transaction rate</strong>, <strong>payload throughput</strong>, <strong>cache-to-cache transfer latency</strong>, <strong>snoop retries</strong>, and <strong>tail latency</strong>. A peak signaling rate or aggregate port utilization is not an adequate measure of useful progress.</p>
+
+</section>
+<section id="protocol-comparison-what-is-ordered-and-what-is-not" aria-labelledby="heading-protocol-comparison-what-is-ordered-and-what-is-not">
+<h2 id="heading-protocol-comparison-what-is-ordered-and-what-is-not">Protocol Comparison: What Is Ordered and What Is Not</h2>
+<table>
+<thead>
+<tr>
+<th>Mechanism or protocol family</th>
+<th>Principal ordering subject</th>
+<th>Typical concurrency opportunity</th>
+<th>Separate issue to verify</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Simple single-request synchronous bus</td>
+<td>One accepted operation at a time</td>
+<td>Limited overlap if protocol permits it</td>
+<td>Target side-effect completion versus transfer acceptance</td>
+</tr>
+<tr>
+<td>AMBA APB</td>
+<td>Setup/access sequence per selected peripheral transfer</td>
+<td>Limited pipelining in a typical APB segment</td>
+<td>Correct bridge serialization and wait states</td>
+</tr>
+<tr>
+<td>AMBA AXI</td>
+<td>IDs, destinations, direction and memory attributes</td>
+<td>Multiple outstanding and potentially reordered responses</td>
+<td>Cross-ID and read/write dependencies</td>
+</tr>
+<tr>
+<td>PCI Express</td>
+<td>TLP classes, ordering attributes and routing domains</td>
+<td>Posted writes and concurrent non-posted traffic</td>
+<td>Relaxed Ordering, device completion semantics</td>
+</tr>
+<tr>
+<td>Coherent ACE/CHI-type fabric</td>
+<td>Line ownership, snoops, coherence and request semantics</td>
+<td>Concurrent coherent reads/writes to distinct lines</td>
+<td>Shareability and participant configuration</td>
+</tr>
+<tr>
+<td>Noncoherent DMA</td>
+<td>Device requests without cache snooping</td>
+<td>DMA overlapped with CPU work</td>
+<td>Clean/invalidate and buffer ownership handoff</td>
+</tr>
+<tr>
+<td>CPU release/acquire synchronization</td>
+<td>Publication/observation relationship in shared memory</td>
+<td>Independent unrelated work</td>
+<td>Matching atomic operations and memory domain</td>
+</tr>
+</tbody>
+</table>
+<p>The table is intentionally conceptual. It does <strong>not</strong> replace a normative protocol ordering table or authorize a specific hardware optimization. A system may combine several rows in one transaction path—for example, a CPU using release ordering to publish data in a coherent cache, then issuing a posted MMIO notification through PCIe.</p>
+
+</section>
+<section id="design-review-and-investigation-framework" aria-labelledby="heading-design-review-and-investigation-framework">
+<h2 id="heading-design-review-and-investigation-framework">Design Review and Investigation Framework</h2>
+<p>An effective design review begins with an observer-based contract. Identify <strong>requesters</strong>, <strong>targets</strong>, <strong>address translations</strong>, <strong>memory types</strong>, <strong>coherency participants</strong>, <strong>transaction identifiers</strong>, <strong>ordering attributes</strong>, <strong>response meanings</strong>, and <strong>reset behavior</strong>. Then draw a sequence diagram that includes CPU stores, DMA accesses, MMIO notifications, responses, and interrupts. Explicitly mark which event makes each data object safe for a consumer to inspect or reuse.</p>
+<p>Ask: Does one producer have multiple outstanding requests? Can requests change destination or ordering ID? Is the memory coherent to the device or just to CPU cores? Does a posted write need flushing? Which operations must be ordered across read and write channels? Can a release/acquire flag safely cross this particular device boundary? What does a timeout mean if some downstream writes already landed? Which barrier or cache-maintenance API is specified by the platform?</p>
+<p>For performance, measure the cost of each required ordering edge instead of removing edges indiscriminately. Parallelism is safe only when the operations are independent under the protocol contract. For correctness, construct small adversarial traces with multiple agents, queue wraparound, backpressure, reordering, and resets. Test for <strong>forbidden outcomes</strong>, not merely successful completion of ordinary traffic.</p>
+
+</section>
+<section id="verification-methods-and-litmus-tests" aria-labelledby="heading-verification-methods-and-litmus-tests">
+<h2 id="heading-verification-methods-and-litmus-tests">Verification Methods and Litmus Tests</h2>
+<p>Hardware verification should include assertions that an ID-scoped response cannot overtake a predecessor where the protocol forbids it, that write payloads match their addresses, that an ownership grant follows all required invalidation acknowledgments, and that a stale-cache holder cannot silently perform an unauthorized coherent write. Checkers must reflect the correct specification issue and interface attributes; a checker enforcing stronger-than-required order may reject legal, high-performance designs.</p>
+<p>Formal litmus tests are useful for memory consistency. Each litmus test defines a tiny concurrent program and a candidate outcome. A solver or formal architecture model can determine whether that outcome is permitted. Simulation and stress testing complement formal analysis by exercising real implementation details—queue depths, bridge timing, packet routing, reset races—but cannot prove the absence of all rare reorderings.</p>
+<p>A good coverage plan includes same-ID and different-ID AXI traffic; cross-destination paths; posted/non-posted PCIe sequences; multi-cache ownership requests; coherent and noncoherent DMA; loss or replay of transactions; and device state changes during reset. Keep <strong>safety assertions</strong> separate from <strong>performance expectations</strong>. A correct response ordering may be slow yet legal.</p>
+
+</section>
+<section id="diagnostic-checklist-for-field-failures" aria-labelledby="heading-diagnostic-checklist-for-field-failures">
+<h2 id="heading-diagnostic-checklist-for-field-failures">Diagnostic Checklist for Field Failures</h2>
+<p>When software intermittently sees an old descriptor or incomplete DMA payload, begin with the documentation and a minimal reproducible handoff. Record the addresses and memory attributes, confirm correct use of DMA mapping APIs, and inspect whether the producer publishes ownership before writing all fields. Check compiler and CPU barriers, MMIO accessors, posted-write flush requirements, device coherency mode, and whether the interrupt guarantees the intended visibility relationship.</p>
+<p>For multicore throughput problems, inspect shared-line ownership, cache-to-cache transfers, NUMA placement, stalls at home nodes, and whether adjacent data objects cause false sharing. For inconsistent completion timing, examine transaction IDs, downstream arbitration, queue saturation, and response reordering. For reset-time corruption, verify that all bus masters have quiesced and outstanding requests were drained or blocked before buffers are recycled.</p>
+<p><strong>Avoid two common overcorrections.</strong> First, do not replace every relaxed access with the strongest available barrier without analyzing which dependency is required. Second, do not declare the hardware broken merely because an observation violates source-code intuition; compare it against the ISA memory model, the interconnect protocol, and the driver/device contract. Correctness demands the full chain.</p>
+
+</section>
+<section id="worked-example-1-same-id-axi-responses" aria-labelledby="heading-worked-example-1-same-id-axi-responses">
+<h2 id="heading-worked-example-1-same-id-axi-responses">Worked Example 1 — Same-ID AXI Responses</h2>
+<p>Assume an illustrative AXI read path with a single target and the applicable same-ID response-order rule. A requester sends read <strong>A</strong> for address 0x1000 with ID 3, then read <strong>B</strong> for 0x2000 with ID 3. The downstream memory system finishes the data for B first. Because A and B share an ordering-constrained ID and destination, the interconnect cannot simply deliver B's completion ahead of A's. It must arrange service or buffer the results so the upstream response stream obeys that rule.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">Cycle</th>
+<th>Requester issues</th>
+<th>Internal result ready</th>
+<th>Permitted upstream response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">1</td>
+<td>Read A, ID 3</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td style="text-align:right">2</td>
+<td>Read B, ID 3</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td style="text-align:right">5</td>
+<td>—</td>
+<td>B data ready</td>
+<td>Hold B as necessary</td>
+</tr>
+<tr>
+<td style="text-align:right">7</td>
+<td>—</td>
+<td>A data ready</td>
+<td>Return A first</td>
+</tr>
+<tr>
+<td style="text-align:right">8</td>
+<td>—</td>
+<td>—</td>
+<td>Return B</td>
+</tr>
+</tbody>
+</table>
+<p>This is a <strong>constructed trace</strong>, not a claim that all AXI targets use these latencies. The takeaway is that ordering can apply to the externally visible response sequence even when internal execution finishes out of order. The design must also respect any burst beat requirements; the example treats each read as a single-beat operation.</p>
+
+</section>
+<section id="worked-example-2-different-ids-allow-more-overlap" aria-labelledby="heading-worked-example-2-different-ids-allow-more-overlap">
+<h2 id="heading-worked-example-2-different-ids-allow-more-overlap">Worked Example 2 — Different IDs Allow More Overlap</h2>
+<p>Now issue read A (ID 3) to one slow memory region and read C (ID 4) to an independent faster target. If the relevant AXI configuration permits their responses to be reordered, C can complete while A remains outstanding. Suppose C returns at cycle 5 and A at cycle 11. The requester associates each returned beat with its response ID and consumes each in its correct command context; it does not assume first-requested means first-completed across different IDs.</p>
+<table>
+<thead>
+<tr>
+<th>Request</th>
+<th style="text-align:right">ID</th>
+<th>Destination</th>
+<th style="text-align:right">Issue cycle</th>
+<th style="text-align:right">Response cycle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td style="text-align:right">3</td>
+<td>Slow memory controller</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">11</td>
+</tr>
+<tr>
+<td>C</td>
+<td style="text-align:right">4</td>
+<td>Fast peripheral</td>
+<td style="text-align:right">2</td>
+<td style="text-align:right">5</td>
+</tr>
+</tbody>
+</table>
+<p>The two responses arrived <strong>C then A</strong>, despite the issue order <strong>A then C</strong>. That is acceptable only under the applicable protocol/region rules. If software requires A to take effect before C, the producer must provide an explicit dependency through the proper platform mechanism; merely assigning different IDs will not preserve the desired sequence.</p>
+
+</section>
+<section id="worked-example-3-a-bridge-restores-ordered-service" aria-labelledby="heading-worked-example-3-a-bridge-restores-ordered-service">
+<h2 id="heading-worked-example-3-a-bridge-restores-ordered-service">Worked Example 3 — A Bridge Restores Ordered Service</h2>
+<p>A bridge accepts three upstream read operations: A(ID 1), B(ID 1), and C(ID 2). The upstream rules require ordered responses for A and B, while C is independent. Its downstream APB port can service only one transfer at a time. The bridge may schedule A, C, B—or A, B, C—if each choice obeys all applicable region and ordering requirements. But it must not return B ahead of A if that violates upstream same-ID rules.</p>
+<p>Consider that A waits four APB cycles, C waits one, and B waits two. The bridge has finite buffers and can use independent traffic to avoid global head-of-line blocking, while retaining response order for the dependent pair. A simplistic bridge that drops IDs when narrowing to APB and returns responses solely by downstream completion time risks protocol violations. A correct bridge's scheduling and association logic is part of the architectural contract, not an optional speed enhancement.</p>
+
+</section>
+<section id="worked-example-4-descriptor-publication-before-a-doorbell" aria-labelledby="heading-worked-example-4-descriptor-publication-before-a-doorbell">
+<h2 id="heading-worked-example-4-descriptor-publication-before-a-doorbell">Worked Example 4 — Descriptor Publication Before a Doorbell</h2>
+<p>A CPU prepares a fictional 32-byte DMA descriptor with <code>buffer_address</code>, <code>length</code>, <code>flags</code>, and <code>owner</code>. The device polls or fetches it only after receiving an MMIO doorbell. A safe abstract handoff is: (1) allocate and map the payload and descriptor correctly; (2) write the address and length; (3) apply required CPU-to-device ordering and any noncoherent cache synchronization; (4) publish the ownership field; (5) notify the device with the appropriate MMIO accessor. If the device manual demands readback to flush a posted doorbell, perform that documented step before teardown or other dependent action.</p>
+<p>If the CPU posts the doorbell before descriptor fields become visible to the device, the device may see <code>owner=1</code> with an old address. Coherent memory may eliminate some maintenance steps but <strong>not</strong> the publication order. A write barrier without a correct DMA mapping does not repair a bad I/O address; a correct mapping without an ordering step does not ensure field ordering. The example describes responsibilities, not portable production driver code.</p>
+
+</section>
+<section id="worked-example-5-coherent-cache-line-ownership" aria-labelledby="heading-worked-example-5-coherent-cache-line-ownership">
+<h2 id="heading-worked-example-5-coherent-cache-line-ownership">Worked Example 5 — Coherent Cache-Line Ownership</h2>
+<p>Assume two coherent CPU caches and a simplified MESI-like protocol. Initially both cores hold line L in Shared state, containing counter 10. Core A wishes to store 11. Before it may complete a coherent write, it requests ownership; the protocol invalidates or otherwise revokes Core B's writable/readable stale status as required, then grants Core A write authority. Core A obtains a Modified copy with counter 11.</p>
+<p>Core B later loads the counter. Its old Shared copy is no longer valid; it must obtain a coherent version, perhaps supplied from Core A through the fabric. The exact data path depends on the protocol and cache hierarchy. This sequence explains <strong>same-line coherence</strong>, but says nothing about whether a different line named <code>ready</code> was published with correct release semantics. Another ordering dependency is required for reliable cross-line message passing.</p>
+
+</section>
+<section id="worked-example-6-false-sharing-and-ownership-traffic" aria-labelledby="heading-worked-example-6-false-sharing-and-ownership-traffic">
+<h2 id="heading-worked-example-6-false-sharing-and-ownership-traffic">Worked Example 6 — False Sharing and Ownership Traffic</h2>
+<p>Core A updates counter A and Core B updates counter B. Both counters occupy different eight-byte slots of one 64-byte cache line. Each core performs 100,000 updates per second, alternating in an adversarial pattern. Under the simplified assumption that nearly every alternation forces a line ownership migration, this can approach 200,000 transfers per second even though the application shares no logical counter values.</p>
+<p>If the same counters are padded onto separate lines, their update streams can proceed with far fewer coherence transfers. Assume for illustration that each migration costs an additional 80 nanoseconds on the critical path: 200,000 × 80 ns = <strong>16 milliseconds of accumulated transfer delay per second</strong>. This is not a predicted wall-clock slowdown because transfers may overlap and scheduling matters. It isolates the incremental work that an ostensibly benign data layout can induce.</p>
+
+</section>
+<section id="worked-example-7-noncoherent-receive-buffer" aria-labelledby="heading-worked-example-7-noncoherent-receive-buffer">
+<h2 id="heading-worked-example-7-noncoherent-receive-buffer">Worked Example 7 — Noncoherent Receive Buffer</h2>
+<p>A noncoherent peripheral writes an incoming packet into a buffer mapped for DMA. The CPU has an older cached copy of that buffer from before the receive. The peripheral signals completion after its device-to-memory writes according to its documented protocol. If the CPU immediately reads its stale cache line, it may see the previous packet even though the hardware DMA transaction succeeded.</p>
+<p>The required handoff uses the platform DMA API to synchronize the buffer <strong>for CPU access</strong> before inspecting the bytes. Once software finishes, it can synchronize and return ownership to the device as required. A CPU load barrier cannot magically invalidate a dirty or stale line on an architecture that does not provide that coherency guarantee. The example separates <strong>completion</strong>, <strong>cache visibility</strong>, and <strong>buffer ownership</strong>, all of which must be correct.</p>
+
+</section>
+<section id="worked-example-8-outstanding-requests-and-the-bandwidth-bound" aria-labelledby="heading-worked-example-8-outstanding-requests-and-the-bandwidth-bound">
+<h2 id="heading-worked-example-8-outstanding-requests-and-the-bandwidth-bound">Worked Example 8 — Outstanding Requests and the Bandwidth Bound</h2>
+<p>An interconnect transfers one 256-byte payload per request. Each request has an average round-trip latency of 100 nanoseconds. If the requester allows only one outstanding request, the best continuous rate under these simplifying assumptions is <code>256 B ÷ 100 ns = 2.56 GB/s</code>. With four independent requests outstanding, the concurrency-derived upper bound is <code>4 × 256 B ÷ 100 ns = 10.24 GB/s</code>.</p>
+<p>Suppose the actual link can sustain only 6.0 GB/s of useful payload. The achievable rate is then bounded above by <strong>min(10.24, 6.0) = 6.0 GB/s</strong>, before target and contention constraints. A hypothetical same-ID ordering restriction might also create head-of-line blocking and reduce the achieved rate. The formula illustrates why increasing outstanding depth can help, but does not guarantee that the interface will hit its peak bandwidth.</p>
+
+</section>
+<section id="worked-example-9-two-core-store-buffering-litmus-test" aria-labelledby="heading-worked-example-9-two-core-store-buffering-litmus-test">
+<h2 id="heading-worked-example-9-two-core-store-buffering-litmus-test">Worked Example 9 — Two-Core Store Buffering Litmus Test</h2>
+<p>Start with coherent shared variables <code>X = 0</code> and <code>Y = 0</code>, each on its own line. Core 0 performs <code>X = 1; r0 = Y</code>. Core 1 performs <code>Y = 1; r1 = X</code>. Without sufficient synchronization, some processor memory models permit the outcome <code>r0 = 0</code> and <code>r1 = 0</code>, because the independent stores need not become observable to the other core before the loads execute. Both lines can remain coherent throughout this scenario.</p>
+<table>
+<thead>
+<tr>
+<th>Core 0</th>
+<th>Core 1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Store X = 1</td>
+<td>Store Y = 1</td>
+</tr>
+<tr>
+<td>Load Y into r0</td>
+<td>Load X into r1</td>
+</tr>
+<tr>
+<td>Possible r0 = 0</td>
+<td>Possible r1 = 0</td>
+</tr>
+</tbody>
+</table>
+<p>Whether this outcome is permitted depends on the <strong>specific ISA memory model, fences, and the full program</strong>. A proper pair of fences or higher-level synchronization may rule it out. The lesson is not that coherence has failed; it is that coherence on X and Y does not automatically impose one global cross-address sequence.</p>
+
+</section>
+<section id="worked-example-10-release-acquire-message-publication" aria-labelledby="heading-worked-example-10-release-acquire-message-publication">
+<h2 id="heading-worked-example-10-release-acquire-message-publication">Worked Example 10 — Release/Acquire Message Publication</h2>
+<p>A producer prepares two fields, <code>length = 512</code> and <code>checksum = C</code>, in coherent memory, then stores <code>ready = 1</code> with release semantics. A consumer repeatedly loads <code>ready</code> with acquire semantics and, on observing the released value, reads the fields. Under the language/ISA's correctly implemented release-acquire relationship, the consumer can rely on the producer's preceding writes to the payload fields being published before the observed release.</p>
+<p>The example assumes proper atomics and no conflicting unsynchronized writers. If the consumer is instead a DMA engine polling a descriptor bit, its interface must define an equivalent device-visible ordering rule; a C++ acquire load executed on a CPU is not something the hardware peripheral automatically performs. Application-level correctness also requires deciding how <code>ready</code> is reset and how the producer knows the entry is safe to reuse.</p>
+
+</section>
+<section id="worked-example-11-posted-mmio-write-versus-device-completion" aria-labelledby="heading-worked-example-11-posted-mmio-write-versus-device-completion">
+<h2 id="heading-worked-example-11-posted-mmio-write-versus-device-completion">Worked Example 11 — Posted MMIO Write Versus Device Completion</h2>
+<p>A driver writes <code>ENABLE = 1</code> into a device register through a posted PCIe Memory Write. Immediately after the CPU executes the store instruction, it cannot infer that the device has already activated the function. A bridge or device input queue may still hold the write. If the driver must establish that the write has reached the appropriate ordering point, it uses the device/platform-approved readback or flush protocol, often a safe register read in the same path.</p>
+<p>Even after that readback returns, the device might require milliseconds for calibration or self-test. The driver therefore waits for an <strong>operational ready status</strong> or another defined completion indication before using the function. Three milestones have been separated: issuing the posted write, flushing it to the required transport point, and completing the device's internal operation. Combining them is a common source of intermittent initialization bugs.</p>
+
+</section>
+<section id="worked-example-12-reset-during-in-flight-dma" aria-labelledby="heading-worked-example-12-reset-during-in-flight-dma">
+<h2 id="heading-worked-example-12-reset-during-in-flight-dma">Worked Example 12 — Reset During In-Flight DMA</h2>
+<p>A device has four pending DMA writes into a host ring. The driver decides to reset the endpoint and recycle the ring memory. If it disables the device's command register but immediately frees the memory, an older outstanding write might arrive after the allocation has been repurposed. Coherent caches cannot repair such a lifetime error: they may correctly propagate the delayed write into the <em>wrong owner’s</em> buffer.</p>
+<p>A correct teardown follows the device and platform contract: stop new requests, quiesce or drain in-flight DMA, confirm the necessary completion or fault containment, invalidate device address translations when required, and only then release memory. If a device cannot guarantee safe drainage after a fault, the operating system may need stronger isolation or reset handling. This example shows why <strong>transaction ordering, completion, and memory safety</strong> intersect at the hardware boundary.</p>
+
+</section>
+<section id="worked-example-13-measuring-coherence-versus-transport-bottlenecks" aria-labelledby="heading-worked-example-13-measuring-coherence-versus-transport-bottlenecks">
+<h2 id="heading-worked-example-13-measuring-coherence-versus-transport-bottlenecks">Worked Example 13 — Measuring Coherence Versus Transport Bottlenecks</h2>
+<p>A synthetic workload suffers 140 ns average shared-counter update latency. Instrumentation estimates 45 ns local compute time, 55 ns average line ownership transfer, and 40 ns other queueing and scheduling delay. If a redesign removes most inter-core sharing while leaving the compute unchanged, the theoretical improvement is bounded by the eliminated ownership and associated queueing costs. Simply increasing the nominal memory-channel bandwidth may not help because the workload's dependency is on <strong>exclusive ownership of one line</strong>, not streaming bytes from DRAM.</p>
+<p>The measurements are hypothetical and should not be added as a general latency formula. In a real system, effects overlap and average components vary by core topology. The diagnostic point is to measure coherence transfers, snoops, and shared-line contention separately from raw bus utilization before purchasing bandwidth or changing ordering rules.</p>
+
+</section>
+<section id="specialist-glossary" aria-labelledby="heading-specialist-glossary">
+<h2 id="heading-specialist-glossary">Specialist Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition in this article</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Access attribute</td>
+<td>Protocol or address-region property governing permitted handling, caching, or ordering.</td>
+</tr>
+<tr>
+<td>Acquire operation</td>
+<td>Memory operation constraining specified later accesses after an observed synchronization.</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td>CPU, device, cache, bridge, or other participant in a memory or interconnect transaction.</td>
+</tr>
+<tr>
+<td>AMBA ACE</td>
+<td>Arm AXI Coherency Extensions for coherent-cache interactions across supported interfaces.</td>
+</tr>
+<tr>
+<td>AMBA AXI</td>
+<td>Arm high-performance memory-mapped transaction protocol with independent channels and IDs.</td>
+</tr>
+<tr>
+<td>AMBA CHI</td>
+<td>Arm Coherent Hub Interface for scalable coherent communications.</td>
+</tr>
+<tr>
+<td>APB</td>
+<td>Arm Advanced Peripheral Bus, commonly used for comparatively simple register accesses.</td>
+</tr>
+<tr>
+<td>Atomic operation</td>
+<td>An indivisible operation with respect to the architectural access rules for its target.</td>
+</tr>
+<tr>
+<td>Backpressure</td>
+<td>Mechanism by which downstream inability to accept traffic delays upstream transfers.</td>
+</tr>
+<tr>
+<td>Barrier</td>
+<td>Instruction or API mechanism that constrains ordering of specified access categories.</td>
+</tr>
+<tr>
+<td>Bridge</td>
+<td>Component joining interface domains while preserving required semantics.</td>
+</tr>
+<tr>
+<td>Buffer ownership</td>
+<td>Agreed right of an agent to read, write, recycle, or hand off a shared buffer.</td>
+</tr>
+<tr>
+<td>Cache coherence</td>
+<td>Protocol ensuring participating caches maintain defined compatible views of locations.</td>
+</tr>
+<tr>
+<td>Cache line</td>
+<td>Minimum or typical block of data tracked by a cache and coherency mechanism.</td>
+</tr>
+<tr>
+<td>Cache maintenance</td>
+<td>Clean, flush, or invalidate action adjusting cached data state or visibility.</td>
+</tr>
+<tr>
+<td>Coherence domain</td>
+<td>Set of agents and locations participating in a particular coherence contract.</td>
+</tr>
+<tr>
+<td>Coherence order</td>
+<td>Consistent defined sequence of writes to a coherent location.</td>
+</tr>
+<tr>
+<td>Commit</td>
+<td>Context-dependent milestone at which an operation's effect becomes architecturally accepted.</td>
+</tr>
+<tr>
+<td>Completion</td>
+<td>Protocol-specific indication that a transaction met a defined response condition.</td>
+</tr>
+<tr>
+<td>Completion queue</td>
+<td>Queue recording operations finished under the relevant device or protocol semantics.</td>
+</tr>
+<tr>
+<td>Consumer</td>
+<td>Agent that observes and processes data or work published by a producer.</td>
+</tr>
+<tr>
+<td>Data race</td>
+<td>Conflicting unsynchronized accesses under a programming-language memory model.</td>
+</tr>
+<tr>
+<td>Descriptor</td>
+<td>Memory structure describing work or data for a hardware device.</td>
+</tr>
+<tr>
+<td>Directory</td>
+<td>Coherency metadata used to identify sharers or owners of cached data.</td>
+</tr>
+<tr>
+<td>DMA</td>
+<td>Direct Memory Access, in which a device initiates memory transfers.</td>
+</tr>
+<tr>
+<td>DMA mapping</td>
+<td>Platform-created representation permitting a device to address transfer buffers.</td>
+</tr>
+<tr>
+<td>Doorbell</td>
+<td>Register or notification used to announce available device work.</td>
+</tr>
+<tr>
+<td>Exclusive state</td>
+<td>Clean private cache-line state in simplified MESI terminology.</td>
+</tr>
+<tr>
+<td>False sharing</td>
+<td>Performance contention from independent variables occupying the same coherence unit.</td>
+</tr>
+<tr>
+<td>FENCE</td>
+<td>Architecture-defined operation imposing selected memory and/or I/O ordering relationships.</td>
+</tr>
+<tr>
+<td>Flow control</td>
+<td>Rules limiting in-flight traffic according to receiving resource capacity.</td>
+</tr>
+<tr>
+<td>Flush</td>
+<td>Context-sensitive completion, drain, or cache-maintenance operation; semantics must be specified.</td>
+</tr>
+<tr>
+<td>Happens-before</td>
+<td>Ordered relation used to reason about visibility and synchronization between operations.</td>
+</tr>
+<tr>
+<td>Home node</td>
+<td>Coherency participant responsible for managing certain address ranges or line states.</td>
+</tr>
+<tr>
+<td>ID</td>
+<td>Transaction identifier used to associate requests, responses, or ordering classes.</td>
+</tr>
+<tr>
+<td>IOMMU</td>
+<td>Input/output memory-management unit translating and controlling device memory accesses.</td>
+</tr>
+<tr>
+<td>Invalid state</td>
+<td>Cache-line state indicating that a local copy is not valid for use.</td>
+</tr>
+<tr>
+<td>I/O memory</td>
+<td>Memory-mapped device region with access semantics distinct from ordinary RAM.</td>
+</tr>
+<tr>
+<td>Issue order</td>
+<td>Sequence in which a requester presents or accepts commands.</td>
+</tr>
+<tr>
+<td>Line ownership</td>
+<td>Coherency permission to modify or supply a particular cache line.</td>
+</tr>
+<tr>
+<td>Linearization point</td>
+<td>Defined moment at which an atomic or queue action logically takes effect.</td>
+</tr>
+<tr>
+<td>Load-acquire</td>
+<td>Load whose specified ordering relation constrains subsequent memory operations.</td>
+</tr>
+<tr>
+<td>Memory consistency</td>
+<td>Architecture's rules governing permitted observations among shared-memory accesses.</td>
+</tr>
+<tr>
+<td>Memory model</td>
+<td>Formal specification of which memory-access orderings and outcomes are permitted.</td>
+</tr>
+<tr>
+<td>MESI</td>
+<td>Modified, Exclusive, Shared, Invalid cache-state vocabulary.</td>
+</tr>
+<tr>
+<td>MMIO</td>
+<td>Memory-Mapped Input/Output: device control or data registers mapped into an address space.</td>
+</tr>
+<tr>
+<td>MOESI</td>
+<td>MESI-like protocol terminology with an additional Owned state.</td>
+</tr>
+<tr>
+<td>Multi-copy atomicity</td>
+<td>Property concerning how writes become observable to multiple processors or agents.</td>
+</tr>
+<tr>
+<td>Noncoherent DMA</td>
+<td>DMA path that does not automatically maintain compatibility with CPU cache copies.</td>
+</tr>
+<tr>
+<td>Non-posted transaction</td>
+<td>Transaction requiring the specified response or completion message.</td>
+</tr>
+<tr>
+<td>Observed order</td>
+<td>Sequence in which a specified observer perceives transaction effects.</td>
+</tr>
+<tr>
+<td>Ordering domain</td>
+<td>Group of requests or observers governed by a particular relative-order rule.</td>
+</tr>
+<tr>
+<td>Outstanding request</td>
+<td>Issued request whose final defined response has not yet been received.</td>
+</tr>
+<tr>
+<td>Owned state</td>
+<td>Dirty shared-data ownership relationship used in MOESI-type terminology.</td>
+</tr>
+<tr>
+<td>Peripheral region</td>
+<td>Memory-mapped target space with interface-defined device transaction behavior.</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>Guarantee that data reached the required nonvolatile persistence domain.</td>
+</tr>
+<tr>
+<td>Posted write</td>
+<td>Write that can advance without a matching end-to-end completion response.</td>
+</tr>
+<tr>
+<td>Producer</td>
+<td>Agent that initializes and publishes data for another participant.</td>
+</tr>
+<tr>
+<td>Program order</td>
+<td>Instruction order defined by the program's execution model.</td>
+</tr>
+<tr>
+<td>Read-modify-write</td>
+<td>Access sequence that reads and conditionally or unconditionally updates a value.</td>
+</tr>
+<tr>
+<td>Release operation</td>
+<td>Memory operation ordering specified earlier accesses before a publication.</td>
+</tr>
+<tr>
+<td>Reorder buffer</td>
+<td>Hardware structure that tracks operations that can execute or complete out of order.</td>
+</tr>
+<tr>
+<td>Requester</td>
+<td>Hardware agent initiating a transaction through an interconnect.</td>
+</tr>
+<tr>
+<td>Response ordering</td>
+<td>Rules about the permitted order of responses to related requests.</td>
+</tr>
+<tr>
+<td>Retry</td>
+<td>Reattempt of an operation permitted by its transaction and side-effect semantics.</td>
+</tr>
+<tr>
+<td>RVWMO</td>
+<td>RISC-V Weak Memory Ordering memory consistency model.</td>
+</tr>
+<tr>
+<td>Shareability</td>
+<td>Attribute defining the intended coherency/observation relationship of memory accesses.</td>
+</tr>
+<tr>
+<td>Shared state</td>
+<td>Compatible read-only line state in simplified MESI terminology.</td>
+</tr>
+<tr>
+<td>Snoop</td>
+<td>Coherency request or observation used to examine another cache's ownership/state.</td>
+</tr>
+<tr>
+<td>Snoop filter</td>
+<td>Structure limiting unnecessary snoop probes using sharer or ownership information.</td>
+</tr>
+<tr>
+<td>Store buffer</td>
+<td>CPU structure holding writes before their final visibility or commit conditions.</td>
+</tr>
+<tr>
+<td>Store-release</td>
+<td>Store with ordering semantics publishing earlier accesses in a supported domain.</td>
+</tr>
+<tr>
+<td>Streaming DMA</td>
+<td>DMA mapping mode commonly using explicit synchronization and ownership transitions.</td>
+</tr>
+<tr>
+<td>TLP</td>
+<td>PCI Express Transaction Layer Packet.</td>
+</tr>
+<tr>
+<td>Transaction</td>
+<td>Protocol-defined logical read, write, atomic, or other operation.</td>
+</tr>
+<tr>
+<td>Transaction response</td>
+<td>Protocol message or handshake reporting a specified transaction outcome.</td>
+</tr>
+<tr>
+<td>Visibility</td>
+<td>Ability of a defined observer to detect an operation's effect.</td>
+</tr>
+<tr>
+<td>Writeback</td>
+<td>Movement of modified cached data toward another cache level or memory.</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+<section id="technical-references-and-further-reading" aria-labelledby="heading-technical-references-and-further-reading">
+<h2 id="heading-technical-references-and-further-reading">Technical References and Further Reading</h2>
+<p>These authoritative materials define the platform- and version-specific rules summarized conceptually above. Hardware designers and driver developers should follow the relevant normative specification and actual product documentation, especially for fine-grained AXI ordering, PCIe Relaxed Ordering attributes, cache-state transitions, and operating-system barriers. The examples in this article are constructed educational illustrations rather than measurements of a specific installed MGU system.</p>
+<ol>
+<li><strong>Arm</strong>, <a href="https://documentation-service.arm.com/static/68b03beb01ae952d9559f9eb">AMBA AXI Protocol Specification</a> — transaction identifiers, ordering rules, channel behavior, and memory attributes; verify the issue supported by the implementation.</li>
+<li><strong>Arm</strong>, <a href="https://documentation-service.arm.com/static/66fd59a21669c0388dca99b7">Learn the Architecture: An Introduction to AMBA AXI</a> — accessible explanation of independent AXI channels and IDs.</li>
+<li><strong>Arm</strong>, <a href="https://www.arm.com/en/architecture/system-architectures/amba/amba-5">AMBA 5 System Architectures</a> — AXI, ACE, and CHI families and coherency goals.</li>
+<li><strong>Arm</strong>, <a href="https://support.arm.com/documentation/102407/0102/CHI-protocol-fundamentals?lang=en">Introducing AMBA CHI</a> — requester/home roles, coherent message flows, and state terminology.</li>
+<li><strong>RISC-V International</strong>, <a href="https://docs.riscv.org/reference/isa/unpriv/rvwmo.html">RVWMO Memory Consistency Model</a> — formal order and observation rules for RISC-V memory accesses.</li>
+<li><strong>RISC-V International</strong>, <a href="https://docs.riscv.org/reference/isa/unpriv/mm-eplan.html">RVWMO Explanatory Material</a> — ordering examples and the distinction between memory and I/O fence categories.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/core-api/wrappers/memory-barriers.html">Linux Kernel Memory Barriers</a> — SMP, compiler, DMA and I/O memory barrier scope.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/core-api/dma-api-howto.html">Dynamic DMA Mapping Guide</a> — coherent and streaming DMA, cache management and buffer ownership.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/driver-api/device-io.html">Bus-Independent Device Accesses</a> — MMIO accessor and posted-write considerations.</li>
+<li><strong>Linux Kernel Documentation</strong>, <a href="https://docs.kernel.org/driver-api/io_ordering.html">Ordering I/O Writes to Memory-Mapped Addresses</a> — ordering writes and flushing posted device operations.</li>
+<li><strong>PCI-SIG</strong>, <a href="https://pcisig.com/specifications">PCI Express Specifications</a> — normative PCIe TLP ordering, attributes, and completion rules; full specifications may require access under PCI-SIG terms.</li>
+<li><strong>AMD</strong>, <a href="https://docs.amd.com/r/en-US/pg302-qdma/Transaction-Ordering-for-PCIe">QDMA Transaction Ordering for PCIe</a> — concrete implementation example of PCIe-to-AXI ordering interactions, not a replacement for PCI-SIG rules.</li>
+</ol>
+
+</section>
+<section id="sub-articles-and-continued-study" aria-labelledby="heading-sub-articles-and-continued-study">
+<h2 id="heading-sub-articles-and-continued-study">Sub-Articles and Continued Study</h2>
+<p>This is one of the established <strong>20 Level 5 specialist articles</strong> under the <a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/">Bus Systems unit index</a>. These active links identify nearby children of the same Level 4 unit. Some later destinations may not yet be authored or deployed, and these links are not evidence of live availability.</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-transactions-and-protocol-phases">Bus Transactions and Protocol Phases</a> — request, response, and completion stages.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-arbitration-and-access-priority">Bus Arbitration and Access Priority</a> — which request wins a shared resource and when.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/synchronous-asynchronous-and-handshake-buses">Synchronous, Asynchronous, and Handshake Buses</a> — transfer acceptance and timing boundaries.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/direct-memory-access-and-bus-mastering">Direct Memory Access and Bus Mastering</a> — device-initiated reads/writes and ownership handoff.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interrupt-signaling-over-system-interconnects">Interrupt Signaling over System Interconnects</a> — notification and visibility at completion.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/memory-mapped-io-and-address-decoding">Memory-Mapped I/O and Address Decoding</a> — device register access semantics.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/switched-fabrics-and-packet-based-interconnects">Switched Fabrics and Packet-Based Interconnects</a> — routing, buffering, and independent request paths.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/pcie-architecture-and-transaction-flow">PCI Express Architecture and Transaction Flow</a> — PCIe transport and ordering attributes.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/on-chip-buses-and-networks-on-chip">On-Chip Buses and Networks-on-Chip</a> — SoC interconnect organization and coherent domains.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/processor-memory-and-storage-interconnects">Processor, Memory, and Storage Interconnects</a> — distinct paths and completion constraints.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-latency-throughput-and-contention">Interconnect Latency, Throughput, and Contention</a> — performance costs of ordering restrictions.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/interconnect-isolation-and-device-security">Interconnect Isolation and Device Security</a> — trust domains and fault containment.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/bus-error-detection-diagnostics-and-recovery">Bus Error Detection, Diagnostics, and Recovery</a> — retries, errors, and unfinished transactions.</li>
+</ul>
+
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<p>These are neighboring overview articles in the Computer Science volume, <strong>not</strong> new children of the current Level 5 specialist:</p>
+<ul>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/computer-architecture-overview">Computer Architecture Overview</a> — full-system organization and shared state.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a> — architectural atomics, privilege and memory-order contracts.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> — caches, misses, cache-line state and locality.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — store buffers, load replay and speculative dependencies.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/parallel-architecture">Parallel Architecture</a> — shared-memory multiprocessors and scalability.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/bus-systems">Bus Systems</a> — parent overview of interconnect communication.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/motherboards-and-buses">Motherboards and Buses</a> — physical platform integration.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> — processor hardware and caches.</li>
+<li><a href="/library/encyclopedia/computer-science/software-systems/device-and-io-management">Device and I/O Management</a> — operating-system device coordination.</li>
+</ul>
+
+</section>
+<section id="editorial-scope-and-publication-status" aria-labelledby="heading-editorial-scope-and-publication-status">
+<h2 id="heading-editorial-scope-and-publication-status">Editorial Scope and Publication Status</h2>
+<p><strong>Article:</strong> Bus Systems Level 5 specialist <strong>10 of 20</strong>, <em>Transaction Ordering and Memory Coherence</em>. <strong>Physical filename:</strong> <code>computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence.html</code>. <strong>Canonical public path:</strong> <code>/library/encyclopedia/computer-science/computer-architecture/bus-systems-articles/transaction-ordering-and-memory-coherence</code>.</p>
+<p><strong>Scope decision:</strong> this article explains ordering, visibility, completion, coherent transport, and the CPU/device boundary. It does not prescribe one cache-coherence algorithm for all processors, replace normative AXI/PCIe/CHI documents, or supply a complete operating-system driver implementation. Numeric cases are illustrative with explicit assumptions. Its sibling links follow the MGU policy of active intended links, without asserting that unproduced child pages are live.</p>
+<p>The HTML deliverable is prepared for local placement and subsequent deployment. <strong>Live publication and the correctness of any server-side URL routing have not been independently verified.</strong> The existing parent summary and unit index are not modified by this article.</p>
+
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script src="/component/bottom-nav-loader.js" defer></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

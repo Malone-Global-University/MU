@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instruction Fetch and Decode | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Specialist CPU guide to instruction fetch and decode: PC prediction, I-cache/iTLB, instruction boundaries, RISC-V and x86 encodings, decode fields, front-end bandwidth, faults, and verification.">
+<meta name="keywords" content="instruction fetch, instruction decode, CPU front end, PC, iTLB, I-cache, compressed instructions, RISC-V encoding, instruction alignment, branch prediction, micro-operations">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Instruction Fetch and Decode | MGU Encyclopedia">
+<meta property="og:description" content="How processors obtain executable instruction bytes, identify boundaries, decode fields, predict control flow, and deliver correct operations to execution.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Instruction Fetch and Decode</h1>
+<p class="subtitle">Instruction-address selection, executable-byte delivery, boundary recognition, semantic field decoding, and the front-end handoff to CPU execution.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-scope-and-the-cpu-front-end">Definition, Scope, and the CPU Front End</a></li>
+<li><a href="#learning-objectives-and-guiding-questions">Learning Objectives and Guiding Questions</a></li>
+<li><a href="#the-front-end-as-a-multi-stage-system">The Front End as a Multi-Stage System</a></li>
+<li><a href="#conceptual-instruction-fetch-and-decode-diagram">Conceptual Instruction Fetch and Decode Diagram</a></li>
+<li><a href="#architectural-pc-fetch-pc-and-prediction-metadata">Architectural PC, Fetch PC, and Prediction Metadata</a></li>
+<li><a href="#worked-trace-sequential-branch-and-redirect">Worked Trace: Sequential, Branch, and Redirect</a></li>
+<li><a href="#executable-example-predict-redirect-and-cancel">Executable Example: Predict, Redirect, and Cancel</a></li>
+<li><a href="#instruction-fetch-bandwidth-and-fetch-blocks">Instruction Fetch Bandwidth and Fetch Blocks</a></li>
+<li><a href="#fetch-boundaries-alignment-and-fragmented-instructions">Fetch Boundaries, Alignment, and Fragmented Instructions</a></li>
+<li><a href="#executable-example-gather-an-instruction-across-blocks">Executable Example: Gather an Instruction Across Blocks</a></li>
+<li><a href="#virtual-addresses-instruction-translation-and-execute-permission">Virtual Addresses, Instruction Translation, and Execute Permission</a></li>
+<li><a href="#executable-example-permission-checked-cross-page-fetch">Executable Example: Permission-Checked Cross-Page Fetch</a></li>
+<li><a href="#instruction-tlbs-address-space-context-and-stale-translations">Instruction TLBs, Address-Space Context, and Stale Translations</a></li>
+<li><a href="#instruction-cache-misses-refill-and-locality">Instruction Cache, Misses, Refill, and Locality</a></li>
+<li><a href="#executable-example-an-instruction-cache-working-set-toy">Executable Example: An Instruction Cache Working-Set Toy</a></li>
+<li><a href="#instruction-density-and-effective-fetch-capacity">Instruction Density and Effective Fetch Capacity</a></li>
+<li><a href="#executable-example-byte-supply-versus-decode-width">Executable Example: Byte Supply Versus Decode Width</a></li>
+<li><a href="#prefetch-buffers-fetch-queues-and-backpressure">Prefetch Buffers, Fetch Queues, and Backpressure</a></li>
+<li><a href="#instruction-fetch-faults-and-error-attribution">Instruction Fetch Faults and Error Attribution</a></li>
+<li><a href="#fixed-mixed-and-variable-instruction-encodings">Fixed, Mixed, and Variable Instruction Encodings</a></li>
+<li><a href="#risc-v-instruction-length-classification">RISC-V Instruction-Length Classification</a></li>
+<li><a href="#executable-example-risc-v-16-32-bit-length-teaching-model">Executable Example: RISC-V 16/32-Bit Length Teaching Model</a></li>
+<li><a href="#executable-example-mixed-length-sequential-pcs">Executable Example: Mixed-Length Sequential PCs</a></li>
+<li><a href="#x86-64-instruction-boundaries-and-prefix-processing">x86-64 Instruction Boundaries and Prefix Processing</a></li>
+<li><a href="#aarch64-instruction-alignment-and-fixed-fields">AArch64 Instruction Alignment and Fixed Fields</a></li>
+<li><a href="#opcode-classification-operand-fields-and-decode-products">Opcode Classification, Operand Fields, and Decode Products</a></li>
+<li><a href="#risc-v-addi-field-extraction-and-sign-extension">RISC-V ADDI: Field Extraction and Sign Extension</a></li>
+<li><a href="#executable-example-decode-a-risc-v-addi-word">Executable Example: Decode a RISC-V ADDI Word</a></li>
+<li><a href="#branch-immediate-reconstruction-noncontiguous-bits">Branch Immediate Reconstruction: Noncontiguous Bits</a></li>
+<li><a href="#executable-example-decode-a-risc-v-b-type-offset">Executable Example: Decode a RISC-V B-Type Offset</a></li>
+<li><a href="#decode-records-and-register-dependency-metadata">Decode Records and Register Dependency Metadata</a></li>
+<li><a href="#executable-example-minimal-decode-records">Executable Example: Minimal Decode Records</a></li>
+<li><a href="#illegal-encodings-unsupported-extensions-and-privilege">Illegal Encodings, Unsupported Extensions, and Privilege</a></li>
+<li><a href="#branch-prediction-and-the-fetch-address-stream">Branch Prediction and the Fetch Address Stream</a></li>
+<li><a href="#worked-scenario-a-branch-target-appears-too-early">Worked Scenario: A Branch Target Appears Too Early</a></li>
+<li><a href="#executable-example-a-two-bit-saturating-direction-predictor">Executable Example: A Two-Bit Saturating Direction Predictor</a></li>
+<li><a href="#call-return-and-indirect-branch-prediction">Call, Return, and Indirect Branch Prediction</a></li>
+<li><a href="#instruction-redirects-flushes-and-replay">Instruction Redirects, Flushes, and Replay</a></li>
+<li><a href="#executable-example-fetch-epochs-prevent-stale-responses">Executable Example: Fetch Epochs Prevent Stale Responses</a></li>
+<li><a href="#decoding-several-instructions-per-cycle">Decoding Several Instructions per Cycle</a></li>
+<li><a href="#decoder-width-micro-operation-generation-and-fusion">Decoder Width, Micro-Operation Generation, and Fusion</a></li>
+<li><a href="#micro-operation-caches-and-alternate-supply-paths">Micro-Operation Caches and Alternate Supply Paths</a></li>
+<li><a href="#microcode-and-complex-decode-paths">Microcode and Complex Decode Paths</a></li>
+<li><a href="#fetch-to-decode-latency-versus-steady-state-throughput">Fetch-to-Decode Latency Versus Steady-State Throughput</a></li>
+<li><a href="#worked-throughput-example-identify-the-narrowest-stage">Worked Throughput Example: Identify the Narrowest Stage</a></li>
+<li><a href="#executable-example-front-end-bottleneck-accounting">Executable Example: Front-End Bottleneck Accounting</a></li>
+<li><a href="#stall-attribution-and-front-end-performance-counters">Stall Attribution and Front-End Performance Counters</a></li>
+<li><a href="#multi-core-simultaneous-multithreading-and-instruction-supply">Multi-Core, Simultaneous Multithreading, and Instruction Supply</a></li>
+<li><a href="#self-modifying-code-and-instruction-visibility">Self-Modifying Code and Instruction Visibility</a></li>
+<li><a href="#instruction-side-consistency-and-memory-ordering-boundaries">Instruction-Side Consistency and Memory-Ordering Boundaries</a></li>
+<li><a href="#speculative-fetch-permissions-and-security-boundaries">Speculative Fetch, Permissions, and Security Boundaries</a></li>
+<li><a href="#front-end-power-and-area-trade-offs">Front-End Power and Area Trade-Offs</a></li>
+<li><a href="#front-end-correctness-required-invariants">Front-End Correctness: Required Invariants</a></li>
+<li><a href="#instruction-fetch-test-matrix">Instruction-Fetch Test Matrix</a></li>
+<li><a href="#executable-example-property-based-boundary-walk">Executable Example: Property-Based Boundary Walk</a></li>
+<li><a href="#six-applied-scenarios-evidence-before-explanation">Six Applied Scenarios: Evidence Before Explanation</a></li>
+<li><a href="#scenario-1-a-compressed-instruction-straddles-a-fetch-block">Scenario 1 — A Compressed Instruction Straddles a Fetch Block</a></li>
+<li><a href="#scenario-2-a-small-loop-is-slower-despite-i-cache-hits">Scenario 2 — A Small Loop Is Slower Despite I-Cache Hits</a></li>
+<li><a href="#scenario-3-a-jit-compiler-executes-yesterday-s-code">Scenario 3 — A JIT Compiler Executes Yesterday’s Code</a></li>
+<li><a href="#scenario-4-a-wide-decoder-is-starved-by-a-narrow-fetch-path">Scenario 4 — A Wide Decoder Is Starved by a Narrow Fetch Path</a></li>
+<li><a href="#scenario-5-a-page-boundary-masks-a-fetch-permission-error">Scenario 5 — A Page Boundary Masks a Fetch Permission Error</a></li>
+<li><a href="#scenario-6-a-hot-patch-redirect-accepts-an-old-fetch-response">Scenario 6 — A Hot-Patch Redirect Accepts an Old Fetch Response</a></li>
+<li><a href="#common-misconceptions-and-corrections">Common Misconceptions and Corrections</a></li>
+<li><a href="#ten-gate-front-end-engineering-framework">Ten-Gate Front-End Engineering Framework</a></li>
+<li><a href="#study-pathway-and-hands-on-laboratory">Study Pathway and Hands-On Laboratory</a></li>
+<li><a href="#review-questions-and-worked-guidance">Review Questions and Worked Guidance</a></li>
+<li><a href="#guided-exercise-1-build-a-fetch-boundary-model">Guided Exercise 1 — Build a Fetch-Boundary Model</a></li>
+<li><a href="#guided-exercise-2-implement-a-redirect-safe-fetch-queue">Guided Exercise 2 — Implement a Redirect-Safe Fetch Queue</a></li>
+<li><a href="#guided-exercise-3-explain-a-measured-front-end-bottleneck">Guided Exercise 3 — Explain a Measured Front-End Bottleneck</a></li>
+<li><a href="#glossary-of-fetch-and-decode-terminology">Glossary of Fetch and Decode Terminology</a></li>
+<li><a href="#sub-articles-and-complete-cpu-specialist-directory">Sub-Articles and Complete CPU Specialist Directory</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#technical-references-and-primary-documentation">Technical References and Primary Documentation</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="definition-scope-and-the-cpu-front-end" aria-labelledby="heading-definition-scope-and-the-cpu-front-end">
+<h2 id="heading-definition-scope-and-the-cpu-front-end">Definition, Scope, and the CPU Front End</h2>
+<p><strong>Instruction fetch</strong> obtains the encoded instructions that a processor may execute, while <strong>instruction decode</strong> identifies instruction boundaries, operations, operands, immediate values, and legality from their bit patterns. These operations form the <em>front end</em> of a processor. The front end delivers valid instruction records or internal operations to later stages; it does not itself guarantee that a fetched instruction will execute or retire. Branch prediction and speculation can cause a CPU to fetch instructions that will subsequently be discarded.</p>
+<p>The central engineering question is how a core converts an instruction address and an executable byte stream into a timely, correctly identified operation under changing control flow, translation permissions, variable instruction lengths, cache misses, and implementation limits. A fetch interface must preserve instruction identity, the original program counter, encoded length, and any error status long enough for later precise handling. Decode must respect the instruction set and enabled features, rather than infer meaning from arbitrary bit layouts.</p>
+<p>This is Level 5 article 3 in the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">Central Processing Unit specialist directory</a> beneath the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">CPU overview</a>. Its ownership is the <strong>front-end pathway: address selection, byte acquisition, instruction alignment, classification, operand identification, and dispatch interfaces</strong>. Detailed execution datapaths, control/exceptions, speculative retirement, cache design, and branch-predictor internals have separate articles.</p>
+</section>
+<section id="learning-objectives-and-guiding-questions" aria-labelledby="heading-learning-objectives-and-guiding-questions">
+<h2 id="heading-learning-objectives-and-guiding-questions">Learning Objectives and Guiding Questions</h2>
+<p>By the end of this article, readers should be able to draw a coherent front-end pipeline, trace an instruction across a cache-line boundary, decode a simple RISC-V instruction correctly, separate architectural PC behavior from predicted fetch PC, and diagnose stalls or faults without confusing instruction availability with instruction correctness.</p>
+<ol><li>Where do next-fetch addresses come from, and when can the predicted path differ from the architectural path?</li><li>How are executable bytes translated, permission-checked, cached, buffered, and delivered to a decoder?</li><li>What determines the start and length of the next instruction in fixed- and variable-length ISAs?</li><li>How do opcode fields become semantic operation classes, operand indices, and signed immediates?</li><li>How do cache misses, front-end width, and redirects affect instructions per cycle?</li><li>How are illegal encodings, fetch errors, and wrong-path work kept from incorrectly affecting architectural state?</li></ol>
+</section>
+<section id="the-front-end-as-a-multi-stage-system" aria-labelledby="heading-the-front-end-as-a-multi-stage-system">
+<h2 id="heading-the-front-end-as-a-multi-stage-system">The Front End as a Multi-Stage System</h2>
+<p>An illustrative front end includes a next-PC selector; instruction-address translation and an instruction cache or memory fetch interface; a fetch buffer; boundary/alignment logic; an ISA-aware decoder; and an output queue feeding rename, issue, or execution. The exact cut between stages varies. A small in-order core may combine fetch and decode in two stages; a high-throughput superscalar design may have several decode lanes, operation caches, and separate prediction structures.</p>
+<p>One useful accounting identity is <strong>delivered operations = eligible fetched instruction bytes × valid boundary reconstruction × decoder availability</strong>, subject to control-flow correctness and downstream backpressure. This is a conceptual dependency, not a literal multiplication of measured rates. Fetching thirty-two bytes in one cycle does not mean eight four-byte instructions can be dispatched if only four decode slots exist, if a branch redirects mid-bundle, or if the byte stream contains a long instruction split across a boundary.</p>
+<p>An architecturally visible instruction may expand into several implementation-private micro-operations, and multiple architectural instructions may be fused in a way not visible to software. Maintain separate counts for <em>bytes fetched, instructions decoded, micro-operations generated, operations issued, and instructions retired</em>. Those denominators answer different performance questions.</p>
+</section>
+<section id="conceptual-instruction-fetch-and-decode-diagram" aria-labelledby="heading-conceptual-instruction-fetch-and-decode-diagram">
+<h2 id="heading-conceptual-instruction-fetch-and-decode-diagram">Conceptual Instruction Fetch and Decode Diagram</h2>
+<figure><svg viewBox="0 0 1060 420" role="img" aria-labelledby="fd-title fd-desc" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px"><title id="fd-title">Conceptual processor instruction front end</title><desc id="fd-desc">A next-address selector and branch predictor feed instruction translation and cache. A fetch queue leads to instruction boundary detection and decode. Decoded operations pass into execution or rename. Branch resolution can redirect the next-address selector and flush younger wrong-path entries. Fetch and decode errors accompany the instruction until architecturally resolved.</desc><defs><marker id="af" markerWidth="8" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0 0L8 3.5L0 7Z" fill="currentColor"/></marker></defs><g fill="none" stroke="currentColor" stroke-width="2"><rect x="25" y="80" width="170" height="105" rx="9"/><rect x="229" y="80" width="171" height="105" rx="9"/><rect x="434" y="80" width="173" height="105" rx="9"/><rect x="642" y="80" width="173" height="105" rx="9"/><rect x="850" y="80" width="183" height="105" rx="9"/><rect x="25" y="264" width="250" height="98" rx="9"/><rect x="642" y="264" width="391" height="98" rx="9"/><path d="M196 132H226" marker-end="url(#af)"/><path d="M401 132H431" marker-end="url(#af)"/><path d="M608 132H639" marker-end="url(#af)"/><path d="M816 132H847" marker-end="url(#af)"/><path d="M152 264V187" marker-end="url(#af)"/><path d="M845 264V186" marker-end="url(#af)"/><path d="M642 313H376V214H109V187" marker-end="url(#af)"/></g><g font-family="sans-serif" font-size="18" fill="currentColor" text-anchor="middle"><text x="110" y="108">Next PC</text><text x="110" y="132">selection and</text><text x="110" y="156">prediction</text><text x="315" y="108">Instruction TLB</text><text x="315" y="132">and permission</text><text x="315" y="156">checks</text><text x="520" y="108">I-cache /</text><text x="520" y="132">instruction</text><text x="520" y="156">memory</text><text x="729" y="109">Fetch queue</text><text x="729" y="134">and boundary</text><text x="729" y="158">alignment</text><text x="941" y="109">Decode</text><text x="941" y="134">and operand</text><text x="941" y="158">identification</text><text x="150" y="291">Predictor metadata</text><text x="150" y="320">branch target and</text><text x="150" y="345">direction history</text><text x="840" y="290">To rename / dispatch / execute</text><text x="840" y="318">redirects on resolved branches</text><text x="840" y="344">and wrong-path cancellation</text></g></svg><figcaption>Teaching abstraction, not a particular vendor pipeline. Cache and translation placement, predecode, micro-op caches, predictor lookup timing, and redirect paths differ among implementations.</figcaption></figure>
+</section>
+<section id="architectural-pc-fetch-pc-and-prediction-metadata" aria-labelledby="heading-architectural-pc-fetch-pc-and-prediction-metadata">
+<h2 id="heading-architectural-pc-fetch-pc-and-prediction-metadata">Architectural PC, Fetch PC, and Prediction Metadata</h2>
+<p>The <strong>architectural program counter</strong> describes the address of an instruction in the software-visible execution sequence according to the ISA. A speculative processor also maintains one or more <strong>fetch addresses</strong> that may run ahead of the committed instruction stream. A predicted taken branch can redirect fetching before the branch executes; a later correction cancels the wrong-path work. These are not independent architectural PC values created for the program.</p>
+<p>Every fetched instruction record should retain its original instruction address and length or enough information to reconstruct them. A front end that passes only decoded operation names downstream loses the ability to report faulting addresses, compute PC-relative targets correctly, or replay an instruction after a recoverable event. The fetch unit may additionally attach prediction identifiers, branch-type hints, page/line origin, or exception tags, none of which necessarily appear in the architectural contract.</p>
+<p>Fall-through address selection follows the actual encoded instruction length. In a fixed four-byte ISA, a sequential next address is often PC+4. In RISC-V configurations with 16-bit compressed instructions, fall-through may be PC+2; other encodings are possible under supported extensions. In x86-64, encoded instructions can have variable byte lengths, and the decoder must determine the next boundary before sequential progression can be finalized.</p>
+</section>
+<section id="worked-trace-sequential-branch-and-redirect" aria-labelledby="heading-worked-trace-sequential-branch-and-redirect">
+<h2 id="heading-worked-trace-sequential-branch-and-redirect">Worked Trace: Sequential, Branch, and Redirect</h2>
+<table><thead><tr><th scope="col">Cycle (illustrative)</th><th scope="col">Fetch address</th><th scope="col">Prediction / response</th><th scope="col">Architecturally relevant outcome</th></tr></thead><tbody><tr><td>1</td><td>0x1000</td><td>Fetch ADDI (4 bytes)</td><td>Sequential candidate at 0x1004</td></tr><tr><td>2</td><td>0x1004</td><td>Fetch conditional branch, predicted taken</td><td>Predict 0x1020 and attach branch metadata</td></tr><tr><td>3</td><td>0x1020</td><td>Fetch predicted target instruction</td><td>Speculative: may be canceled</td></tr><tr><td>4</td><td>0x1024</td><td>Fetch another predicted-path instruction</td><td>Speculative: may be canceled</td></tr><tr><td>5</td><td>0x1004</td><td>Branch resolves not taken; redirect</td><td>Younger target-path entries invalidated</td></tr><tr><td>6</td><td>0x1008</td><td>Fetch correct fall-through</td><td>Execution continues from correct path</td></tr></tbody></table><p>The cycle numbers are explanatory and not tied to a specific pipeline depth. A redirect may cause bubbles or overlapping fetches depending on how the implementation cancels outstanding transactions. The key correctness rule is that wrong-path instructions must not commit architectural effects, even if their bytes were fetched or decoded.</p>
+</section>
+<section id="executable-example-predict-redirect-and-cancel" aria-labelledby="heading-executable-example-predict-redirect-and-cancel">
+<h2 id="heading-executable-example-predict-redirect-and-cancel">Executable Example: Predict, Redirect, and Cancel</h2>
+<pre><code class="language-python">def frontend_trace(program, start_pc, predicted_next, resolved_next):
+    pc = start_pc
+    fetched = []
+    for _ in range(3):
+        fetched.append(pc)
+        pc = predicted_next.get(pc, pc + program[pc])
+    # A resolved branch at 0x1004 invalidates its younger fetches.
+    branch_pc = 0x1004
+    kept = fetched[:fetched.index(branch_pc) + 1]
+    redirected = resolved_next[branch_pc]
+    return fetched, kept, redirected
+
+sizes = {0x1000: 4, 0x1004: 4, 0x1020: 4}
+all_fetches, retained, new_pc = frontend_trace(
+    sizes, 0x1000, {0x1004: 0x1020}, {0x1004: 0x1008})
+assert all_fetches == [0x1000, 0x1004, 0x1020]
+assert retained == [0x1000, 0x1004]
+assert new_pc == 0x1008
+print(&#x27;Canceled younger fetch from&#x27;, hex(0x1020))</code></pre><p>This model tracks addresses, not execution results. An implementation would also cancel queued decode records and manage outstanding fetch responses. It illustrates the correct relationship between a predicted next-fetch address and the address selected after branch resolution.</p>
+</section>
+<section id="instruction-fetch-bandwidth-and-fetch-blocks" aria-labelledby="heading-instruction-fetch-bandwidth-and-fetch-blocks">
+<h2 id="heading-instruction-fetch-bandwidth-and-fetch-blocks">Instruction Fetch Bandwidth and Fetch Blocks</h2>
+<p>Front ends often request data in aligned chunks rather than individually reading each instruction from main memory. A fetch block may contain several encoded instructions, some partial instructions, and an early branch. A cache line may be much larger than a cycle’s fetch chunk; conversely, a single instruction may straddle two chunks. Fetch bandwidth is measured in bytes per time or in instructions delivered, and both metrics depend on instruction length and the availability of valid data.</p>
+<p>The width of an instruction cache read, the granularity of an interconnect burst, and the number of instructions decoded in a cycle are different parameters. A wide cache can refill a fetch queue while a narrow decoder limits useful progress. A narrow cache or instruction boundary unit may prevent a wide decoder from ever reaching its advertised throughput. Physical alignment also matters because an arbitrary address may lie near the end of an aligned block.</p>
+<p>A design must correctly handle instruction bytes crossing a fetch-block boundary and, where permitted, cache-line or page boundaries. The next required bytes must be assembled in order and tagged with the originating PC. Validity must be attached to the combined instruction, rather than assumed merely because its first byte was returned successfully.</p>
+</section>
+<section id="fetch-boundaries-alignment-and-fragmented-instructions" aria-labelledby="heading-fetch-boundaries-alignment-and-fragmented-instructions">
+<h2 id="heading-fetch-boundaries-alignment-and-fragmented-instructions">Fetch Boundaries, Alignment, and Fragmented Instructions</h2>
+<p>An <strong>instruction boundary</strong> is the address at which an instruction begins. It is not necessarily a cache-line boundary, memory-word boundary, or virtual-memory page boundary. Fixed-length ISAs with alignment restrictions simplify boundary discovery, though fetch blocks can still end in the middle of the required fixed-width word. Mixed 16- and 32-bit instruction sets require a preliminary length decision from the encoded stream.</p>
+<p>If a 32-bit instruction starts at offset 2 of a four-byte aligned fetch word, the first halfword is in that word and the second halfword is in the next word. An instruction-alignment buffer can retain the partial halfword while waiting for the rest. If the second half is inaccessible, the system must report the architecturally appropriate fetch-related failure rather than interpret a truncated instruction as valid.</p>
+<p>The choice of endianness governs how bytes are represented in a multi-byte instruction encoding. It does not authorize simply reversing the entire instruction stream or skipping alignment checks. A robust decoder forms the instruction bits according to the ISA and memory model, then extracts fields at their defined positions.</p>
+</section>
+<section id="executable-example-gather-an-instruction-across-blocks" aria-labelledby="heading-executable-example-gather-an-instruction-across-blocks">
+<h2 id="heading-executable-example-gather-an-instruction-across-blocks">Executable Example: Gather an Instruction Across Blocks</h2>
+<pre><code class="language-python">def gather(code_memory, pc, length, fetch_block_bytes=4):
+    # Simplified: a byte-addressed immutable memory dictionary.
+    collected = bytearray()
+    while len(collected) &lt; length:
+        addr = pc + len(collected)
+        block_start = (addr // fetch_block_bytes) * fetch_block_bytes
+        offset = addr - block_start
+        take = min(length - len(collected), fetch_block_bytes - offset)
+        for byte_addr in range(addr, addr + take):
+            if byte_addr not in code_memory:
+                raise MemoryError(f&#x27;fetch missing byte at {byte_addr:#x}&#x27;)
+            collected.append(code_memory[byte_addr])
+    return bytes(collected)
+
+memory = {0x1002: 0x93, 0x1003: 0x00,
+          0x1004: 0x10, 0x1005: 0x00}
+assert gather(memory, 0x1002, 4) == bytes.fromhex(&#x27;93001000&#x27;)
+try:
+    gather({0x1002: 0x93, 0x1003: 0x00}, 0x1002, 4)
+except MemoryError as error:
+    print(error)
+else:
+    raise AssertionError(&#x27;a partial instruction cannot succeed&#x27;)</code></pre><p>An actual memory system returns cache lines or bus responses with fault and access metadata, not a Python dictionary. This teaching example ensures a partial instruction cannot silently appear complete when the second fetch block is absent.</p>
+</section>
+<section id="virtual-addresses-instruction-translation-and-execute-permission" aria-labelledby="heading-virtual-addresses-instruction-translation-and-execute-permission">
+<h2 id="heading-virtual-addresses-instruction-translation-and-execute-permission">Virtual Addresses, Instruction Translation, and Execute Permission</h2>
+<p>On systems with virtual memory, the instruction fetch address typically must be translated to a physical location before or in parallel with accessing the instruction cache. An <strong>instruction translation lookaside buffer</strong> (iTLB) caches recent address translations; a miss may require a page-table walk. Each access is also subject to execute permissions and relevant protection controls. Some systems combine translation and cache lookup stages differently, but successful byte retrieval alone is not proof that the instruction was authorized for execution.</p>
+<p>Execution permission is distinct from data-read permission in common protection schemes. An operating system may mark a page non-executable even if application code can read it as data; some architectures also have execute-only mappings. A processor must reject instruction fetch from a prohibited page according to its defined exception behavior. Translation caches also require coherent management across address-space changes, page-table updates, and privilege transitions.</p>
+<p>When an instruction crosses a page boundary, both relevant parts of the instruction must be fetched under their applicable translation and access rules. A valid first half does not grant permission to fetch the second half from the next page. The effective fault presentation must follow the ISA and privileged architecture; a simplified teaching model should record which byte or portion failed without inventing vendor-specific trap fields.</p>
+</section>
+<section id="executable-example-permission-checked-cross-page-fetch" aria-labelledby="heading-executable-example-permission-checked-cross-page-fetch">
+<h2 id="heading-executable-example-permission-checked-cross-page-fetch">Executable Example: Permission-Checked Cross-Page Fetch</h2>
+<pre><code class="language-python">PAGE = 16  # miniature teaching page, not real hardware page size
+pages = {0: {&#x27;x&#x27;: True}, 1: {&#x27;x&#x27;: False}}
+image = {14: 0x93, 15: 0x00, 16: 0x10, 17: 0x00}
+
+def fetch_instruction(pc, size):
+    output = []
+    for addr in range(pc, pc + size):
+        if not pages.get(addr // PAGE, {}).get(&#x27;x&#x27;, False):
+            raise PermissionError(f&#x27;no execute permission at {addr}&#x27;)
+        output.append(image[addr])
+    return bytes(output)
+
+try:
+    fetch_instruction(14, 4)
+except PermissionError as exc:
+    assert &#x27;16&#x27; in str(exc)
+else:
+    raise AssertionError(&#x27;second-page permission must be checked&#x27;)
+pages[1][&#x27;x&#x27;] = True
+assert fetch_instruction(14, 4) == bytes.fromhex(&#x27;93001000&#x27;)
+print(&#x27;Page permission checked for all instruction bytes&#x27;)</code></pre><p>The example intentionally does not simulate a TLB or real page-table format. It enforces the important invariant: every fetched byte must be covered by a permitted executable mapping. Real page sizes, privileges, executable-only behavior, and precise exception classification depend on the platform.</p>
+</section>
+<section id="instruction-tlbs-address-space-context-and-stale-translations" aria-labelledby="heading-instruction-tlbs-address-space-context-and-stale-translations">
+<h2 id="heading-instruction-tlbs-address-space-context-and-stale-translations">Instruction TLBs, Address-Space Context, and Stale Translations</h2>
+<p>An iTLB entry usually represents a translation associated with a virtual page and relevant address-space or privilege context. The metadata may include page size, permission and validity bits, global-mapping status, or equivalent implementation fields. Not all cores use the same tagging design. A stale entry can cause incorrect code lookup or permission behavior after a page-table change if the operating system does not perform the required translation synchronization.</p>
+<p>There is a distinction between an instruction cache containing previously fetched bytes and an iTLB containing translations. The cache may physically index or tag its data, or use virtual bits under constraints; the TLB holds the address mapping. Invalidation of one structure does not automatically imply invalidation of every other front-end structure. Changes to executable mappings, kernel text, or just-in-time-generated code may demand several distinct synchronization steps.</p>
+<p>When diagnosing an apparent fetch from the wrong process, examine the address-space identifier or context-switch discipline, translation shootdowns, privilege permissions, and any use of shared virtual mappings. Do not assume that flushing the instruction bytes alone repairs stale translation state. A page-table update becomes safe only when the architecture-specific ordering and invalidation contract is satisfied.</p>
+</section>
+<section id="instruction-cache-misses-refill-and-locality" aria-labelledby="heading-instruction-cache-misses-refill-and-locality">
+<h2 id="heading-instruction-cache-misses-refill-and-locality">Instruction Cache, Misses, Refill, and Locality</h2>
+<p>An <strong>instruction cache</strong> keeps recently used instruction bytes near the core. Sequential code often benefits from spatial locality; repeated loops benefit from temporal locality. A small hot loop can achieve high instruction supply when its working set fits in the relevant cache and front-end buffers. Frequent calls into scattered code, branch-heavy traces, or a program with a large active code footprint can increase cache pressure and fetch stalls.</p>
+<p>A cache hit does not mean decoding is instantaneous. The cache must return bytes, the boundary logic must identify complete instructions, and the decoder must produce a valid operation. Conversely, a cache miss may be partly hidden by prefetch and buffering, but misses that interrupt the critical fetch stream can starve downstream stages. This makes instruction-side cache-hit metrics useful yet insufficient by themselves to diagnose front-end performance.</p>
+<p>Cache associativity, line size, physical placement, replacement policy, and prefetch design are implementation choices. This article treats them as front-end constraints; the <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a> specialist article owns their detailed hardware design.</p>
+</section>
+<section id="executable-example-an-instruction-cache-working-set-toy" aria-labelledby="heading-executable-example-an-instruction-cache-working-set-toy">
+<h2 id="heading-executable-example-an-instruction-cache-working-set-toy">Executable Example: An Instruction Cache Working-Set Toy</h2>
+<pre><code class="language-python">from collections import OrderedDict
+
+def miss_count(fetch_pcs, line_size=16, capacity_lines=2):
+    # Fully associative LRU teaching cache: line identity only.
+    lines = OrderedDict()
+    misses = 0
+    for pc in fetch_pcs:
+        line = pc // line_size
+        if line not in lines:
+            misses += 1
+            if len(lines) == capacity_lines:
+                lines.popitem(last=False)
+        else:
+            lines.pop(line)
+        lines[line] = None
+    return misses
+
+loop_pcs = [0, 4, 8, 12] * 5
+spread_pcs = [0, 16, 32, 0, 16, 32] * 3
+assert miss_count(loop_pcs) == 1
+assert miss_count(spread_pcs) == len(spread_pcs)
+print(&#x27;hot loop:&#x27;, miss_count(loop_pcs), &#x27;miss; spread:&#x27;,
+      miss_count(spread_pcs), &#x27;misses&#x27;)</code></pre><p>No real cache model is this simple: a line may be prefetched, accesses can overlap, associativity is not necessarily fully associative, and virtual translation adds another dimension. Nevertheless, the example shows why the instruction footprint of a program affects effective front-end bandwidth.</p>
+</section>
+<section id="instruction-density-and-effective-fetch-capacity" aria-labelledby="heading-instruction-density-and-effective-fetch-capacity">
+<h2 id="heading-instruction-density-and-effective-fetch-capacity">Instruction Density and Effective Fetch Capacity</h2>
+<p>An instruction set with shorter average encodings can fit more instructions into an equal number of fetched bytes, though it does not follow that every instruction runs faster. Encoded density influences instruction-cache footprint, fetch traffic, and boundary complexity. A compressed instruction extension can reduce code size, but the decoder must discover whether each instruction is compressed and expand or directly interpret it as defined by the ISA.</p>
+<p>Consider an eight-byte fetch group. It may contain two four-byte instructions, four two-byte instructions, or another legal mixture. In a mixed-width program, the front end must count <em>completed instructions</em>, not merely words or halfwords, and correctly carry partial encodings to the next group. A branch partway through a group can limit the number of useful instructions delivered on the predicted path.</p>
+<p>Compression can change where an instruction falls relative to cache lines and pages. It may also change branch offsets and code layout. Results are workload-dependent: better code density can reduce instruction misses, yet additional decompression logic and changes in alignment can offset part of that benefit. Any performance claim should specify the implementation, instruction mix, and measurement conditions.</p>
+</section>
+<section id="executable-example-byte-supply-versus-decode-width" aria-labelledby="heading-executable-example-byte-supply-versus-decode-width">
+<h2 id="heading-executable-example-byte-supply-versus-decode-width">Executable Example: Byte Supply Versus Decode Width</h2>
+<pre><code class="language-python">def theoretical_delivery(fetch_bytes, mean_instruction_bytes,
+                         decode_slots, output_capacity=None):
+    if mean_instruction_bytes &lt;= 0 or fetch_bytes &lt;= 0 or decode_slots &lt;= 0:
+        raise ValueError(&#x27;positive capacities required&#x27;)
+    by_bytes = fetch_bytes / mean_instruction_bytes
+    caps = [by_bytes, float(decode_slots)]
+    if output_capacity is not None:
+        caps.append(float(output_capacity))
+    return min(caps)
+
+assert theoretical_delivery(16, 4, 4) == 4
+assert theoretical_delivery(16, 2, 6) == 6
+assert theoretical_delivery(8, 4, 6) == 2
+assert theoretical_delivery(16, 4, 6, output_capacity=2) == 2
+print(&#x27;Supply and decode impose separate upper bounds&#x27;)</code></pre><p>The estimator uses an average encoding length and assumes a steady state; it is an upper-bound illustration rather than a measured IPC prediction. Real fetch/decode rates are further limited by alignment, branch redirects, queue occupancy, cache misses, instruction complexity, and back-end stalls.</p>
+</section>
+<section id="prefetch-buffers-fetch-queues-and-backpressure" aria-labelledby="heading-prefetch-buffers-fetch-queues-and-backpressure">
+<h2 id="heading-prefetch-buffers-fetch-queues-and-backpressure">Prefetch Buffers, Fetch Queues, and Backpressure</h2>
+<p>A prefetch buffer or fetch queue decouples an upstream cache or memory interface from downstream decode. If the cache delivers an instruction group while the decoder is temporarily busy, the bytes may remain queued rather than being discarded. During a brief fetch miss, the decoder can continue consuming previously buffered instructions. Queues therefore smooth intermittent supply and demand, although they cannot overcome a sustained imbalance.</p>
+<p>Each queue entry requires clear validity and ordering rules. For variable-length instructions, the queue may store raw bytes and associated starting address or may store predecoded instruction boundaries. Additional tags can record predicted control-flow path, exception status, privilege context, or sequence identity. A redirect must invalidate entries younger than the redirecting instruction, even if they have already crossed a fetch-cache boundary.</p>
+<p><strong>Backpressure</strong> prevents overflow when downstream resources are full. If decode cannot accept another item, the fetch queue must retain it without duplication; if the fetch queue is full, upstream fetching must stall or use a defined buffering mechanism. Loss, reordering, replay without invalidation, and stale fault tags can cause correctness failures that ordinary arithmetic instruction tests do not expose.</p>
+</section>
+<section id="instruction-fetch-faults-and-error-attribution" aria-labelledby="heading-instruction-fetch-faults-and-error-attribution">
+<h2 id="heading-instruction-fetch-faults-and-error-attribution">Instruction Fetch Faults and Error Attribution</h2>
+<p>Fetch can fail because the next instruction address is misaligned under the active ISA, the address lacks a valid translation, execute permission is denied, a memory or bus access fails, or an error-detection mechanism rejects returned bits. These failures have distinct architectural classifications, and a processor may represent them internally with tags that accompany the affected instruction. Not every bus transaction problem must immediately stop the machine; the relevant issue is whether the failing instruction would become architecturally observable.</p>
+<p>A wrong-path speculative fetch might encounter an inaccessible address and later be squashed because an older branch resolves differently. A correct processor must not expose that discarded path as if the application executed it. On the correct path, however, a fetch fault must be reported using the architecture-defined exception and PC rules. Later stages often carry the faulting PC and cause until the instruction reaches the appropriate precise reporting point.</p>
+<p>An instruction that straddles a page boundary is particularly instructive. Fetching its first portion successfully does not justify manufacturing the remaining bits. If the second portion faults, the implementation must preserve enough information to report the event correctly and must not decode unrelated bytes as a replacement. Detailed trap encoding and privilege transition behavior belong in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a>.</p>
+</section>
+<section id="fixed-mixed-and-variable-instruction-encodings" aria-labelledby="heading-fixed-mixed-and-variable-instruction-encodings">
+<h2 id="heading-fixed-mixed-and-variable-instruction-encodings">Fixed, Mixed, and Variable Instruction Encodings</h2>
+<table><thead><tr><th scope="col">ISA / configuration</th><th scope="col">Typical length convention</th><th scope="col">Front-end implication</th><th scope="col">Important caution</th></tr></thead><tbody><tr><td>AArch64 A64</td><td>32-bit instructions</td><td>Regular boundaries and field extraction</td><td>Alignment and exception behavior still matter</td></tr><tr><td>Base RISC-V RV32I / RV64I</td><td>32-bit base instructions, IALIGN=32</td><td>Four-byte aligned instruction starts</td><td>Other supported extensions can change length rules</td></tr><tr><td>RISC-V with C extension</td><td>16- and 32-bit instruction forms; IALIGN=16</td><td>Halfword boundaries and mixed-width assembly</td><td>Length classification must respect full supported ISA</td></tr><tr><td>x86-64</td><td>Variable-length encodings, at most 15 bytes</td><td>Prefix processing, length decoding and boundary finding</td><td>Exact opcode, prefix, ModR/M and mode rules are complex</td></tr></tbody></table><p>The table compares encoding structure, not inherent speed. RISC-V supports a broader variable-length encoding framework, and an implementation must reject unsupported lengths and instructions. For AArch64, the A64 instruction set uses fixed 32-bit encoding; this does not imply every Arm execution state historically used the same instruction size.</p>
+</section>
+<section id="risc-v-instruction-length-classification" aria-labelledby="heading-risc-v-instruction-length-classification">
+<h2 id="heading-risc-v-instruction-length-classification">RISC-V Instruction-Length Classification</h2>
+<p>The base RISC-V integer ISA uses 32-bit instructions. With a compressed instruction extension, the stream may contain 16-bit encodings as well as 32-bit encodings and aligned instruction addresses can be two-byte boundaries. The standard encoding convention uses the lowest two bits of the first 16-bit parcel to distinguish ordinary 16-bit encodings from 32-bit-or-longer instruction encodings. In the common RV32/64 I+C subset, a halfword whose low two bits are not <code>11</code> starts a 16-bit instruction; otherwise the next 16 bits must be considered for a 32-bit instruction candidate.</p>
+<p><strong>Important qualification:</strong> a decoder for a general RISC-V implementation must also understand defined longer-length encodings when supported, and reject reserved or unsupported patterns. The classifier below intentionally accepts only a teaching subset of 16- and 32-bit lengths; it is not a full RISC-V length decoder or an ISA conformance test. It must not claim that every pattern with the low two bits equal to 11 is necessarily a valid 32-bit instruction.</p>
+<p>The instruction-start alignment parameter <code>IALIGN</code> is 32 bits for the base ISA and becomes 16 bits with compressed-capable configurations. A taken jump to a prohibited alignment can cause an instruction-address-misaligned exception; a branch that is not taken need not generate the same event solely because its unused target would have been misaligned.</p>
+</section>
+<section id="executable-example-risc-v-16-32-bit-length-teaching-model" aria-labelledby="heading-executable-example-risc-v-16-32-bit-length-teaching-model">
+<h2 id="heading-executable-example-risc-v-16-32-bit-length-teaching-model">Executable Example: RISC-V 16/32-Bit Length Teaching Model</h2>
+<pre><code class="language-python">def limited_riscv_length(first_halfword, compressed_enabled):
+    if first_halfword &amp; 0b11 != 0b11:
+        if not compressed_enabled:
+            raise ValueError(&#x27;16-bit instruction unavailable without C&#x27;)
+        return 2
+    # The lowest five bits 11111 indicate longer/reserved length forms;
+    # this miniature model deliberately refuses them.
+    if first_halfword &amp; 0b11111 == 0b11111:
+        raise ValueError(&#x27;unsupported longer/reserved encoding&#x27;)
+    return 4
+
+assert limited_riscv_length(0x0001, True) == 2
+assert limited_riscv_length(0x0093, True) == 4
+assert limited_riscv_length(0x0093, False) == 4
+for sample in (0x0001, 0x001F):
+    try:
+        limited_riscv_length(sample, False)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(&#x27;unsupported encoding was accepted&#x27;)
+print(&#x27;Common C/32-bit lengths classified, unsupported forms rejected&#x27;)</code></pre><p>Instruction length and instruction legality are separate decisions: an encoding can have a recognizable length while representing a reserved or unsupported operation. Production implementations require the complete applicable ISA length and decode rules, including exact exception behavior.</p>
+</section>
+<section id="executable-example-mixed-length-sequential-pcs" aria-labelledby="heading-executable-example-mixed-length-sequential-pcs">
+<h2 id="heading-executable-example-mixed-length-sequential-pcs">Executable Example: Mixed-Length Sequential PCs</h2>
+<pre><code class="language-python">def sequential_pcs(start, lengths):
+    pc = start
+    result = []
+    for length in lengths:
+        if length not in (2, 4):
+            raise ValueError(&#x27;toy model supports 2- or 4-byte instructions&#x27;)
+        if pc % 2:
+            raise ValueError(&#x27;misaligned instruction address&#x27;)
+        result.append((pc, length))
+        pc += length
+    return result, pc
+
+schedule, final_pc = sequential_pcs(0x1000, [2, 4, 2, 2, 4])
+assert schedule == [(0x1000, 2), (0x1002, 4),
+                    (0x1006, 2), (0x1008, 2), (0x100A, 4)]
+assert final_pc == 0x100E
+print(schedule)</code></pre><p>A four-byte instruction may legally start at a two-byte boundary when IALIGN=16; it can then span aligned four-byte fetch chunks. Validity still depends on its actual encoded bits, platform feature support, and permitted executable memory.</p>
+</section>
+<section id="x86-64-instruction-boundaries-and-prefix-processing" aria-labelledby="heading-x86-64-instruction-boundaries-and-prefix-processing">
+<h2 id="heading-x86-64-instruction-boundaries-and-prefix-processing">x86-64 Instruction Boundaries and Prefix Processing</h2>
+<p>x86-64 encodings are variable-length and may include instruction prefixes, opcode bytes, an addressing-form byte (ModR/M), an optional scale-index-base (SIB) byte, displacement, and immediate fields. Their presence depends on the instruction and mode. Front-end boundary detection can be more involved than slicing the instruction stream into fixed four-byte words, particularly when one instruction ends near a cache-line boundary and another begins in the same group.</p>
+<p>The architectural instruction-length limit in ordinary Intel 64 and IA-32 encodings is fifteen bytes. A robust decoder must enforce it and apply the documented prefix rules; extra prefixes are not simply ignored without consequences. A variable-length front end may use predecode metadata or specialized length decoders to identify instruction starts before full semantic decode. Implementation details differ substantially across processor generations.</p>
+<p><strong>Do not equate boundary detection with semantic validity.</strong> A sequence can have a discoverable length but contain an illegal opcode, an unsupported extension, or invalid prefix usage. Conversely, a byte pattern that resembles a simple opcode may be data or a field of another instruction if decoding begins at the wrong location. Correct disassembly requires known code boundaries and mode context, not a visual scan for mnemonic-looking bytes.</p>
+</section>
+<section id="aarch64-instruction-alignment-and-fixed-fields" aria-labelledby="heading-aarch64-instruction-alignment-and-fixed-fields">
+<h2 id="heading-aarch64-instruction-alignment-and-fixed-fields">AArch64 Instruction Alignment and Fixed Fields</h2>
+<p>In AArch64 execution using the A64 instruction set, instructions are fixed-width 32-bit words with defined field positions and four-byte instruction alignment. This regularity simplifies instruction boundary detection and parallel field extraction. It does not remove the need for instruction translation, execute permission checks, correct endianness handling, code-memory synchronization, or branch redirection.</p>
+<p>A64 decoders classify instructions from combinations of opcode fields rather than from one universal contiguous opcode field that identifies every instruction family. Register specifiers, immediates, condition encodings, and operation variants occupy different positions in different instruction classes. A decoder should therefore implement the proper class-specific encoding tables, not merely use the fact that all instructions are four bytes long.</p>
+<p>An important taxonomy distinction is that “Arm” encompasses different ISA states and instruction encodings across products and historical generations. The current comparison is specifically about AArch64 A64, while older A32/T32 and some microcontroller configurations have different length and alignment rules. Broad statements about all Arm-family hardware must not silently substitute A64 behavior.</p>
+</section>
+<section id="opcode-classification-operand-fields-and-decode-products" aria-labelledby="heading-opcode-classification-operand-fields-and-decode-products">
+<h2 id="heading-opcode-classification-operand-fields-and-decode-products">Opcode Classification, Operand Fields, and Decode Products</h2>
+<p>After boundaries are identified, semantic decoding determines what each legal instruction means. Typical outputs include an operation class, architectural source/destination register indices, immediate operands, memory access width, control-flow classification, instruction length, and extension or privilege constraints. Later pipeline stages may translate this into internal control signals or micro-operations; the exact representation is an implementation choice.</p>
+<p>For example, a simple register-immediate addition decoder needs to identify its opcode, funct fields, source register, destination register, and a properly sign-extended immediate. It must also confirm that the encoding is legal in the configured ISA. A branch decoder needs its source indices and reconstructed signed PC-relative offset; other instructions need different format-specific assembly rules. Reusing one bit-extraction rule for all classes is a common source of incorrect decoders.</p>
+<p>The decode record should preserve provenance: original PC, raw encoding, decoded length, valid/illegal status, and any fetch exception. If the front end speculates, a younger record also needs a way to be invalidated. These attributes make later fault reporting, instruction retirement, and verification possible without pretending the decoder is the whole processor.</p>
+</section>
+<section id="risc-v-addi-field-extraction-and-sign-extension" aria-labelledby="heading-risc-v-addi-field-extraction-and-sign-extension">
+<h2 id="heading-risc-v-addi-field-extraction-and-sign-extension">RISC-V ADDI: Field Extraction and Sign Extension</h2>
+<p>RISC-V base integer <code>ADDI</code> is an I-type instruction. The low seven opcode bits identify the broad integer-immediate class; bits 14–12 provide the function field, bits 19–15 select the first source register, bits 11–7 select the destination, and bits 31–20 contain the signed 12-bit immediate. In RV32I and RV64I, the immediate is sign-extended to the machine width for the arithmetic operation.</p>
+<p>For the encoding <code>0xFFF10093</code>, the operation is <code>ADDI x1, x2, -1</code>. The source register number and destination number are architectural indices; they do not say where the operand is physically stored in a renamed implementation. The calculation may later be performed by an ALU, but this decoder’s responsibility is to produce a correct instruction description.</p>
+<p>It is essential to validate both opcode and function class before calling an encoding ADDI. A general I-type opcode may identify other operations; the same immediate field positions do not make every instruction an add-immediate. The example below intentionally recognizes exactly one instruction family.</p>
+</section>
+<section id="executable-example-decode-a-risc-v-addi-word" aria-labelledby="heading-executable-example-decode-a-risc-v-addi-word">
+<h2 id="heading-executable-example-decode-a-risc-v-addi-word">Executable Example: Decode a RISC-V ADDI Word</h2>
+<pre><code class="language-python">def signed(value, width):
+    sign = 1 &lt;&lt; (width - 1)
+    return (value ^ sign) - sign
+
+def decode_addi(word):
+    opcode = word &amp; 0x7F
+    funct3 = (word &gt;&gt; 12) &amp; 0x7
+    if opcode != 0x13 or funct3 != 0:
+        raise ValueError(&#x27;not an ADDI encoding&#x27;)
+    return {&#x27;op&#x27;: &#x27;ADDI&#x27;,
+            &#x27;rd&#x27;: (word &gt;&gt; 7) &amp; 31,
+            &#x27;rs1&#x27;: (word &gt;&gt; 15) &amp; 31,
+            &#x27;imm&#x27;: signed((word &gt;&gt; 20) &amp; 0xFFF, 12)}
+
+assert decode_addi(0xFFF10093) == {
+    &#x27;op&#x27;: &#x27;ADDI&#x27;, &#x27;rd&#x27;: 1, &#x27;rs1&#x27;: 2, &#x27;imm&#x27;: -1}
+assert decode_addi(0x00718213) == {
+    &#x27;op&#x27;: &#x27;ADDI&#x27;, &#x27;rd&#x27;: 4, &#x27;rs1&#x27;: 3, &#x27;imm&#x27;: 7}
+try:
+    decode_addi(0x00000063)  # branch opcode
+except ValueError:
+    pass
+else:
+    raise AssertionError(&#x27;branch accepted as ADDI&#x27;)
+print(&#x27;ADDI field extraction and sign extension verified&#x27;)</code></pre><p>This is an actual base-instruction field layout, but it is not a full RISC-V instruction decoder. A compliant processor also checks further instruction classes and system-specific execution constraints.</p>
+</section>
+<section id="branch-immediate-reconstruction-noncontiguous-bits" aria-labelledby="heading-branch-immediate-reconstruction-noncontiguous-bits">
+<h2 id="heading-branch-immediate-reconstruction-noncontiguous-bits">Branch Immediate Reconstruction: Noncontiguous Bits</h2>
+<p>RISC-V B-type branches encode their signed branch offset in scattered bit positions instead of one contiguous immediate field. The reconstructed byte offset takes imm[12] from bit 31; imm[10:5] from bits 30–25; imm[4:1] from bits 11–8; and imm[11] from bit 7. The low offset bit is zero. The sign bit must be extended before the offset is added to the address of the branch instruction itself.</p>
+<p>This encoding illustrates why decoding cannot stop at identifying opcode and register indices. The correct branch-target formula requires assembling an offset from the defined fields, respecting sign, and using the original branch PC. Adding the offset to the already incremented fall-through PC would be incorrect for the RISC-V branch class. Prediction hardware may supply a target early, but the eventual architectural calculation must use the ISA rule.</p>
+<p>The branch’s comparator semantics depend on <code>funct3</code> and operand values. Decoder outputs typically classify whether the operation is BEQ, BNE, BLT, BGE, BLTU, or BGEU, while downstream execution decides whether the condition holds. In a given configuration, unsupported or reserved encodings must be rejected rather than being guessed into a nearby class.</p>
+</section>
+<section id="executable-example-decode-a-risc-v-b-type-offset" aria-labelledby="heading-executable-example-decode-a-risc-v-b-type-offset">
+<h2 id="heading-executable-example-decode-a-risc-v-b-type-offset">Executable Example: Decode a RISC-V B-Type Offset</h2>
+<pre><code class="language-python">def sign_extend(value, width):
+    return (value ^ (1 &lt;&lt; (width - 1))) - (1 &lt;&lt; (width - 1))
+
+def branch_offset(inst):
+    imm = (((inst &gt;&gt; 31) &amp; 1) &lt;&lt; 12)
+    imm |= (((inst &gt;&gt; 7) &amp; 1) &lt;&lt; 11)
+    imm |= (((inst &gt;&gt; 25) &amp; 0x3F) &lt;&lt; 5)
+    imm |= (((inst &gt;&gt; 8) &amp; 0xF) &lt;&lt; 1)
+    return sign_extend(imm, 13)
+
+def beq_word(rs1, rs2, offset):
+    assert offset % 2 == 0 and -(1 &lt;&lt; 12) &lt;= offset &lt; (1 &lt;&lt; 12)
+    bits = offset &amp; 0x1FFF
+    return ((((bits &gt;&gt; 12) &amp; 1) &lt;&lt; 31) |
+            (((bits &gt;&gt; 5) &amp; 63) &lt;&lt; 25) |
+            ((rs2 &amp; 31) &lt;&lt; 20) | ((rs1 &amp; 31) &lt;&lt; 15) |
+            (((bits &gt;&gt; 1) &amp; 15) &lt;&lt; 8) |
+            (((bits &gt;&gt; 11) &amp; 1) &lt;&lt; 7) | 0x63)
+
+for offset in (-4096, -18, -2, 0, 2, 18, 4094):
+    word = beq_word(1, 2, offset)
+    assert (word &amp; 0x7F) == 0x63
+    assert branch_offset(word) == offset
+assert 0x1000 + branch_offset(beq_word(1, 2, -18)) == 0x0FEE
+print(&#x27;B-type immediate reconstruction tested at boundary values&#x27;)</code></pre><p>The helper assembles BEQ encodings for instructional testing and omits some real-world legality and alignment conditions. The signed 13-bit branch offset has a range of −4096 through +4094 in two-byte steps; available legal branch-target alignment also depends on the ISA configuration.</p>
+</section>
+<section id="decode-records-and-register-dependency-metadata" aria-labelledby="heading-decode-records-and-register-dependency-metadata">
+<h2 id="heading-decode-records-and-register-dependency-metadata">Decode Records and Register Dependency Metadata</h2>
+<p>A decoded instruction often becomes a structured internal record containing operation type, source register identifiers, destination register identifier, immediate value, memory attributes, and control-flow classification. The record is not necessarily an execution command ready to run immediately; it can be queued until data dependencies and resources are satisfied. The decision to create physical register mappings, to allocate reorder-buffer entries, or to issue work belongs to later stages in many cores.</p>
+<p>An in-order implementation can read architectural registers during decode and forward operands to execution. A more complex implementation may decode register <em>names</em> first and later rename those names into physical dependencies. In either design, the decoder must not mislabel which source registers an instruction reads or which destination it writes. That error can create silent data corruption even if the ALU produces a mathematically correct result for the operands it receives.</p>
+<p>Unneeded source fields should not be treated as real dependencies. For example, bits that occupy an <code>rs2</code>-like position in one format may be immediate bits in another. If a dependency checker blindly assumes every instruction reads two sources, it may introduce needless stalls or, worse, read the wrong physical value. Decode is therefore a central interface between the ISA encoding and the core’s dataflow machinery.</p>
+</section>
+<section id="executable-example-minimal-decode-records" aria-labelledby="heading-executable-example-minimal-decode-records">
+<h2 id="heading-executable-example-minimal-decode-records">Executable Example: Minimal Decode Records</h2>
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Decoded:
+    op: str
+    pc: int
+    length: int
+    rd: int | None
+    sources: tuple[int, ...]
+    immediate: int | None
+
+def simple_addi(word, pc):
+    if (word &amp; 0x7F) != 0x13 or ((word &gt;&gt; 12) &amp; 7) != 0:
+        raise ValueError(&#x27;unsupported instruction&#x27;)
+    imm = (word &gt;&gt; 20) &amp; 0xFFF
+    if imm &amp; 0x800:
+        imm -= 0x1000
+    return Decoded(&#x27;ADDI&#x27;, pc, 4, (word &gt;&gt; 7) &amp; 31,
+                   ((word &gt;&gt; 15) &amp; 31,), imm)
+
+record = simple_addi(0xFFF10093, 0x4000)
+assert record == Decoded(&#x27;ADDI&#x27;, 0x4000, 4, 1, (2,), -1)
+assert len(record.sources) == 1
+print(record)</code></pre><p>In this model, <code>None</code> denotes an absent destination or immediate. Real decoders additionally preserve legality, memory order, fault, prediction, privilege, and pipeline-control metadata. The key property is that the record corresponds to one specific encoded instruction at one specific PC.</p>
+</section>
+<section id="illegal-encodings-unsupported-extensions-and-privilege" aria-labelledby="heading-illegal-encodings-unsupported-extensions-and-privilege">
+<h2 id="heading-illegal-encodings-unsupported-extensions-and-privilege">Illegal Encodings, Unsupported Extensions, and Privilege</h2>
+<p>Not every possible instruction bit pattern is legal. ISA documents define reserved encodings, feature-dependent operation families, and privilege restrictions. The decoder must classify an instruction under the <em>current execution mode and enabled ISA configuration</em>. An instruction may decode to a known mnemonic in a reference manual yet still be unavailable on a processor lacking the relevant extension or illegal in the current privilege level.</p>
+<p>The implementation may mark such a record as an illegal instruction or another architecturally defined exception and carry that status to the precise handling point. No operand operation should silently run under an approximate interpretation. Particularly dangerous is a decoder that matches only a broad opcode and ignores required function bits, accidentally accepting a reserved encoding as a supported operation.</p>
+<p>The front end should separate three questions: (1) do the bytes constitute a complete instruction of recognized length; (2) is the encoding legal for the configured ISA and current execution context; and (3) are its attempted effects permitted when actually executed? Certain access checks may be performed later than initial byte decoding, and some system instructions have context-sensitive effects. The result must preserve the architecture’s defined observable behavior.</p>
+</section>
+<section id="branch-prediction-and-the-fetch-address-stream" aria-labelledby="heading-branch-prediction-and-the-fetch-address-stream">
+<h2 id="heading-branch-prediction-and-the-fetch-address-stream">Branch Prediction and the Fetch Address Stream</h2>
+<p>Branch prediction attempts to keep the instruction supply moving before a conditional branch’s outcome is known. A direction predictor estimates taken versus not taken, while a branch-target buffer may remember target addresses; return prediction mechanisms can use a return-address stack or another model of call and return behavior. These structures help choose the next fetch address. They are not the ultimate authority on which instructions belong to the program’s committed path.</p>
+<p>A prediction can be perfectly accurate for direction but still lead to incorrect fetching if its target is wrong, stale, or associated with the wrong control-flow instruction. Conversely, a correct target with a wrong direction prediction wastes fetch bandwidth. When a branch eventually resolves, its computed direction and target must be compared to the prediction. Any younger instructions on an incorrect path are invalidated, with a redirect to the correct address.</p>
+<p>Branch predictors can be shared or partitioned among hardware threads, and their data structures can have aliasing: distinct branch PCs map to the same prediction entry. Aliasing is an implementation-performance issue and, in some settings, a security consideration. Detailed predictor organizations and recovery schemes belong to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a>.</p>
+</section>
+<section id="worked-scenario-a-branch-target-appears-too-early" aria-labelledby="heading-worked-scenario-a-branch-target-appears-too-early">
+<h2 id="heading-worked-scenario-a-branch-target-appears-too-early">Worked Scenario: A Branch Target Appears Too Early</h2>
+<table><thead><tr><th scope="col">Event</th><th scope="col">Prediction state</th><th scope="col">Required front-end response</th></tr></thead><tbody><tr><td>Fetch a conditional branch at 0x2000</td><td>Target buffer predicts 0x2200</td><td>Queue branch with original PC and prediction tag</td></tr><tr><td>Fetch target-path instructions</td><td>Direction predicted taken</td><td>Keep younger records speculative</td></tr><tr><td>Execute branch operands</td><td>Actual condition false</td><td>Determine correct fall-through 0x2004</td></tr><tr><td>Detect mismatch</td><td>Prediction wrong</td><td>Cancel younger records and redirect fetch</td></tr><tr><td>Resume fetch</td><td>Correct path 0x2004</td><td>Deliver valid instructions from fall-through</td></tr><tr><td>Retire branch</td><td>Branch itself remains valid</td><td>Do not retire any canceled target-path work</td></tr></tbody></table><p>Predictor update timing and the precise number of lost cycles vary by core. The behavioral requirements do not: instructions on the abandoned path cannot commit architectural results, while the redirecting branch retains its identity and is handled according to the ISA.</p>
+</section>
+<section id="executable-example-a-two-bit-saturating-direction-predictor" aria-labelledby="heading-executable-example-a-two-bit-saturating-direction-predictor">
+<h2 id="heading-executable-example-a-two-bit-saturating-direction-predictor">Executable Example: A Two-Bit Saturating Direction Predictor</h2>
+<pre><code class="language-python">class TwoBitPredictor:
+    def __init__(self):
+        self.counters = {}
+    def predict(self, pc):
+        return self.counters.get(pc, 1) &gt;= 2
+    def observe(self, pc, taken):
+        old = self.counters.get(pc, 1)
+        self.counters[pc] = min(3, old + 1) if taken else max(0, old - 1)
+
+model = TwoBitPredictor()
+assert model.predict(0x1000) is False
+for outcome in (True, True, True):
+    model.observe(0x1000, outcome)
+assert model.counters[0x1000] == 3
+assert model.predict(0x1000) is True
+model.observe(0x1000, False)
+assert model.predict(0x1000) is True
+model.observe(0x1000, False)
+assert model.predict(0x1000) is False
+print(&#x27;Hysteresis avoids flipping on a single contrary outcome&#x27;)</code></pre><p>The model predicts direction only. It does not predict targets, handle speculative history, use global correlations, or model rollback. It demonstrates the idea of <em>hysteresis</em>: a strongly learned branch pattern may require multiple contrary observations before the direction estimate reverses.</p>
+</section>
+<section id="call-return-and-indirect-branch-prediction" aria-labelledby="heading-call-return-and-indirect-branch-prediction">
+<h2 id="heading-call-return-and-indirect-branch-prediction">Call, Return, and Indirect Branch Prediction</h2>
+<p>Direct unconditional branches often have targets derivable from their instruction encoding and PC. Conditional branches additionally need an outcome estimate. Indirect branches and returns can be harder because the target depends on register or stack state that is not necessarily available during fetch. A branch-target buffer or indirect-target predictor supplies a provisional destination before downstream execution validates it.</p>
+<p>A <strong>return-address stack</strong> is a common performance mechanism that predicts where a function return will go by tracking call and return patterns. It approximates a software call stack but is not an architectural substitute for it: unusual control flow, exceptions, unbalanced returns, or context transitions can upset predictions. The processor must recover from a wrong prediction, rather than assume the predictor’s stack is always correct.</p>
+<p>Indirect branches are important for virtual method dispatch, function pointers, switch tables, interpreters, and callbacks. Their target predictability is workload-dependent. An application’s branches should be profiled before attributing a throughput problem to instruction-cache misses or decoder width; frequent indirect mispredictions can cause front-end flushes even when every required instruction is already cached.</p>
+</section>
+<section id="instruction-redirects-flushes-and-replay" aria-labelledby="heading-instruction-redirects-flushes-and-replay">
+<h2 id="heading-instruction-redirects-flushes-and-replay">Instruction Redirects, Flushes, and Replay</h2>
+<p>The front end must respond not only to ordinary branches but also to exceptions, interrupts, serialization operations, address-translation changes, and selected pipeline recovery events. Some events redirect to an architecturally specified target; others require replay of an instruction or refetch from a known address. The implementation chooses queue flush, tag cancellation, checkpoint recovery, or other internal techniques to satisfy the defined architectural behavior.</p>
+<p>Cancellation needs to reach every outstanding younger operation, including decode-buffer entries that have not been dispatched and fetch responses that arrive after the redirect. A common failure mode is allowing a late return from a discarded fetch request to enter a newly restarted queue as though it belongs to the correct path. Sequence identifiers or epochs can prevent that confusion: data returned under an old path tag is rejected after the redirect.</p>
+<p>Replay is not equivalent to re-executing an instruction with architectural side effects twice. The recovery boundary must guarantee that repeated speculative work does not produce duplicate committed stores, duplicated exceptions, or externally visible device actions. Detailed rollback and retirement rules belong to neighboring CPU specialist articles; the front end’s responsibility is correct instruction identity and orderly re-supply.</p>
+</section>
+<section id="executable-example-fetch-epochs-prevent-stale-responses" aria-labelledby="heading-executable-example-fetch-epochs-prevent-stale-responses">
+<h2 id="heading-executable-example-fetch-epochs-prevent-stale-responses">Executable Example: Fetch Epochs Prevent Stale Responses</h2>
+<pre><code class="language-python">class FetchControl:
+    def __init__(self):
+        self.epoch = 0
+        self.accepted = []
+    def request(self, pc):
+        return (self.epoch, pc)
+    def redirect(self):
+        self.epoch += 1
+    def response(self, token, bytes_):
+        issued_epoch, pc = token
+        if issued_epoch != self.epoch:
+            return False
+        self.accepted.append((pc, bytes_))
+        return True
+
+f = FetchControl()
+old = f.request(0x1000)
+f.redirect()
+new = f.request(0x2000)
+assert not f.response(old, b&#x27;OLD&#x27;)
+assert f.response(new, b&#x27;NEW&#x27;)
+assert f.accepted == [(0x2000, b&#x27;NEW&#x27;)]
+print(&#x27;Late old-path response rejected&#x27;)</code></pre><p>Epoch tagging is one possible design technique. Real hardware may need separate sequence numbers, reorder checkpoints, request IDs, and per-resource response handling; simply incrementing one counter does not implement all aspects of a CPU redirect.</p>
+</section>
+<section id="decoding-several-instructions-per-cycle" aria-labelledby="heading-decoding-several-instructions-per-cycle">
+<h2 id="heading-decoding-several-instructions-per-cycle">Decoding Several Instructions per Cycle</h2>
+<p>A superscalar front end attempts to deliver multiple instructions per cycle. It needs sufficient fetch bytes, boundary information, parallel decoding resources, and downstream queue capacity. If instruction lengths vary, the core must find several instruction starts in the same fetch group, and each decoder may support only certain complexity classes. A “four-wide decoder” specification generally does not mean all possible groups of four instructions can be processed without constraints.</p>
+<p>Parallel decoding must preserve the program order of the decoded instruction records even if later execution is out of order. Branches may terminate or redirect a group, and a partial instruction at the end of a fetch group may need more bytes before it can enter a decode lane. Some front ends partition decode lanes into simple and complex paths, use a micro-op cache, or limit how many complicated macroinstructions can be decoded in one cycle.</p>
+<p>The appropriate performance metric is the sustained instruction or micro-operation delivery rate for a representative instruction mix, not a theoretical maximum observed only on an ideal stream. Internal micro-op counts can exceed architectural instruction counts. If comparing processors, explicitly state whether throughput refers to fetched bytes, decoded macroinstructions, micro-operations, dispatched operations, or retired instructions.</p>
+</section>
+<section id="decoder-width-micro-operation-generation-and-fusion" aria-labelledby="heading-decoder-width-micro-operation-generation-and-fusion">
+<h2 id="heading-decoder-width-micro-operation-generation-and-fusion">Decoder Width, Micro-Operation Generation, and Fusion</h2>
+<p>In some processors an architectural instruction translates into one internal micro-operation; in others it can produce several. Some front ends <em>fuse</em> certain instruction patterns into a combined internal unit of work under specific implementation rules. This complicates simple calculations that equate one decoder slot with one issued operation. For example, two adjacent architectural operations may be recognized as a useful pair without changing the architectural result that software observes.</p>
+<p>Architectural instruction semantics remain defined by the ISA even when a particular microarchitecture performs early fusion or uses a special internal operation format. A debugger and disassembler should still report the original instruction sequence, not invent a replacement machine-code instruction simply because the hardware fused work internally. The trace must retain enough source mapping to report exceptions and precise retirement correctly.</p>
+<p>Fusion and expansion are not guaranteed for all instruction arrangements or all microarchitectural generations. Code-layout, operand selection, branch type, and implementation heuristics may affect whether a pattern qualifies. An engineering performance review should consult the relevant processor documentation and measure actual event counts before claiming a given compiler pattern will always fuse.</p>
+</section>
+<section id="micro-operation-caches-and-alternate-supply-paths" aria-labelledby="heading-micro-operation-caches-and-alternate-supply-paths">
+<h2 id="heading-micro-operation-caches-and-alternate-supply-paths">Micro-Operation Caches and Alternate Supply Paths</h2>
+<p>Some high-performance processors cache already-decoded internal operations, reducing repeated work by the full instruction-length decoder on frequently executed code. Such an operation cache is distinct from an instruction cache of encoded bytes, although both exploit locality. Its presence can change the front-end bottleneck: a loop may run quickly from the decoded supply path but slow down when its operations do not fit or when a control-flow transition misses the operation cache.</p>
+<p>A decoded-operation cache needs to respect program identity and instruction changes. It cannot return stale operations after executable code changes unless the ISA and system software have satisfied the appropriate synchronization requirements. Depending on the implementation, cache tags and invalidation rules may incorporate address translation, execution context, or other metadata. These are vendor-specific details, not universal CPU requirements.</p>
+<p>A cache hit is not equivalent to an executable instruction being free of instruction-side stalls. A downstream queue can fill, an operation can be blocked by resource limits, or a branch can redirect the supply stream. Performance analysis should distinguish <em>decoded-operation hits</em> from <em>retired instruction throughput</em> and should preserve the architectural-to-internal-operation mapping.</p>
+</section>
+<section id="microcode-and-complex-decode-paths" aria-labelledby="heading-microcode-and-complex-decode-paths">
+<h2 id="heading-microcode-and-complex-decode-paths">Microcode and Complex Decode Paths</h2>
+<p>Some instruction-set implementations use microcode or sequenced internal operations for selected complex instructions, exceptional operations, or implementation management tasks. A decoder can identify an instruction whose execution requires a microcode assist or internal control sequence. In such designs, a single architectural instruction may temporarily consume special front-end or execution resources that reduce the throughput of nearby instructions.</p>
+<p>The term <em>microcode</em> should not be used loosely for every internal operation. Many modern processors decode common instructions into micro-operations without using an accessible microcode program for every instruction. The exact interface between the decoder, microcode sequencer, and execution resources is architecture-specific and can vary across generations.</p>
+<p>This article covers the <strong>handoff</strong>: decode identifies the operation class and any special sequencing requirement. The detailed internal translation, patching, and sequencing design belongs to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a>. A front-end review should identify whether unusual latency is due to instruction supply, expansion, specialized sequencing, or back-end execution.</p>
+</section>
+<section id="fetch-to-decode-latency-versus-steady-state-throughput" aria-labelledby="heading-fetch-to-decode-latency-versus-steady-state-throughput">
+<h2 id="heading-fetch-to-decode-latency-versus-steady-state-throughput">Fetch-to-Decode Latency Versus Steady-State Throughput</h2>
+<p><strong>Latency</strong> describes how long an individual instruction takes to travel from selected fetch address to an available decoded record. <strong>Throughput</strong> describes how many instructions or internal operations can be delivered per unit time when the pipeline is full. A processor can have a deep front end with substantial latency yet high steady-state throughput; conversely, a short in-order pipeline may have low latency but limited decode width.</p>
+<p>Misses and redirects make latency variable. An L1 instruction-cache hit may supply bytes rapidly; an iTLB miss can require a translation walk, and an I-cache miss can take much longer depending on the memory hierarchy. Predictions sometimes hide part of front-end latency, but a wrong prediction reveals recovery cost because the core must refill from a corrected address.</p>
+<p>Instruction-level parallelism, back-end execution width, and retirement resources impose additional limits that a faster front end cannot overcome. An honest analysis isolates front-end stalls and measures them in the context of the workload. Confusing the maximum advertised decode width with actual instructions retired per cycle exaggerates potential performance gains.</p>
+</section>
+<section id="worked-throughput-example-identify-the-narrowest-stage" aria-labelledby="heading-worked-throughput-example-identify-the-narrowest-stage">
+<h2 id="heading-worked-throughput-example-identify-the-narrowest-stage">Worked Throughput Example: Identify the Narrowest Stage</h2>
+<table><thead><tr><th scope="col">Stage or constraint</th><th scope="col">Illustrative capacity</th><th scope="col">What it limits</th></tr></thead><tbody><tr><td>Fetch block</td><td>16 bytes/cycle</td><td>At 4 bytes per instruction, at most 4 nominal instructions/cycle</td></tr><tr><td>Length and alignment unit</td><td>4 complete instructions/cycle</td><td>Boundary handling under favorable alignment</td></tr><tr><td>Decoder</td><td>6 macroinstructions/cycle</td><td>Upper decode capacity, not automatic delivery</td></tr><tr><td>Output queue acceptance</td><td>3 decoded instructions/cycle</td><td>Current backpressure reduces delivered throughput</td></tr><tr><td>Execution / retirement</td><td>4 instructions/cycle</td><td>Would not be the bottleneck in this example</td></tr></tbody></table><p>The instantaneous upper bound here is three instructions per cycle because the receiving queue accepts only three. If that queue drains and can accept six, the nominal four-instruction fetch limit becomes the next ceiling for four-byte average encodings. Misses, branches, mixed lengths, and micro-operation expansion reduce realized throughput further.</p>
+</section>
+<section id="executable-example-front-end-bottleneck-accounting" aria-labelledby="heading-executable-example-front-end-bottleneck-accounting">
+<h2 id="heading-executable-example-front-end-bottleneck-accounting">Executable Example: Front-End Bottleneck Accounting</h2>
+<pre><code class="language-python">def frontend_ceiling(fetch_bytes, avg_inst_bytes, alignment_slots,
+                    decode_slots, queue_slots, backend_slots):
+    if avg_inst_bytes &lt;= 0:
+        raise ValueError(&#x27;invalid average instruction length&#x27;)
+    return min(fetch_bytes / avg_inst_bytes, alignment_slots,
+               decode_slots, queue_slots, backend_slots)
+
+assert frontend_ceiling(16, 4, 4, 6, 3, 4) == 3
+assert frontend_ceiling(16, 4, 4, 6, 6, 4) == 4
+assert frontend_ceiling(16, 2, 8, 6, 6, 8) == 6
+assert frontend_ceiling(8, 4, 4, 6, 6, 8) == 2
+print(&#x27;Stage bottlenecks change with instruction length and backpressure&#x27;)</code></pre><p>These are steady-state arithmetic ceilings, not detailed cycle-accurate simulations. Decoder mixes, instruction boundaries, predictor accuracy, memory stalls, and flow-control bubbles can reduce the practical delivery rate. The model is useful only if its simplifying assumptions are explicit.</p>
+</section>
+<section id="stall-attribution-and-front-end-performance-counters" aria-labelledby="heading-stall-attribution-and-front-end-performance-counters">
+<h2 id="heading-stall-attribution-and-front-end-performance-counters">Stall Attribution and Front-End Performance Counters</h2>
+<p>Processor performance counters may report instruction-cache misses, translation misses, branch mispredictions, decoded-operation cache events, stalled cycles, and delivered operations. Hardware event names and definitions vary, so counter values from different processor families should not be compared as though they were identical measurements. Aggregate “front-end bound” estimates often depend on derived formulas and sampling conventions.</p>
+<p>A robust investigation correlates counter data with code layout, branch profiles, cache behavior, and actual workload outcomes. If the decoder is empty for many cycles, the cause could be a fetch miss, an instruction boundary problem, a target redirect, or upstream throttling. If decode frequently produces valid operations but the queue cannot accept them, the bottleneck is downstream backpressure rather than an inadequate instruction cache.</p>
+<p>Use performance measurement to test a hypothesis, not to select a narrative after seeing one number. Ensure profiling runs have stable workload inputs, comparable processor frequencies, and enough observations to avoid mistaking startup transients for steady-state behavior. Cross-check that improvements in front-end supply translate into completed program work rather than merely higher speculative activity.</p>
+</section>
+<section id="multi-core-simultaneous-multithreading-and-instruction-supply" aria-labelledby="heading-multi-core-simultaneous-multithreading-and-instruction-supply">
+<h2 id="heading-multi-core-simultaneous-multithreading-and-instruction-supply">Multi-Core, Simultaneous Multithreading, and Instruction Supply</h2>
+<p>In a multicore processor, each core commonly has its own front-end machinery, although details of shared cache capacity, power budgets, and interconnect services vary. In simultaneous multithreading, multiple architectural thread contexts may compete for front-end cycles, buffers, prediction capacity, and downstream execution resources. A scheduler may prioritize ready threads or alternate which context supplies the next fetch address.</p>
+<p>One thread stalled on an instruction-cache miss can sometimes leave fetch or decode capacity available for another thread. That benefit depends on which resources are shared and whether the stalled thread occupies critical queues. The interaction can also cause interference: two threads with large or conflicting code footprints may displace each other’s instruction cache lines or predictor entries.</p>
+<p>Performance attribution should identify the thread and core context rather than treating all fetched bytes as belonging to one linear instruction stream. The architectural state of one thread must remain isolated even if the front end shares prediction tables or decode execution units. Detailed resource partitioning is treated in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a>.</p>
+</section>
+<section id="self-modifying-code-and-instruction-visibility" aria-labelledby="heading-self-modifying-code-and-instruction-visibility">
+<h2 id="heading-self-modifying-code-and-instruction-visibility">Self-Modifying Code and Instruction Visibility</h2>
+<p>A processor may have recently fetched or cached instructions from an address before software modifies the corresponding bytes. The architecture and execution environment define how a new instruction stream becomes visible after code writes. Data-cache coherence alone does not always establish the required ordering of instruction fetch with code stores; specialized instruction synchronization or cache maintenance may be necessary.</p>
+<p>On RISC-V systems implementing the Zifencei extension, <code>FENCE.I</code> provides defined local synchronization between stores to instruction memory and subsequent instruction fetch on the same hart. System software must also address cross-hart synchronization through its appropriate mechanisms. On other ISAs, different instruction/data cache maintenance and synchronization requirements apply. The exact recipe must come from the platform documentation, not a generic assumption that executable bytes update instantaneously.</p>
+<p>Just-in-time compilation, dynamic instrumentation, hot patching, and firmware update paths all require deliberate code-publication protocols. A system should prevent execution of incomplete instruction sequences and coordinate executable permissions, instruction visibility, and thread access. This article explains the fetch-side hazard; it does not replace the OS and security guidance for writable/executable mappings and safe code deployment.</p>
+</section>
+<section id="instruction-side-consistency-and-memory-ordering-boundaries" aria-labelledby="heading-instruction-side-consistency-and-memory-ordering-boundaries">
+<h2 id="heading-instruction-side-consistency-and-memory-ordering-boundaries">Instruction-Side Consistency and Memory-Ordering Boundaries</h2>
+<p>Instruction bytes live in memory, but the ordering rules for ordinary data loads and stores do not necessarily settle when code changes must be observed as instructions. The distinction is fundamental in processors with separate instruction and data caches. Some architectures maintain additional coherence rules or synchronization operations; others require system software to perform explicit maintenance before executing newly generated code.</p>
+<p>Translation changes are another separate issue. Changing page-table execute permission or remapping a virtual instruction page may require invalidating translation information, while changing instruction bytes may require instruction-side synchronization. Executing the correct updated code can therefore involve two conceptually different contracts: the address maps to the intended physical page with suitable execute rights, and the instruction fetch stream observes the intended contents.</p>
+<p>A practical failure report should state whether the observed stale behavior came from an old translation, old instruction-cache bytes, stale decoded operations, or a race between writers and executing threads. The remedy differs by mechanism. Simply labeling the event “cache incoherence” conceals distinctions important for debugging and security.</p>
+</section>
+<section id="speculative-fetch-permissions-and-security-boundaries" aria-labelledby="heading-speculative-fetch-permissions-and-security-boundaries">
+<h2 id="heading-speculative-fetch-permissions-and-security-boundaries">Speculative Fetch, Permissions, and Security Boundaries</h2>
+<p>Speculative fetching may access instruction-side structures before a branch is resolved. The architectural result of a wrong-path fetch must not masquerade as a committed exception or executed instruction. Nevertheless, speculation can modify implementation-private structures such as prediction or cache state, and those changes can have timing consequences even when the speculative instruction never retires.</p>
+<p>This distinction motivates protections against microarchitectural side channels. The precise risk depends on the processor, code, threat model, and mitigation configuration. A front-end security review should consider predictor state sharing, indirect-target influence, cross-context isolation, instruction-cache timing, and the possibility that software could infer information from contention. It should not claim that every speculative fetch reveals secret data or that a software-level permission rule automatically prevents every timing effect.</p>
+<p>Instruction decode also forms an input-validation boundary: illegal encodings, malformed instruction sequences, and unsupported features must not trigger undefined behavior in the core’s control logic. Design verification should include adversarial instruction streams and privilege transitions. The specialist <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a> covers the deeper mitigation landscape.</p>
+</section>
+<section id="front-end-power-and-area-trade-offs" aria-labelledby="heading-front-end-power-and-area-trade-offs">
+<h2 id="heading-front-end-power-and-area-trade-offs">Front-End Power and Area Trade-Offs</h2>
+<p>A wider front end requires more fetch bandwidth, more boundary-finding capability, more decode lanes, and often more queue capacity. These structures consume silicon area and energy, while their benefit depends on whether the workload and downstream pipeline can use the additional supply. A core targeting low-power embedded applications may favor simpler in-order fetch/decode even if that reduces maximum throughput.</p>
+<p>Prediction tables, instruction caches, and operation caches consume both static and dynamic power. A front end that aggressively fetches wrong-path instructions wastes energy as well as cycles. Techniques such as clock gating, selective prediction, throttling, and careful queue sizing can reduce unnecessary work, but they require correct control and verification under stalls or resets.</p>
+<p>Architectural decisions should use realistic performance-per-watt and area budgets. The fastest front end in isolation may be an inefficient system choice if it starves execution, spends most cycles predicting low-value work, or exceeds thermal limits. Power comparisons should distinguish workloads and manufacturing contexts rather than asserting that one instruction encoding or cache structure is universally superior.</p>
+</section>
+<section id="front-end-correctness-required-invariants" aria-labelledby="heading-front-end-correctness-required-invariants">
+<h2 id="heading-front-end-correctness-required-invariants">Front-End Correctness: Required Invariants</h2>
+<p>An effective verification plan starts with invariants independent of the implementation’s performance. <strong>Identity:</strong> each accepted decoded instruction corresponds to the intended bytes at a well-defined PC. <strong>Completeness:</strong> no incomplete or unsupported encoding is silently executed. <strong>Order:</strong> records delivered to the architectural instruction sequence preserve control-flow and sequential order, even when internal execution reorders later. <strong>Fault attribution:</strong> a fetch or decode fault remains attached to the correct instruction.</p>
+<p>Other invariants cover <strong>cancellation</strong> (no wrong-path record can commit), <strong>flow control</strong> (a valid instruction is neither dropped nor duplicated under backpressure), <strong>permissions</strong> (all instruction bytes are accessed under applicable rules), and <strong>liveness</strong> (the front end eventually delivers instructions when the memory system responds and downstream resources accept them). Liveness needs fairness and environment assumptions; it cannot be established merely by checking one transition.</p>
+<p>Assertions should distinguish response validity from semantic legality. A fetched word may have valid memory data yet encode an illegal instruction; a branch may be legally decoded but predicted incorrectly. These conditions require different expected responses. A strong test suite maintains a reference decoder and independent execution trace rather than only confirming that the DUT agrees with its own generated control signals.</p>
+</section>
+<section id="instruction-fetch-test-matrix" aria-labelledby="heading-instruction-fetch-test-matrix">
+<h2 id="heading-instruction-fetch-test-matrix">Instruction-Fetch Test Matrix</h2>
+<table><thead><tr><th scope="col">Test category</th><th scope="col">Example stimulus</th><th scope="col">Expected property</th></tr></thead><tbody><tr><td>Sequential instruction stream</td><td>Contiguous legal 32-bit instructions</td><td>Correct PC increments and no duplicates</td></tr><tr><td>Mixed-length stream</td><td>2/4-byte RISC-V encodings</td><td>Correct boundaries and original PCs</td></tr><tr><td>Cross-block instruction</td><td>32-bit instruction starting at offset 2</td><td>Full assembly from consecutive blocks</td></tr><tr><td>Cross-page instruction</td><td>Second page non-executable</td><td>Fetch failure, not fabricated trailing bytes</td></tr><tr><td>Correctly predicted branch</td><td>Taken branch with valid target</td><td>No unnecessary wrong-path retirement</td></tr><tr><td>Mispredicted branch</td><td>Target fetched then branch resolves not taken</td><td>Cancel wrong-path queue entries</td></tr><tr><td>Illegal instruction</td><td>Reserved or unsupported opcode</td><td>Precise invalid-instruction handling</td></tr><tr><td>Backpressure</td><td>Decoder blocked while fetch continues</td><td>Retain bytes without loss or duplication</td></tr><tr><td>Stale response</td><td>Old fetch arrives after redirect</td><td>Reject mismatched epoch/sequence</td></tr><tr><td>Code publication</td><td>Modify bytes then synchronize as required</td><td>Subsequent execution sees correct legal code</td></tr><tr><td>Reset / context change</td><td>Clear or retag speculative records</td><td>No previous-context operation leaks into new stream</td></tr></tbody></table><p>A test matrix becomes more useful when linked to coverage counters and a reference model. Include directed corner cases and randomized streams with reproducible seeds. Hardware implementations also require signal-level timing verification and checks of interactions with the memory subsystem.</p>
+</section>
+<section id="executable-example-property-based-boundary-walk" aria-labelledby="heading-executable-example-property-based-boundary-walk">
+<h2 id="heading-executable-example-property-based-boundary-walk">Executable Example: Property-Based Boundary Walk</h2>
+<pre><code class="language-python">from random import Random
+
+def walk_mixed(start_pc, lengths):
+    pc = start_pc
+    starts = []
+    for length in lengths:
+        assert length in (2, 4)
+        starts.append(pc)
+        pc += length
+    return starts, pc
+
+rng = Random(20261123)
+for _ in range(200):
+    lengths = [rng.choice((2, 4)) for _ in range(rng.randrange(1, 40))]
+    starts, end = walk_mixed(0x1000, lengths)
+    assert starts[0] == 0x1000
+    assert all(b - a == length for a, b, length in
+               zip(starts, starts[1:] + [end], lengths))
+    assert end == 0x1000 + sum(lengths)
+print(&#x27;200 mixed-length streams preserve boundaries and total size&#x27;)</code></pre><p>The randomized check validates the address walk, not the legality of the encoded instructions. To test a real decoder, generate legal and illegal instruction byte streams from an independent ISA specification and compare the decoded fields and exception behavior.</p>
+</section>
+<section id="six-applied-scenarios-evidence-before-explanation" aria-labelledby="heading-six-applied-scenarios-evidence-before-explanation">
+<h2 id="heading-six-applied-scenarios-evidence-before-explanation">Six Applied Scenarios: Evidence Before Explanation</h2>
+<p>The following scenarios combine a symptom, a technical distinction, and a testable verification route. They are constructed teaching cases, not reports of incidents at MGU or measurements from a particular CPU. They demonstrate why instruction fetch and decode should be treated as an integrated system that is nonetheless separable from the rest of the processor.</p>
+<p>Each scenario asks what evidence would distinguish an instruction-supply problem from a downstream execution problem and what correctness requirement survives performance optimization. Engineers should collect a PC trace, source encoding or disassembly, translation and cache context, and pipeline-validity information appropriate to their implementation before deciding on a remedy.</p>
+</section>
+<section id="scenario-1-a-compressed-instruction-straddles-a-fetch-block" aria-labelledby="heading-scenario-1-a-compressed-instruction-straddles-a-fetch-block">
+<h2 id="heading-scenario-1-a-compressed-instruction-straddles-a-fetch-block">Scenario 1 — A Compressed Instruction Straddles a Fetch Block</h2>
+<p>A compact RISC-V program has a 32-bit instruction beginning at address 0x1002. The first halfword comes from one aligned four-byte fetch word and the second from the next. A faulty predecoder assumes every 32-bit instruction is word-aligned and instead decodes the last halfword as a separate compressed instruction. The resulting program counter drifts, and the subsequent disassembly no longer matches the instruction sequence the compiler emitted.</p>
+<p>The correction is to classify length from the first halfword under the active ISA configuration, retain the partial instruction, fetch the needed additional bytes, and combine the instruction before semantic decode. A directed test must cover both aligned and offset-two 32-bit instructions, plus a missing or inaccessible second fetch block. The test should compare original PCs, lengths, raw encodings, and decoded operation identities—not merely the total number of instruction words returned.</p>
+<p>If the assembled instruction crosses a page boundary, permissions for the second page must also be respected. This is why an instruction-alignment buffer must be part of a correct fetch interface rather than an optional performance shortcut.</p>
+</section>
+<section id="scenario-2-a-small-loop-is-slower-despite-i-cache-hits" aria-labelledby="heading-scenario-2-a-small-loop-is-slower-despite-i-cache-hits">
+<h2 id="heading-scenario-2-a-small-loop-is-slower-despite-i-cache-hits">Scenario 2 — A Small Loop Is Slower Despite I-Cache Hits</h2>
+<p>A numerical loop fits entirely in the L1 instruction cache, and cache-miss counters are near zero, yet the core rarely reaches its expected instruction retirement rate. Measurements show frequent branches, occasional incorrect target predictions, and limited decoder delivery after redirects. The I-cache is supplying bytes quickly, but control-flow recovery prevents continuous decode and dispatch.</p>
+<p>A useful experiment changes code layout or branch behavior while keeping arithmetic work comparable. Compare branch prediction statistics, delivered operations, queue-empty cycles, and retired instructions per cycle. If the predictor improves but the throughput does not, a different bottleneck—decode width, data dependencies, or execution ports—may dominate. If predictor changes improve delivered instruction supply and program time, the evidence supports a control-flow limitation.</p>
+<p>This scenario illustrates the limit of using a single cache-hit metric as a proxy for front-end health. An instruction can be present in cache yet fetched at the wrong time or from a repeatedly discarded path.</p>
+</section>
+<section id="scenario-3-a-jit-compiler-executes-yesterday-s-code" aria-labelledby="heading-scenario-3-a-jit-compiler-executes-yesterday-s-code">
+<h2 id="heading-scenario-3-a-jit-compiler-executes-yesterday-s-code">Scenario 3 — A JIT Compiler Executes Yesterday’s Code</h2>
+<p>A just-in-time compiler writes a new instruction sequence into an allocated code region. One thread attempts to execute it immediately. The application occasionally appears to execute stale instructions even though a data read of the region shows the new bytes. The likely causes include missing instruction-cache synchronization, an unsafe publish protocol, or executing concurrently with a writer; the exact problem must be diagnosed under the platform’s architecture and OS contracts.</p>
+<p>The implementation must ensure that the generated instruction sequence is complete, that the appropriate instruction-visibility operation has been performed, and that execution permissions and thread synchronization are correct. For RISC-V, the locally defined role of <code>FENCE.I</code> in Zifencei is relevant, while cross-hart synchronization requires additional coordination. Other ISAs prescribe different cache-maintenance and barrier sequences.</p>
+<p>A successful test involves repeated code publication and execution under concurrency while checking the resulting behavior and required synchronizations. It is not sufficient to verify only that a memory debugger displays the new bytes.</p>
+</section>
+<section id="scenario-4-a-wide-decoder-is-starved-by-a-narrow-fetch-path" aria-labelledby="heading-scenario-4-a-wide-decoder-is-starved-by-a-narrow-fetch-path">
+<h2 id="heading-scenario-4-a-wide-decoder-is-starved-by-a-narrow-fetch-path">Scenario 4 — A Wide Decoder Is Starved by a Narrow Fetch Path</h2>
+<p>A six-instruction-per-cycle decoder is connected to a front end that typically delivers only sixteen instruction bytes per cycle. The running program averages roughly four bytes per instruction. Under favorable alignment, the fetch side can supply only about four instructions per cycle even if the decoder has idle lanes. More complex instruction boundaries and taken branches can reduce that number further.</p>
+<p>Increasing decode width alone would not solve the bottleneck. An engineer should assess whether wider byte delivery, improved instruction density, a decoded-operation supply path, or branch-target improvements would raise real throughput without excessive energy and area cost. The correct benchmark is completed program work under representative workloads, not an isolated decoder demonstration.</p>
+<p>If the average instruction length falls to two bytes, the bottleneck can move from fetch bandwidth to decode width or downstream queues. The same hardware can therefore exhibit different front-end ceilings for different instruction mixes.</p>
+</section>
+<section id="scenario-5-a-page-boundary-masks-a-fetch-permission-error" aria-labelledby="heading-scenario-5-a-page-boundary-masks-a-fetch-permission-error">
+<h2 id="heading-scenario-5-a-page-boundary-masks-a-fetch-permission-error">Scenario 5 — A Page Boundary Masks a Fetch Permission Error</h2>
+<p>A 32-bit instruction begins near the end of an executable page, but its final bytes are on a neighboring page without execute permission. An incomplete teaching emulator reads the first bytes and substitutes zero for the missing remainder, incorrectly reporting a legal operation or an illegal encoding rather than the correct instruction-fetch access failure.</p>
+<p>The repair is to tie byte assembly to per-page translation and permission checks. A failure in the second page must be preserved with the instruction’s original starting PC and any architecture-specific fault metadata. The emulator must not silently fill absent bytes or continue decoding the next page as unrelated instructions.</p>
+<p>The directed test should cover a valid/valid pair, valid/non-executable pair, valid/unmapped pair, and a fetch on a wrong speculative path that is ultimately canceled. This distinguishes access permission, instruction completeness, and precise exception behavior.</p>
+</section>
+<section id="scenario-6-a-hot-patch-redirect-accepts-an-old-fetch-response" aria-labelledby="heading-scenario-6-a-hot-patch-redirect-accepts-an-old-fetch-response">
+<h2 id="heading-scenario-6-a-hot-patch-redirect-accepts-an-old-fetch-response">Scenario 6 — A Hot-Patch Redirect Accepts an Old Fetch Response</h2>
+<p>A running system installs a new branch target and redirects fetch, but an outstanding memory transaction for the former path returns after the redirect. Without a valid sequence tag, the late response enters the new queue and is decoded at an address associated with the wrong path. The problem appears intermittent because it depends on memory latency and timing.</p>
+<p>A front end can attach a fetch epoch or comparable generation identifier to each request and response. A redirect invalidates queued younger work and causes responses from the old generation to be discarded. Tests deliberately vary response order and latency, including responses arriving on the same cycle as a redirect, and assert that the decoded instruction stream corresponds to a single legal path.</p>
+<p>This protection should coexist with architectural instruction-memory synchronization. A correct epoch tag prevents wrong-path contamination, but it does not by itself guarantee that a newly patched code region is visible to instruction fetch. Separate consistency contracts must both be satisfied.</p>
+</section>
+<section id="common-misconceptions-and-corrections" aria-labelledby="heading-common-misconceptions-and-corrections">
+<h2 id="heading-common-misconceptions-and-corrections">Common Misconceptions and Corrections</h2>
+<table><thead><tr><th scope="col">Misconception</th><th scope="col">Correction</th></tr></thead><tbody><tr><td>Fetching an instruction means it executed</td><td>Fetch can be speculative and later squashed; architectural execution and retirement are separate</td></tr><tr><td>The program counter always increases by four</td><td>Branches, traps, variable-length encodings, and redirects change address progression</td></tr><tr><td>An I-cache hit guarantees full decoder speed</td><td>Instruction length, alignment, branches, and backpressure can still limit supply</td></tr><tr><td>Every RISC-V word with low bits 11 is a valid 32-bit instruction</td><td>Longer/reserved forms and opcode legality require additional checks</td></tr><tr><td>Instruction decode only determines a mnemonic</td><td>It must also identify length, fields, immediate values, legality, source/destination information and metadata</td></tr><tr><td>Cache coherence guarantees newly written code is immediately executable</td><td>Instruction visibility and translation synchronization follow architecture-specific rules</td></tr><tr><td>Wrong-path fetch faults must always trap</td><td>Architectural exception presentation depends on whether the instruction belongs to the correct committed path</td></tr><tr><td>A six-wide decoder means six instructions retire every cycle</td><td>Front-end supply, decoder mix, queues, execution, and retirement are independent limits</td></tr><tr><td>A register field always names a source register</td><td>Field meaning is instruction-format dependent</td></tr><tr><td>Prefetch eliminates cache misses</td><td>Prefetch can hide some latency but cannot guarantee timely correct-path supply</td></tr></tbody></table>
+</section>
+<section id="ten-gate-front-end-engineering-framework" aria-labelledby="heading-ten-gate-front-end-engineering-framework">
+<h2 id="heading-ten-gate-front-end-engineering-framework">Ten-Gate Front-End Engineering Framework</h2>
+<table><thead><tr><th scope="col">Gate</th><th scope="col">Question</th><th scope="col">Evidence to require</th></tr></thead><tbody><tr><td>1. ISA configuration</td><td>Which length, encoding, extension, and alignment rules apply?</td><td>Documented mode and feature set</td></tr><tr><td>2. PC provenance</td><td>Where is the PC of each decoded instruction retained?</td><td>Trace with instruction address and length</td></tr><tr><td>3. Translation</td><td>Are address spaces and execute rights checked correctly?</td><td>Permission and page-boundary tests</td></tr><tr><td>4. Byte assembly</td><td>Can instructions cross fetch groups, lines, or pages?</td><td>Alignment and cross-boundary regression</td></tr><tr><td>5. Decode legality</td><td>Are reserved and feature-dependent encodings rejected?</td><td>Independent decode-reference comparisons</td></tr><tr><td>6. Control flow</td><td>Are target estimates corrected without wrong-path commit?</td><td>Branch redirect and squash checks</td></tr><tr><td>7. Flow control</td><td>Can queues stall, resume, and replay without loss?</td><td>Backpressure and delayed-response tests</td></tr><tr><td>8. Performance</td><td>Which stage limits useful operation supply?</td><td>Fetch/decode/dispatch/retire counters</td></tr><tr><td>9. Code visibility</td><td>How are code writes and page mapping changes synchronized?</td><td>Architecture and OS publication procedure</td></tr><tr><td>10. Lifecycle</td><td>How are reset, test coverage, patches, and regressions managed?</td><td>Repeatable tests, traceability, measured baselines</td></tr></tbody></table><p>Each gate should result in a checkable artifact rather than a claim that the front end “works.” Establish correctness for the active ISA and exception model before optimizing prediction, queue depth, or decoder width.</p>
+</section>
+<section id="study-pathway-and-hands-on-laboratory" aria-labelledby="heading-study-pathway-and-hands-on-laboratory">
+<h2 id="heading-study-pathway-and-hands-on-laboratory">Study Pathway and Hands-On Laboratory</h2>
+<p>A productive study sequence begins with a binary instruction trace and progresses toward a coupled front-end model. First, hand-decode a small set of legal RISC-V ADDI and B-type examples; include negative immediates and edge offsets. Second, run the mixed-length PC walker with different 2- and 4-byte sequences, marking fetch-group boundaries. Third, add memory access permissions and deliberately split an instruction across a prohibited page boundary.</p>
+<p>Next, add a finite-capacity fetch queue and an epoch-tagged branch redirect. Inject cache-latency delays and verify that instructions never duplicate or disappear under stalls. Finally, collect delivered-instruction counts and compare them against a theoretical fetch-byte/decode-width ceiling. Be explicit about why the actual rate is lower when branches, misses, or downstream stalls occur.</p>
+<p>The goal is not to build a production superscalar core in one exercise. It is to establish correct instruction identity, legality, stateful flow control, and a defensible performance accounting model. Each increment should have independently testable invariants and repeatable inputs.</p>
+</section>
+<section id="review-questions-and-worked-guidance" aria-labelledby="heading-review-questions-and-worked-guidance">
+<h2 id="heading-review-questions-and-worked-guidance">Review Questions and Worked Guidance</h2>
+<ol>
+<li><strong>What is the difference between a fetch PC and the architectural PC?</strong> The fetch PC may follow predictions and run ahead; the architectural instruction address identifies the program-visible instruction stream as defined by the ISA.</li>
+<li><strong>Can a four-byte instruction begin at PC=0x1002?</strong> Yes in an ISA configuration allowing halfword alignment, such as RISC-V with a suitable compressed extension; not as a general rule for an IALIGN=32 configuration.</li>
+<li><strong>Why is a second-page permission check necessary?</strong> All bytes of a spanning instruction must be fetched from authorized mapped memory; a valid first half does not authorize the second.</li>
+<li><strong>How does instruction density affect fetch bandwidth?</strong> Shorter mean encodings can deliver more instruction boundaries per fetched byte, but correctness, decode capacity, branch behavior, and back-end throughput remain limiting.</li>
+<li><strong>What does a branch predictor output?</strong> A provisional direction and/or target that selects future fetching; the actual branch semantics must eventually validate that prediction.</li>
+<li><strong>What is the decoder’s response to an unsupported instruction?</strong> Identify the encoding as unavailable or illegal under the configured ISA rather than inventing a valid operation.</li>
+<li><strong>Why can I-cache hit rate be high while IPC is low?</strong> Branch redirects, decode bottlenecks, alignment, queue pressure, and back-end stalls can prevent useful progress.</li>
+<li><strong>Why is FENCE.I significant on RISC-V?</strong> Under Zifencei it defines local synchronization between prior code stores and subsequent instruction fetch on that hart; cross-hart coordination is separate.</li>
+</ol>
+</section>
+<section id="guided-exercise-1-build-a-fetch-boundary-model" aria-labelledby="heading-guided-exercise-1-build-a-fetch-boundary-model">
+<h2 id="heading-guided-exercise-1-build-a-fetch-boundary-model">Guided Exercise 1 — Build a Fetch-Boundary Model</h2>
+<p>Start with a byte-addressed instruction image of at least thirty-two bytes that contains both two-byte and four-byte RISC-V instructions under a constrained C-enabled teaching subset. Track PC, length, and the aligned four-byte fetch-block addresses needed for each instruction. Add an intentionally truncated final instruction and assert that the model rejects it instead of reading a default zero value.</p>
+<p><strong>Deliverable:</strong> a table containing instruction-start PC, length, fetched blocks, and decode/fetch status, plus tests for an instruction beginning at address 2 mod 4. Explain how your model would change if longer RISC-V encoding forms were supported. The primary evaluation criterion is correctness of boundaries and error reporting, not the number of instructions per second.</p>
+</section>
+<section id="guided-exercise-2-implement-a-redirect-safe-fetch-queue" aria-labelledby="heading-guided-exercise-2-implement-a-redirect-safe-fetch-queue">
+<h2 id="heading-guided-exercise-2-implement-a-redirect-safe-fetch-queue">Guided Exercise 2 — Implement a Redirect-Safe Fetch Queue</h2>
+<p>Model a two-entry fetch queue with delayed memory responses. Attach a generation number to each request. On branch resolution, update the fetch address, increase the generation, and invalidate younger queued records. Send old responses after the redirect and confirm that none are admitted to the new queue. Repeat under a downstream decoder stall.</p>
+<p><strong>Deliverable:</strong> a timestamped trace of accepted, stalled, canceled, and rejected records. Prove that no accepted instruction appears twice and that a wrong-path item cannot reach the execution interface. Distinguish the path-generation tag from instruction-memory synchronization: an epoch prevents path confusion but does not determine when newly written code becomes visible.</p>
+</section>
+<section id="guided-exercise-3-explain-a-measured-front-end-bottleneck" aria-labelledby="heading-guided-exercise-3-explain-a-measured-front-end-bottleneck">
+<h2 id="heading-guided-exercise-3-explain-a-measured-front-end-bottleneck">Guided Exercise 3 — Explain a Measured Front-End Bottleneck</h2>
+<p>Assume a front end can supply 16 instruction bytes per cycle, classify four instruction boundaries, decode six instructions, and deliver at most four decoded records to a downstream queue. Evaluate ideal ceilings for an average instruction length of four bytes and then two bytes. Next, introduce a branch redirect every twelve useful instructions with a three-cycle supply interruption and derive an approximate effective throughput under your explicit pipeline assumptions.</p>
+<p><strong>Deliverable:</strong> a table of limiting stage, theoretical ceiling, redirect-loss assumption, and calculated delivered instruction rate. Recompute after widening fetch to 24 bytes and describe when the improvement would matter. An answer should identify why such an analytical model cannot replace event-counter data on a particular processor.</p>
+</section>
+<section id="glossary-of-fetch-and-decode-terminology" aria-labelledby="heading-glossary-of-fetch-and-decode-terminology">
+<h2 id="heading-glossary-of-fetch-and-decode-terminology">Glossary of Fetch and Decode Terminology</h2>
+<table><thead><tr><th scope="col">Term</th><th scope="col">Meaning</th></tr></thead><tbody><tr><td>Front end</td><td>Processor subsystem responsible for instruction address selection, byte supply and decoding</td></tr><tr><td>Architectural PC</td><td>Instruction-address/control-flow state defined by the ISA</td></tr><tr><td>Fetch PC</td><td>Implementation-maintained address used to request future instruction bytes</td></tr><tr><td>Fall-through</td><td>Sequential next-instruction address after the current encoded instruction</td></tr><tr><td>Redirect</td><td>Change of fetch address following prediction correction, exception, or control event</td></tr><tr><td>Instruction boundary</td><td>Memory address where a valid instruction encoding begins</td></tr><tr><td>Instruction length</td><td>Number of encoded bytes that belong to one architectural instruction</td></tr><tr><td>Fetch block</td><td>Group of bytes requested or supplied by an instruction-side interface</td></tr><tr><td>Fetch queue</td><td>Buffer separating instruction supply from boundary finding or decode</td></tr><tr><td>Instruction cache</td><td>Cache of encoded instruction bytes</td></tr><tr><td>iTLB</td><td>Instruction-side cache of address translation information</td></tr><tr><td>Execute permission</td><td>Protection attribute determining whether instruction fetch is authorized</td></tr><tr><td>Predecode</td><td>Early boundary or classification work before full semantic decode</td></tr><tr><td>Opcode</td><td>Encoded field or combination of fields indicating instruction class</td></tr><tr><td>Immediate</td><td>Constant operand assembled from instruction bits</td></tr><tr><td>Sign extension</td><td>Propagation of a signed field’s high bit to a wider representation</td></tr><tr><td>IALIGN</td><td>RISC-V instruction-start alignment requirement, in bits</td></tr><tr><td>Compressed instruction</td><td>Shorter encoding form provided by a relevant ISA extension</td></tr><tr><td>Branch-target buffer</td><td>Prediction structure associating a branch with a likely destination</td></tr><tr><td>Return-address stack</td><td>Prediction structure for function return destinations</td></tr><tr><td>Macroinstruction</td><td>Architectural instruction before possible internal decomposition</td></tr><tr><td>Micro-operation</td><td>Implementation-private unit of execution work derived from instructions</td></tr><tr><td>Micro-op cache</td><td>Cache of previously decoded internal operations on supporting cores</td></tr><tr><td>Backpressure</td><td>Signal or condition preventing upstream transfer when downstream cannot accept it</td></tr><tr><td>Wrong path</td><td>Speculative instruction stream that does not match resolved control flow</td></tr><tr><td>Epoch tag</td><td>Generation identifier used to reject obsolete fetch responses</td></tr><tr><td>Precise exception</td><td>Architecturally correct reporting at the required instruction boundary</td></tr><tr><td>FENCE.I</td><td>RISC-V instruction-fetch synchronization operation in Zifencei</td></tr><tr><td>Decode width</td><td>Maximum number of eligible instructions a decoder may process per cycle</td></tr><tr><td>Instruction density</td><td>Typical number of useful instructions represented per byte of encoded code</td></tr></tbody></table>
+</section>
+<section id="sub-articles-and-complete-cpu-specialist-directory" aria-labelledby="heading-sub-articles-and-complete-cpu-specialist-directory">
+<h2 id="heading-sub-articles-and-complete-cpu-specialist-directory">Sub-Articles and Complete CPU Specialist Directory</h2>
+<p>This page is specialist article 3 of 24 in the existing <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">Central Processing Unit unit index</a>. The hyperlinks below intentionally include prescribed future article destinations. An active link does not establish that its destination has been authored or deployed.</p><ol class="course-links"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a></li></ol><p><strong>Suggested next reading:</strong> <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a> continues from decoded operations to arithmetic hardware; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> develops precise fault and trap handling; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a> develops the prediction and recovery path.</p>
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<ul class="course-links">
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems</a> — Physical devices and processor hardware division.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> — Parent overview of CPU structure and execution.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a> — Hardware routes used after instruction selection and decoding.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a> — Software-visible PC, register and exception state.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a> — Definition of instruction encodings and semantics.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — General processor execution organization, optimization and staging.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing">Pipeline Processing</a> — Stages, hazards and pipeline timing concepts.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/memory-hierarchy">Memory Hierarchy</a> — General cache and memory latency principles.</li>
+</ul><p><strong>Topic boundary:</strong> this article owns the mechanism of obtaining, aligning and semantically classifying instructions for a CPU. Complete ISA specifications, cache architectures, execution units, privilege details, and microarchitectural speculation are covered by the corresponding related articles.</p>
+</section>
+<section id="technical-references-and-primary-documentation" aria-labelledby="heading-technical-references-and-primary-documentation">
+<h2 id="heading-technical-references-and-primary-documentation">Technical References and Primary Documentation</h2>
+<ol class="course-links">
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/rv32.html">RISC-V International, <em>RV32I Base Integer Instruction Set</em></a>. Defines base instruction formats, architectural operands, PC-relative control flow, and alignment requirements.</li>
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/c-st-ext.html">RISC-V International, <em>Compressed Instructions (C Extension)</em></a>. Mixed 16/32-bit encoding and compressed-instruction semantics.</li>
+<li><a href="https://docs.riscv.org/reference/isa/unpriv/zifencei.html">RISC-V International, <em>Zifencei Instruction-Fetch Fence</em></a>. Instruction-memory visibility and FENCE.I.</li>
+<li><a href="https://docs.riscv.org/reference/isa/v20250508/unpriv/intro.html">RISC-V International, <em>Unprivileged ISA Introduction</em></a>. Instruction-set principles and execution-environment responsibilities.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Intel, <em>Intel 64 and IA-32 Architectures Software Developer’s Manuals</em></a>. Instruction-encoding format, prefixes, modes, and decode legality.</li>
+<li><a href="https://www.intel.com/content/www/us/en/content-details/843829/intel-64-and-ia-32-architectures-software-developer-s-manual-combined-volumes-2a-2b-2c-and-2d-instruction-set-reference-a-z.html">Intel, <em>Instruction Set Reference, A–Z</em></a>. ModR/M, SIB, displacements, immediates and instruction-specific fields.</li>
+<li><a href="https://support.arm.com/documentation/ddi0487">Arm, <em>Arm Architecture Reference Manual for A-profile Architecture</em></a>. A64 encoding, instruction alignment, and exception requirements.</li>
+<li><a href="https://ibex-core.readthedocs.io/en/stable/03_reference/instruction_fetch.html">lowRISC, <em>Ibex Instruction Fetch</em></a>. Example implementation using prefetch, compressed decode, and optional instruction cache.</li>
+<li><a href="https://ibex-core.readthedocs.io/en/stable/03_reference/instruction_decode_execute.html">lowRISC, <em>Ibex Instruction Decode and Execute</em></a>. Example interface between fetch/decompression, decode, and an in-order execution stage.</li>
+<li><a href="https://ibex-core.readthedocs.io/en/stable/03_reference/icache.html">lowRISC, <em>Ibex Instruction Cache</em></a>. Example of instruction-side buffering and alignment concerns.</li>
+<li>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em>. Front-end performance, speculation, instruction supply and pipeline trade-offs.</li>
+<li>David A. Patterson and John L. Hennessy, <em>Computer Organization and Design: The Hardware/Software Interface</em>, RISC-V edition. Instruction formats and datapath control teaching examples.</li>
+</ol><p>Architecture manuals govern defined instruction encodings and exceptions. Ibex documents illustrate one implementation and should not be generalized to all RISC-V cores. All Python programs and the conceptual SVG are educational models, not processor RTL or a complete ISA interpreter.</p>
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope">
+<h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Article prepared:</strong> November 23, 2026. This Level 5 document completes the prescribed <code>instruction-fetch-and-decode.html</code> destination under the CPU specialist unit. The parent CPU overview and index were not altered.</p>
+<p><strong>Included:</strong> PC provenance, branch-predicted fetch, I-cache and iTLB interactions, executable-permission checks, instruction assembly across boundaries, RISC-V compressed/fixed encodings, x86-64 and A64 comparisons, executable decoding models, queue control, redirect cancellation, predecode, operation supply, performance bottlenecks, code publication, six applied scenarios, a ten-gate review framework, exercises and references.</p>
+<p><strong>Limitations:</strong> the examples represent selected instruction classes and simplified fetch control. They do not implement all RISC-V length encodings, x86 prefix rules, A64 decode tables, actual page-table formats, a hardware cache or pipeline timing, architectural trap registers, or formal processor compliance. Links to intended sibling destinations must not be interpreted as verified live pages.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ========== HEAD ========== -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Processor Cores and Datapaths | MGU Encyclopedia | Malone Global University</title>
+<meta name="description" content="Specialist guide to CPU core datapaths: registers, operand multiplexers, ALUs, control signals, memory and writeback routes, pipelines, bypassing, timing, and verification.">
+<meta name="keywords" content="CPU datapath, processor core, register file, ALU, control path, microarchitecture, writeback, pipeline, forwarding, RISC-V">
+<link rel="canonical" href="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Processor Cores and Datapaths | MGU Encyclopedia">
+<meta property="og:description" content="How instruction-processing cores move and transform values through register files, execution units, memory interfaces, and control paths.">
+<meta property="og:url" content="https://maloneuniversity.org/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">
+<link rel="icon" href="/image/global/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/component/lib.css">
+</head>
+<!-- ========== BODY ========== -->
+<body id="top" data-uploaded="11-23-2026" data-updated="11-23-2026">
+<!-- ========== HEADER ========== -->
+<div id="header-placeholder"></div>
+<script>
+fetch('/component/header.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('header-placeholder').innerHTML = data;
+    const script = document.createElement('script');
+    script.src = '/component/main.js';
+    document.body.appendChild(script);
+  });
+</script>
+<!-- ========== HERO ========== -->
+<section class="hero">
+<h1>Processor Cores and Datapaths</h1>
+<p class="subtitle">Functional units, architectural state, operand routes, execution control, memory access, and the implementation trade-offs that turn instructions into processor behavior.</p>
+</section>
+<!-- ========== BREADCRUMB ========== -->
+<nav class="breadcrumb" aria-label="Breadcrumb" id="breadcrumb"></nav>
+<!-- ========== MAIN ========== -->
+<main id="main-content" role="main">
+<section class="toc" aria-label="On this page"><h3>On This Page</h3><ol>
+<li><a href="#definition-and-specialist-scope">Definition and Specialist Scope</a></li>
+<li><a href="#learning-objectives-and-guiding-questions">Learning Objectives and Guiding Questions</a></li>
+<li><a href="#a-cpu-package-is-not-a-core">A CPU Package Is Not a Core</a></li>
+<li><a href="#architecture-microarchitecture-and-physical-implementation">Architecture, Microarchitecture, and Physical Implementation</a></li>
+<li><a href="#state-elements-versus-combinational-logic">State Elements Versus Combinational Logic</a></li>
+<li><a href="#conceptual-core-datapath-diagram">Conceptual Core Datapath Diagram</a></li>
+<li><a href="#instruction-fetch-and-the-program-counter">Instruction Fetch and the Program Counter</a></li>
+<li><a href="#instruction-decoding-and-control-signal-generation">Instruction Decoding and Control-Signal Generation</a></li>
+<li><a href="#register-files-and-operand-port-requirements">Register Files and Operand Port Requirements</a></li>
+<li><a href="#executable-example-architectural-register-bank">Executable Example: Architectural Register Bank</a></li>
+<li><a href="#operand-selection-and-immediate-generation">Operand Selection and Immediate Generation</a></li>
+<li><a href="#arithmetic-units-shifters-and-comparators">Arithmetic Units, Shifters, and Comparators</a></li>
+<li><a href="#executable-example-modular-integer-alu">Executable Example: Modular Integer ALU</a></li>
+<li><a href="#result-selection-and-register-writeback">Result Selection and Register Writeback</a></li>
+<li><a href="#data-memory-path-and-load-store-addressing">Data-Memory Path and Load/Store Addressing</a></li>
+<li><a href="#branch-comparison-and-next-pc-selection">Branch Comparison and Next-PC Selection</a></li>
+<li><a href="#six-instruction-classes-and-their-datapath-routes">Six Instruction Classes and Their Datapath Routes</a></li>
+<li><a href="#control-signals-as-a-coherent-instruction-contract">Control Signals as a Coherent Instruction Contract</a></li>
+<li><a href="#worked-trace-register-to-register-add">Worked Trace: Register-to-Register ADD</a></li>
+<li><a href="#worked-trace-add-immediate-and-sign-extension">Worked Trace: Add-Immediate and Sign Extension</a></li>
+<li><a href="#worked-trace-load-word">Worked Trace: Load Word</a></li>
+<li><a href="#worked-trace-store-word">Worked Trace: Store Word</a></li>
+<li><a href="#worked-trace-conditional-branch-and-jump">Worked Trace: Conditional Branch and Jump</a></li>
+<li><a href="#executable-reference-a-six-instruction-teaching-core">Executable Reference: A Six-Instruction Teaching Core</a></li>
+<li><a href="#datapath-invariants-that-catch-wiring-errors">Datapath Invariants That Catch Wiring Errors</a></li>
+<li><a href="#single-cycle-organization-one-long-combinational-route">Single-Cycle Organization: One Long Combinational Route</a></li>
+<li><a href="#executable-example-simplified-timing-budget">Executable Example: Simplified Timing Budget</a></li>
+<li><a href="#multicycle-datapaths-and-resource-reuse">Multicycle Datapaths and Resource Reuse</a></li>
+<li><a href="#pipeline-stages-and-overlapped-execution">Pipeline Stages and Overlapped Execution</a></li>
+<li><a href="#pipeline-timing-table-five-instructions">Pipeline Timing Table: Five Instructions</a></li>
+<li><a href="#raw-dependencies-and-bypass-networks">RAW Dependencies and Bypass Networks</a></li>
+<li><a href="#load-use-hazards-and-memory-latency">Load-Use Hazards and Memory Latency</a></li>
+<li><a href="#structural-hazards-and-resource-contention">Structural Hazards and Resource Contention</a></li>
+<li><a href="#explicit-control-of-stalls-flushes-and-validity">Explicit Control of Stalls, Flushes, and Validity</a></li>
+<li><a href="#execution-units-latency-and-initiation-interval">Execution Units, Latency, and Initiation Interval</a></li>
+<li><a href="#worked-example-port-budget-for-two-issue-arithmetic">Worked Example: Port Budget for Two-Issue Arithmetic</a></li>
+<li><a href="#multicycle-functions-and-iterative-hardware">Multicycle Functions and Iterative Hardware</a></li>
+<li><a href="#control-path-for-illegal-instructions-and-exceptions">Control Path for Illegal Instructions and Exceptions</a></li>
+<li><a href="#architectural-state-versus-physical-storage">Architectural State Versus Physical Storage</a></li>
+<li><a href="#physical-wiring-fanout-and-bypass-cost">Physical Wiring, Fanout, and Bypass Cost</a></li>
+<li><a href="#clocking-setup-hold-constraints-and-reset">Clocking, Setup/Hold Constraints, and Reset</a></li>
+<li><a href="#power-area-and-energy-per-instruction">Power, Area, and Energy per Instruction</a></li>
+<li><a href="#executable-example-throughput-and-cpi-scenarios">Executable Example: Throughput and CPI Scenarios</a></li>
+<li><a href="#implementation-comparison-three-datapath-organizations">Implementation Comparison: Three Datapath Organizations</a></li>
+<li><a href="#how-bottlenecks-move-when-a-datapath-changes">How Bottlenecks Move When a Datapath Changes</a></li>
+<li><a href="#data-hazard-walkthrough-forward-or-stall">Data-Hazard Walkthrough: Forward or Stall?</a></li>
+<li><a href="#executable-example-forwarding-priority">Executable Example: Forwarding Priority</a></li>
+<li><a href="#executable-example-an-unready-younger-producer-blocks-use">Executable Example: An Unready Younger Producer Blocks Use</a></li>
+<li><a href="#datapath-correctness-through-reference-model-comparison">Datapath Correctness Through Reference-Model Comparison</a></li>
+<li><a href="#a-practical-datapath-verification-matrix">A Practical Datapath Verification Matrix</a></li>
+<li><a href="#testing-a-datapath-under-stress">Testing a Datapath Under Stress</a></li>
+<li><a href="#reliability-and-error-containment-in-core-data-paths">Reliability and Error Containment in Core Data Paths</a></li>
+<li><a href="#security-privilege-and-speculative-data-movement">Security, Privilege, and Speculative Data Movement</a></li>
+<li><a href="#implementation-case-study-an-open-source-risc-v-core">Implementation Case Study: An Open-Source RISC-V Core</a></li>
+<li><a href="#scenario-1-a-microcontroller-needs-low-area-and-predictable-work">Scenario 1 — A Microcontroller Needs Low Area and Predictable Work</a></li>
+<li><a href="#scenario-2-a-pipeline-is-fast-but-a-dependent-loop-is-not">Scenario 2 — A Pipeline Is Fast but a Dependent Loop Is Not</a></li>
+<li><a href="#scenario-3-a-two-issue-core-hits-a-register-file-limit">Scenario 3 — A Two-Issue Core Hits a Register-File Limit</a></li>
+<li><a href="#scenario-4-correct-address-wrong-store-data">Scenario 4 — Correct Address, Wrong Store Data</a></li>
+<li><a href="#scenario-5-a-branch-misroute-reveals-control-coupling">Scenario 5 — A Branch Misroute Reveals Control Coupling</a></li>
+<li><a href="#scenario-6-an-isa-compatible-upgrade-needs-more-than-clock-speed">Scenario 6 — An ISA-Compatible Upgrade Needs More Than Clock Speed</a></li>
+<li><a href="#ten-gate-core-datapath-design-framework">Ten-Gate Core Datapath Design Framework</a></li>
+<li><a href="#common-misconceptions-and-corrections">Common Misconceptions and Corrections</a></li>
+<li><a href="#guided-exercises-and-design-problems">Guided Exercises and Design Problems</a></li>
+<li><a href="#review-questions-with-concise-answers">Review Questions with Concise Answers</a></li>
+<li><a href="#glossary-of-core-datapath-terms">Glossary of Core Datapath Terms</a></li>
+<li><a href="#specialist-unit-directory-and-continuing-study">Specialist Unit Directory and Continuing Study</a></li>
+<li><a href="#related-encyclopedia-topics">Related Encyclopedia Topics</a></li>
+<li><a href="#technical-references-and-primary-documentation">Technical References and Primary Documentation</a></li>
+<li><a href="#publication-status-and-editorial-scope">Publication Status and Editorial Scope</a></li>
+</ol></section>
+<section id="definition-and-specialist-scope" aria-labelledby="heading-definition-and-specialist-scope">
+<h2 id="heading-definition-and-specialist-scope">Definition and Specialist Scope</h2>
+<p>An <strong>instruction-processing core</strong> is an integrated collection of storage elements, computing circuits, control logic, and communication routes capable of executing a defined instruction set. Its <strong>datapath</strong> is the network through which instruction operands, intermediate results, addresses, and writeback values move. The <strong>control path</strong> selects the operation and routes the relevant values through that network. Together they form a physical implementation of an instruction-processing machine.</p>
+<p>The central question is not merely whether a processor can add two numbers. It is <em>where each operand comes from, how it reaches the correct functional unit, how a result is delivered to its destination, and how one instruction’s effects remain distinguishable from another’s</em>. A register file without read selection cannot supply operands; an arithmetic unit without a destination path cannot change processor state; a program counter without next-address selection cannot implement branches.</p>
+<p>This Level 5 specialist article sits under <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> and its <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/">specialist index</a>. The examples use a deliberately simplified <strong>RV32I-like teaching datapath</strong> rather than a claim about a commercial core. ISA specification belongs to <a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a>; detailed scheduling, speculative machinery, and interconnect topology have their own specialist owners.</p>
+</section>
+<section id="learning-objectives-and-guiding-questions" aria-labelledby="heading-learning-objectives-and-guiding-questions">
+<h2 id="heading-learning-objectives-and-guiding-questions">Learning Objectives and Guiding Questions</h2>
+<p>After studying this article, the reader should be able to identify the physical data-storage and movement elements of a core, trace at least six instruction classes, write a consistent control table, distinguish pipeline throughput from instruction latency, and evaluate whether a proposed datapath has enough ports, timing slack, and recovery mechanisms for its promised workload.</p>
+<ol>
+<li>Where does each instruction source operand originate, and which wires or bypasses carry it?</li>
+<li>What controls the result type, destination register, memory transaction, and next instruction address?</li>
+<li>Which structures are architecturally visible and which are implementation choices?</li>
+<li>What changes when the same logic is scheduled across multiple cycles or pipeline stages?</li>
+<li>How do timing, power, area, verification, and correctness constrain an apparently simple circuit?</li>
+</ol>
+</section>
+<section id="a-cpu-package-is-not-a-core" aria-labelledby="heading-a-cpu-package-is-not-a-core">
+<h2 id="heading-a-cpu-package-is-not-a-core">A CPU Package Is Not a Core</h2>
+<p>A <strong>processor package</strong> is a physical assembly installed or soldered into a platform; it may contain one or more dies, multiple cores, shared caches, memory controllers, accelerators, and I/O circuits. A <strong>core</strong> is a processing organization capable of progressing one or more instruction streams. An <strong>execution unit</strong> is only one functional resource inside a core, such as an integer ALU, shifter, multiplier, or floating-point unit.</p>
+<p>A <strong>hardware thread</strong> is a schedulable architectural context, often with its own program-visible registers and instruction pointer. A core supporting simultaneous multithreading may have more than one context while sharing some decode, scheduling, execution, and cache resources. Conversely, a single-core microcontroller may have one hardware thread but contain multiple execution subunits. Counting arithmetic units, physical dies, hardware contexts, and advertised cores as if they were the same quantity produces misleading performance estimates.</p>
+<p>For a processor with four cores and eight hardware threads, the relevant hardware question is how resources are distributed and shared—not whether the machine necessarily has eight independent datapaths. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multicore Topology</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading</a> cover those designs in detail.</p>
+</section>
+<section id="architecture-microarchitecture-and-physical-implementation" aria-labelledby="heading-architecture-microarchitecture-and-physical-implementation">
+<h2 id="heading-architecture-microarchitecture-and-physical-implementation">Architecture, Microarchitecture, and Physical Implementation</h2>
+<p>An <strong>instruction set architecture</strong> defines the externally meaningful instruction behavior, register and memory semantics, and exceptions. <strong>Microarchitecture</strong> describes internal structures that implement the contract: the register-file organization, datapath topology, pipeline stages, scheduling queues, and execution units. <strong>Physical implementation</strong> realizes these mechanisms in gates, storage cells, interconnect, clock networks, and power distribution.</p>
+<p>Two CPUs may implement the same ISA while having radically different internal datapaths: one may issue one instruction at a time, and another may decode several instructions, rename registers, and execute out of order. Software should obtain the promised architectural results in either case. This separation is essential: diagrams explaining a simple path from registers to an ALU are not literal descriptions of every superscalar or microcoded processor.</p>
+<p>A practical design review therefore distinguishes <em>required architectural behavior</em> from <em>chosen hardware mechanisms</em>. The first is verified against the ISA specification; the second is evaluated for timing, power, reliability, security, and implementation cost.</p>
+</section>
+<section id="state-elements-versus-combinational-logic" aria-labelledby="heading-state-elements-versus-combinational-logic">
+<h2 id="heading-state-elements-versus-combinational-logic">State Elements Versus Combinational Logic</h2>
+<p>Each datapath is constructed from two broad categories. <strong>State elements</strong> preserve information across clock edges or other storage events: flip-flops, latches where used, SRAM arrays, program counters, and pipeline registers. <strong>Combinational networks</strong> calculate outputs from current inputs: adders, shifters, comparators, decoders, multiplexers, and control equations. Memory arrays often have internal timing and port contracts that are more elaborate than a one-cycle black box.</p>
+<p>A clocked register accepts a value when its enable and timing conditions are satisfied. A combinational ALU does not independently remember its previous answer; changing operands changes its outputs after propagation delay. Between register boundaries, the combinational path must settle early enough to satisfy setup time at the receiving storage element and must not violate minimum hold-time constraints.</p>
+<p>This distinction also explains why a register-to-register circuit can run only as fast as its longest relevant timed path, even if most instructions use a much shorter route.</p>
+</section>
+<section id="conceptual-core-datapath-diagram" aria-labelledby="heading-conceptual-core-datapath-diagram">
+<h2 id="heading-conceptual-core-datapath-diagram">Conceptual Core Datapath Diagram</h2>
+<p>The diagram below is an instructional model: a fixed-width instruction fetch feeds decoding; two register operands reach an ALU; memory and arithmetic results converge on a writeback selector; a separate next-PC selector chooses sequential or redirected execution. Dashed conceptual links are omitted for clarity, and control signals are summarized rather than exhaustively drawn.</p>
+<figure>
+<svg viewBox="0 0 1000 440" role="img" aria-labelledby="datapath-title datapath-desc" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;border:1px solid currentColor;border-radius:8px">
+<title id="datapath-title">Simplified CPU core register-ALU-memory datapath</title>
+<desc id="datapath-desc">Program counter sends an address to instruction memory. Instruction decode controls a two-read one-write register file, operand multiplexers, an ALU, data memory, and a writeback multiplexer. A next-PC selector uses sequential and branch target addresses.</desc>
+<defs><marker id="cpuarrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 Z" fill="currentColor"/></marker></defs>
+<g fill="none" stroke="currentColor" stroke-width="2"><rect x="32" y="66" width="106" height="62" rx="7"/><rect x="187" y="66" width="140" height="62" rx="7"/><rect x="383" y="66" width="148" height="62" rx="7"/><rect x="583" y="165" width="112" height="72" rx="7"/><rect x="750" y="165" width="130" height="72" rx="7"/><rect x="753" y="322" width="126" height="60" rx="7"/><rect x="382" y="322" width="145" height="60" rx="7"/><rect x="190" y="321" width="133" height="60" rx="7"/><rect x="365" y="173" width="137" height="73" rx="7"/></g>
+<g fill="currentColor" font-family="sans-serif" font-size="16" text-anchor="middle"><text x="85" y="94">Program</text><text x="85" y="113">counter</text><text x="258" y="93">Instruction</text><text x="258" y="112">memory</text><text x="458" y="92">Decode and</text><text x="458" y="111">control</text><text x="434" y="200">Register file</text><text x="434" y="220">2R / 1W</text><text x="639" y="196">ALU</text><text x="639" y="215">and compare</text><text x="814" y="194">Data</text><text x="814" y="213">memory</text><text x="816" y="346">Writeback</text><text x="816" y="366">selector</text><text x="454" y="345">Next-PC</text><text x="454" y="364">selector</text><text x="256" y="345">PC + 4</text><text x="256" y="363">adder</text></g>
+<g stroke="currentColor" fill="none" stroke-width="2.5" marker-end="url(#cpuarrow)"><path d="M138 97H185"/><path d="M327 97H380"/><path d="M452 128V170"/><path d="M502 208H580"/><path d="M695 201H747"/><path d="M813 237V319"/><path d="M750 349H531V234H500"/><path d="M32 128V345H186"/><path d="M323 350H379"/><path d="M527 349H650V241H639"/><path d="M382 351H86V131"/></g>
+<g font-size="13" font-family="sans-serif" fill="currentColor"><text x="155" y="83">address</text><text x="338" y="83">instruction</text><text x="528" y="195">operands</text><text x="700" y="183">address/data</text><text x="565" y="341">result</text><text x="102" y="321">sequential</text><text x="329" y="304">branch/next</text></g>
+</svg>
+<figcaption>Figure 1. A conceptual CPU datapath, not the full circuitry of a particular commercial implementation. Control, branch-target, immediate, store-data, bypass, exception, and cache paths are elaborated in later sections.</figcaption>
+</figure>
+<p><strong>Reading rule:</strong> follow each instruction from its source registers or immediate fields through a selected functional path to its architectural effect. An arrow indicates potential data movement, not that all arrows are active for every instruction.</p>
+</section>
+<section id="instruction-fetch-and-the-program-counter" aria-labelledby="heading-instruction-fetch-and-the-program-counter">
+<h2 id="heading-instruction-fetch-and-the-program-counter">Instruction Fetch and the Program Counter</h2>
+<p>The <strong>program counter (PC)</strong> represents the address of the current or next instruction according to the implementation’s stage convention. A simple teaching core uses a PC register as an instruction-memory address and a separate adder to form a sequential successor. When considering only 32-bit instructions with four-byte alignment, that successor is <code>PC + 4</code>; variable-length instruction encodings require a length-aware successor.</p>
+<p>Instruction fetch may involve address translation, instruction caches, alignment logic, and prediction. The front end extracts instruction bits for a decoder and forwards a source-register index, destination-register index, opcode, immediate, and control fields to the relevant logic. The processor cannot assume the next instruction is always sequential: branch, jump, trap, and return mechanisms alter the next-PC path.</p>
+<p>Deep treatment of cache and predictor structures belongs to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a> and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculation</a>. This page uses the fetch block chiefly to connect instruction identity with datapath selection.</p>
+</section>
+<section id="instruction-decoding-and-control-signal-generation" aria-labelledby="heading-instruction-decoding-and-control-signal-generation">
+<h2 id="heading-instruction-decoding-and-control-signal-generation">Instruction Decoding and Control-Signal Generation</h2>
+<p>An instruction decoder maps relevant instruction bits, together with machine state and validity signals, into controls such as <code>RegWrite</code>, <code>MemWrite</code>, <code>ALUSrc</code>, <code>ALUOp</code>, <code>ResultSelect</code>, and <code>PCSelect</code>. A small core may implement these as combinational equations; a multicycle implementation may have a finite-state controller or a microcoded sequencer.</p>
+<p>Control signals must be coherent. A store may compute an address through the ALU and enable a memory write, but it must not also overwrite an unrelated destination register. A branch may compare two operands and redirect the PC only when its condition is true. Invalid or unsupported encodings must not accidentally enable writes because unused decoder bits happened to match a recognized pattern.</p>
+<p>Control and datapath are not physically separate subsystems with no interaction. Zero flags, carry or comparison results, memory-ready responses, exception indications, and forwarding availability flow back into control decisions.</p>
+</section>
+<section id="register-files-and-operand-port-requirements" aria-labelledby="heading-register-files-and-operand-port-requirements">
+<h2 id="heading-register-files-and-operand-port-requirements">Register Files and Operand Port Requirements</h2>
+<p>A <strong>register file</strong> is a bank of registers with addressable read and write ports. A conventional simple three-operand arithmetic instruction requests two source values and one destination write. A conceptual two-read/one-write file supplies <code>rs1</code> and <code>rs2</code> simultaneously and accepts the result for <code>rd</code> at the proper write event. The physical implementation may use flops, SRAM-like arrays, banking, duplication, or specialized cells.</p>
+<p>In the base RV32I integer ISA, 32 integer-register names <code>x0</code> through <code>x31</code> exist; <code>x0</code> reads as zero and ignores writes, while the other registers hold XLEN-bit values. The <code>PC</code> is an additional architectural state element. Register naming and calling conventions do not imply a unique physical storage layout. A speculative out-of-order core can have a much larger physical register file than the 32 architectural names.</p>
+<p>Port count and timing are design constraints. A core issuing two unrelated instructions in the same cycle could require four operand reads and two writes if handled in one unduplicated centralized register file. Banking, operand bypass, scheduling restrictions, and replication change this arithmetic. Port pressure can constrain clock speed, power, or issue throughput.</p>
+</section>
+<section id="executable-example-architectural-register-bank" aria-labelledby="heading-executable-example-architectural-register-bank">
+<h2 id="heading-executable-example-architectural-register-bank">Executable Example: Architectural Register Bank</h2>
+<pre><code class="language-python">class RegisterBank:
+    def __init__(self):
+        self.x = [0] * 32
+
+    def read(self, index):
+        if not 0 &lt;= index &lt; 32:
+            raise IndexError(index)
+        return 0 if index == 0 else self.x[index]
+
+    def write(self, index, value):
+        if not 0 &lt;= index &lt; 32:
+            raise IndexError(index)
+        if index != 0:
+            self.x[index] = value &amp; 0xFFFF_FFFF
+
+rf = RegisterBank()
+rf.write(6, 0xFFFF_FFFF)
+rf.write(7, 3)
+rf.write(5, rf.read(6) + rf.read(7))
+rf.write(0, 99)
+assert rf.read(5) == 2
+assert rf.read(0) == 0
+assert rf.read(6) == 0xFFFF_FFFF
+print(&quot;register bank: wraparound and x0 semantics verified&quot;)</code></pre><p>This is an <em>architectural behavior model</em>, not an accurate simulation of register-file write edges, electrical delay, or physical port collisions. The masking operation implements a chosen 32-bit arithmetic result; an actual instruction’s complete semantics must follow the relevant ISA.</p>
+</section>
+<section id="operand-selection-and-immediate-generation" aria-labelledby="heading-operand-selection-and-immediate-generation">
+<h2 id="heading-operand-selection-and-immediate-generation">Operand Selection and Immediate Generation</h2>
+<p>The first ALU operand typically comes from a source register or a specially selected value such as the PC. The second may come from a register, an <strong>immediate</strong> decoded from instruction bits, a constant, or an auxiliary path. A multiplexer chooses one candidate under a control signal. An immediate generator performs bit rearrangement, sign extension, and any required scaling according to the particular instruction encoding.</p>
+<p>In a register-add instruction, an ALU input might be <code>RF[rs2]</code>; in add-immediate, the same ALU input is the sign-extended immediate; in load and store, it usually represents an address offset. Mixing the source register index with the value stored in that register is a common diagram error. Another error is to zero-extend a negative signed immediate and thereby produce an incorrect address or arithmetic value.</p>
+<p>Multiplexers are not free: each selected path adds logic, capacitance, and sometimes wire delay. The number of choices and physical distance between sources can affect a critical path even if the arithmetic unit itself is fast.</p>
+</section>
+<section id="arithmetic-units-shifters-and-comparators" aria-labelledby="heading-arithmetic-units-shifters-and-comparators">
+<h2 id="heading-arithmetic-units-shifters-and-comparators">Arithmetic Units, Shifters, and Comparators</h2>
+<p>The <strong>arithmetic logic unit (ALU)</strong> performs selected integer operations such as addition, subtraction, AND, OR, XOR, and comparison. A shifter may be a separate functional block or integrated with the ALU. Some designs provide dedicated branch comparison or address-generation units; others reuse a shared adder and pay scheduling costs when requests contend.</p>
+<p>An adder computes modulo 2<sup>XLEN</sup> arithmetic for relevant integer instructions; signedness changes how bit patterns are interpreted and how comparisons are performed, not necessarily the underlying addition circuit. In RV32I, base integer ADD does not trap on signed overflow. Shift amounts and comparison semantics must still be decoded correctly.</p>
+<p>Multipliers, dividers, floating-point blocks, vector lanes, and cryptographic instructions are not automatically part of a minimal base integer core. They can have different latency, throughput, power, and register-interface demands. See <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a> for their internal designs.</p>
+</section>
+<section id="executable-example-modular-integer-alu" aria-labelledby="heading-executable-example-modular-integer-alu">
+<h2 id="heading-executable-example-modular-integer-alu">Executable Example: Modular Integer ALU</h2>
+<pre><code class="language-python">MASK = (1 &lt;&lt; 32) - 1
+
+def signed32(x):
+    x &amp;= MASK
+    return x if x &lt; (1 &lt;&lt; 31) else x - (1 &lt;&lt; 32)
+
+def alu(operation, a, b):
+    a, b = a &amp; MASK, b &amp; MASK
+    if operation == &quot;ADD&quot;: return (a + b) &amp; MASK
+    if operation == &quot;SUB&quot;: return (a - b) &amp; MASK
+    if operation == &quot;AND&quot;: return a &amp; b
+    if operation == &quot;OR&quot;: return a | b
+    if operation == &quot;XOR&quot;: return a ^ b
+    if operation == &quot;SLT&quot;: return int(signed32(a) &lt; signed32(b))
+    if operation == &quot;SLTU&quot;: return int(a &lt; b)
+    raise ValueError(&quot;unsupported ALU operation&quot;)
+
+assert alu(&quot;ADD&quot;, 0xFFFF_FFFF, 1) == 0
+assert alu(&quot;SUB&quot;, 0, 1) == 0xFFFF_FFFF
+assert alu(&quot;SLT&quot;, 0xFFFF_FFFF, 1) == 1
+assert alu(&quot;SLTU&quot;, 0xFFFF_FFFF, 1) == 0
+print(&quot;ALU: modular arithmetic and signed/unsigned comparison verified&quot;)</code></pre><p>Observe that signed less-than and unsigned less-than can disagree on the same 32-bit bit patterns. An ALU schematic should therefore expose which flags or comparison modes are selected, rather than treating a generic “less-than” box as self-explanatory.</p>
+</section>
+<section id="result-selection-and-register-writeback" aria-labelledby="heading-result-selection-and-register-writeback">
+<h2 id="heading-result-selection-and-register-writeback">Result Selection and Register Writeback</h2>
+<p>The value written to a destination register may come from an ALU, loaded memory, a calculated return address, or another result source. A <strong>writeback multiplexer</strong> chooses the appropriate source. Its destination register identifier must travel with the corresponding instruction, particularly after a pipeline introduces stage delays.</p>
+<p>For arithmetic, <code>ALUResult</code> is selected; for a load, the loaded and appropriately extended memory value is selected; for a jump-and-link, the return address becomes a register result. Store and conditional branch instructions generally have no general-purpose destination write in the simple RV32I examples.</p>
+<p>The physical moment at which an execution result becomes available may differ from the moment it can safely update architectural state. In speculative designs, results can occupy temporary physical registers before they retire in program order. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a> develops that distinction.</p>
+</section>
+<section id="data-memory-path-and-load-store-addressing" aria-labelledby="heading-data-memory-path-and-load-store-addressing">
+<h2 id="heading-data-memory-path-and-load-store-addressing">Data-Memory Path and Load/Store Addressing</h2>
+<p>For a typical load/store ISA, the ALU computes an <strong>effective address</strong> by adding a base-register value to a sign-extended offset. A store sends both the computed address and the store-data operand to the memory subsystem. A load returns data that may require alignment extraction, byte selection, sign extension, or zero extension before writeback.</p>
+<p>An essential diagram detail is that the store-data path must remain available even when the ALU second input is the immediate offset. The datapath therefore needs separate mechanisms to transport <code>RF[rs2]</code> as store payload while the ALU calculates <code>RF[rs1] + offset</code>. Omitting this path yields a diagram that cannot execute stores.</p>
+<p>A teaching model may depict data memory as returning a value immediately. Actual systems include caching, translation, memory protection, load-store queues, forwarding, latency variation, faults, and potentially asynchronous responses. These subjects are expanded in <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a>.</p>
+</section>
+<section id="branch-comparison-and-next-pc-selection" aria-labelledby="heading-branch-comparison-and-next-pc-selection">
+<h2 id="heading-branch-comparison-and-next-pc-selection">Branch Comparison and Next-PC Selection</h2>
+<p>A branch requires both a <strong>decision</strong> and a <strong>target</strong>. The decision compares operands according to signed, unsigned, equality, or other rules. The target may be formed by a PC-relative displacement, a register-address calculation, or an exception vector. A next-PC selector chooses the proper successor once the relevant condition and legality checks are known.</p>
+<p>In a simple teaching core, a branch that is not taken selects the sequential address; a taken branch selects the target. The branch-control signal is not identical to the branch condition: one identifies that an instruction is a branch and the other determines whether that particular branch redirects execution. Incorrectly joining the signals can redirect the PC for arithmetic instructions that happen to produce a “zero” ALU result.</p>
+<p>Some implementations compute the target independently from comparison logic to reduce latency. Speculative cores may fetch a predicted target long before the branch condition is resolved and must recover if that prediction proves incorrect. These mechanisms are not required to define the abstract datapath but change its real timing and paths.</p>
+</section>
+<section id="six-instruction-classes-and-their-datapath-routes" aria-labelledby="heading-six-instruction-classes-and-their-datapath-routes">
+<h2 id="heading-six-instruction-classes-and-their-datapath-routes">Six Instruction Classes and Their Datapath Routes</h2>
+<p>A compact CPU is easier to understand by following <strong>architectural effects</strong> rather than memorizing a decorative schematic. The table uses RV32I-style assembly syntax and assumes 32-bit instruction encodings for its sequential-PC examples. The labels describe conceptual routes; they do not specify a unique number of clock cycles.</p><table><thead><tr><th scope="col">Example</th><th scope="col">Selected operand/result path</th><th scope="col">Architectural effect</th><th scope="col">Next-PC decision</th></tr></thead><tbody><tr><td><code>ADD x5,x6,x7</code></td><td>Read x6 and x7 → ALU add → writeback</td><td>x5 receives sum modulo 2<sup>32</sup></td><td>Sequential</td></tr><tr><td><code>ADDI x5,x6,-3</code></td><td>Read x6, sign-extend -3 → ALU add → writeback</td><td>x5 receives sum</td><td>Sequential</td></tr><tr><td><code>LW x5,12(x6)</code></td><td>Read x6, add +12 → data memory → writeback</td><td>x5 receives the loaded signed 32-bit word</td><td>Sequential</td></tr><tr><td><code>SW x5,12(x6)</code></td><td>Read x6 and x5, add +12 → data memory write</td><td>Memory at the effective address receives x5</td><td>Sequential</td></tr><tr><td><code>BEQ x6,x7,target</code></td><td>Read x6/x7 → equality comparison; calculate target</td><td>No GPR write</td><td>Branch target only if operands match</td></tr><tr><td><code>JAL x1,target</code></td><td>PC + instruction length → link writeback; PC + offset</td><td>x1 receives return address</td><td>Jump target</td></tr></tbody></table><p>A load operation is not “just an ADD followed by a write”: it computes an address, requests or waits for memory, selects the returned data, and writes it to the destination. Similarly, a store does not use the writeback port to update main memory.</p>
+</section>
+<section id="control-signals-as-a-coherent-instruction-contract" aria-labelledby="heading-control-signals-as-a-coherent-instruction-contract">
+<h2 id="heading-control-signals-as-a-coherent-instruction-contract">Control Signals as a Coherent Instruction Contract</h2>
+<p>Control tables are compact descriptions of selected circuits. The following table defines signals for a <strong>particular simplified single-issue datapath</strong>; real cores may encode controls differently, use separate comparators, or spread a given instruction across multiple micro-operations. Here <code>ALUSrc=I</code> selects an immediate as the second input, <code>R</code> selects a register, <code>RegWrite</code> authorizes a destination-register write, and <code>Result</code> chooses its source.</p><table><thead><tr><th scope="col">Instruction</th><th scope="col">ALU purpose</th><th scope="col">ALUSrc</th><th scope="col">MemWrite</th><th scope="col">RegWrite</th><th scope="col">Result</th><th scope="col">PC path</th></tr></thead><tbody><tr><td>ADD</td><td>add</td><td>R</td><td>0</td><td>1</td><td>ALU</td><td>sequential</td></tr><tr><td>ADDI</td><td>add</td><td>I</td><td>0</td><td>1</td><td>ALU</td><td>sequential</td></tr><tr><td>LW</td><td>address add</td><td>I</td><td>0</td><td>1</td><td>memory</td><td>sequential</td></tr><tr><td>SW</td><td>address add</td><td>I</td><td>1</td><td>0</td><td>—</td><td>sequential</td></tr><tr><td>BEQ</td><td>equality/compare</td><td>R</td><td>0</td><td>0</td><td>—</td><td>conditional</td></tr><tr><td>JAL</td><td>target formation (may have own adder)</td><td>—</td><td>0</td><td>1</td><td>link address</td><td>unconditional</td></tr></tbody></table><p>A “—” indicates a control that is irrelevant for a design without a corresponding active write. This is a <em>descriptive don’t-care</em>, not permission to drive unpredictable write enables. Unrecognized instructions must be rejected or handled as specified rather than interpreted by accidental bit patterns.</p>
+</section>
+<section id="worked-trace-register-to-register-add" aria-labelledby="heading-worked-trace-register-to-register-add">
+<h2 id="heading-worked-trace-register-to-register-add">Worked Trace: Register-to-Register ADD</h2>
+<p>Consider <code>ADD x5, x6, x7</code>, with x6 holding 7 and x7 holding 11. The instruction decoder identifies two register sources and destination x5. The register-file selectors output 7 and 11. The ALU control selects addition, the second-operand multiplexer selects the register path, and the ALU produces 18. The result selector chooses ALU output; <code>RegWrite</code> authorizes x5 to receive 18. The sequential-PC logic chooses the next instruction address.</p>
+<p>The instruction’s correctness argument can be stated as a state transition: given valid operands and no relevant exception, the new architectural register mapping differs from the old mapping only at x5, where it holds the modulo-32-bit sum. Memory is unchanged, and control proceeds sequentially. In a physical design, values are valid during specific timing windows; the model’s simple narrative is not a statement that every circuit changes instantaneously.</p>
+<p>This trace also reveals potential hazards. If the prior instruction produces x6 but that result has not reached the register file, the consumer may need bypass data, a stall, or a different schedule.</p>
+</section>
+<section id="worked-trace-add-immediate-and-sign-extension" aria-labelledby="heading-worked-trace-add-immediate-and-sign-extension">
+<h2 id="heading-worked-trace-add-immediate-and-sign-extension">Worked Trace: Add-Immediate and Sign Extension</h2>
+<p>For <code>ADDI x5, x6, -3</code>, assume x6 equals 7. Instruction decode extracts the destination and source register indices plus the signed immediate field. Immediate-generation logic forms the XLEN-bit bit pattern corresponding to -3. An ALU input selector chooses that immediate rather than the second read port. Adding 7 and -3 produces 4, which is written to x5.</p>
+<p>The difference from register ADD is physical: the second operand comes from immediate-generation logic, not from another register read. Depending on the ISA and implementation, the same adder may also serve load/store address generation. A diagram with a fixed second ALU input connected only to a register file cannot implement this instruction family without an additional selection path.</p>
+<p>At a boundary such as x6 = 0, the result is the 32-bit two’s-complement encoding of -3. The numerical interpretation is distinct from the bit pattern; the datapath carries bits, while individual operations specify their interpretation.</p>
+</section>
+<section id="worked-trace-load-word" aria-labelledby="heading-worked-trace-load-word">
+<h2 id="heading-worked-trace-load-word">Worked Trace: Load Word</h2>
+<p>For <code>LW x5, 12(x6)</code>, assume x6 holds address 0x1000 and memory at 0x100C contains 0xFFFF_FFFD. The ALU calculates 0x100C from the base register and sign-extended offset. The memory system checks the relevant access conditions and obtains the word. The load-data path returns 0xFFFF_FFFD and the result selector directs it to the register file for x5.</p>
+<p>If interpreted as a signed 32-bit integer, that bit pattern is -3; it is nevertheless the same 32 bits in the register. In a real implementation, the load may be delayed or fault because of alignment rules, translation or protection, cache misses, or device behavior. Successful architectural writeback must not occur for an instruction that is required to report a fault instead.</p>
+<p>The crucial datapath distinction is that address-generation and data-return are separate operations. An early address result does not mean the loaded data is already available.</p>
+</section>
+<section id="worked-trace-store-word" aria-labelledby="heading-worked-trace-store-word">
+<h2 id="heading-worked-trace-store-word">Worked Trace: Store Word</h2>
+<p>For <code>SW x5, 12(x6)</code>, the register-file first read produces the address base, and the second read produces the store data. The ALU second input is the sign-extended offset, not the store-data register. The ALU computes the effective address, while a dedicated store-data path delivers x5’s bits to the write interface. <code>MemWrite</code> is asserted only at the appropriate valid transaction point.</p>
+<p>If the memory target rejects the access, the processor must follow the ISA and system’s exception rules. Many pipelined and speculative CPUs defer globally visible store effects until a safe commit point; an instruction reaching an address-generation unit is not equivalent to architectural store completion.</p>
+<p>Trace the path backwards when debugging a store failure: if the address is correct but the contents are wrong, inspect store-data selection, byte enables, masks, forwarding, and memory-interface timing before assuming the adder is faulty.</p>
+</section>
+<section id="worked-trace-conditional-branch-and-jump" aria-labelledby="heading-worked-trace-conditional-branch-and-jump">
+<h2 id="heading-worked-trace-conditional-branch-and-jump">Worked Trace: Conditional Branch and Jump</h2>
+<p>A conditional equality branch uses two source-register values for comparison and also forms a candidate target address. If the comparison is true and no higher-priority exception intervenes, the next-PC selector chooses the target. Otherwise it chooses the sequential address. Branch-taken status and target computation can be performed by one shared ALU or by parallel specialized units.</p>
+<p>A jump-and-link instruction performs a different pair of tasks: it writes a return address to a selected register and redirects the PC. In the simplified fixed-width case the link value is the old PC + 4, not the branch target. A design that writes the target address as the return value would break ordinary function-call control flow.</p>
+<p>Actual RISC-V encodings permit compressed instructions when the relevant extension is supported, so the link address advances by the length of the jumping instruction; the +4 example is specifically a 32-bit instruction. Likewise, target-alignment and fault behavior are ISA- and extension-specific and must be verified.</p>
+</section>
+<section id="executable-reference-a-six-instruction-teaching-core" aria-labelledby="heading-executable-reference-a-six-instruction-teaching-core">
+<h2 id="heading-executable-reference-a-six-instruction-teaching-core">Executable Reference: A Six-Instruction Teaching Core</h2>
+<pre><code class="language-python">MASK = 0xFFFF_FFFF
+
+class ToyCore:
+    &quot;&quot;&quot;Conceptual RV32-like state transitions; not a cycle-accurate CPU.&quot;&quot;&quot;
+    def __init__(self):
+        self.x = [0] * 32
+        self.pc = 0
+        self.memory = {}  # aligned word address -&gt; 32-bit value
+
+    def read(self, r):
+        assert 0 &lt;= r &lt; 32
+        return 0 if r == 0 else self.x[r]
+
+    def write(self, r, value):
+        assert 0 &lt;= r &lt; 32
+        if r:
+            self.x[r] = value &amp; MASK
+
+    def word_address(self, value):
+        address = value &amp; MASK
+        if address % 4:
+            raise ValueError(&quot;unaligned word address in teaching model&quot;)
+        return address
+
+    def step(self, instruction):
+        op, *arg = instruction
+        old_pc = self.pc
+        next_pc = (old_pc + 4) &amp; MASK
+        if op == &quot;ADD&quot;:
+            rd, rs1, rs2 = arg
+            self.write(rd, self.read(rs1) + self.read(rs2))
+        elif op == &quot;ADDI&quot;:
+            rd, rs1, imm = arg
+            self.write(rd, self.read(rs1) + imm)
+        elif op == &quot;LW&quot;:
+            rd, offset, base = arg
+            a = self.word_address(self.read(base) + offset)
+            self.write(rd, self.memory.get(a, 0))
+        elif op == &quot;SW&quot;:
+            rs2, offset, base = arg
+            a = self.word_address(self.read(base) + offset)
+            self.memory[a] = self.read(rs2)
+        elif op == &quot;BEQ&quot;:
+            rs1, rs2, offset = arg
+            if self.read(rs1) == self.read(rs2):
+                next_pc = (old_pc + offset) &amp; MASK
+        elif op == &quot;JAL&quot;:
+            rd, offset = arg
+            self.write(rd, next_pc)
+            next_pc = (old_pc + offset) &amp; MASK
+        else:
+            raise ValueError(&quot;unsupported instruction&quot;)
+        self.pc = next_pc
+
+cpu = ToyCore()
+cpu.write(6, 0x1000)
+cpu.write(7, 11)
+cpu.step((&quot;ADDI&quot;, 5, 7, -3))   # x5 &lt;- 8
+cpu.step((&quot;SW&quot;, 5, 12, 6))     # memory[0x100C] &lt;- 8
+cpu.step((&quot;LW&quot;, 8, 12, 6))     # x8 &lt;- 8
+cpu.step((&quot;BEQ&quot;, 5, 8, 8))     # PC 12 -&gt; 20
+cpu.step((&quot;JAL&quot;, 1, 16))       # x1 &lt;- 24; PC -&gt; 36
+assert (cpu.read(5), cpu.read(8), cpu.read(1), cpu.pc) == (8, 8, 24, 36)
+print(&quot;toy datapath trace: registers, load/store, branch and link verified&quot;)</code></pre><p>This emulator intentionally omits binary instruction encoding, instruction fetch faults, privilege modes, byte-level memory, cache timing, store buffering, trap handling, and 16-bit instruction forms. It demonstrates the <em>data dependencies and architectural effects</em> of selected instruction classes; it is not a replacement for an ISA simulator or RTL verification.</p>
+</section>
+<section id="datapath-invariants-that-catch-wiring-errors" aria-labelledby="heading-datapath-invariants-that-catch-wiring-errors">
+<h2 id="heading-datapath-invariants-that-catch-wiring-errors">Datapath Invariants That Catch Wiring Errors</h2>
+<p>A datapath invariant is a condition required to hold whenever the corresponding instruction is valid and authorized. Examples include: a store must not assert general-register writeback; a register-register ADD must not read an immediate as its second ALU operand; a load must select memory data rather than its computed address for its destination value; a branch condition must use the intended architectural operands; and a write to the architecturally constant zero register must not alter later reads.</p>
+<p>In a simplified, non-speculative model, one can test these properties after every instruction. In a pipelined or speculative core, invariants must be attached to the right time and event: “no visible store before commit” is more precise than “no memory interface activity before commit,” because prefetching, speculative translation, and internal queues may operate earlier. An architectural reference model and a cycle-accurate implementation model answer different questions.</p>
+<p>Many consequential bugs are control-path bugs, not mistakes in ALU mathematics: a stale destination index, incorrect byte enables, a write enable asserted for an invalid instruction, or a bypass selecting a value from a younger instruction.</p>
+</section>
+<section id="single-cycle-organization-one-long-combinational-route" aria-labelledby="heading-single-cycle-organization-one-long-combinational-route">
+<h2 id="heading-single-cycle-organization-one-long-combinational-route">Single-Cycle Organization: One Long Combinational Route</h2>
+<p>A <strong>single-cycle instructional datapath</strong> completes the effects of each instruction within one clock period, bounded by storage-element timing. Its conceptual advantages are directness and limited inter-instruction timing state. Its major cost is that the period must accommodate the longest legal path—often a load passing through instruction fetch, register read, address calculation, data access, and result selection.</p>
+<p>Suppose one teaching circuit has 0.22 ns of instruction access, 0.14 ns of register reading, 0.18 ns of ALU delay, 0.45 ns of data access, and 0.10 ns of result selection and capture allowance. Under this <em>overly simplified additive model</em>, the load path totals 1.09 ns; the maximum clock rate based on that path alone is approximately 0.917 GHz. This is not a benchmark of an actual product and does not replace setup, skew, uncertainty, routing, or other timing constraints.</p>
+<p>All instructions must use the same clock period even if an AND instruction could finish much sooner. Long paths penalize short operations, while the single-cycle approach may require separate instruction and data access resources to avoid a structural conflict.</p>
+</section>
+<section id="executable-example-simplified-timing-budget" aria-labelledby="heading-executable-example-simplified-timing-budget">
+<h2 id="heading-executable-example-simplified-timing-budget">Executable Example: Simplified Timing Budget</h2>
+<pre><code class="language-python">path_ns = {
+    &quot;instruction&quot;: 0.22,
+    &quot;register_read&quot;: 0.14,
+    &quot;alu&quot;: 0.18,
+    &quot;data_access&quot;: 0.45,
+    &quot;result_capture&quot;: 0.10,
+}
+single_cycle_ns = sum(path_ns.values())
+frequency_ghz = 1 / single_cycle_ns
+assert round(single_cycle_ns, 2) == 1.09
+assert round(frequency_ghz, 3) == 0.917
+
+# A hypothetical five-stage design has a maximum logic stage of 0.45 ns
+# and an assumed register/clock overhead of 0.08 ns per stage.
+pipeline_clock_ns = 0.45 + 0.08
+assert round(1 / pipeline_clock_ns, 3) == 1.887
+print(f&quot;single-cycle  {single_cycle_ns:.2f} ns, {frequency_ghz:.3f} GHz&quot;)
+print(f&quot;ideal stage    {pipeline_clock_ns:.2f} ns, {1/pipeline_clock_ns:.3f} GHz&quot;)</code></pre><p>The hypothetical pipeline can accept more instructions over time only if hazards and resource conflicts permit. Its five-stage instruction latency is not 0.53 ns; neglecting stalls, it is closer to five stage periods, about 2.65 ns. More stages can increase throughput without improving the time required for a single dependent instruction.</p>
+</section>
+<section id="multicycle-datapaths-and-resource-reuse" aria-labelledby="heading-multicycle-datapaths-and-resource-reuse">
+<h2 id="heading-multicycle-datapaths-and-resource-reuse">Multicycle Datapaths and Resource Reuse</h2>
+<p>In a <strong>multicycle</strong> processor, instruction work is partitioned into sequential steps such as fetch, decode/register read, execute or address calculation, memory access, and writeback. Different instruction classes may require different numbers of cycles. A register-register operation might not need the data-memory stage; a branch might terminate after comparison and PC selection; a load generally requires memory return before writing its destination.</p>
+<p>A multicycle organization can reuse one ALU for both <code>PC + 4</code> and effective-address calculations on different cycles, or can use a single physical memory port for instruction and data requests at different moments. Intermediate registers preserve values while control advances through the required states. This can reduce hardware duplication but creates a more involved control machine and variable CPI.</p>
+<p>A multicycle core is not synonymous with a pipelined core. In a simple multicycle arrangement, only one instruction may occupy the reused resources at a time, whereas pipelining overlaps steps from several instructions. Evaluating resource savings therefore requires both area and sustained throughput, not clock frequency alone.</p>
+</section>
+<section id="pipeline-stages-and-overlapped-execution" aria-labelledby="heading-pipeline-stages-and-overlapped-execution">
+<h2 id="heading-pipeline-stages-and-overlapped-execution">Pipeline Stages and Overlapped Execution</h2>
+<p>A <strong>pipeline</strong> inserts registers between portions of the datapath so several instructions can occupy distinct stages concurrently. A familiar educational arrangement uses fetch (IF), decode/register-read (ID), execute (EX), memory (MEM), and writeback (WB). Actual processors combine or divide stages differently, and a stage label does not uniquely describe its logic.</p>
+<p>Pipelining replaces one long register-to-register timing path with a set of shorter paths plus pipeline-register overhead. If enough independent work exists and the pipeline avoids stalls, an ideal single-issue pipeline can <em>complete</em> roughly one instruction per cycle in steady state, even though each instruction occupies several cycles. Filling and draining the pipeline, branches, dependencies, and variable memory latency reduce realized throughput.</p>
+<p>Every payload that is still needed must cross stage boundaries: destination register identifiers, operand values, immediate values, control bits, exception status, and valid/kill tags. A correct result paired with the wrong destination tag is an incorrect processor. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a> treats full stage scheduling and conflict handling.</p>
+</section>
+<section id="pipeline-timing-table-five-instructions" aria-labelledby="heading-pipeline-timing-table-five-instructions">
+<h2 id="heading-pipeline-timing-table-five-instructions">Pipeline Timing Table: Five Instructions</h2>
+<table><thead><tr><th scope="col">Instruction</th><th scope="col">Cycle 1</th><th scope="col">Cycle 2</th><th scope="col">Cycle 3</th><th scope="col">Cycle 4</th><th scope="col">Cycle 5</th><th scope="col">Cycle 6</th><th scope="col">Cycle 7</th><th scope="col">Cycle 8</th><th scope="col">Cycle 9</th></tr></thead><tbody><tr><td>I1</td><td>IF</td><td>ID</td><td>EX</td><td>MEM</td><td>WB</td><td>—</td><td>—</td><td>—</td><td>—</td></tr><tr><td>I2</td><td>—</td><td>IF</td><td>ID</td><td>EX</td><td>MEM</td><td>WB</td><td>—</td><td>—</td><td>—</td></tr><tr><td>I3</td><td>—</td><td>—</td><td>IF</td><td>ID</td><td>EX</td><td>MEM</td><td>WB</td><td>—</td><td>—</td></tr><tr><td>I4</td><td>—</td><td>—</td><td>—</td><td>IF</td><td>ID</td><td>EX</td><td>MEM</td><td>WB</td><td>—</td></tr><tr><td>I5</td><td>—</td><td>—</td><td>—</td><td>—</td><td>IF</td><td>ID</td><td>EX</td><td>MEM</td><td>WB</td></tr></tbody></table><p>This is the <strong>ideal schedule</strong> for one five-stage, one-instruction-per-cycle pipeline with no hazards and no bubbles. The first result retires in cycle 5; subsequent results retire in successive cycles. Five instructions consume nine total cycles including fill/drain. The schedule is not correct for arbitrary dependent instruction sequences without appropriate forwarding or stalls.</p>
+</section>
+<section id="raw-dependencies-and-bypass-networks" aria-labelledby="heading-raw-dependencies-and-bypass-networks">
+<h2 id="heading-raw-dependencies-and-bypass-networks">RAW Dependencies and Bypass Networks</h2>
+<p>A <strong>read-after-write (RAW) dependency</strong> arises when an instruction consumes a register value produced by an earlier instruction. Consider <code>ADD x5,x6,x7</code> immediately followed by <code>SUB x8,x5,x9</code>. The subtract instruction needs the newly computed x5, not the value previously stored there. If the producer has generated an ALU result but has not yet written it to the register file, an operand may be forwarded from a later pipeline stage to the consumer’s ALU input.</p>
+<p>This <strong>bypass or forwarding network</strong> contains comparator logic for matching destination and source tags, data paths from candidate producers, muxes, and freshness rules. If both an older and a newer producer write the same register name, a consumer must receive the correct most recent preceding definition. Forwarding logic must also respect result-valid flags, squashed instructions, and instructions that produce no register result.</p>
+<p>The network can reduce stalls but adds area, routing, mux depth, and potential timing pressure. A bypass drawn as a single arrow conceals the arbitration rules and the number of candidate sources that may be needed in an actual core.</p>
+</section>
+<section id="load-use-hazards-and-memory-latency" aria-labelledby="heading-load-use-hazards-and-memory-latency">
+<h2 id="heading-load-use-hazards-and-memory-latency">Load-Use Hazards and Memory Latency</h2>
+<p>A load-use sequence such as <code>LW x5,0(x6)</code> followed immediately by <code>ADD x7,x5,x8</code> is not always solved by ordinary ALU-result forwarding. The address may be available in EX, but the loaded data may arrive only in MEM or later. If the dependent ADD needs its operand earlier than that, the pipeline inserts a bubble or rearranges execution; many conventional simple five-stage models require one stall cycle for an immediate load-use dependency.</p>
+<p>This is an illustrative scheduling rule, not a universal constant: pipeline depth, cache timing, load bypass provisions, out-of-order scheduling, and variable memory response determine the actual penalty. A cache miss can stall for many cycles, while a ready independent instruction in a more advanced core may proceed.</p>
+<p>Designs must represent the difference between <em>address-ready</em>, <em>load-data-ready</em>, and <em>architecturally complete</em>. Treating all three as the same signal is a common source of dependency bugs.</p>
+</section>
+<section id="structural-hazards-and-resource-contention" aria-labelledby="heading-structural-hazards-and-resource-contention">
+<h2 id="heading-structural-hazards-and-resource-contention">Structural Hazards and Resource Contention</h2>
+<p>A <strong>structural hazard</strong> occurs when concurrent pipeline activities require a hardware resource that cannot serve all of them simultaneously. Examples include an instruction-fetch port colliding with a load on a unified single-port memory, two same-cycle register writes competing for one write port, or a multiply instruction occupying a non-pipelined arithmetic unit while another multiply requests entry.</p>
+<p>Design alternatives include extra ports, duplicated resources, banking, time multiplexing, buffering, altered issue policy, or stalls. Each changes cost and timing. A single-issue pipeline may avoid some multiwrite-port problems by construction but still face cache, memory, TLB, or shared execution conflicts.</p>
+<p>Before claiming a datapath supports N instructions per cycle, count the required operand reads, destination writes, memory operations, execution pipelines, and retirement capacity for the intended instruction mix. Peak width at one stage is not end-to-end sustained width.</p>
+</section>
+<section id="explicit-control-of-stalls-flushes-and-validity" aria-labelledby="heading-explicit-control-of-stalls-flushes-and-validity">
+<h2 id="heading-explicit-control-of-stalls-flushes-and-validity">Explicit Control of Stalls, Flushes, and Validity</h2>
+<p>A pipeline register often stores data plus a <strong>valid bit</strong> and control information. During a stall, a stage may retain an instruction while another stage receives a bubble. When control flow is redirected or an exception occurs, younger instructions along the wrong path must be invalidated or otherwise prevented from changing architectural state. A stalled or squashed store must not escape as a valid visible transaction.</p>
+<p>Control priorities matter: reset, exception, kill, stall, and ordinary update conditions cannot be assigned arbitrarily. For example, a kill condition should not be lost because a stage is also stalled. The exact priority scheme depends on implementation, but its externally observable effect must match the machine’s instruction contract.</p>
+<p>A schematic that only shows arithmetic signals cannot establish correctness under interrupts, flushes, or memory backpressure. These paths are part of the real datapath/control interface even when omitted from an introductory figure.</p>
+</section>
+<section id="execution-units-latency-and-initiation-interval" aria-labelledby="heading-execution-units-latency-and-initiation-interval">
+<h2 id="heading-execution-units-latency-and-initiation-interval">Execution Units, Latency, and Initiation Interval</h2>
+<p>An execution unit’s <strong>latency</strong> is the elapsed interval before a particular result becomes available to a dependent consumer. Its <strong>initiation interval</strong> or reciprocal throughput characterizes how frequently it can begin independent operations under the relevant resource assumptions. A pipelined multiplier might accept a new multiply each cycle but return each result several cycles later. An iterative divider may be unavailable for another division until its internal sequence finishes.</p>
+<p>If a processor has two ALUs, it does not follow that every instruction pair can complete simultaneously. Decode, operand delivery, instruction ordering, data dependencies, memory resources, and retirement all matter. Likewise, a fast ALU clock rate does not guarantee proportional application speedup if instructions mostly wait for memory.</p>
+<p>Measure unit capacity using a workload and identify the bottleneck resource. The difference between latency and throughput is fundamental to interpreting performance figures and choosing datapath structures.</p>
+</section>
+<section id="worked-example-port-budget-for-two-issue-arithmetic" aria-labelledby="heading-worked-example-port-budget-for-two-issue-arithmetic">
+<h2 id="heading-worked-example-port-budget-for-two-issue-arithmetic">Worked Example: Port Budget for Two-Issue Arithmetic</h2>
+<p>Suppose a core should issue two independent three-operand integer instructions in the same cycle. Each instruction reads up to two source operands and writes one result. A naive single centralized register file would need up to four read ports and two write ports available at relevant times to support this pattern without restrictions. That is a <strong>logical demand</strong>; the actual physical design may bypass some operands, divide storage into banks, serialize accesses, or implement a different schedule.</p>
+<p>Now suppose both instructions share one single-cycle integer ALU. Four read ports do not solve the execution conflict: only one operation can use that ALU at a time unless the unit supports an appropriate wider issue or duplication. Two ALUs do not solve a one-write-port conflict if both results need the same write event.</p>
+<p>The general budgeting approach is to identify per-instruction sources and sinks, multiply by target issue width, and then account for bypassing, banking conflicts, multicycle reservations, and real hardware timing. This reveals bottlenecks earlier than a high-level claim of “dual issue.”</p>
+</section>
+<section id="multicycle-functions-and-iterative-hardware" aria-labelledby="heading-multicycle-functions-and-iterative-hardware">
+<h2 id="heading-multicycle-functions-and-iterative-hardware">Multicycle Functions and Iterative Hardware</h2>
+<p>Not every arithmetic function should be built as one large combinational network. A resource-constrained core may implement multiplication or division through an iterative shift/add or subtract/compare procedure using a smaller datapath over multiple cycles. Another core may use dedicated multiplier arrays or pipelines to prioritize throughput. The architectural operation can remain the same while the internal execution schedule changes.</p>
+<p>An iterative arithmetic block requires registers for partial products, remainders, iteration counters, or other internal state. The controller must hold or replay dependent instructions and propagate completion or exception status. A one-cycle block needs more combinational hardware but may impose a harder clock period unless pipelined.</p>
+<p>The correct choice depends on required operation mix, energy, implementation area, physical clock targets, and tolerance for variable latency. Arithmetic unit design is separated into its own specialist article because the circuits vary greatly across processor classes.</p>
+</section>
+<section id="control-path-for-illegal-instructions-and-exceptions" aria-labelledby="heading-control-path-for-illegal-instructions-and-exceptions">
+<h2 id="heading-control-path-for-illegal-instructions-and-exceptions">Control Path for Illegal Instructions and Exceptions</h2>
+<p>An instruction can fail before a meaningful destination write: its encoding may be illegal, its memory access may fault, or an externally signaled condition may require a trap. The decoder and execution path must report enough information to select the correct exception behavior and preserve the expected architectural state.</p>
+<p>In a small in-order teaching processor, this may mean preventing register and memory writes for a faulting instruction and redirecting the PC to a handler with appropriate cause state. In speculative machines, fault indications may be carried with an instruction until it reaches a safe retirement point so that younger speculative work cannot create an architecturally earlier exception.</p>
+<p>The exact privilege and exception model is architecture-specific. This specialist article treats exception signaling as a datapath/control obligation; <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a> owns the complete mechanism.</p>
+</section>
+<section id="architectural-state-versus-physical-storage" aria-labelledby="heading-architectural-state-versus-physical-storage">
+<h2 id="heading-architectural-state-versus-physical-storage">Architectural State Versus Physical Storage</h2>
+<p>Architectural registers describe what programs can observe. Physical register structures serve implementation needs and can include pipeline registers, temporary values, renaming registers, condition-result latches, and queue entries that software does not name. Confusing a register-file schematic with the entire internal storage state produces false conclusions about modern processors.</p>
+<p>For example, an out-of-order core may rename two successive writes to architectural x5 onto distinct physical storage locations. It can then run independent instructions without false dependencies while preserving the correct in-order architectural result at retirement. This does not enlarge the software-visible register namespace. Conversely, a microcontroller could use a compact physical storage organization for the same ISA register set.</p>
+<p>The detailed mapping and recovery mechanisms belong to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a>. At the datapath level, the crucial point is that source tags and destination tags must identify the correct values through all execution paths.</p>
+</section>
+<section id="physical-wiring-fanout-and-bypass-cost" aria-labelledby="heading-physical-wiring-fanout-and-bypass-cost">
+<h2 id="heading-physical-wiring-fanout-and-bypass-cost">Physical Wiring, Fanout, and Bypass Cost</h2>
+<p>A logical connection that looks inexpensive in a block diagram may be physically difficult. Long wires have capacitance and resistance; large fanout loads require buffering; wide buses consume routing resources; and multiplexers inserted on timing-critical paths increase delay. A bypass network connecting many execution-unit outputs to many operand inputs can become a significant physical-design challenge.</p>
+<p>As issue width and execution resources grow, a full all-to-all forwarding fabric may impose increasing area, power, and timing costs. Designs often cluster units, use segmented networks, schedule around unavailable bypasses, or trade generality for simpler local routing. Register-file port counts and interconnect topology can dominate energy and frequency even when the arithmetic logic is straightforward.</p>
+<p>The schematic should therefore be treated as a connectivity specification first. Achievable clock frequency is established through implementation and timing analysis, not inferred from the number of boxes or the apparent brevity of a drawn arrow.</p>
+</section>
+<section id="clocking-setup-hold-constraints-and-reset" aria-labelledby="heading-clocking-setup-hold-constraints-and-reset">
+<h2 id="heading-clocking-setup-hold-constraints-and-reset">Clocking, Setup/Hold Constraints, and Reset</h2>
+<p>A synchronous core depends on clock distribution and the setup/hold constraints of its storage elements. At a simplified level, the period must exceed the launch clock-to-Q delay, the worst combinational and routing delay, the receiving setup requirement, and any applicable skew or uncertainty allowance. The minimum-delay side must independently satisfy hold-time requirements.</p>
+<p>Reset behavior is likewise part of the implementation. Some state may need deterministic initialization; other storage may be left unspecified until explicitly written, provided no invalid value can affect architectural behavior. Register-file initialization rules are not identical across all ISAs or cores; treating every physical flip-flop as if it must reset to zero can waste resources and create incorrect assumptions.</p>
+<p>Clock enables and gated clocks can reduce switching, but they introduce their own functional verification and physical-timing requirements. The control path needs explicit rules for bringing a halted or reset stage back into valid operation.</p>
+</section>
+<section id="power-area-and-energy-per-instruction" aria-labelledby="heading-power-area-and-energy-per-instruction">
+<h2 id="heading-power-area-and-energy-per-instruction">Power, Area, and Energy per Instruction</h2>
+<p>Datapath selection is an energy problem as well as a speed problem. A common first-order dynamic-power model is <code>P_dynamic ≈ α · C · V² · f</code>, where α reflects switching activity, C switched capacitance, V supply voltage, and f switching frequency. Static leakage, regulator losses, clock-tree power, and system-level effects also matter. The relation indicates tendencies; it is not a complete performance or energy predictor.</p>
+<p>Duplicating arithmetic units can increase peak throughput but also enlarge active and leakage capacitance. Reusing one ALU can save hardware but cause more cycles and energy in the controller and registers. Aggressive bypass networks improve utilization yet introduce wide high-activity buses. A clock frequency increase may require voltage changes that drive disproportionate energy costs.</p>
+<p>Useful measures include energy per retired instruction, energy per completed application task, performance per watt at realistic sustained loads, and energy-delay trade-offs. <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a> addresses the broader processor policies.</p>
+</section>
+<section id="executable-example-throughput-and-cpi-scenarios" aria-labelledby="heading-executable-example-throughput-and-cpi-scenarios">
+<h2 id="heading-executable-example-throughput-and-cpi-scenarios">Executable Example: Throughput and CPI Scenarios</h2>
+<pre><code class="language-python">def rate_mips(clock_ghz, cpi):
+    assert clock_ghz &gt; 0 and cpi &gt; 0
+    return 1000 * clock_ghz / cpi
+
+# MIPS = million instructions per second; illustrative arithmetic only.
+A = rate_mips(1.2, 1.8)
+B = rate_mips(1.8, 3.0)
+assert abs(A - 666.6666667) &lt; 1e-4
+assert abs(B - 600.0) &lt; 1e-9
+assert A &gt; B
+
+# The higher-clock configuration B is slower for this instruction mix.
+print(f&quot;design A: {A:.1f} MIPS; design B: {B:.1f} MIPS&quot;)</code></pre><p>Real workload performance should not be ranked by MIPS alone: different ISAs and compilers can execute different instruction counts to accomplish the same work. This numerical example isolates the relationship among clock, CPI, and instruction throughput for a comparable instruction stream; it does not establish application-level performance.</p>
+</section>
+<section id="implementation-comparison-three-datapath-organizations" aria-labelledby="heading-implementation-comparison-three-datapath-organizations">
+<h2 id="heading-implementation-comparison-three-datapath-organizations">Implementation Comparison: Three Datapath Organizations</h2>
+<table><thead><tr><th scope="col">Dimension</th><th scope="col">Single-cycle teaching core</th><th scope="col">Multicycle in-order core</th><th scope="col">Pipelined core</th></tr></thead><tbody><tr><td>Instruction overlap</td><td>One instruction finishes per long cycle</td><td>Stages reused over successive cycles</td><td>Multiple instructions in flight</td></tr><tr><td>Clock-period driver</td><td>Worst complete instruction path</td><td>Worst scheduled microstep path</td><td>Worst pipeline stage plus register overhead</td></tr><tr><td>Control state</td><td>Relatively little timing state</td><td>Controller and intermediate registers</td><td>Stage-valid, stalls, bypass/flush control</td></tr><tr><td>Resource sharing</td><td>Often needs parallel instruction/data paths</td><td>Can reuse ALU and memory ports</td><td>Needs enough simultaneous stage resources</td></tr><tr><td>Typical latency trade-off</td><td>One long cycle per instruction</td><td>Variable multiple shorter cycles</td><td>Several shorter cycles per instruction</td></tr><tr><td>Characteristic challenge</td><td>Critical-path length</td><td>CPI from sequential reuse</td><td>Hazard handling, wire and control complexity</td></tr><tr><td>Appropriate use</td><td>Small educational reference</td><td>Compact, area-sensitive implementations</td><td>Higher throughput when workloads permit</td></tr></tbody></table><p>These are conceptual families, not exclusive commercial product categories. Some real CPUs mix multicycle execution units into a pipelined machine, or build pipelines with stage counts and resource organizations unlike this table. Measured performance depends on workload and implementation.</p>
+</section>
+<section id="how-bottlenecks-move-when-a-datapath-changes" aria-labelledby="heading-how-bottlenecks-move-when-a-datapath-changes">
+<h2 id="heading-how-bottlenecks-move-when-a-datapath-changes">How Bottlenecks Move When a Datapath Changes</h2>
+<p>Improving one datapath component often moves the bottleneck. A faster ALU may expose register-file port limits; an additional load/store unit may reveal cache bank contention; a wider decoder may reveal insufficient scheduler entries; a deeper pipeline may increase branch recovery penalties. A design is a chain of bounded resources, not a collection of independent peak-specification numbers.</p>
+<p>A useful method is to classify observed idle time into front-end starvation, execution dependencies, resource occupancy, memory wait, and control recovery. Modern performance tools use architecture-specific counters, so raw counter names should not be compared across vendors without checking definitions and attribution methodology. Microarchitectural counters describe a particular implementation, not universal mathematical categories.</p>
+<p>The datapath designer should ask whether the target workload is ALU-bound, dependency-bound, memory-bound, or limited by instruction delivery or retirement. Spending area on an unused functional unit can improve a synthetic peak score without improving the actual application.</p>
+</section>
+<section id="data-hazard-walkthrough-forward-or-stall" aria-labelledby="heading-data-hazard-walkthrough-forward-or-stall">
+<h2 id="heading-data-hazard-walkthrough-forward-or-stall">Data-Hazard Walkthrough: Forward or Stall?</h2>
+<p>Assume the five-stage educational pipeline described earlier. If instruction I1 computes <code>ADD x5,x6,x7</code> in EX and a following I2 needs x5 for <code>SUB x8,x5,x9</code>, an EX-to-EX forwarding path can supply I1’s result when I2 reaches its ALU stage. If forwarding is absent, the controller must delay I2 until the register-file value is valid according to the stage and write/read timing rules.</p>
+<p>Now replace I1 with <code>LW x5,0(x6)</code>. Its EX stage computes an address, but the loaded value may be produced later; forwarding the EX address to I2 would be an incorrect substitution. With a conventional cache-latency assumption, I2 may need one or more bubbles. A cache miss can prolong the wait, and some pipelines cancel or replay instructions instead of holding a simple fixed bubble.</p>
+<p>The design lesson is to label forwarded values by <strong>producer instruction, destination tag, data type, validity, and availability stage</strong>. A mux select based only on register-number equality is insufficient to guarantee correctness.</p>
+</section>
+<section id="executable-example-forwarding-priority" aria-labelledby="heading-executable-example-forwarding-priority">
+<h2 id="heading-executable-example-forwarding-priority">Executable Example: Forwarding Priority</h2>
+<pre><code class="language-python">def choose_operand(reg, original, ex, mem):
+    &quot;&quot;&quot;Select nearest older eligible producer; teaching priority logic.&quot;&quot;&quot;
+    if reg == 0:
+        return 0
+    for stage in (ex, mem):  # nearest producer wins
+        if (stage[&quot;valid&quot;] and stage[&quot;writes&quot;] and
+                stage[&quot;ready&quot;] and stage[&quot;rd&quot;] == reg):
+            return stage[&quot;value&quot;]
+    return original
+
+ex = dict(valid=True, writes=True, ready=True, rd=5, value=41)
+mem = dict(valid=True, writes=True, ready=True, rd=5, value=19)
+assert choose_operand(5, 7, ex, mem) == 41
+assert choose_operand(8, 7, ex, mem) == 7
+assert choose_operand(0, 7, ex, mem) == 0
+
+# An unresolved load must trigger a stall or replay elsewhere, not
+# be treated as a ready value merely because a tag matches.
+ex[&quot;ready&quot;] = False
+assert choose_operand(5, 7, ex, mem) == 19  # only if older MEM is desired
+print(&quot;bypass priority and validity checks verified&quot;)</code></pre><p>The last assertion is a <strong>mux-only demonstration</strong>. If an unready younger instruction is the required producer of x5, the consumer must stall rather than fall back to an older physical value. Correct hazard detection therefore happens <em>before</em> this simple selection operation. The next example includes that missing dependency rule.</p>
+</section>
+<section id="executable-example-an-unready-younger-producer-blocks-use" aria-labelledby="heading-executable-example-an-unready-younger-producer-blocks-use">
+<h2 id="heading-executable-example-an-unready-younger-producer-blocks-use">Executable Example: An Unready Younger Producer Blocks Use</h2>
+<pre><code class="language-python">def operand_or_stall(reg, original, producers):
+    &quot;&quot;&quot;Producers are ordered youngest to oldest among older instructions.&quot;&quot;&quot;
+    if reg == 0:
+        return 0, False
+    for p in producers:
+        if p[&quot;valid&quot;] and p[&quot;writes&quot;] and p[&quot;rd&quot;] == reg:
+            return (p[&quot;value&quot;], False) if p[&quot;ready&quot;] else (None, True)
+    return original, False
+
+# Newer load has not returned; older ADD has a value for the same rd.
+newer_load = dict(valid=True, writes=True, ready=False, rd=5, value=None)
+older_add = dict(valid=True, writes=True, ready=True, rd=5, value=19)
+assert operand_or_stall(5, 7, [newer_load, older_add]) == (None, True)
+newer_load.update(ready=True, value=41)
+assert operand_or_stall(5, 7, [newer_load, older_add]) == (41, False)
+print(&quot;RAW dependency on the newest older producer verified&quot;)</code></pre><p>The consumer’s operands must be supplied by the newest older definition in program order, not simply whichever bypass value happens to be available. Out-of-order implementations maintain the same semantic dependency with more elaborate tags and readiness tracking.</p>
+</section>
+<section id="datapath-correctness-through-reference-model-comparison" aria-labelledby="heading-datapath-correctness-through-reference-model-comparison">
+<h2 id="heading-datapath-correctness-through-reference-model-comparison">Datapath Correctness Through Reference-Model Comparison</h2>
+<p>One strong hardware-verification approach compares a processor’s architecturally committed instruction stream against an independently implemented <strong>instruction-set reference model</strong>. For each committed operation, the checker can compare the opcode, source/destination meaning, PC, memory effects, and exception state. A simulator that executes both models without a shared implementation bug provides better evidence than comparing two copies of the same ALU routine.</p>
+<p>Microarchitectural tests should additionally verify local protocol rules: an operand is never consumed before ready; a stage cannot write on behalf of a killed instruction; the writeback destination tag travels with the right result; a memory transaction cannot escape its validity check; and reset recovery does not turn stale pipeline state into valid work.</p>
+<p>Differential testing may expose subtle issues involving signed immediates, shift amounts, alignment, instruction fusion, speculative recovery, or register-zero behavior. The strongest evidence combines directed corner cases, random instruction streams, assertions, coverage analysis, and review of actual memory and exception semantics.</p>
+</section>
+<section id="a-practical-datapath-verification-matrix" aria-labelledby="heading-a-practical-datapath-verification-matrix">
+<h2 id="heading-a-practical-datapath-verification-matrix">A Practical Datapath Verification Matrix</h2>
+<table><thead><tr><th scope="col">Test family</th><th scope="col">Stimulus</th><th scope="col">Expected observable evidence</th></tr></thead><tbody><tr><td>Arithmetic boundaries</td><td>0, all ones, max signed positive, min signed negative</td><td>Correct modular bits and correct signed/unsigned comparisons</td></tr><tr><td>Register aliases</td><td>rd = x0; rs1 = rs2; rd equals a source</td><td>Correct zero-register behavior and read/write ordering</td></tr><tr><td>Immediate decoding</td><td>Positive and negative offsets, bit-field boundaries</td><td>Correct sign-extension and selected ALU operand</td></tr><tr><td>Memory path</td><td>Load/store same address, masking, alignment faults</td><td>Correct address, payload, width, and fault behavior</td></tr><tr><td>Back-to-back dependencies</td><td>ADD→SUB; load→consumer; repeated writes to same rd</td><td>Correct bypass priority or a stall when data unready</td></tr><tr><td>Control redirects</td><td>Taken/not-taken branches, jump link, exception</td><td>Correct target/link and suppression of wrong-path writes</td></tr><tr><td>Resource pressure</td><td>Two requests for one unit or port</td><td>Defined arbitration, replay, or stall without lost work</td></tr><tr><td>Reset and flushing</td><td>Reset during stall, fault with younger store</td><td>No stale valid instruction or unintended architectural side effect</td></tr></tbody></table><p>For a real implementation, the chosen ISA’s privilege, concurrency, memory-model, and implementation-specific configuration details expand this matrix considerably. Passing short directed tests is necessary but does not establish complete verification.</p>
+</section>
+<section id="testing-a-datapath-under-stress" aria-labelledby="heading-testing-a-datapath-under-stress">
+<h2 id="heading-testing-a-datapath-under-stress">Testing a Datapath Under Stress</h2>
+<p>Tests should exercise intersections of features, not only each one in isolation. A correct load can fail when it immediately follows a taken branch; a correct forwarding path can fail when an older load stalls; a correct reset routine can fail when a memory response arrives just after a flush. These situations uncover bugs in validity propagation, priority, and resource recovery.</p>
+<p>For randomized instruction testing, initialize registers and memory deterministically, retain a seed for reproducibility, and compare retired behavior to an independent reference. Include addresses near boundaries, aliasing registers, mixed immediate signs, consecutive control changes, and repeated destinations. Test illegal instructions and faults with suitable privilege and memory settings where the full design supports them.</p>
+<p>Complement simulation with timing analysis, linting, formal assertions, and gate-level or FPGA evaluation where applicable. Functional correctness is not proof that a circuit meets its clock target or power budget after placement and routing.</p>
+</section>
+<section id="reliability-and-error-containment-in-core-data-paths" aria-labelledby="heading-reliability-and-error-containment-in-core-data-paths">
+<h2 id="heading-reliability-and-error-containment-in-core-data-paths">Reliability and Error Containment in Core Data Paths</h2>
+<p>Physical datapaths are subject to transient faults, permanent defects, timing violations, voltage disturbances, and aging-related degradation. Depending on design requirements, implementations may protect register files, caches, buses, and pipeline state with parity, error-correcting codes, duplication, control-flow checks, retry, or other mechanisms.</p>
+<p>Error detection is not automatically recovery. The system must know whether the affected result can be safely retried, whether execution must stop, and whether an error is recoverable without exposing corrupted architectural state. Protection mechanisms introduce logic, latency, energy use, and sometimes new fault modes; their adequacy depends on the threat and reliability model.</p>
+<p>For concrete documented designs, the OpenTitan Ibex system includes configurable integrity features for relevant processor interfaces. Such implementation-specific facts must not be generalized to all RISC-V cores or to every CPU datapath. See <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a>.</p>
+</section>
+<section id="security-privilege-and-speculative-data-movement" aria-labelledby="heading-security-privilege-and-speculative-data-movement">
+<h2 id="heading-security-privilege-and-speculative-data-movement">Security, Privilege, and Speculative Data Movement</h2>
+<p>A datapath can be architecturally correct and still expose information through timing or other microarchitectural effects. Speculatively executed instructions may touch caches, predictors, or queues before architectural retirement; later squashing their register writes does not necessarily erase every physical effect. Unauthorized architecturally visible access must still be blocked by the relevant translation and privilege rules.</p>
+<p>The control/datapath review should identify the privilege associated with a memory request, whether translated and physical addresses are correctly tagged, how exceptions suppress visible effects, and whether hidden speculative state can influence observations. Data-integrity and confidentiality goals are separate from ordinary functional correctness.</p>
+<p>Detailed microarchitectural side-channel mitigations and their limitations belong to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a>. This article emphasizes the architectural design boundary: datapath access routes are also security-sensitive information-flow paths.</p>
+</section>
+<section id="implementation-case-study-an-open-source-risc-v-core" aria-labelledby="heading-implementation-case-study-an-open-source-risc-v-core">
+<h2 id="heading-implementation-case-study-an-open-source-risc-v-core">Implementation Case Study: An Open-Source RISC-V Core</h2>
+<p>The Ibex project provides a useful public example of how a compact RISC-V core maps ISA behavior to pipeline stages, register-file interfaces, ALU operations, load/store interactions, and optional configuration choices. Its documented pipeline configurations illustrate that even a small integer core involves nontrivial timing decisions: some branch and load/store sequences can introduce stalls, and optional hardware features change the schedule.</p>
+<p>An Ibex diagram is not identical to the single-cycle teaching figure used above. Ibex has actual RTL, buffering, and control behavior that must be read in its own reference guide. The OpenTitan integration further includes platform-specific protections and interfaces. When moving from a schematic to RTL, always consult the selected implementation’s actual configuration and its documentation rather than copying an educational five-stage diagram into a design report.</p>
+<p>Recommended engineering exercise: identify where Ibex stores architectural integer registers, where load/store addresses are computed, where memory responses are accepted, and how a taken branch changes instruction fetch. Then compare those observed structures with the general rules in this article.</p>
+</section>
+<section id="scenario-1-a-microcontroller-needs-low-area-and-predictable-work" aria-labelledby="heading-scenario-1-a-microcontroller-needs-low-area-and-predictable-work">
+<h2 id="heading-scenario-1-a-microcontroller-needs-low-area-and-predictable-work">Scenario 1 — A Microcontroller Needs Low Area and Predictable Work</h2>
+<p>A battery-powered controller executes short control loops with modest code and relatively little arithmetic parallelism. The hardware team considers duplicating an adder for branch target generation. The first evaluation asks whether the saved cycles materially affect deadlines, or whether an existing ALU can be reused across separate multicycle steps.</p>
+<p>If the controller has a strict control-loop deadline, a shared unit’s worst-case arbitration delay matters. If the workload rarely branches and has generous timing margins, reuse may save area and leakage. Either decision must be supported by a realistic workload and a bound on worst-case response, not by counting instructions alone.</p>
+<p><strong>Lesson:</strong> narrow workloads favor measured resource sharing; hard timing requirements require guaranteed paths and interference analysis.</p>
+</section>
+<section id="scenario-2-a-pipeline-is-fast-but-a-dependent-loop-is-not" aria-labelledby="heading-scenario-2-a-pipeline-is-fast-but-a-dependent-loop-is-not">
+<h2 id="heading-scenario-2-a-pipeline-is-fast-but-a-dependent-loop-is-not">Scenario 2 — A Pipeline Is Fast but a Dependent Loop Is Not</h2>
+<p>A team lengthens a pipeline and raises its maximum clock rate, but a loop repeatedly performs a load followed immediately by an arithmetic operation on the loaded value. The new pipeline spends many cycles waiting for the dependency. Instruction throughput on independent synthetic arithmetic is high, yet the application is constrained by load-to-use latency.</p>
+<p>A datapath review should inspect when the load address is computed, when memory data becomes ready, what the bypass can deliver, and whether the controller can schedule other independent work. Adding an ALU may not help if the next ALU operand is unavailable.</p>
+<p><strong>Lesson:</strong> distinguish peak issue capacity from dependent-chain latency and actual workload CPI.</p>
+</section>
+<section id="scenario-3-a-two-issue-core-hits-a-register-file-limit" aria-labelledby="heading-scenario-3-a-two-issue-core-hits-a-register-file-limit">
+<h2 id="heading-scenario-3-a-two-issue-core-hits-a-register-file-limit">Scenario 3 — A Two-Issue Core Hits a Register-File Limit</h2>
+<p>A proposed two-issue core has two integer ALUs but its register bank cannot supply four independent operands at the required timing. The team observes issue bubbles whenever both operations need fresh register data. The execution units are available, but operand supply throttles the core.</p>
+<p>Possible responses include increasing register-file ports, operand bypass, banking, instruction scheduling, or lowering the peak issue promise. Each has an area, power, and complexity cost. An optimization that raises bank conflicts on representative instructions may reduce sustained throughput despite its nominal increased width.</p>
+<p><strong>Lesson:</strong> datapath bandwidth begins at operand sources and ends at writeback, not at the ALUs.</p>
+</section>
+<section id="scenario-4-correct-address-wrong-store-data" aria-labelledby="heading-scenario-4-correct-address-wrong-store-data">
+<h2 id="heading-scenario-4-correct-address-wrong-store-data">Scenario 4 — Correct Address, Wrong Store Data</h2>
+<p>A validation trace shows that a store computes its intended address but writes an obsolete payload. The ALU and immediate generator are correct; the error lies in the separate store-data path, which carried a stale operand through a pipeline stage without the appropriate forwarding or stall.</p>
+<p>The engineer should correlate the instruction tag, store-data source tag, validity, and memory-write enable at each stage. If an earlier instruction produces the stored value, the store must receive that result by register update, bypass, or safe scheduling. Checking only the effective address misses the defect.</p>
+<p><strong>Lesson:</strong> every instruction may have multiple independent operand/result routes, and each must obey its own dependency timing.</p>
+</section>
+<section id="scenario-5-a-branch-misroute-reveals-control-coupling" aria-labelledby="heading-scenario-5-a-branch-misroute-reveals-control-coupling">
+<h2 id="heading-scenario-5-a-branch-misroute-reveals-control-coupling">Scenario 5 — A Branch Misroute Reveals Control Coupling</h2>
+<p>A design redirects the PC on some arithmetic instructions whenever an ALU zero flag is set. The underlying ALU correctly reports zero, but the control logic erroneously treats that flag as an unconditional branch decision. Correct behavior requires that the decoded instruction actually be a branch and that its specified condition evaluate true.</p>
+<p>The team adds a control assertion: <code>redirect_due_to_branch → decoded_branch ∧ valid_instruction ∧ condition_met</code>, with appropriate additional handling for jumps and exceptions. Directed tests include arithmetic producing zero, taken equality branches, and branches with nonmatching operands.</p>
+<p><strong>Lesson:</strong> valid datapath flags do not authorize architectural actions without matching control context.</p>
+</section>
+<section id="scenario-6-an-isa-compatible-upgrade-needs-more-than-clock-speed" aria-labelledby="heading-scenario-6-an-isa-compatible-upgrade-needs-more-than-clock-speed">
+<h2 id="heading-scenario-6-an-isa-compatible-upgrade-needs-more-than-clock-speed">Scenario 6 — An ISA-Compatible Upgrade Needs More Than Clock Speed</h2>
+<p>An organization considers replacing an existing processor platform with a new ISA-compatible CPU. The product literature advertises higher frequency and more execution units, but the actual workload includes random memory accesses and short, branch-heavy routines. Benchmark results vary sharply across applications.</p>
+<p>An evaluation should examine branch recovery, effective cache/memory latency, load/store concurrency, sustained power limits, and software compatibility. A clock-rate uplift alone cannot establish application speedup; a larger execution backend may remain underutilized if memory and front-end bottlenecks dominate.</p>
+<p><strong>Lesson:</strong> core datapath design is only one layer of platform performance and must be measured in context.</p>
+</section>
+<section id="ten-gate-core-datapath-design-framework" aria-labelledby="heading-ten-gate-core-datapath-design-framework">
+<h2 id="heading-ten-gate-core-datapath-design-framework">Ten-Gate Core Datapath Design Framework</h2>
+<table><thead><tr><th scope="col">Gate</th><th scope="col">Decision question</th><th scope="col">Evidence or deliverable</th></tr></thead><tbody><tr><td>1. ISA contract</td><td>Which instructions and architectural effects must be supported?</td><td>Instruction-class map and independent ISA reference</td></tr><tr><td>2. State map</td><td>Which architectural and microarchitectural values need storage?</td><td>PC/register/pipeline-state inventory</td></tr><tr><td>3. Operand routes</td><td>Where does every source operand originate?</td><td>Source-to-unit wiring and immediate-generation paths</td></tr><tr><td>4. Functional units</td><td>Which operations, widths, and latencies are required?</td><td>ALU, shifter, memory, branch and optional-unit specifications</td></tr><tr><td>5. Results and visibility</td><td>Where can each result go, and when may it commit?</td><td>Writeback selection, store and exception semantics</td></tr><tr><td>6. Resource budget</td><td>Can simultaneous operations access the necessary ports?</td><td>Port, arbitration, bypass and throughput analysis</td></tr><tr><td>7. Timing closure</td><td>What are worst register-to-register paths?</td><td>Stage budgets, clock constraints, post-route timing</td></tr><tr><td>8. Hazard and recovery</td><td>How are stale operands and wrong-path effects prevented?</td><td>Forwarding/stall/kill logic, directed hazard tests</td></tr><tr><td>9. Security and reliability</td><td>Which errors or information flows need protection?</td><td>Fault response, privilege tags, protection rationale</td></tr><tr><td>10. Workload evidence</td><td>Do the costs justify the measured improvement?</td><td>Performance, energy, area and regression measurements</td></tr></tbody></table><p>The gates are a design-review aid rather than a single universal architecture. A small microcontroller may have a different evidence package from a high-performance out-of-order processor, but both must identify their architectural contract and demonstrate that their hardware implements it.</p>
+</section>
+<section id="common-misconceptions-and-corrections" aria-labelledby="heading-common-misconceptions-and-corrections">
+<h2 id="heading-common-misconceptions-and-corrections">Common Misconceptions and Corrections</h2>
+<table><thead><tr><th scope="col">Misconception</th><th scope="col">Correction</th></tr></thead><tbody><tr><td>“A core is an ALU.”</td><td>An ALU is a component; a core also needs state, instruction delivery, control, result routing, and exception behavior.</td></tr><tr><td>“A package with eight threads has eight independent datapaths.”</td><td>Hardware-thread contexts may share core execution and memory resources.</td></tr><tr><td>“The ISA specifies the pipeline stages.”</td><td>The ISA specifies externally visible behavior; most pipeline details are microarchitectural choices.</td></tr><tr><td>“All instructions write a register.”</td><td>Branches and stores often have no general-register destination write.</td></tr><tr><td>“A store’s ALU input carries the data to be stored.”</td><td>The ALU usually computes the address; store payload follows a separate path.</td></tr><tr><td>“Bypassing eliminates every data hazard.”</td><td>A producer whose value is not yet ready still requires a stall, replay, or independent scheduling.</td></tr><tr><td>“A faster clock means a faster program.”</td><td>CPI, instruction count, memory behavior, and sustained workload constraints matter.</td></tr><tr><td>“A pipeline makes an instruction finish in one short cycle.”</td><td>Pipelining can improve steady-state throughput while instruction latency spans multiple cycles.</td></tr><tr><td>“Squashing an instruction removes all physical effects.”</td><td>Internal speculative effects may remain even without architectural retirement.</td></tr><tr><td>“A diagram establishes implementable timing.”</td><td>Physical layout, wire delay, storage timing, and constraints determine timing closure.</td></tr></tbody></table>
+</section>
+<section id="guided-exercises-and-design-problems" aria-labelledby="heading-guided-exercises-and-design-problems">
+<h2 id="heading-guided-exercises-and-design-problems">Guided Exercises and Design Problems</h2>
+<ol>
+<li><strong>Operand-source accounting.</strong> Draw the source and destination routes for ADD, ADDI, LW, SW, BEQ, and JAL. Explain why a store needs a path from its second register read even when the ALU selects an immediate.</li>
+<li><strong>Control truth table.</strong> Extend the simplified control table with <code>AND</code> and <code>BNE</code>. Specify the branch decision separately from the instruction-class decoder.</li>
+<li><strong>Critical path.</strong> Recompute the simple single-cycle timing budget if data access increases from 0.45 ns to 0.70 ns. Identify what remains idealized.</li>
+<li><strong>Bypass correctness.</strong> Give an instruction sequence where two older instructions write x5. Show why the latest preceding definition wins and why a not-ready producer forces a stall.</li>
+<li><strong>Issue width.</strong> For two instructions each reading two registers and writing one, compute a naive register-file port budget. Then identify at least two ways real hardware might reduce the number of physical ports.</li>
+<li><strong>Pipeline schedule.</strong> Add a one-cycle load-use stall to the ideal five-stage schedule and identify which stage-valid bits must be retained or cleared.</li>
+<li><strong>Fault handling.</strong> Describe how an alignment fault on a load prevents destination writeback in an in-order model.</li>
+<li><strong>Physical design.</strong> Explain how a global bypass network can lengthen the critical path even when no extra ALU arithmetic is added.</li>
+</ol>
+<p>Suggested evidence for exercises includes explicit state assumptions, register and memory values before and after an instruction, named datapath selectors, a timing table, and a statement of what the simplified model omits.</p>
+</section>
+<section id="review-questions-with-concise-answers" aria-labelledby="heading-review-questions-with-concise-answers">
+<h2 id="heading-review-questions-with-concise-answers">Review Questions with Concise Answers</h2>
+<ol>
+<li><strong>What is a datapath?</strong> The connected network of storage elements, processing units, selectors, and wires that moves and transforms instruction-related values.</li>
+<li><strong>What does control logic do?</strong> It selects paths and operations, authorizes architectural effects, and manages timing and recovery.</li>
+<li><strong>Why have a writeback selector?</strong> Different instruction classes produce destination values from arithmetic, memory, or link-address sources.</li>
+<li><strong>Why is a zero register special?</strong> A fixed-zero architectural register reads as zero and ignores ordinary writes; implementation must preserve that contract.</li>
+<li><strong>Does a pipeline improve every single-instruction latency?</strong> No. It primarily permits overlap and can improve throughput while increasing stage count and hazard costs.</li>
+<li><strong>When does bypassing fail to solve a RAW hazard?</strong> When the required newest older producer has not produced a valid value by the consumer’s need time.</li>
+<li><strong>What is the critical path?</strong> The limiting timed combinational path between relevant launch and capture points, including implementation-specific timing requirements.</li>
+<li><strong>Why can a two-ALU core issue fewer than two instructions per cycle?</strong> Operand ports, dependencies, branch behavior, memory resources, or retirement capacity may limit progress.</li>
+<li><strong>What is the difference between architectural and physical registers?</strong> Architectural registers are program-visible names; physical storage can include additional implementation locations.</li>
+<li><strong>What must a store carry separately?</strong> The effective address, payload, memory-write authorization, and any width/mask or validity information.</li>
+<li><strong>What can cause a branch misroute?</strong> Incorrect decode, comparison, target calculation, PC selection, or priority of exceptions and recovery.</li>
+<li><strong>What evidence supports a complete design?</strong> Reference-model conformance, local assertions, directed/random testing, timing closure, and workload-based performance and power measurements.</li>
+</ol>
+</section>
+<section id="glossary-of-core-datapath-terms" aria-labelledby="heading-glossary-of-core-datapath-terms">
+<h2 id="heading-glossary-of-core-datapath-terms">Glossary of Core Datapath Terms</h2>
+<table><thead><tr><th scope="col">Term</th><th scope="col">Meaning</th></tr></thead><tbody><tr><td>Architectural state</td><td>Program-visible machine state defined by the ISA or execution environment.</td></tr><tr><td>ALU</td><td>Circuit that performs selected arithmetic, logic, or comparison operations.</td></tr><tr><td>Bypass / forwarding</td><td>Delivery of a producer result to a dependent consumer before normal register-file writeback.</td></tr><tr><td>Clock-to-Q</td><td>Launch-register delay from active clock event to a valid output.</td></tr><tr><td>Combinational logic</td><td>Circuit whose outputs follow current inputs after propagation delay.</td></tr><tr><td>Control path</td><td>Logic that issues operation, routing, enable, and recovery decisions.</td></tr><tr><td>Critical path</td><td>Timing-limiting path under the selected clock and implementation constraints.</td></tr><tr><td>Datapath</td><td>Physical route and functional elements through which instruction values move.</td></tr><tr><td>Destination tag</td><td>Identifier associating an instruction result with its intended register or destination.</td></tr><tr><td>Effective address</td><td>Address computed for a memory operation using base, offset, and relevant rules.</td></tr><tr><td>EX stage</td><td>Conceptual pipeline stage performing an execution or address-generation operation.</td></tr><tr><td>Exception</td><td>Architecturally defined condition that changes normal instruction completion.</td></tr><tr><td>Fanout</td><td>Number/load of circuit inputs driven by a signal, affecting switching and timing.</td></tr><tr><td>Flush / squash</td><td>Invalidation of in-flight work that must not commit architectural effects.</td></tr><tr><td>Hardware thread</td><td>Architectural execution context scheduled on a core’s resources.</td></tr><tr><td>Immediate</td><td>Constant encoded in an instruction and transformed as required for operation.</td></tr><tr><td>Instruction latency</td><td>Elapsed execution time before a specific result becomes usable or complete.</td></tr><tr><td>Initiation interval</td><td>Minimum spacing between accepted operations for a functional unit under stated conditions.</td></tr><tr><td>ISA</td><td>Instruction Set Architecture: externally defined instruction and state contract.</td></tr><tr><td>Load-use hazard</td><td>Dependency where a consumer needs load data before the memory path delivers it.</td></tr><tr><td>Microarchitecture</td><td>Organization of internal structures used to implement an ISA.</td></tr><tr><td>Mux / multiplexer</td><td>Selector choosing one among multiple candidate signals.</td></tr><tr><td>PC / program counter</td><td>State used to identify the current or next instruction address.</td></tr><tr><td>Pipeline register</td><td>State element separating processing stages and carrying instructions and metadata.</td></tr><tr><td>Port</td><td>Independent access interface to a register file, memory, or execution resource.</td></tr><tr><td>RAW dependency</td><td>Read-after-write relationship requiring an earlier instruction’s result.</td></tr><tr><td>Register file</td><td>Addressable bank of operand and destination registers.</td></tr><tr><td>Retirement</td><td>Point at which an instruction’s effects become architecturally committed under processor rules.</td></tr><tr><td>Result selector</td><td>Mux choosing among arithmetic, memory, link, or other destination values.</td></tr><tr><td>Setup and hold</td><td>Input stability timing requirements at a storage element.</td></tr><tr><td>Sign extension</td><td>Expansion of a signed smaller-width bit pattern to a larger width.</td></tr><tr><td>Single-cycle core</td><td>Conceptual organization completing each instruction within one clock period.</td></tr><tr><td>Stage valid bit</td><td>Metadata stating whether a pipeline stage contains a meaningful instruction.</td></tr><tr><td>Structural hazard</td><td>Conflict caused by insufficient hardware resources for concurrent requests.</td></tr><tr><td>Writeback</td><td>Delivery of a completed result to its intended register or architectural destination.</td></tr></tbody></table>
+</section>
+<section id="specialist-unit-directory-and-continuing-study" aria-labelledby="heading-specialist-unit-directory-and-continuing-study">
+<h2 id="heading-specialist-unit-directory-and-continuing-study">Specialist Unit Directory and Continuing Study</h2>
+<p>These 24 Level 5 articles define the CPU unit’s specialist sequence. All URLs are intentionally active planned targets under MGU’s navigation policy. Link presence is not a statement that every destination is already deployed.</p><ol class="course-links" id="cpu-sibling-list"><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-cores-and-datapaths">Processor Cores and Datapaths</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">CPU Control Logic and Exception Handling</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-completion-and-retirement">Instruction Completion and Retirement</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">CPU Pipelines and Hazards</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/superscalar-issue-and-out-of-order-execution">Superscalar Issue and Out-of-Order Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/register-renaming-and-reorder-buffers">Register Renaming and Reorder Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/branch-prediction-and-speculative-execution">Branch Prediction and Speculative Execution</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/vector-simd-and-specialized-instructions">Vector, SIMD, and Specialized CPU Instructions</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/microcode-and-internal-operation-translation">Microcode and Internal Operation Translation</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-hierarchies-and-locality">CPU Cache Hierarchies and Locality</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/load-store-units-and-memory-ordering">Load/Store Units and Memory Ordering</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/address-translation-and-translation-lookaside-buffers">Address Translation and Translation Lookaside Buffers</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/multicore-cpu-topology-and-shared-resources">Multi-Core CPU Topology and Shared Resources</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/simultaneous-multithreading-and-hardware-contexts">Simultaneous Multithreading and Hardware Contexts</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-cache-coherence-and-atomic-operations">CPU Cache Coherence and Atomic Operations</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-clock-frequency-voltage-and-power-states">CPU Clock Frequency, Voltage, and Power States</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/processor-thermal-design-and-packaging">Processor Thermal Design and Packaging</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-benchmarks-ipc-and-bottlenecks">CPU Benchmarks, IPC, and Bottlenecks</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-security-isolation-and-speculative-side-channels">CPU Security Isolation and Speculative Side Channels</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-reliability-error-detection-and-recovery">CPU Reliability, Error Detection, and Recovery</a></li><li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-platform-compatibility-and-workload-selection">CPU Platform Compatibility and Workload Selection</a></li></ol>
+<p><strong>Suggested sequence:</strong> begin with this datapath article, then study <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/architectural-registers-and-processor-state">Architectural Registers and Processor State</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/instruction-fetch-and-decode">Instruction Fetch and Decode</a>, <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/arithmetic-logic-and-floating-point-units">Arithmetic, Logic, and Floating-Point Units</a>, and <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-control-logic-and-exception-handling">Control Logic and Exceptions</a>. After the general core organization is clear, move to <a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit-articles/cpu-pipelines-and-hazards">Pipelines and Hazards</a> and the subsequent execution, memory, and multicore articles.</p>
+</section>
+<section id="related-encyclopedia-topics" aria-labelledby="heading-related-encyclopedia-topics">
+<h2 id="heading-related-encyclopedia-topics">Related Encyclopedia Topics</h2>
+<ul class="course-links">
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/">Hardware Systems</a> — Physical components and platform integration.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/central-processing-unit">Central Processing Unit</a> — Parent overview of processors, cores, and performance.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/">Computer Architecture</a> — Machine organization at the broader architectural level.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/microarchitecture">Microarchitecture</a> — Cross-design implementation patterns and pipeline organization.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/instruction-set-architecture">Instruction Set Architecture</a> — Software-visible instructions and state definitions.</li>
+<li><a href="/library/encyclopedia/computer-science/computer-architecture/pipeline-processing">Pipeline Processing</a> — Generic staged instruction execution.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/motherboards-and-buses">Motherboards and Buses</a> — Platform connectivity beyond the processing core.</li>
+<li><a href="/library/encyclopedia/computer-science/hardware-systems/memory-hardware">Memory Hardware</a> — Physical storage devices and memory technologies.</li>
+<li><a href="/library/encyclopedia/computer-science/computational-foundations/binary-logic">Binary Logic</a> — Logical operations underlying combinational circuits.</li>
+</ul><p><strong>Scope separation:</strong> this article owns the practical routes and physical structures that move instruction data inside CPU cores. It does not repeat a full ISA reference, a detailed superscalar scheduling treatise, or the motherboard-level bus specification.</p>
+</section>
+<section id="technical-references-and-primary-documentation" aria-labelledby="heading-technical-references-and-primary-documentation">
+<h2 id="heading-technical-references-and-primary-documentation">Technical References and Primary Documentation</h2>
+<ol class="course-links">
+<li><a href="https://docs.riscv.org/reference/isa/v20240411/_attachments/riscv-unprivileged.pdf">RISC-V International, <em>The RISC-V Instruction Set Manual, Volume I: Unprivileged Architecture</em></a>. Normative reference for register state, instruction semantics, integer operations, and immediate/branch behavior; the teaching examples use only a small illustrative subset.</li>
+<li><a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel64-and-ia32-architectures-optimization.html">Intel, <em>Intel® 64 and IA-32 Architectures Optimization Reference Manual</em> resource</a>. Architecture-family optimization and performance guidance; exact datapaths and execution-port resources vary by microarchitecture.</li>
+<li><a href="https://ibex-core.readthedocs.io/en/latest/03_reference/index.html">lowRISC, <em>Ibex Core Reference Guide</em></a>. Open-source RISC-V core documentation for register files, pipeline details, load/store units, and design variants.</li>
+<li><a href="https://opentitan.org/book/hw/ip/rv_core_ibex/data/rv_core_ibex.html">OpenTitan, <em>Ibex Core Integration and Register Documentation</em></a>. Example of platform-level CPU configuration and integrity-related interfaces.</li>
+<li>David A. Patterson and John L. Hennessy, <em>Computer Organization and Design: The Hardware/Software Interface</em>, RISC-V edition. Textbook context for instructional single-cycle, multicycle, and pipelined datapaths; consult the relevant edition for its diagrams and timing assumptions.</li>
+<li>John L. Hennessy and David A. Patterson, <em>Computer Architecture: A Quantitative Approach</em>. General reference for implementation/performance trade-offs, pipeline organizations, and quantitative evaluation.</li>
+</ol>
+<p>References establish conceptual frameworks and architecture-specific examples. The hypothetical path delays, toy emulator, and exercise scenarios here are constructed for instruction; they are not measurements taken from vendor hardware or compliance certifications.</p>
+</section>
+<section id="publication-status-and-editorial-scope" aria-labelledby="heading-publication-status-and-editorial-scope">
+<h2 id="heading-publication-status-and-editorial-scope">Publication Status and Editorial Scope</h2>
+<p><strong>Article prepared:</strong> November 23, 2026. This standalone Level 5 specialist article fulfills the first planned CPU unit destination, <code>processor-cores-and-datapaths.html</code>, under the already established Level 4 CPU specialist index.</p>
+<p><strong>Coverage:</strong> conceptual core structure, state and logic boundaries, an accessible datapath figure, instruction-class routing, control tables, arithmetic and memory examples, single-cycle/multicycle/pipelined models, forwarding and stall logic, timing and resource analysis, physical implementation constraints, fault/security considerations, six applied scenarios, a ten-gate design framework, exercises, glossary, and references.</p>
+<p><strong>Editorial limitations:</strong> example code models a small subset of 32-bit RISC-V-like architectural behavior; it is not a binary decoder, synthesizable RTL, production core simulator, vendor-performance measurement, or full ISA compliance suite. The described microarchitectural mechanisms vary across implementations. The CPU unit index and parent overview have not been modified. Active sibling links do not independently establish that every planned page is published.</p>
+</section>
+<!-- ========== BOTTOM PAGE NAVIGATION ========== -->
+<div id="bottom-nav-placeholder"></div>
+</main>
+<!-- ========== FOOTER ========== -->
+<div id="footer-placeholder"></div>
+<!-- ========== SHARED BOTTOM NAVIGATION LOADER ========== -->
+<script defer src="/component/bottom-nav-loader.js"></script>
+<!-- ========== FOOTER LOADER ========== -->
+<script>
+fetch('/component/footer.html')
+  .then(response => response.text())
+  .then(data => {
+    document.getElementById('footer-placeholder').innerHTML = data;
+    const uploaded = document.body.dataset.uploaded;
+    const updated = document.body.dataset.updated;
+    const pageDates = document.getElementById('page-dates');
+    if (pageDates) {
+      pageDates.textContent = `Uploaded: ${uploaded} | Updated: ${updated}`;
+    }
+  });
+</script>
+</body>
+</html>
