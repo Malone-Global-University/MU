@@ -1,6 +1,6 @@
 # MGU Markdown Editor and Rendering Engine — v0.1.0
 
-**Status:** development candidate, not a verified release. Prepared November 27, 2026. Governing reference: WA-008; engineering specification revision 0.1.
+**Status:** accepted development baseline, pending external archival. Updated November 27, 2026. Governing reference: WA-008; engineering specification revision 0.1.
 
 ## Purpose
 
@@ -12,7 +12,7 @@ Proposed location (matching the existing versioned MGU software hosting conventi
 
 `C:\MGU\library\reference\software-documentation\mgu-licensed-software\mgu-markdown-editor-v0.1.0`
 
-Extract the project folder into `C:\MGU\library\reference\software-documentation\mgu-licensed-software\`. Do not overwrite earlier applications. This source package does not include or replace the root npm manifests. Node 22 and npm 10 are the intended environment; the existing shared esbuild installation at `C:\MGU` is reused. The selected parser is `markdown-it@15.0.3` (pinned proposed version; registry availability was confirmed from npm's listing, but installation could not be performed in the build environment). Install only after reviewing changes to the existing root manifests. If the dependency already exists, inspect its version first; do not replace an existing version required by another app without regression testing.
+Extract the project folder into `C:\MGU\library\reference\software-documentation\mgu-licensed-software\`. Do not overwrite earlier applications. The original source package does not include or replace the root npm manifests. Node 22 and npm 10 are the intended environment; the existing shared esbuild installation at `C:\MGU` is reused. The selected parser is `markdown-it@15.0.3` (pinned proposed version; the installed version must be recorded from the local root npm manifests). Install only after reviewing changes to the existing root manifests. If the dependency already exists, inspect its version first; do not replace an existing version required by another app without regression testing.
 
 ```powershell
 Set-Location 'C:\MGU'
@@ -63,13 +63,29 @@ No network dependency is required at runtime after bundling. The project is not 
 - 200,000 UTF-16 code-unit input limit for rendering; text remains editable. No benchmark or hard performance guarantee yet. Rendering is synchronous.
 - No persistent storage, file import/export, syntax highlighting, toolbar formatting, mathematical notation, tables, publication theme, or formal module distribution yet. Source text is lost on reload or closing unless copied elsewhere. CodeMirror and file operations are deferred to v0.2.0; extensions to v0.3.0.
 
-## Verification record
+## Verification record — November 27, 2026
 
-- JavaScript syntax checks: passed for all three modules and test file under Node v22.16.0 in the authoring environment.
-- Dependency installation: blocked by DNS/network access to npm registry (`EAI_AGAIN`).
-- Renderer test suite: attempted, blocked at module import (`ERR_MODULE_NOT_FOUND`); no functional assertions ran. Do not treat these tests as passed.
-- Bundle, end-to-end interaction, Windows execution and deployment: not verified. Root manifests and runtime bundle not included; preserve the actual updated root package.json/package-lock.json when the local milestone is verified.
+### Verified in the local Windows environment
+
+- Owner demonstrated browser operation at localhost and live rendering of a substantial MGU Encyclopedia article.
+- Owner supplied screenshots of heading levels, emphasis, lists, blockquotes, inline and indented code, horizontal rules, hyperlinks and Unicode text, and of the preview security test.
+- Owner confirmed editor width adjustment, 50/50 reset, independent scrolling, undo/redo and Render Now without errors. Manual rendering resets preview position to the top.
+- Owner supplied Node test output: 6 tests, 6 passed, 0 failed, 0 skipped; total duration 200.9728 ms.
+- The regression suite covers basic rendering, safe/inert links, raw HTML and unsafe protocols, image prevention, malformed/empty input, deterministic output and input-limit enforcement.
+- Source review confirms preview links are rendered as styled spans without href attributes; the automated test verifies that contract.
+- Owner generated a 216,019-code-unit test input in PowerShell; browser handling and recovery from that input were not explicitly confirmed.
+
+### Verification boundaries
+
+- Exact statistics counts, browser console inspection, narrow-window behavior and manual oversized-input recovery are not independently verified. These are accepted as nonblocking for this development baseline and should be included in future regression checks.
+- The authoring environment initially could not install npm dependencies; the owner's local test results supersede that initial test blocker. Local browser operation is confirmed, but the exact installed dependency versions and build command output were not supplied.
+- Security checks are smoke tests, not a comprehensive security audit. Public deployment is not confirmed.
+- v0.1.0 is recommended for development freeze; external archival is not yet confirmed.
 
 ## Release closeout
 
-Only after local automated and manual tests pass: freeze the version; keep the generated runtime bundle, source, test corpus, and actual root manifests; update this README with evidence; preserve a complete baseline on the external backup drive (do not assume a drive letter); document the milestone in MGU Software Development Records. Then start v0.2.0 in a new versioned folder. Do not overwrite the archived HTML editor or advance before verification.
+Freeze the accepted version; keep the generated runtime bundle, source, test corpus, and actual root manifests; preserve a complete baseline on the external backup drive (do not assume a drive letter); document the milestone in MGU Software Development Records. Record actual dependency versions from the local manifests. Then start v0.2.0 in a new versioned folder. Do not overwrite the archived HTML editor or the v0.1.0 baseline.
+
+## Next milestone
+
+v0.2.0: formatting toolbar, syntax highlighting, Markdown file import/export, and proposed live/manual preview toggle. Retain the independent renderer interface and run the v0.1.0 regression suite. Consider preview scroll preservation as a usability enhancement.
