@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {pathToFileURL} from 'node:url';
+import {resolve} from 'node:path';
+const bundle=process.argv[2]?pathToFileURL(resolve(process.argv[2])).href:new URL('../public/renderer.mjs',import.meta.url).href;
+const {renderMarkdown,exportHTML,RENDERER_VERSION,exportPrintDocument}=await import(bundle);
+assert.equal(RENDERER_VERSION,'1.1.0');
+assert.equal(renderMarkdown('# MGU').html,'<h1>MGU</h1>\n');
+assert.match(renderMarkdown('$x^2$').html,/<math\b/);
+assert.match(exportHTML('# MGU',{preset:'academic'}).html,/<title>Markdown document<\/title>/);
+console.log('Standalone renderer bundle import: PASS');
+const printable=exportPrintDocument('# MGU',{toc:true,title:'PDF test'});
+assert.equal(printable.valid,true);assert.match(printable.html,/href="#mgu-heading-1"/);assert.match(printable.html,/@page\{size:Letter portrait/);
+console.log('Standalone print document API: PASS');
