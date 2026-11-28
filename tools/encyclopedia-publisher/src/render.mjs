@@ -1,4 +1,3 @@
-import MarkdownIt from 'markdown-it';
 import {parseFragment,serialize} from 'parse5';
 import {pathToFileURL} from 'node:url';
 import {verifyRenderer} from './config.mjs';
@@ -8,29 +7,21 @@ export function walk(node,fn){fn(node);for(const child of node.childNodes??[])wa
 export function attr(node,name){return node.attrs?.find(a=>a.name===name)?.value;}
 export function textContent(node){return node.nodeName==='#text'?node.value:(node.childNodes??[]).map(textContent).join('');}
 export function safeHref(value){return typeof value==='string' && value.length>0 && !/[\x00-\x20\x7f\\]/.test(value) && !value.startsWith('//') && (!/^[a-z][a-z0-9+.-]*:/i.test(value)||/^(https?:|mailto:)/i.test(value));}
-export function inspectMarkdown(body){
-  const parser=new MarkdownIt('commonmark',{html:true});
-  // The inspection parser accepts all schemes so disallowed links can be diagnosed instead of silently converted to text.
-  parser.validateLink=()=>true;
-  const inspect=tokens=>{for(const t of tokens){
-    check(t.type!=='image','UNSUPPORTED_CONTENT','Embedded Markdown images are disabled in renderer v1.1.0.');
-    check(t.type!=='html_block'&&t.type!=='html_inline','UNSUPPORTED_CONTENT','Raw HTML in article prose is not supported. Use fenced examples for literal HTML.');
-    if(t.type==='link_open')check(safeHref(t.attrGet('href')),'UNSAFE_LINK','Disallowed hyperlink scheme or characters.');
-    if(t.children)inspect(t.children);
-  }};
-  // Enable tables to inspect image/link tokens in table cells as well.
-  parser.enable('table');
-  inspect(parser.parse(body,{}));
+export function inspectMarkdown(body, renderer) {
+  const diagnostics = renderer.inspectMarkdown(body);
+  check(Array.isArray(diagnostics),'RENDER_FAILED','Unexpected inspection result.');
+  for (const d of diagnostics) check(d.severity!=='error',d.code,d.message);
+  return diagnostics;
 }
 export async function loadRenderer(c){
   const file=await verifyRenderer(c);
   const r=await import(pathToFileURL(file).href);
-  check(r.RENDERER_VERSION===c.rendererVersion && typeof r.renderMarkdown==='function' && r.MAX_SOURCE_LENGTH===200000,'RENDERER_MISMATCH','Unexpected renderer exports or source limit.');
+  check(r.RENDERER_NAME===c.rendererName && r.RENDERER_VERSION===c.rendererVersion && typeof r.renderMarkdown==='function' && typeof r.inspectMarkdown==='function' && r.MAX_SOURCE_LENGTH===200000,'RENDERER_MISMATCH','Unexpected renderer exports or source limit.');
   return r;
 }
 export function renderArticle(record,renderer){
   check(record.body.length<=renderer.MAX_SOURCE_LENGTH,'SOURCE_LIMIT','Markdown body exceeds renderer limit.');
-  inspectMarkdown(record.body);
+  inspectMarkdown(record.body,renderer);
   const result=renderer.renderMarkdown(record.body,{inertLinks:false,outline:true,headingIds:true});
   check(result&&typeof result.html==='string'&&Array.isArray(result.outline)&&Array.isArray(result.diagnostics),'RENDER_FAILED','Unexpected renderer output contract.');
   check(!result.diagnostics.some(d=>d.severity==='error'),'RENDER_FAILED',JSON.stringify(result.diagnostics));
@@ -54,7 +45,21 @@ export function renderArticle(record,renderer){
   const toc=headings.filter(h=>h.level>1);
   check(toc.every(h=>h.id&&h.text),'HTML_INVALID','Every subsection needs an ID and visible text.');
   check(headings.length===result.outline.length&&headings.every((h,i)=>h.id===result.outline[i].id&&h.level===result.outline[i].level),'HTML_INVALID','Rendered headings disagree with renderer outline.');
-  // Retain rendered H1, or synthesize a single H1 for metadata-only title.
-  const html=(h1.length?'':`<h1>${escapeHTML(title)}</h1>\n`)+serialize(fragment);
-  return {record:{...record,title},html,toc:toc.map(({level,id,text})=>({level,id,text})),diagnostics:[...result.diagnostics,...(!record.title?[warning('TITLE_DERIVED','Title recovered from existing H1.')]:[])]};
+  // Move the validated leading title to the shared hero, preserving its anchor.
+  // The article body must not repeat the H1. No source Markdown is rewritten.
+  const titleId=h1[0]?.id;
+  if(h1.length) fragment.childNodes.splice(fragment.childNodes.indexOf(h1[0].node),1);
+  // Label an unheaded opening prose block in the generated article only.
+  // Preserve all renderer-generated section anchors and any authored opening heading.
+  const opening=fragment.childNodes.find(n=>n.tagName||n.nodeName==='#text'&&n.value.trim());
+  if(opening?.tagName==='p') {
+    let id='mgu-overview', suffix=2;
+    while(ids.has(id))id=`mgu-overview-${suffix++}`;
+    const overview=parseFragment(`<h2 id="${id}">Overview</h2>`).childNodes[0];
+    overview.parentNode=fragment;
+    fragment.childNodes.splice(fragment.childNodes.indexOf(opening),0,overview);
+    toc.unshift({node:overview,level:2,id,text:'Overview'});
+  }
+  const html=serialize(fragment);
+  return {record:{...record,title},titleId,html,toc:toc.map(({level,id,text})=>({level,id,text})),diagnostics:[...result.diagnostics,...(!record.title?[warning('TITLE_DERIVED','Title recovered from existing H1.')]:[])]};
 }

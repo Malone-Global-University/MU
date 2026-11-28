@@ -1,3 +1,9 @@
+---
+title: Cab Calloway
+description: American jazz vocalist, bandleader, songwriter, dancer, actor and author.
+type: biography
+---
+
 # Cab Calloway
 
 **Cabell Calloway III** (December 25, 1907 – November 18, 1994), professionally known as **Cab Calloway**, was an American jazz vocalist, bandleader, songwriter, dancer, actor, and author. One of the most recognizable entertainers of the swing era, Calloway achieved national prominence during the early 1930s through his orchestra's engagements at Harlem's Cotton Club and the success of his signature recording, “Minnie the Moocher.” His combination of scat singing, audience participation, theatrical movement, elaborate clothing, and sophisticated orchestral accompaniment established an influential model of American popular entertainment.
